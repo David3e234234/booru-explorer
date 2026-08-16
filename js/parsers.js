@@ -1,11 +1,14 @@
 export function logInfo(...args) { console.log(...args); }
 export function logError(...args) { console.error(...args); }
+
+export const DEFAULT_AI_TAGS = ['ai-generated', 'ai_generated', 'stable_diffusion', 'midjourney', 'novelai', 'ai_art', 'ai_assisted'];
+
 async function fetchProxied(url, options = {}) {
   const u = typeof url === 'string' ? url : url.toString();
   // danbooru, rule34 and xbooru support direct CORS
   if (u.includes('danbooru.donmai.us') || u.includes('rule34.xxx') || u.includes('xbooru.com')) {
     try {
-      const res = await fetchProxied(u, options);
+      const res = await fetch(u, options);
       return res;
     } catch(e) {}
   }
