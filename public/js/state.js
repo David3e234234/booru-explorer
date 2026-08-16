@@ -298,29 +298,33 @@ function extractTagsFromPost(post, scores, catMap, multiplier = 1.0) {
 // 🎯 Вычисление процента релевантности поста
 export function calculatePostMatchPercent(post, userInterestMap) {
   if (!post || !userInterestMap || userInterestMap.size === 0) {
-    return Math.floor(75 + Math.random() * 15);
+    return 0;
   }
 
   let matchPoints = 0;
-  let totalChecks = 0;
 
   const checkTag = (tag, weightMultiplier = 1.0) => {
     if (!tag) return;
-    const clean = String(tag).toLowerCase().trim();
-    totalChecks++;
+    const clean = String(tag).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+    if (!clean) return;
     if (userInterestMap.has(clean)) {
       matchPoints += (userInterestMap.get(clean) || 1) * weightMultiplier;
     }
   };
 
-  if (post.author) checkTag(post.author, 3.0);
-  if (Array.isArray(post.tags)) {
+  if (post.author) checkTag(post.author, 4.0);
+  if (post.tagDetails) {
+    if (Array.isArray(post.tagDetails.artist)) post.tagDetails.artist.forEach(a => checkTag(a, 4.0));
+    if (Array.isArray(post.tagDetails.character)) post.tagDetails.character.forEach(c => checkTag(c, 3.0));
+    if (Array.isArray(post.tagDetails.copyright)) post.tagDetails.copyright.forEach(cp => checkTag(cp, 2.5));
+    if (Array.isArray(post.tagDetails.general)) post.tagDetails.general.forEach(g => checkTag(g, 1.0));
+  } else if (Array.isArray(post.tags)) {
     for (const t of post.tags) checkTag(t, 1.0);
   }
 
-  if (matchPoints === 0) return 70;
-  const ratio = matchPoints / (matchPoints + 15);
-  const percent = Math.min(99, Math.max(72, Math.round(ratio * 100)));
+  if (matchPoints === 0) return 0;
+  const ratio = matchPoints / (matchPoints + 12);
+  const percent = Math.min(99, Math.max(70, Math.round(62 + ratio * 37)));
   return percent;
 }
 

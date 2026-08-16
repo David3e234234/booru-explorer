@@ -813,7 +813,7 @@ async function fetchDanbooru(params, aiTagsList, settings) {
   // Приоритет Сортировка
   if (queryTags.length < 2) {
     if (category === 'top') queryTags.push('order:rank');          // Топ всех времён (индексированный рейтинг)
-    else if (category === 'popular') queryTags.push('order:rank_week'); // Тренды за неделю
+    else if (category === 'popular' || category === 'recommended') queryTags.push('order:rank_week'); // Тренды за неделю
     else if (category === 'random') queryTags.push('order:random');
   }
 
@@ -1075,11 +1075,11 @@ async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList) {
   let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
   let url = '';
 
-  if (category === 'popular' && !tags) {
+  if ((category === 'popular' || category === 'recommended') && !tags) {
     url = `${siteUrl}/post/popular_by_week.json`;
   } else {
     if (category === 'top') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
-    else if (category === 'popular') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
+    else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
     else if (category === 'random') finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
 
     if (ratingFilter === 'nsfw') {
@@ -1145,7 +1145,7 @@ async function fetchSafebooru(params, aiTagsList) {
   }
 
   let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter);
-  if (category === 'top' || category === 'popular') finalTags += ' sort:score:desc';
+  if (category === 'top' || category === 'popular' || category === 'recommended') finalTags += ' sort:score:desc';
   else if (category === 'random') finalTags += ' sort:random';
 
   const pid = Math.max(0, page - 1);
@@ -1211,7 +1211,7 @@ async function fetchRule34(params, aiTagsList, settings) {
 
   if (category === 'top') {
     searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
-  } else if (category === 'popular') {
+  } else if (category === 'popular' || category === 'recommended') {
     searchTags = searchTags ? `${searchTags} sort:updated:desc` : 'sort:updated:desc';
   } else if (category === 'random') {
     searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
@@ -1462,7 +1462,7 @@ async function fetchGelbooru(params, aiTagsList, settings) {
 
   if (category === 'top') {
     searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
-  } else if (category === 'popular') {
+  } else if (category === 'popular' || category === 'recommended') {
     searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
   } else if (category === 'random') {
     searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
@@ -1619,7 +1619,7 @@ async function fetchRule34Video(params, aiTagsList) {
 
   const fetchPromises = pageNumbers.map(async (p) => {
     let url = '';
-    const isPopular = (category === 'popular' || category === 'top');
+    const isPopular = (category === 'popular' || category === 'top' || category === 'recommended');
     if (cleanQuery) {
       const sortByParam = isPopular ? '&sort_by=most_popular' : '';
       url = `https://rule34video.com/search/${encodeURIComponent(cleanQuery)}/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&q=${encodeURIComponent(cleanQuery)}${sortByParam}&from_videos=${p}`;

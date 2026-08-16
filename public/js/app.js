@@ -735,61 +735,110 @@ async function performSearch(reset = false, options = {}) {
 
       const userInterests = getUserInterestTags();
       const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
-      
-      let queryCategory = 'popular';
-      let searchTags = state.searchTags.join(' ');
+      const currentLimit = state.settings.itemsPerPage || state.limit || 100;
+      let candidatePosts = [];
 
-      // Если теги не заданы вручную и есть обученный профиль, формируем срез интересов
-      if (!searchTags && userInterests.length > 0) {
-        const topPool = userInterests.filter(i => i.category === 'artist' || i.category === 'character');
-        const pool = topPool.length > 0 ? topPool : userInterests;
-        const seedIndex = ((state.page - 1) * 2) % pool.length;
-        const seedTag = pool[seedIndex]?.tag;
-        if (seedTag) {
-          searchTags = seedTag;
-          queryCategory = 'new';
+      if (state.searchTags.length > 0) {
+        // 1. Если пользователь ввел теги вручную в поисковую строку
+        const res = await fetchPosts({
+          site: state.currentSite,
+          tags: state.searchTags.join(' '),
+          page: state.page,
+          limit: currentLimit,
+          category: 'recommended',
+          aiFilter: state.aiFilter,
+          ratingFilter: state.ratingFilter,
+          typeFilter: state.typeFilter,
+          ageFilter: state.ageFilter,
+          hideFurry: state.hideFurry,
+          hidePregnant: state.hidePregnant,
+          bustCache: options.bustCache || false
+        });
+        if (res.success && Array.isArray(res.posts)) {
+          candidatePosts = res.posts;
+        }
+      } else {
+        // 2. Умная выборка рекомендаций:
+        // А. Запрашиваем посты по топ-интересам (если есть)
+        if (userInterests.length > 0) {
+          const pool = userInterests.filter(i => i.category === 'artist' || i.category === 'character' || i.category === 'copyright');
+          const interestPool = pool.length > 0 ? pool : userInterests;
+          const seedIndex = ((state.page - 1) * 2) % interestPool.length;
+          const seedTag = interestPool[seedIndex]?.tag;
+
+          if (seedTag) {
+            const cleanSeedTag = seedTag.replace(/[()]/g, '').trim();
+            const resSeed = await fetchPosts({
+              site: state.currentSite,
+              tags: cleanSeedTag,
+              page: 1,
+              limit: Math.min(currentLimit, 50),
+              category: 'new',
+              aiFilter: state.aiFilter,
+              ratingFilter: state.ratingFilter,
+              typeFilter: state.typeFilter,
+              ageFilter: state.ageFilter,
+              hideFurry: state.hideFurry,
+              hidePregnant: state.hidePregnant,
+              bustCache: options.bustCache || false
+            }).catch(() => null);
+
+            if (resSeed && resSeed.success && Array.isArray(resSeed.posts) && resSeed.posts.length > 0) {
+              candidatePosts.push(...resSeed.posts);
+            }
+          }
+        }
+
+        // Б. ВСЕГДА догружаем или страхуем подборку популярным контентом сайта (гарантия отсутствия пустого экрана)
+        const resPopular = await fetchPosts({
+          site: state.currentSite,
+          tags: '',
+          page: state.page,
+          limit: currentLimit,
+          category: 'popular',
+          aiFilter: state.aiFilter,
+          ratingFilter: state.ratingFilter,
+          typeFilter: state.typeFilter,
+          ageFilter: state.ageFilter,
+          hideFurry: state.hideFurry,
+          hidePregnant: state.hidePregnant,
+          bustCache: options.bustCache || false
+        }).catch(() => null);
+
+        if (resPopular && resPopular.success && Array.isArray(resPopular.posts)) {
+          candidatePosts.push(...resPopular.posts);
         }
       }
 
-      const currentLimit = state.settings.itemsPerPage || state.limit || 100;
-      const res = await fetchPosts({
-        site: state.currentSite,
-        tags: searchTags,
-        page: state.page,
-        limit: currentLimit,
-        category: queryCategory,
-        aiFilter: state.aiFilter,
-        ratingFilter: state.ratingFilter,
-        typeFilter: state.typeFilter,
-        ageFilter: state.ageFilter,
-        hideFurry: state.hideFurry,
-        hidePregnant: state.hidePregnant,
-        bustCache: options.bustCache || false
+      // Дедупликация постов по ID
+      const seen = new Set();
+      const uniquePosts = [];
+      candidatePosts.forEach(p => {
+        if (p && p.id && !seen.has(p.id)) {
+          seen.add(p.id);
+          uniquePosts.push(p);
+        }
       });
 
-      if (res.success && Array.isArray(res.posts)) {
-        const scoredPosts = res.posts.map(p => {
-          return {
-            ...p,
-            matchPercent: calculatePostMatchPercent(p, interestMap)
-          };
-        });
+      // Ранжирование по карте интересов
+      const scoredPosts = uniquePosts.map(p => {
+        return {
+          ...p,
+          matchPercent: calculatePostMatchPercent(p, interestMap)
+        };
+      });
 
-        // Сортировка по проценту соответствия
-        scoredPosts.sort((a, b) => (b.matchPercent || 0) - (a.matchPercent || 0));
+      // Сортировка: посты с наибольшим совпадением идут наверх
+      scoredPosts.sort((a, b) => (b.matchPercent || 0) - (a.matchPercent || 0));
 
-        if (reset) {
-          state.posts = scoredPosts;
-        } else {
-          const existingIds = new Set(state.posts.map(p => p.id));
-          const newPosts = scoredPosts.filter(p => !existingIds.has(p.id));
-          state.posts.push(...newPosts);
-        }
-        state.hasMore = res.posts.length > 0;
+      if (reset) {
+        state.posts = scoredPosts;
       } else {
-        if (reset) state.posts = [];
-        state.hasMore = false;
+        const existingIds = new Set(state.posts.map(p => p.id));
+        const newPosts = scoredPosts.filter(p => !existingIds.has(p.id));
+        state.posts.push(...newPosts);
       }
+      state.hasMore = uniquePosts.length > 0;
 
       galleryInstance.renderGallery(!reset);
       renderSidebarPageTags();

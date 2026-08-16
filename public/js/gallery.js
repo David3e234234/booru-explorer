@@ -327,7 +327,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     }
 
     let matchBadge = '';
-    if (state.currentCategory === 'recommended' && post.matchPercent) {
+    if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
       matchBadge = `<span class="badge-format match-percent" title="Совпадение с вашими вкусами: ${post.matchPercent}%">✨ ${post.matchPercent}%</span>`;
     }
 
