@@ -1,0 +1,108 @@
+:root {
+  /* Базовая темная тема (Deep Slate & Charcoal) */
+  --bg-main: #0c0e14;
+  --bg-surface: #131722;
+  --bg-surface-elevated: #1a202e;
+  --bg-surface-hover: #232b3d;
+  
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-focus: rgba(99, 102, 241, 0.5);
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --text-inverse: #0f172a;
+
+  /* Благородные матовые акценты */
+  --accent-primary: #6366f1;
+  --accent-primary-hover: #4f46e5;
+  --accent-primary-subtle: rgba(99, 102, 241, 0.12);
+
+  --accent-danger: #f43f5e;
+  --accent-danger-subtle: rgba(244, 63, 94, 0.12);
+  
+  --accent-warning: #f59e0b;
+  --accent-warning-subtle: rgba(245, 158, 11, 0.12);
+
+  --accent-success: #10b981;
+  --accent-success-subtle: rgba(16, 185, 129, 0.12);
+
+  /* Цветовая кодировка категорий тегов Booru */
+  --tag-general: #94a3b8;
+  --tag-general-bg: rgba(148, 163, 184, 0.1);
+  
+  --tag-artist: #f43f5e;
+  --tag-artist-bg: rgba(244, 63, 94, 0.12);
+
+  --tag-character: #10b981;
+  --tag-character-bg: rgba(16, 185, 129, 0.12);
+
+  --tag-copyright: #a855f7;
+  --tag-copyright-bg: rgba(168, 85, 247, 0.12);
+
+  --tag-meta: #f59e0b;
+  --tag-meta-bg: rgba(245, 158, 11, 0.12);
+
+  /* Радиусы и тени */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 28px -4px rgba(0, 0, 0, 0.65);
+  --shadow-viewer: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+
+  /* Шрифты */
+  --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Переходы */
+  --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Мобильные метрики и слои */
+  --mobile-nav-height: 60px;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --z-mobile-nav: 200;
+  --z-drawer-backdrop: 290;
+  --z-drawer: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+/* Тема OLED Pure Black */
+[data-theme="oled"] {
+  --bg-main: #000000;
+  --bg-surface: #0a0a0c;
+  --bg-surface-elevated: #121216;
+  --bg-surface-hover: #1c1c22;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.15);
+}
+
+/* Светлая тема */
+[data-theme="light"] {
+  --bg-main: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #f1f5f9;
+  --bg-surface-hover: #e2e8f0;
+  
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-medium: rgba(0, 0, 0, 0.12);
+  --border-focus: rgba(99, 102, 241, 0.4);
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --text-inverse: #ffffff;
+
+  --accent-primary-subtle: rgba(99, 102, 241, 0.08);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.1);
+}

@@ -1,0 +1,1628 @@
+async function fetchProxied(url, options = {}) {
+  const proxiedUrl = 'https://api.allorigins.win/raw?url=$';
+  return fetch(proxiedUrl, options);
+}
+
+export const SITES = {
+  danbooru: {
+    id: 'danbooru',
+    name: 'Danbooru',
+    baseUrl: 'https://danbooru.donmai.us',
+    rating: 'all',
+    supportsVideo: true,
+    supportsTags: true,
+    accentColor: '#3b82f6',
+    description: 'Золотой стандарт каталогизации аниме и манга артов'
+  },
+  rule34video: {
+    id: 'rule34video',
+    name: 'Rule34Video',
+    baseUrl: 'https://rule34video.com',
+    rating: 'nsfw',
+    supportsVideo: true,
+    supportsTags: true,
+    accentColor: '#ef4444',
+    description: 'Крупнейший архив 3D/2D видеоанимаций в высоком качестве'
+  },
+  yandere: {
+    id: 'yandere',
+    name: 'Yande.re',
+    baseUrl: 'https://yande.re',
+    rating: 'all',
+    supportsVideo: false,
+    supportsTags: true,
+    accentColor: '#ec4899',
+    description: 'Высочайшее качество, сканы артбуков и обои без сжатия'
+  },
+  safebooru: {
+    id: 'safebooru',
+    name: 'Safebooru',
+    baseUrl: 'https://safebooru.org',
+    rating: 'safe',
+    supportsVideo: false,
+    supportsTags: true,
+    accentColor: '#10b981',
+    description: 'Чистый безопасный каталог без откровенного 18+ контента'
+  },
+  konachan: {
+    id: 'konachan',
+    name: 'Konachan',
+    baseUrl: 'https://konachan.net',
+    rating: 'safe_questionable',
+    supportsVideo: false,
+    supportsTags: true,
+    accentColor: '#f97316',
+    description: 'Аниме-обои и иллюстрации сверхвысокого разрешения'
+  },
+  rule34: {
+    id: 'rule34',
+    name: 'Rule34 (Paheal / XXX)',
+    baseUrl: 'https://rule34.paheal.net',
+    rating: 'nsfw',
+    supportsVideo: true,
+    supportsTags: true,
+    accentColor: '#aae5a4',
+    description: 'Огромный архив 18+ артов, анимаций и комиксов'
+  },
+  gelbooru: {
+    id: 'gelbooru',
+    name: 'Gelbooru',
+    baseUrl: 'https://gelbooru.com',
+    rating: 'all',
+    supportsVideo: true,
+    supportsTags: true,
+    accentColor: '#6366f1',
+    description: 'Каталог артов (поддержка API ключа в Настройках)'
+  },
+  xbooru: {
+    id: 'xbooru',
+    name: 'Xbooru',
+    baseUrl: 'https://xbooru.com',
+    rating: 'nsfw',
+    supportsVideo: true,
+    supportsTags: true,
+    accentColor: '#f43f5e',
+    description: '18+ хентай-архив на движке DAPI с быстрой выдачей'
+  },
+  hypnohub: {
+    id: 'hypnohub',
+    name: 'Hypnohub',
+    baseUrl: 'https://hypnohub.net',
+    rating: 'all',
+    supportsVideo: true,
+    supportsTags: true,
+    accentColor: '#8b5cf6',
+    description: 'Тематический Booru-архив с открытым DAPI каталогом'
+  }
+};
+
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 BooruExplorer/3.0';
+
+/**
+ * Безопасный парсер JSON ответа от внешних Booru API.
+ * Предотвращает падения 'Unexpected end of JSON input' при пустых ответах, HTML-ошибках или сбоях сети.
+ */
+export function safeJsonParse(text, fallback = null) {
+  if (!text || typeof text !== 'string') return fallback;
+  const trimmed = text.trim();
+  if (!trimmed || trimmed.startsWith('<') || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
+    return fallback;
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return fallback;
+  }
+}
+
+export function checkIsAi(tagsArray, aiTagsList) {
+  if (!Array.isArray(tagsArray)) return false;
+  const lowerTags = tagsArray.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : ''));
+  const checkList = (aiTagsList && aiTagsList.length > 0 ? aiTagsList : DEFAULT_AI_TAGS).map(t => t.toLowerCase().trim());
+  return lowerTags.some(tag => checkList.includes(tag) || tag.includes('ai_gen') || tag.includes('novelai') || tag.includes('stable_diffusion') || tag.includes('midjourney'));
+}
+
+const SOUND_KEYWORDS = ['sound', 'audio', 'has_audio', 'with_sound', 'has_sound', 'music', 'voiced', 'voice', 'sound_warning', 'audible'];
+
+export function checkMediaTypes(url, fileExt = '', rawTags = []) {
+  const lowerTags = Array.isArray(rawTags) ? rawTags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')) : [];
+  const tagsStr = lowerTags.join(' ');
+  const combined = ((url || '') + ' ' + (fileExt || '') + ' ' + tagsStr).toLowerCase();
+  const isVideo = combined.includes('.mp4') || combined.includes('.webm') || combined.includes('.mkv') || combined.includes('.mov') || combined.includes('.m4v') || tagsStr.includes('video') || tagsStr.includes('animated') || tagsStr.includes('ugoira');
+  const isGif = combined.includes('.gif') && !isVideo;
+  const hasSound = isVideo && (lowerTags.some(t => SOUND_KEYWORDS.includes(t)) || combined.includes('has_audio') || combined.includes('with_sound') || combined.includes('sound_warning'));
+  let ext = fileExt ? fileExt.toLowerCase().replace('.', '') : '';
+  if (!ext && url) {
+    const cleanUrl = url.split('?')[0];
+    const match = cleanUrl.match(/\.([a-z0-9]+)$/i);
+    if (match) ext = match[1].toLowerCase();
+  }
+  return { isVideo, isGif, hasSound, fileExt: ext || (isVideo ? 'mp4' : isGif ? 'gif' : 'jpg') };
+}
+
+function getFfmpegHeaders(targetUrl) {
+  let referer = 'https://danbooru.donmai.us/';
+  let authHeader = '';
+  const currentSettings = getSettings();
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.hostname.includes('rule34video.com')) referer = 'https://rule34video.com/';
+    else if (parsed.hostname.includes('paheal.net') || parsed.hostname.includes('paheal-cdn.net')) referer = 'https://rule34.paheal.net/';
+    else if (parsed.hostname.includes('rule34.xxx')) referer = 'https://rule34.xxx/';
+    else if (parsed.hostname.includes('donmai.us')) {
+      referer = 'https://danbooru.donmai.us/';
+      if (currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
+        authHeader = `Authorization: Basic ${Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64')}\r\n`;
+      }
+    } else if (parsed.hostname.includes('yande.re')) referer = 'https://yande.re/';
+    else if (parsed.hostname.includes('konachan')) referer = 'https://konachan.net/';
+    else if (parsed.hostname.includes('gelbooru.com')) referer = 'https://gelbooru.com/';
+    else if (parsed.hostname.includes('safebooru.org')) referer = 'https://safebooru.org/';
+    else if (parsed.hostname.includes('xbooru.com')) referer = 'https://xbooru.com/';
+    else if (parsed.hostname.includes('hypnohub.net')) referer = 'https://hypnohub.net/';
+    else referer = `${parsed.protocol}//${parsed.host}/`;
+  } catch {}
+  return `User-Agent: ${BROWSER_USER_AGENT}\r\nReferer: ${referer}\r\n${authHeader}`;
+}
+
+export function resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo) {
+  const isVideoExt = (url) => {
+    if (!url) return false;
+    const clean = url.split('?')[0].toLowerCase();
+    return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.zip') || clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
+  };
+
+  if (!previewUrl || isVideoExt(previewUrl)) {
+    if (isVideo && (fileUrl || sampleUrl)) {
+      return `/api/video-thumbnail?url=${encodeURIComponent(fileUrl || sampleUrl)}`;
+    }
+    return (!isVideo && sampleUrl && !isVideoExt(sampleUrl)) ? sampleUrl : (fileUrl || '');
+  }
+  return previewUrl;
+}
+
+const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+const BOORU_USER_AGENT = 'BooruExplorer/3.0 (by booruexplorer)';
+
+async function fetchSafe(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeout || 25000);
+  const isBrowserTarget = url.includes('rule34video.com') || url.includes('rule34.xxx') || url.includes('paheal') || url.includes('gelbooru.com') || url.includes('xbooru.com') || url.includes('hypnohub.net');
+  const ua = isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT;
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'User-Agent': ua,
+        'Accept': 'application/json, text/xml, text/html, */*',
+        ...(options.headers || {})
+      }
+    });
+    clearTimeout(timeout);
+    return response;
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
+  }
+}
+
+/**
+ * Умная адаптация и нормализация тегов для разных Booru источников:
+ * - Преобразует теги со скобками 'hu_tao_(genshin_impact)' -> 'hu_tao genshin_impact' для сайтов без скобок
+ * - Применяет алиасы (petite -> small_breasts)
+ * - Учитывает фильтр возраста (ageFilter)
+ */
+export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'all') {
+  let tags = (rawTags || '').trim();
+
+  // 1. Адаптация тегов со скобками (например: hu_tao_(genshin_impact), hu tao (genshin impact))
+  if (site !== 'danbooru' && tags) {
+    // Преобразуем name_(franchise) или name (franchise) в 'name franchise'
+    tags = tags.replace(/([a-zA-Z0-9_-]+)_\(([^)]+)\)/g, '$1 $2');
+    tags = tags.replace(/([a-zA-Z0-9_-]+)\s*\(([^)]+)\)/g, '$1 $2');
+    // Удаляем любые висящие скобки
+    tags = tags.replace(/[()]/g, '');
+  }
+
+  // 2. Алиасы тегов для совместимости с Danbooru
+  if (site === 'gelbooru' || site === 'rule34' || site === 'safebooru' || site === 'yandere' || site === 'konachan' || site === 'rule34video' || site === 'xbooru' || site === 'hypnohub') {
+    tags = tags.replace(/\bpetite\b/gi, 'small_breasts');
+  }
+
+  const tagList = tags.split(/\s+/).filter(Boolean);
+
+  // 3. Подмешивание тегов телосложения / типажей
+  if (ageFilter === 'adult') {
+    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+      if (!tagList.some(t => t.startsWith('-loli'))) tagList.push('-loli');
+      if (!tagList.some(t => t.startsWith('-shota'))) tagList.push('-shota');
+      if (!tagList.some(t => t.startsWith('-flat_chest'))) tagList.push('-flat_chest');
+    }
+    if (tagList.length === 0) {
+      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+        tagList.push('mature_female');
+      } else if (site === 'yandere' || site === 'konachan') {
+        tagList.push('mature');
+      }
+    }
+  } else if (ageFilter === 'young') {
+    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+      if (!tagList.some(t => t.startsWith('-milf'))) tagList.push('-milf');
+      if (!tagList.some(t => t.startsWith('-huge_breasts'))) tagList.push('-huge_breasts');
+    }
+    // Если поиск пустой, подмешиваем категорию миниатюрности
+    if (tagList.length === 0) {
+      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+        tagList.push('small_breasts');
+      } else if (site === 'yandere' || site === 'konachan') {
+        tagList.push('loli');
+      }
+    }
+  }
+
+  return tagList.join(' ');
+}
+
+/**
+ * Универсальная нормализация даты к ISO строке
+ */
+export function normalizeDate(rawDate) {
+  if (!rawDate) return '';
+  try {
+    if (typeof rawDate === 'number') {
+      // Если timestamp в секундах
+      const d = rawDate < 10000000000 ? new Date(rawDate * 1000) : new Date(rawDate);
+      if (!isNaN(d.getTime())) return d.toISOString();
+    } else if (typeof rawDate === 'string') {
+      const trimmed = rawDate.trim();
+      if (!trimmed) return '';
+      if (/^\d{10}$/.test(trimmed)) {
+        const d = new Date(parseInt(trimmed, 10) * 1000);
+        if (!isNaN(d.getTime())) return d.toISOString();
+      } else if (/^\d{13}$/.test(trimmed)) {
+        const d = new Date(parseInt(trimmed, 10));
+        if (!isNaN(d.getTime())) return d.toISOString();
+      }
+      const d = new Date(trimmed);
+      if (!isNaN(d.getTime())) return d.toISOString();
+    }
+  } catch {}
+  return '';
+}
+
+/**
+ * Универсальное извлечение автора из тегов, источника и полей поста
+ */
+export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
+  const tags = Array.isArray(rawTags) ? rawTags : [];
+  
+  // 1. Поиск в явных тегах автора
+  const explicitArtistTags = tags.filter(t => 
+    t.startsWith('artist:') || t.startsWith('creator:') || t.startsWith('author:') || t.startsWith('draw:')
+  ).map(t => t.replace(/^(artist|creator|author|draw):/, ''));
+  if (explicitArtistTags.length > 0) {
+    return explicitArtistTags.join(', ');
+  }
+
+  // 2. Поиск тегов со специальными маркерами: name_(artist), name_(creator), by_name, etc.
+  const markerArtistTags = tags.filter(t => 
+    t.endsWith('_(artist)') || t.endsWith('_(creator)') || t.endsWith('_(circle)') || t.endsWith('_(studio)') || t.startsWith('by_')
+  ).map(t => t.replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, ''));
+  if (markerArtistTags.length > 0) {
+    return markerArtistTags.join(', ');
+  }
+
+  // 3. Извлечение автора из ссылки источника (source)
+  if (source && typeof source === 'string') {
+    const s = source.trim();
+    const twitterMatch = s.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)(?:\/status|\/|$)/i);
+    if (twitterMatch && !['intent', 'i', 'home', 'search', 'post', 'status'].includes(twitterMatch[1].toLowerCase())) {
+      return `@${twitterMatch[1]}`;
+    }
+    const pixivUserMatch = s.match(/pixiv\.net\/(?:en\/)?users\/(\d+)/i) || s.match(/pixiv\.me\/([a-zA-Z0-9_-]+)/i);
+    if (pixivUserMatch) {
+      return `pixiv:${pixivUserMatch[1]}`;
+    }
+    const artstationMatch = s.match(/artstation\.com\/([a-zA-Z0-9_-]+)/i);
+    if (artstationMatch && !['artwork', 'projects', 'artist'].includes(artstationMatch[1].toLowerCase())) {
+      return artstationMatch[1];
+    }
+    const deviantArtMatch = s.match(/deviantart\.com\/([a-zA-Z0-9_-]+)/i);
+    if (deviantArtMatch && !['art', 'tag', 'topic', 'view'].includes(deviantArtMatch[1].toLowerCase())) {
+      return deviantArtMatch[1];
+    }
+    const fanboxMatch = s.match(/([a-zA-Z0-9_-]+)\.fanbox\.cc/i);
+    if (fanboxMatch) {
+      return fanboxMatch[1];
+    }
+    const fantiaMatch = s.match(/fantia\.jp\/fanclubs\/(\d+)/i);
+    if (fantiaMatch) {
+      return `fantia:${fantiaMatch[1]}`;
+    }
+    const patreonMatch = s.match(/patreon\.com\/([a-zA-Z0-9_-]+)/i);
+    if (patreonMatch && !['posts', 'join'].includes(patreonMatch[1].toLowerCase())) {
+      return `patreon:${patreonMatch[1]}`;
+    }
+    const skebMatch = s.match(/skeb\.jp\/@([a-zA-Z0-9_-]+)/i);
+    if (skebMatch) {
+      return `@${skebMatch[1]}`;
+    }
+  }
+
+  // 4. Использование поля itemAuthor если оно не мусорное
+  if (itemAuthor && typeof itemAuthor === 'string') {
+    const cleanAuthor = itemAuthor.trim();
+    const isBad = !cleanAuthor || cleanAuthor === '0' || cleanAuthor === 'null' || cleanAuthor === 'undefined' || cleanAuthor.toLowerCase() === 'anonymous' || /^\d+$/.test(cleanAuthor);
+    if (!isBad) {
+      return cleanAuthor;
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Умная классификация тегов по категориям
+ */
+export function classifyTags(rawTags = [], author = '') {
+  const tags = Array.isArray(rawTags) ? rawTags : [];
+  const artist = [];
+  const character = [];
+  const copyright = [];
+  const meta = [];
+  const general = [];
+
+  if (author) {
+    author.split(',').forEach(a => {
+      const clean = a.trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/\s+/g, '_');
+      if (clean && !artist.includes(clean)) artist.push(clean);
+    });
+  }
+
+  for (const tag of tags) {
+    const t = tag.toLowerCase();
+    if (t.startsWith('artist:') || t.endsWith('_(artist)') || t.endsWith('_(creator)') || t.startsWith('by_') || t.endsWith('_(circle)') || t.endsWith('_(studio)')) {
+      const clean = tag.replace(/^(artist|creator|author|draw):/, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, '');
+      if (!artist.includes(clean)) artist.push(clean);
+    } else if (t.startsWith('character:') || t.endsWith('_(character)') || t.endsWith('_(cosplay)')) {
+      const clean = tag.replace(/^character:/, '').replace(/_?\((character|cosplay)\)$/i, '');
+      if (!character.includes(clean)) character.push(clean);
+    } else if (t.startsWith('copyright:') || t.endsWith('_(series)') || t.endsWith('_(game)') || t.endsWith('_(anime)') || t.endsWith('_(manga)') || t.endsWith('_(vtuber)') || t.endsWith('_(novel)')) {
+      const clean = tag.replace(/^copyright:/, '').replace(/_?\((series|game|anime|manga|vtuber|novel)\)$/i, '');
+      if (!copyright.includes(clean)) copyright.push(clean);
+    } else if (t.startsWith('meta:') || ['highres', 'absurdres', '4k', 'sound', 'audio', 'video', 'animated', 'ugoira', 'translated', 'commentary', 'tagme'].includes(t)) {
+      const clean = tag.replace(/^meta:/, '');
+      if (!meta.includes(clean)) meta.push(clean);
+    } else {
+      general.push(tag);
+    }
+  }
+
+  return { artist, character, copyright, general, meta };
+}
+
+// 1. Danbooru (JSON REST)
+export async function fetchDanbooru(params, aiTagsList, settings) {
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all' } = params;
+  const userTagList = tags.trim().split(/\s+/).filter(Boolean);
+  const queryTags = [];
+  
+  const prioritizeUserTags = settings?.prioritizeUserTags === true;
+  const deepFetchPagesSetting = settings?.deepFetchPages ? parseInt(settings.deepFetchPages, 10) : 2;
+
+  // Если приоритет у ручных тегов - сначала добавляем их
+  if (prioritizeUserTags) {
+    for (const t of userTagList) {
+      if (queryTags.length < 2) queryTags.push(t);
+    }
+  }
+
+  // Приоритет Видео/звук
+  if (typeFilter === 'audio' || typeFilter === 'sound') {
+    if (queryTags.length < 2) queryTags.push('sound');
+  } else if (typeFilter === 'video') {
+    if (queryTags.length < 2) queryTags.push('animated');
+  }
+
+  // Если ручные теги не в приоритете - добавляем их после медиа-фильтра
+  if (!prioritizeUserTags) {
+    for (const t of userTagList) {
+      if (queryTags.length < 2) queryTags.push(t);
+    }
+  }
+
+  // Приоритет Сортировка
+  if (queryTags.length < 2) {
+    if (category === 'top') queryTags.push('order:rank');          // Топ всех времён (индексированный рейтинг)
+    else if (category === 'popular' || category === 'recommended') queryTags.push('order:rank_week'); // Тренды за неделю
+    else if (category === 'random') queryTags.push('order:random');
+  }
+
+  // Приоритет Рейтинг
+  if (queryTags.length < 2) {
+    if (ratingFilter === 'nsfw') queryTags.push('rating:q,e');
+    else if (ratingFilter === 'sfw') queryTags.push('rating:g,s');
+  }
+
+  const isTagsDropped = userTagList.length + (typeFilter !== 'all' ? 1 : 0) + (ratingFilter !== 'all' ? 1 : 0) > 2;
+  const shouldDeepFetch = isTagsDropped || deepFetchPagesSetting > 1;
+  const fetchLimit = shouldDeepFetch ? Math.max(limit, 200) : limit;
+
+  const finalTags = queryTags.join(' ');
+  let allData = [];
+
+  logInfo('Danbooru', `Поиск в API: tags="${finalTags}", deepFetch=${shouldDeepFetch ? deepFetchPagesSetting + ' стр.' : 'выкл'}, userPriority=${prioritizeUserTags}`);
+
+  // Вспомогательная функция быстрой оценки соответствия поста
+  const isPostMatch = (item) => {
+    if (item.is_banned) return false;
+    const rawTags = (item.tag_string || '').toLowerCase().split(/\s+/).filter(Boolean);
+    if (userTagList.length > 0) {
+      const hasAll = userTagList.every(t => {
+        const clean = t.toLowerCase();
+        if (clean.startsWith('-')) return !rawTags.includes(clean.slice(1));
+        if (clean.includes(':')) return true;
+        return rawTags.includes(clean);
+      });
+      if (!hasAll) return false;
+    }
+    if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
+      const variants = item.media_asset?.variants || [];
+      const hasVideoVariant = variants.some(v => v.file_ext === 'mp4' || v.file_ext === 'webm' || v.url?.includes('.mp4') || v.url?.includes('.webm'));
+      const isVidExt = item.file_ext === 'mp4' || item.file_ext === 'webm' || item.file_ext === 'zip' || (item.file_url && (item.file_url.endsWith('.mp4') || item.file_url.endsWith('.webm')));
+      const isAnimTag = rawTags.includes('animated') || rawTags.includes('video') || rawTags.includes('ugoira');
+      if (!hasVideoVariant && !isVidExt && !isAnimTag) return false;
+    }
+    if (ratingFilter === 'nsfw') {
+      const r = (item.rating || '').toLowerCase();
+      if (r !== 'e' && r !== 'q' && r !== 'explicit' && r !== 'questionable' && r !== 'sensitive') return false;
+    } else if (ratingFilter === 'sfw') {
+      const r = (item.rating || '').toLowerCase();
+      if (r !== 's' && r !== 'g' && r !== 'general') return false;
+    }
+    if (params.ageFilter === 'adult') {
+      if (CURVY_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+      if (!userTagList.length && !CURVY_INCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+    } else if (params.ageFilter === 'young') {
+      if (PETITE_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+      if (!PETITE_INCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+    }
+    return true;
+  };
+
+  if (shouldDeepFetch) {
+    const minDesiredPosts = 50; // Минимальная цель выдачи
+    const maxIterations = Math.max(deepFetchPagesSetting * 2, 12); // До 12-15 страниц по 200 (до 3000 постов)
+    let currentCursor = '';
+    let matchedCount = 0;
+    
+    if (page > 1) {
+      const startPageNum = (page - 1) * deepFetchPagesSetting + 1;
+      if (startPageNum <= 5) {
+        currentCursor = `page=${startPageNum}`;
+      }
+    }
+
+    const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)
+      ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
+      : '';
+
+    for (let i = 0; i < maxIterations; i++) {
+      let pageParam = currentCursor || `page=${(page - 1) * deepFetchPagesSetting + 1 + i}`;
+      const url = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(finalTags)}&limit=${fetchLimit}${pageParam ? '&' + pageParam : ''}${authParam}`;
+      
+      let data = null;
+      for (let retry = 0; retry < 2; retry++) {
+        try {
+          if (i > 0 || retry > 0) await new Promise(r => setTimeout(r, 150));
+          const res = await fetchSafe(url);
+          if (!res.ok) {
+            if (res.status === 429) {
+              await new Promise(r => setTimeout(r, 600));
+              continue;
+            }
+            break;
+          }
+          const text = await res.text();
+          const parsed = safeJsonParse(text, null);
+          if (Array.isArray(parsed)) {
+            data = parsed;
+            break;
+          }
+        } catch (err) {
+          if (retry === 0) {
+            await new Promise(r => setTimeout(r, 300));
+            continue;
+          }
+          logError('Danbooru', `Ошибка курсорного поиска на шаге ${i + 1}`, err);
+          break;
+        }
+      }
+
+      if (!data || data.length === 0) break;
+      allData.push(...data);
+      
+      for (const item of data) {
+        if (isPostMatch(item)) matchedCount++;
+      }
+
+      const ids = data.map(d => d.id).filter(id => typeof id === 'number');
+      if (ids.length > 0) {
+        const minId = Math.min(...ids);
+        currentCursor = `page=b${minId}`;
+      } else {
+        break;
+      }
+
+      // Если уже набрали 50+ подходящих постов — прекращаем углубление
+      if (matchedCount >= minDesiredPosts && i >= deepFetchPagesSetting - 1) {
+        break;
+      }
+
+      if (data.length < fetchLimit) {
+        // Конец архива
+        break;
+      }
+    }
+  } else {
+    const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)
+      ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
+      : '';
+    const url = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(finalTags)}&page=${page}&limit=${fetchLimit}${authParam}`;
+    try {
+      const res = await fetchSafe(url);
+      if (res.ok) {
+        const text = await res.text();
+        const data = safeJsonParse(text, null);
+        if (Array.isArray(data)) allData = data;
+      } else {
+        logError('Danbooru', `API статус: ${res.status}`);
+      }
+    } catch (err) {
+      logError('Danbooru', 'Ошибка стандартного fetch', err);
+    }
+  }
+
+  // Если по прямому тегу ничего не найдено, а тег похож на автора/аккаунт (например ti_nira_n)
+  if (allData.length === 0 && userTagList.length === 1 && !userTagList[0].includes(':')) {
+    const rawTag = userTagList[0].replace(/^@/, '');
+    const sourceQuery = `source:*${rawTag}*`;
+    logInfo('Danbooru', `Прямой тег не вернул результатов, пробуем поиск по автору в источнике: tags="${sourceQuery}"`);
+    try {
+      const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)
+        ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
+        : '';
+      const fallbackUrl = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(sourceQuery)}&limit=${fetchLimit}${authParam}`;
+      const res = await fetchSafe(fallbackUrl);
+      if (res.ok) {
+        const text = await res.text();
+        const data = safeJsonParse(text, null);
+        if (Array.isArray(data) && data.length > 0) {
+          allData = data;
+        }
+      }
+    } catch (e) {}
+  }
+
+  logInfo('Danbooru', `Получено из API: ${allData.length} постов до локальной фильтрации`);
+
+  const validItems = allData.filter(item => {
+    if (item.is_banned) return false;
+    const variants = item.media_asset?.variants || [];
+    const hasMedia = !!(item.file_url || item.large_file_url || item.preview_file_url || variants.length > 0);
+    return hasMedia;
+  });
+
+  return validItems.map(item => {
+    const rawTags = (item.tag_string || '').split(' ').filter(Boolean);
+    const variants = item.media_asset?.variants || [];
+    
+    // Поиск лучших MP4/WebM вариантов в media_asset (включая sample.webm / mp4 для Ugoira анимаций)
+    const mp4_720p = variants.find(v => (v.type === '720p' || v.type === 'sample') && (v.file_ext === 'mp4' || v.url?.includes('.mp4')));
+    const mp4_orig = variants.find(v => v.type === 'original' && (v.file_ext === 'mp4' || v.url?.includes('.mp4')));
+    const webm_var = variants.find(v => (v.type === 'sample' || v.file_ext === 'webm') && (v.file_ext === 'webm' || v.url?.includes('.webm')));
+    const any_video = mp4_720p || mp4_orig || webm_var || variants.find(v => v.file_ext === 'mp4' || v.file_ext === 'webm');
+
+    // Извлечение ссылок
+    let fileUrl = item.file_url || item.large_file_url || item.preview_file_url || '';
+    let sampleUrl = item.large_file_url || item.file_url || '';
+
+    if (any_video && any_video.url) {
+      sampleUrl = mp4_720p?.url || webm_var?.url || any_video.url;
+      fileUrl = mp4_orig?.url || any_video.url || fileUrl;
+    }
+
+    const { isVideo: checkVideo, isGif, hasSound: checkSound, fileExt: detectedExt } = checkMediaTypes(fileUrl, item.file_ext, rawTags);
+    const hasPlayableVideo = (fileUrl.endsWith('.mp4') || fileUrl.endsWith('.webm') || sampleUrl.endsWith('.mp4') || sampleUrl.endsWith('.webm') || !!any_video);
+    const isVideo = (checkVideo || hasPlayableVideo) && (!fileUrl.endsWith('.zip') || !!any_video);
+    const hasSound = isVideo && (checkSound || rawTags.includes('sound') || rawTags.includes('audio') || variants.some(v => v.has_sound || v.audio));
+    // Извлекаем все варианты изображений по типу для разных уровней качества
+    const findImgVariant = (types) => variants.find(v => types.includes(v.type) && (v.file_ext === 'jpg' || v.file_ext === 'webp' || v.file_ext === 'png'));
+    const thumb180 = findImgVariant(['180x180'])?.url || item.preview_file_url || '';
+    const thumb360 = findImgVariant(['360x360'])?.url || '';
+    const thumb720 = findImgVariant(['720x720'])?.url || '';
+    const thumbSample = findImgVariant(['sample'])?.url || item.large_file_url || sampleUrl || '';
+    const thumbOriginal = (!isVideo && (findImgVariant(['original'])?.url || item.file_url || fileUrl)) || '';
+    const previewUrl = resolvePreviewUrl(thumb180 || item.preview_file_url, fileUrl, sampleUrl, isVideo);
+    const isAi = checkIsAi(rawTags, aiTagsList) || (item.tag_string_meta && item.tag_string_meta.includes('ai_generated'));
+
+    const author = (item.tag_string_artist || '').split(' ').filter(Boolean).join(', ') || item.uploader_name || '';
+
+    return {
+      id: `danbooru_${item.id}`,
+      originalId: String(item.id),
+      site: 'danbooru',
+      siteName: 'Danbooru',
+      previewUrl,
+      thumb180,
+      thumb360,
+      thumb720,
+      thumbSample,
+      thumbOriginal,
+      sampleUrl,
+      fileUrl,
+      fileExt: isVideo ? (any_video?.file_ext || 'mp4') : detectedExt,
+      isVideo,
+      isGif,
+      hasSound,
+      author,
+      tags: rawTags,
+      tagDetails: {
+        artist: (item.tag_string_artist || '').split(' ').filter(Boolean),
+        character: (item.tag_string_character || '').split(' ').filter(Boolean),
+        copyright: (item.tag_string_copyright || '').split(' ').filter(Boolean),
+        general: (item.tag_string_general || '').split(' ').filter(Boolean),
+        meta: (item.tag_string_meta || '').split(' ').filter(Boolean)
+      },
+      score: item.score || 0,
+      rating: item.rating || 'g',
+      width: item.image_width || 0,
+      height: item.image_height || 0,
+      source: item.source || '',
+      createdAt: item.created_at || '',
+      isAi
+    };
+  }).filter(p => p.fileUrl || p.sampleUrl || p.previewUrl);
+}
+
+// 2. Yande.re & Konachan
+export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList) {
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
+  if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
+    // Moebooru сайты не содержат видеороликов
+    return [];
+  }
+
+  let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
+  let url = '';
+
+  if ((category === 'popular' || category === 'recommended') && !tags) {
+    url = `${siteUrl}/post/popular_by_week.json`;
+  } else {
+    if (category === 'top') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
+    else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
+    else if (category === 'random') finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
+
+    if (ratingFilter === 'nsfw') {
+      finalTags += ' rating:questionable,explicit';
+    } else if (ratingFilter === 'sfw') {
+      finalTags += ' rating:safe';
+    }
+
+    url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
+  }
+  const res = await fetchSafe(url);
+  if (!res.ok) {
+    logError(siteName, `API статус: ${res.status}`);
+    return [];
+  }
+  const text = await res.text();
+  const data = safeJsonParse(text, []);
+  if (!Array.isArray(data)) return [];
+
+  return data.map(item => {
+    const rawTags = (item.tags || '').split(' ').filter(Boolean);
+    const fileUrl = item.file_url || item.jpeg_url || item.sample_url || item.preview_url;
+    const sampleUrl = item.sample_url || item.jpeg_url || fileUrl;
+    const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+    const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
+    const isAi = checkIsAi(rawTags, aiTagsList);
+    const author = extractAuthor(rawTags, item.source, item.author);
+    const tagDetails = classifyTags(rawTags, author);
+    const createdAt = normalizeDate(item.created_at);
+
+    return {
+      id: `${siteId}_${item.id}`,
+      originalId: String(item.id),
+      site: siteId,
+      siteName,
+      previewUrl,
+      sampleUrl,
+      fileUrl,
+      fileExt,
+      isVideo,
+      isGif,
+      hasSound: isVideo && hasSound,
+      author,
+      tags: rawTags,
+      tagDetails,
+      score: item.score || 0,
+      rating: item.rating || 's',
+      width: parseInt(item.width, 10) || 0,
+      height: parseInt(item.height, 10) || 0,
+      source: item.source || '',
+      createdAt,
+      isAi
+    };
+  });
+}
+
+// 3. Safebooru
+export async function fetchSafebooru(params, aiTagsList) {
+  const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ratingFilter = 'all', ageFilter = 'all' } = params;
+  if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound' || ratingFilter === 'nsfw') {
+    // Safebooru не содержит видео и NSFW контента
+    return [];
+  }
+
+  let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter);
+  if (category === 'top' || category === 'popular' || category === 'recommended') finalTags += ' sort:score:desc';
+  else if (category === 'random') finalTags += ' sort:random';
+
+  const pid = Math.max(0, page - 1);
+  const url = `https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(finalTags)}&pid=${pid}&limit=${limit}`;
+  const res = await fetchSafe(url);
+  if (!res.ok) return [];
+  const text = await res.text();
+  const data = safeJsonParse(text, []);
+  const posts = Array.isArray(data) ? data : (data?.post || []);
+
+  return posts.map(item => {
+    const rawTags = (item.tags || '').split(' ').filter(Boolean);
+    let fileUrl = item.file_url || '';
+    if (fileUrl.startsWith('//')) fileUrl = 'https:' + fileUrl;
+    else if (fileUrl.startsWith('/')) fileUrl = 'https://safebooru.org' + fileUrl;
+
+    let sampleUrl = item.sample_url || fileUrl;
+    if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+    else if (sampleUrl.startsWith('/')) sampleUrl = 'https://safebooru.org' + sampleUrl;
+
+    let previewUrlRaw = item.preview_url || item.sample_url || fileUrl;
+    if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
+    else if (previewUrlRaw.startsWith('/')) previewUrlRaw = 'https://safebooru.org' + previewUrlRaw;
+
+    const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+    const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+    const isAi = checkIsAi(rawTags, aiTagsList);
+    const author = extractAuthor(rawTags, item.source, item.author || item.owner);
+    const tagDetails = classifyTags(rawTags, author);
+    const createdAt = normalizeDate(item.created_at || item.change);
+
+    return {
+      id: `safebooru_${item.id}`,
+      originalId: String(item.id),
+      site: 'safebooru',
+      siteName: 'Safebooru',
+      previewUrl,
+      sampleUrl,
+      fileUrl,
+      fileExt,
+      isVideo,
+      isGif,
+      hasSound: isVideo && hasSound,
+      author,
+      tags: rawTags,
+      tagDetails,
+      score: parseInt(item.score, 10) || 0,
+      rating: item.rating || 's',
+      width: parseInt(item.width, 10) || 0,
+      height: parseInt(item.height, 10) || 0,
+      source: item.source || '',
+      createdAt,
+      isAi
+    };
+  });
+}
+
+// 4. Rule34.xxx (Поддержка DAPI JSON + автоматический HTML Scraper парсинг + Paheal fallback)
+export async function fetchRule34(params, aiTagsList, settings) {
+  const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ageFilter = 'all' } = params;
+  
+  let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
+
+  if (category === 'top') {
+    searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+  } else if (category === 'popular' || category === 'recommended') {
+    searchTags = searchTags ? `${searchTags} sort:updated:desc` : 'sort:updated:desc';
+  } else if (category === 'random') {
+    searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+  }
+
+  const pid = Math.max(0, page - 1);
+
+  // 1. Попытка через официальный DAPI если есть API ключ
+  if (settings.rule34ApiKey && settings.rule34UserId) {
+    const url = `https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`;
+    try {
+      const res = await fetchSafe(url);
+      if (res.ok) {
+        const text = await res.text();
+        if (!text.includes('Missing authentication')) {
+          const data = safeJsonParse(text, null);
+          if (Array.isArray(data) && data.length > 0) {
+            return data.map(item => {
+              const rawTags = (item.tags || '').split(' ').filter(Boolean);
+              let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
+              const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
+              let sampleUrl = item.sample_url || fileUrl;
+              let previewUrl = item.preview_url || '';
+              if (isVideo) {
+                if (sampleUrl && (sampleUrl.endsWith('.jpg') || sampleUrl.endsWith('.jpeg') || sampleUrl.endsWith('.png'))) {
+                  if (!previewUrl) previewUrl = sampleUrl;
+                }
+                sampleUrl = fileUrl;
+              }
+              previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
+              const author = extractAuthor(rawTags, item.source, item.owner || item.creator_id || item.author);
+              const tagDetails = classifyTags(rawTags, author);
+              const createdAt = normalizeDate(item.created_at || item.change);
+              return {
+                id: `rule34_${item.id}`,
+                originalId: String(item.id),
+                site: 'rule34',
+                siteName: 'Rule34.xxx',
+                previewUrl,
+                sampleUrl,
+                fileUrl,
+                fileExt,
+                isVideo,
+                isGif,
+                hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+                author,
+                tags: rawTags,
+                tagDetails,
+                score: parseInt(item.score, 10) || 0,
+                rating: item.rating || 'e',
+                width: parseInt(item.width, 10) || 0,
+                height: parseInt(item.height, 10) || 0,
+                source: item.source || '',
+                createdAt,
+                isAi: checkIsAi(rawTags, aiTagsList)
+              };
+            });
+          }
+        }
+      }
+    } catch (err) {
+      logError('Rule34.xxx DAPI', 'Ошибка DAPI запроса, переключение на HTML парсинг', err);
+    }
+  }
+
+  // 2. Универсальный веб-парсер Rule34.xxx (открытая выдача без API ключа)
+  const htmlUrl = `https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(searchTags)}&pid=${pid * 42}`;
+  try {
+    const res = await fetchSafe(htmlUrl);
+    if (res.ok) {
+      const html = await res.text();
+      const posts = [];
+      const spanRegex = /<span id="s(\d+)" class="thumb"[^>]*>([\s\S]*?)<\/span>/g;
+      let match;
+      while ((match = spanRegex.exec(html)) !== null) {
+        const id = match[1];
+        const block = match[2];
+
+        const imgMatch = block.match(/<img[^>]+src="([^"]+)"/);
+        const thumbUrl = imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : '';
+
+        const titleMatch = block.match(/title="([^"]*)"/);
+        const altMatch = block.match(/alt="([^"]*)"/);
+        const titleAttr = (titleMatch ? titleMatch[1] : (altMatch ? altMatch[1] : '')).replace(/&amp;/g, '&');
+
+        const classMatch = block.match(/class="([^"]*)"/);
+        const classAttr = classMatch ? classMatch[1] : '';
+
+        if (!id || !thumbUrl) continue;
+
+        let score = 0;
+        const scoreMatch = titleAttr.match(/score:(-?\d+)/);
+        if (scoreMatch) score = parseInt(scoreMatch[1], 10);
+
+        let rating = 'e';
+        const ratingMatch = titleAttr.match(/rating:(\w+)/);
+        if (ratingMatch) rating = ratingMatch[1].charAt(0).toLowerCase();
+
+        const cleanTitleTags = titleAttr.replace(/score:-?\d+/g, '').replace(/rating:\w+/g, '').trim();
+        const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
+
+        const isVideoClass = classAttr.includes('webm-thumb') || classAttr.includes('video-thumb');
+        const isVideoTag = rawTags.includes('video') || rawTags.includes('animated') || rawTags.includes('webm') || rawTags.includes('mp4');
+        const isVideo = isVideoClass || isVideoTag;
+
+        const cleanThumb = thumbUrl.split('?')[0];
+        const thumbMatch = cleanThumb.match(/\/thumbnails\/+(\d+)\/thumbnail_([a-f0-9]+)\./i);
+
+        let fileUrl = '';
+        let sampleUrl = '';
+        const previewUrl = thumbUrl;
+        let fileExt = isVideo ? 'mp4' : 'jpg';
+
+        if (thumbMatch) {
+          const dir = thumbMatch[1];
+          const hash = thumbMatch[2];
+          const host = cleanThumb.includes('wimg.rule34.xxx') ? 'https://wimg.rule34.xxx' : (cleanThumb.includes('us.rule34.xxx') ? 'https://us.rule34.xxx' : 'https://rule34.xxx');
+          if (isVideo) {
+            fileUrl = `${host}/images/${dir}/${hash}.mp4`;
+            sampleUrl = fileUrl;
+            fileExt = 'mp4';
+          } else {
+            fileUrl = `${host}/images/${dir}/${hash}.jpg`;
+            sampleUrl = `${host}/samples/${dir}/sample_${hash}.jpg`;
+          }
+        } else {
+          fileUrl = thumbUrl.replace('/thumbnails/', '/images/').replace('thumbnail_', '').split('?')[0];
+          sampleUrl = thumbUrl.replace('/thumbnails/', '/samples/').replace('thumbnail_', 'sample_').split('?')[0];
+        }
+
+        const source = `https://rule34.xxx/index.php?page=post&s=view&id=${id}`;
+        const author = extractAuthor(rawTags, source, '');
+        const tagDetails = classifyTags(rawTags, author);
+
+        posts.push({
+          id: `rule34_${id}`,
+          originalId: id,
+          site: 'rule34',
+          siteName: 'Rule34.xxx',
+          previewUrl,
+          sampleUrl,
+          fileUrl,
+          fileExt,
+          isVideo,
+          isGif: rawTags.includes('gif'),
+          hasSound: isVideo && (rawTags.includes('sound') || rawTags.includes('audio')),
+          author,
+          tags: rawTags,
+          tagDetails,
+          score,
+          rating,
+          width: 0,
+          height: 0,
+          source,
+          createdAt: '',
+          isAi: checkIsAi(rawTags, aiTagsList)
+        });
+      }
+
+      if (posts.length > 0) {
+        return posts.slice(0, limit);
+      }
+    }
+  } catch (err) {
+    logError('Rule34.xxx HTML', 'Ошибка веб-парсинга Rule34.xxx', err);
+  }
+
+  // 3. Fallback: Открытый Paheal API
+  if (settings && settings.enablePaheal === false) {
+    return [];
+  }
+  let pahealSearchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
+  const fetchPahealLimit = category === 'popular' ? Math.max(limit, 70) : limit;
+  if (category === 'top') {
+    pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
+  }
+  const pahealUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=${encodeURIComponent(pahealSearchTags)}&limit=${fetchPahealLimit}&page=${page}`;
+  try {
+    const pahealRes = await fetchSafe(pahealUrl);
+    if (!pahealRes.ok) return [];
+    const text = await pahealRes.text();
+
+    const posts = [];
+    const tagRegex = /<tag\s+([^>]+)>/g;
+    let match;
+    while ((match = tagRegex.exec(text)) !== null) {
+      const attrsStr = match[1];
+      const attrs = {};
+      const attrRegex = /([a-z0-9_]+)=['"]([^'"]*)['"]/gi;
+      let attrMatch;
+      while ((attrMatch = attrRegex.exec(attrsStr)) !== null) {
+        attrs[attrMatch[1]] = attrMatch[2];
+      }
+      if (attrs.file_url) {
+        const rawTags = (attrs.tags || '').split(' ').filter(Boolean);
+        const fileName = attrs.file_name || '';
+        let { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(attrs.file_url, fileName, rawTags);
+        if (fileName.toLowerCase().endsWith('.mp4') || fileName.toLowerCase().endsWith('.webm')) {
+          isVideo = true;
+          fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
+        }
+        const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
+        const author = extractAuthor(rawTags, attrs.source, attrs.author);
+        const tagDetails = classifyTags(rawTags, author);
+        const createdAt = normalizeDate(attrs.created_at || attrs.date);
+        posts.push({
+          id: `paheal_${attrs.id}`,
+          originalId: attrs.id,
+          site: 'rule34',
+          siteName: 'Rule34',
+          previewUrl,
+          sampleUrl: attrs.file_url,
+          fileUrl: attrs.file_url,
+          fileExt,
+          isVideo,
+          isGif,
+          hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+          author,
+          tags: rawTags,
+          tagDetails,
+          score: parseInt(attrs.score, 10) || 0,
+          rating: 'e',
+          width: parseInt(attrs.width, 10) || 0,
+          height: parseInt(attrs.height, 10) || 0,
+          source: attrs.source || '',
+          createdAt,
+          isAi: checkIsAi(rawTags, aiTagsList)
+        });
+      }
+    }
+
+    if (category === 'popular' && posts.length > 0) {
+      posts.sort((a, b) => (b.score || 0) - (a.score || 0));
+    }
+
+    return posts.slice(0, limit);
+  } catch (err) {
+    logError('Rule34 Paheal', 'Ошибка запроса Paheal', err);
+    return [];
+  }
+}
+
+// 6. Gelbooru (Поддержка DAPI JSON + автоматический HTML Scraper парсинг)
+export async function fetchGelbooru(params, aiTagsList, settings) {
+  const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ageFilter = 'all' } = params;
+  
+  let searchTags = adaptTagsForSite('gelbooru', tags, ageFilter, typeFilter);
+
+  if (category === 'top') {
+    searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+  } else if (category === 'popular' || category === 'recommended') {
+    searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+  } else if (category === 'random') {
+    searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+  }
+
+  const pid = Math.max(0, page - 1);
+
+  // 1. Попытка через официальный DAPI если есть ключ
+  if (settings.gelbooruApiKey && settings.gelbooruUserId) {
+    const url = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.gelbooruApiKey)}&user_id=${encodeURIComponent(settings.gelbooruUserId)}`;
+    try {
+      const res = await fetchSafe(url);
+      if (res.ok) {
+        const text = await res.text();
+        const data = safeJsonParse(text, []);
+        const posts = data?.post || (Array.isArray(data) ? data : []);
+        if (Array.isArray(posts) && posts.length > 0) {
+          return posts.map(item => {
+            const rawTags = (item.tags || '').split(' ').filter(Boolean);
+            const fileUrl = item.file_url || '';
+            const sampleUrl = item.sample_url || fileUrl;
+            const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+            const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
+            const author = extractAuthor(rawTags, item.source, item.owner || item.creator_id || item.author);
+            const tagDetails = classifyTags(rawTags, author);
+            const createdAt = normalizeDate(item.created_at || item.change);
+            return {
+              id: `gelbooru_${item.id}`,
+              originalId: String(item.id),
+              site: 'gelbooru',
+              siteName: 'Gelbooru',
+              previewUrl,
+              sampleUrl,
+              fileUrl,
+              fileExt,
+              isVideo,
+              isGif,
+              hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+              author,
+              tags: rawTags,
+              tagDetails,
+              score: parseInt(item.score, 10) || 0,
+              rating: item.rating || 's',
+              width: parseInt(item.width, 10) || 0,
+              height: parseInt(item.height, 10) || 0,
+              source: item.source || '',
+              createdAt,
+              isAi: checkIsAi(rawTags, aiTagsList)
+            };
+          });
+        }
+      }
+    } catch (err) {
+      logError('Gelbooru DAPI', 'Ошибка DAPI запроса, переключение на HTML парсинг', err);
+    }
+  }
+
+  // 2. Универсальный fallback через открытую веб-выдачу Gelbooru HTML
+  const htmlUrl = `https://gelbooru.com/index.php?page=post&s=list&tags=${encodeURIComponent(searchTags)}&pid=${pid * 42}`;
+  try {
+    const res = await fetchSafe(htmlUrl);
+    if (!res.ok) return [];
+    const html = await res.text();
+
+    const posts = [];
+    const articleRegex = /<article\s+class="thumbnail-preview"[^>]*>[\s\S]*?<\/article>/g;
+    let match;
+    while ((match = articleRegex.exec(html)) !== null) {
+      const block = match[0];
+      const idMatch = block.match(/id="p(\d+)"/) || block.match(/id=(\d+)/);
+      const id = idMatch ? idMatch[1] : '';
+      const imgMatch = block.match(/<img[^>]+src="([^"]+)"/);
+      const thumbUrl = imgMatch ? imgMatch[1] : '';
+      const titleMatch = block.match(/title="([^"]*)"/);
+      const titleAttr = titleMatch ? titleMatch[1] : '';
+
+      if (!id || !thumbUrl) continue;
+
+      let score = 0;
+      const scoreMatch = titleAttr.match(/score:(-?\d+)/);
+      if (scoreMatch) score = parseInt(scoreMatch[1], 10);
+
+      let rating = 's';
+      const ratingMatch = titleAttr.match(/rating:(\w+)/);
+      if (ratingMatch) rating = ratingMatch[1].charAt(0).toLowerCase();
+
+      const cleanTitleTags = titleAttr.replace(/score:-?\d+/g, '').replace(/rating:\w+/g, '').trim();
+      const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
+
+      const fileUrl = thumbUrl.replace('/thumbnails/', '/images/').replace('thumbnail_', '');
+      const sampleUrl = thumbUrl.replace('/thumbnails/', '/samples/').replace('thumbnail_', 'sample_');
+      const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      const previewUrl = resolvePreviewUrl(thumbUrl, fileUrl, sampleUrl, isVideo);
+      const author = extractAuthor(rawTags, `https://gelbooru.com/index.php?page=post&s=view&id=${id}`, '');
+      const tagDetails = classifyTags(rawTags, author);
+
+      posts.push({
+        id: `gelbooru_${id}`,
+        originalId: id,
+        site: 'gelbooru',
+        siteName: 'Gelbooru',
+        previewUrl,
+        sampleUrl,
+        fileUrl,
+        fileExt,
+        isVideo,
+        isGif,
+        hasSound: isVideo && hasSound,
+        author,
+        tags: rawTags,
+        tagDetails,
+        score,
+        rating,
+        width: 0,
+        height: 0,
+        source: `https://gelbooru.com/index.php?page=post&s=view&id=${id}`,
+        createdAt: '',
+        isAi: checkIsAi(rawTags, aiTagsList)
+      });
+    }
+
+    return posts;
+  } catch (err) {
+    logError('Gelbooru HTML', 'Ошибка веб-парсинга Gelbooru', err);
+    return [];
+  }
+}
+
+// 7. Rule34Video (Video Archive)
+export async function fetchRule34Video(params, aiTagsList) {
+  const { tags = '', page = 1, limit = 80, category = '', ratingFilter = 'all', ageFilter = 'all' } = params;
+  if (ratingFilter === 'sfw') {
+    // Rule34Video - 18+ ресурс
+    return [];
+  }
+
+  // Адаптация тегов возраста для Rule34Video (поиск по тегу в запросе)
+  let rawTags = tags.trim();
+  if (ageFilter === 'young' && !rawTags) {
+    rawTags = 'small tits';
+  } else if (ageFilter === 'adult' && !rawTags) {
+    rawTags = 'big tits';
+  }
+
+  const cleanQuery = rawTags.replace(/[_+\s]+/g, '-').replace(/-+/g, '-').toLowerCase();
+  
+  // Загружаем пакет из 4 страниц сайта параллельно (4 страницы x 38 = ~150 видео за один запрос!)
+  const pagesPerBatch = 4;
+  const startFrom = (page - 1) * pagesPerBatch + 1;
+  const pageNumbers = Array.from({ length: pagesPerBatch }, (_, i) => startFrom + i);
+
+  const allPosts = [];
+  const seenIds = new Set();
+
+  const fetchPromises = pageNumbers.map(async (p) => {
+    let url = '';
+    const isPopular = (category === 'popular' || category === 'top' || category === 'recommended');
+    if (cleanQuery) {
+      const sortByParam = isPopular ? '&sort_by=most_popular' : '';
+      url = `https://rule34video.com/search/${encodeURIComponent(cleanQuery)}/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&q=${encodeURIComponent(cleanQuery)}${sortByParam}&from_videos=${p}`;
+    } else if (isPopular) {
+      url = `https://rule34video.com/top-rated/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&from=${p}`;
+    } else {
+      url = `https://rule34video.com/latest-updates/?mode=async&function=get_block&block_id=custom_list_videos_latest_videos_list&from=${p}`;
+    }
+
+    try {
+      const res = await fetchSafe(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        timeout: 10000
+      });
+      if (!res.ok) return [];
+      const html = await res.text();
+
+      const blocks = html.split('<div class="item').slice(1);
+      const pageResults = [];
+
+      for (const block of blocks) {
+        const linkMatch = block.match(/href="([^"]*video\/(\d+)\/([^"]*))"\s+title="([^"]*)"/);
+        const thumbMatch = block.match(/data-original="([^"]*)"/) || block.match(/src="([^"]*)"/);
+        const previewMatch = block.match(/data-preview="([^"]*)"/);
+        if (!linkMatch) continue;
+
+        const id = linkMatch[2];
+        const pageUrl = linkMatch[1];
+        const slug = linkMatch[3] || '';
+        const rawTitle = linkMatch[4] || 'Rule34 Video';
+        const title = rawTitle.replace(/&#34;/g, '"').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+        const thumb = thumbMatch ? thumbMatch[1] : '';
+        const previewMp4 = previewMatch ? previewMatch[1] : '';
+
+        // Извлечение автора из названия видео (форматы: "Title | Author", "Title by Author", "[Author] Title")
+        let author = '';
+        const authorBracketMatch = title.match(/^\[([^\]]+)\]/);
+        const authorPipeMatch = title.match(/\|\s*([a-zA-Z0-9_\- ]+)$/);
+        const authorByMatch = title.match(/by\s+([a-zA-Z0-9_\- ]+)/i);
+
+        if (authorPipeMatch) {
+          author = authorPipeMatch[1].trim();
+        } else if (authorByMatch) {
+          author = authorByMatch[1].trim();
+        } else if (authorBracketMatch) {
+          const bracketTag = authorBracketMatch[1].trim();
+          if (!['pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd'].includes(bracketTag.toLowerCase())) {
+            author = bracketTag;
+          }
+        }
+
+        const rawTagsSet = new Set(['video', 'animated']);
+        slug.split(/[-_/]+/).filter(s => s.length > 1).forEach(s => rawTagsSet.add(s.toLowerCase()));
+        title.toLowerCase().split(/[\s,()\[\]\-_/|"]+/).filter(s => s.length > 1).forEach(s => rawTagsSet.add(s));
+
+        if (cleanQuery) {
+          cleanQuery.split('-').filter(Boolean).forEach(q => rawTagsSet.add(q));
+          rawTagsSet.add(cleanQuery.replace(/-/g, '_'));
+        }
+        if (author) {
+          rawTagsSet.add(author.toLowerCase().replace(/\s+/g, '_'));
+          rawTagsSet.add(author.toLowerCase());
+        }
+
+        const rawTags = Array.from(rawTagsSet);
+        const isAi = checkIsAi(rawTags, aiTagsList);
+        const tagDetails = classifyTags(rawTags, author);
+
+        pageResults.push({
+          id: `rule34video_${id}`,
+          originalId: String(id),
+          site: 'rule34video',
+          siteName: 'Rule34Video',
+          title,
+          author,
+          previewUrl: resolvePreviewUrl(thumb, previewMp4, previewMp4, true),
+          sampleUrl: previewMp4,
+          fileUrl: previewMp4,
+          fileExt: 'mp4',
+          isVideo: true,
+          isGif: false,
+          hasSound: true,
+          tags: rawTags,
+          tagDetails,
+          score: 100,
+          rating: 'e',
+          width: 1280,
+          height: 720,
+          source: pageUrl,
+          createdAt: '',
+          isAi
+        });
+      }
+      return pageResults;
+    } catch (err) {
+      logError('Rule34Video', `Ошибка загрузки страницы ${p}`, err);
+      return [];
+    }
+  });
+
+  const batchResults = await Promise.all(fetchPromises);
+  for (const pagePosts of batchResults) {
+    for (const post of pagePosts) {
+      if (!seenIds.has(post.originalId)) {
+        seenIds.add(post.originalId);
+        allPosts.push(post);
+      }
+    }
+  }
+
+  return allPosts;
+}
+
+// 8. Xbooru (Gelbooru DAPI)
+export async function fetchXbooru(params, aiTagsList) {
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
+  if (ratingFilter === 'sfw') {
+    // Xbooru - 18+ NSFW ресурс
+    return [];
+  }
+
+  let searchTags = adaptTagsForSite('xbooru', tags, ageFilter, typeFilter);
+  if (category === 'top' || category === 'popular') {
+    searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+  } else if (category === 'random') {
+    searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+  }
+
+  if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
+    searchTags = searchTags ? `${searchTags} animated` : 'animated';
+  }
+
+  const pid = Math.max(0, page - 1);
+  const url = `https://xbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
+
+  try {
+    const res = await fetchSafe(url, {
+      headers: {
+        'Referer': 'https://xbooru.com/'
+      }
+    });
+    if (!res.ok) return [];
+    const text = await res.text();
+    const data = safeJsonParse(text, []);
+    const posts = data?.post || (Array.isArray(data) ? data : []);
+
+    return posts.map(item => {
+      const rawTags = (item.tags || '').split(' ').filter(Boolean);
+      let fileUrl = item.file_url || '';
+      if (!fileUrl && item.directory && item.image) {
+        fileUrl = `https://img.xbooru.com/images/${item.directory}/${item.image}`;
+      } else if (fileUrl.startsWith('//')) {
+        fileUrl = 'https:' + fileUrl;
+      }
+
+      let sampleUrl = item.sample_url || fileUrl;
+      if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+
+      let previewUrlRaw = item.preview_url || (item.directory && item.image ? `https://img.xbooru.com/thumbnails/${item.directory}/thumbnail_${item.image}` : fileUrl);
+      if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
+
+      const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+      const author = extractAuthor(rawTags, item.source, item.owner || item.creator_id || item.author);
+      const tagDetails = classifyTags(rawTags, author);
+      const createdAt = normalizeDate(item.created_at || item.change);
+
+      return {
+        id: `xbooru_${item.id}`,
+        originalId: String(item.id),
+        site: 'xbooru',
+        siteName: 'Xbooru',
+        previewUrl,
+        sampleUrl,
+        fileUrl,
+        fileExt,
+        isVideo,
+        isGif,
+        hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+        author,
+        tags: rawTags,
+        tagDetails,
+        score: parseInt(item.score, 10) || 0,
+        rating: item.rating || 'e',
+        width: parseInt(item.width, 10) || 0,
+        height: parseInt(item.height, 10) || 0,
+        source: item.source || '',
+        createdAt,
+        isAi: checkIsAi(rawTags, aiTagsList)
+      };
+    });
+  } catch (err) {
+    logError('Xbooru', 'Ошибка загрузки постов', err);
+    return [];
+  }
+}
+
+// 9. Hypnohub (DAPI)
+export async function fetchHypnohub(params, aiTagsList) {
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
+
+  let searchTags = adaptTagsForSite('hypnohub', tags, ageFilter, typeFilter);
+  if (category === 'top' || category === 'popular') {
+    searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+  } else if (category === 'random') {
+    searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+  }
+
+  if (ratingFilter === 'nsfw') {
+    searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
+  } else if (ratingFilter === 'sfw') {
+    searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
+  }
+
+  if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
+    searchTags = searchTags ? `${searchTags} animated` : 'animated';
+  }
+
+  const pid = Math.max(0, page - 1);
+  const url = `https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
+
+  try {
+    const res = await fetchSafe(url, {
+      headers: {
+        'Referer': 'https://hypnohub.net/'
+      }
+    });
+    if (!res.ok) return [];
+    const text = await res.text();
+    const data = safeJsonParse(text, []);
+    const posts = data?.post || (Array.isArray(data) ? data : []);
+
+    return posts.map(item => {
+      const rawTags = (item.tags || '').split(' ').filter(Boolean);
+      let fileUrl = item.file_url || '';
+      if (!fileUrl && item.directory && item.image) {
+        fileUrl = `https://hypnohub.net/images/${item.directory}/${item.image}`;
+      } else if (fileUrl.startsWith('//')) {
+        fileUrl = 'https:' + fileUrl;
+      }
+
+      let sampleUrl = item.sample_url || fileUrl;
+      if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+
+      let previewUrlRaw = item.preview_url || (item.directory && item.image ? `https://hypnohub.net/thumbnails/${item.directory}/thumbnail_${item.image}` : fileUrl);
+      if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
+
+      const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+      const author = extractAuthor(rawTags, item.source, item.owner || item.creator_id || item.author);
+      const tagDetails = classifyTags(rawTags, author);
+      const createdAt = normalizeDate(item.created_at || item.change);
+
+      return {
+        id: `hypnohub_${item.id}`,
+        originalId: String(item.id),
+        site: 'hypnohub',
+        siteName: 'Hypnohub',
+        previewUrl,
+        sampleUrl,
+        fileUrl,
+        fileExt,
+        isVideo,
+        isGif,
+        hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+        author,
+        tags: rawTags,
+        tagDetails,
+        score: parseInt(item.score, 10) || 0,
+        rating: item.rating || 'q',
+        width: parseInt(item.width, 10) || 0,
+        height: parseInt(item.height, 10) || 0,
+        source: item.source || '',
+        createdAt,
+        isAi: checkIsAi(rawTags, aiTagsList)
+      };
+    });
+  } catch (err) {
+    logError('Hypnohub', 'Ошибка загрузки постов', err);
+    return [];
+  }
+}
+
+// Диспетчер
+async function fetchPosts(site, params, aiTagsList, settings) {
+  switch (site) {
+    case 'danbooru':
+      return await fetchDanbooru(params, aiTagsList, settings);
+    case 'rule34video':
+      return await fetchRule34Video(params, aiTagsList);
+    case 'yandere':
+      return await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', params, aiTagsList);
+    case 'safebooru':
+      return await fetchSafebooru(params, aiTagsList);
+    case 'konachan':
+      return await fetchMoebooru('konachan', 'https://konachan.net', 'Konachan', params, aiTagsList);
+    case 'rule34':
+      return await fetchRule34(params, aiTagsList, settings);
+    case 'gelbooru':
+      return await fetchGelbooru(params, aiTagsList, settings);
+    case 'xbooru':
+      return await fetchXbooru(params, aiTagsList);
+    case 'hypnohub':
+      return await fetchHypnohub(params, aiTagsList);
+    case 'all': {
+      let mainSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub'];
+      if (params.typeFilter === 'video' || params.typeFilter === 'audio' || params.typeFilter === 'sound') {
+        mainSites = ['rule34video', 'danbooru', 'rule34', 'gelbooru', 'xbooru', 'hypnohub'];
+      } else if (params.ratingFilter === 'nsfw') {
+        mainSites = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub'];
+      }
+      const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / mainSites.length));
+      const results = await Promise.allSettled(
+        mainSites.map(s => fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, settings))
+      );
+      const lists = [];
+      results.forEach(res => {
+        if (res.status === 'fulfilled' && Array.isArray(res.value) && res.value.length > 0) {
+          lists.push(res.value);
+        }
+      });
+      // Чередование (Round-Robin) постов с разных сайтов для равномерного разнообразия
+      const combined = [];
+      const maxLength = Math.max(0, ...lists.map(l => l.length));
+      for (let i = 0; i < maxLength; i++) {
+        for (let j = 0; j < lists.length; j++) {
+          if (i < lists[j].length) {
+            combined.push(lists[j][i]);
+          }
+        }
+      }
+      return combined;
+    }
+    default:
+      return await fetchDanbooru(params, aiTagsList, settings);
+  }
+}
+
+// API Эндпоинты
+
+app.get('/api/sites', (req, res) => {
+  res.json({ sites: Object.values(SITES) });
+});
+
+
+export async function fetchTagAutocomplete(query, site) {
+  if (!query) return { tags: [] };
+  let url = '';
+  if (site === 'danbooru') url = 'https://danbooru.donmai.us/tags/autocomplete.json?search[name_matches]=$*&limit=10';
+  else if (site === 'gelbooru') url = 'https://gelbooru.com/index.php?page=dapi&s=tag&q=index&json=1&limit=10&name_pattern=$%';
+  else if (site === 'rule34') url = 'https://api.rule34.xxx/index.php?page=dapi&s=tag&q=index&json=1&limit=10&name_pattern=$%';
+  else return { tags: [] };
+
+  try {
+    const res = await fetchProxied(url);
+    if (!res.ok) return { tags: [] };
+    const text = await res.text();
+    const data = safeJsonParse(text, []);
+    if (Array.isArray(data)) {
+      return { tags: data.map(t => t.name).slice(0, 10) };
+    } else if (data && data.tag) {
+      return { tags: data.tag.map(t => t.name).slice(0, 10) };
+    }
+  } catch (e) {}
+  return { tags: [] };
+}
+
+export async function fetchPosts(options) {
+  const s = options.site;
+  if (s === 'danbooru') return await fetchDanbooru(options);
+  if (s === 'gelbooru') return await fetchGelbooru(options);
+  if (s === 'rule34') return await fetchRule34(options);
+  if (s === 'yandere') return await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', options);
+  if (s === 'konachan') return await fetchMoebooru('konachan', 'https://konachan.net', 'Konachan', options);
+  if (s === 'safebooru') return await fetchSafebooru(options);
+  if (s === 'rule34video') return await fetchRule34Video(options);
+  if (s === 'xbooru') return await fetchXbooru(options);
+  if (s === 'hypnohub') return await fetchHypnohub(options);
+  return [];
+}
+

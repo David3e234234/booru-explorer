@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Booru Explorer">
+  <meta name="theme-color" content="#0c0e14">
+  <title>Booru Explorer — Медиа & Видео Поисковик</title>
+  <link rel="manifest" href="manifest.json?v=5.5">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon.png?v=5.5">
+  <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=5.5">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=5.5">
+  <link rel="apple-touch-icon-precomposed" href="icons/apple-touch-icon.png?v=5.5">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/variables.css?v=5.5">
+  <link rel="stylesheet" href="css/main.css?v=5.5">
+  <link rel="stylesheet" href="css/components.css?v=5.5">
+  <link rel="stylesheet" href="css/viewer.css?v=5.5">
+</head>
+<body>
+
+  <!-- Верхняя панель навигации -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="brand" id="btnLogo">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <span class="brand-title">Booru<span class="brand-accent">Explorer</span></span>
+      </div>
+
+      <!-- Вкладки разделов (Десктоп) -->
+      <nav class="nav-tabs desktop-only">
+        <button class="nav-tab active" data-category="new" title="Свежие публикации">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span>Новое</span>
+        </button>
+        <button class="nav-tab" data-category="recommended" title="Персональные рекомендации на основе ваших лайков">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>
+          <span>Для вас</span>
+        </button>
+        <button class="nav-tab" data-category="popular" title="Тренды: горячие посты за последнюю неделю">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>
+          <span>Популярное</span>
+        </button>
+        <button class="nav-tab" data-category="top" title="Топ: лучшее за все время по рейтингу">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          <span>Топ</span>
+        </button>
+        <button class="nav-tab" data-category="random" title="Случайная выборка">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/></svg>
+          <span>Случайно</span>
+        </button>
+        <button class="nav-tab" data-category="favorites" title="Сохраненные закладки">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+          <span>Избранное</span> <span class="badge-fav-count" id="badgeFavCount">0</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Правая часть: опции и настройки -->
+    <div class="header-right">
+      <div class="header-status-info" id="headerStatusBox" title="Нажмите для смены источника">
+        <span class="active-site-badge" id="currentSiteLabel">Danbooru</span>
+        <span class="results-count desktop-only" id="resultsCount">0 постов</span>
+      </div>
+
+      <button class="btn-action-shuffle" id="btnShuffleGallery" title="Перемешать посты в случайном порядке">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.6-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l6.6 8.6c.8 1.1 2 1.7 3.3 1.7H22"/><path d="m18 14 4 4-4 4"/></svg>
+        <span class="desktop-only">Перемешать</span>
+      </button>
+
+      <!-- Переключатель колонок для десктопа -->
+      <div class="grid-size-selector desktop-only" id="desktopGridSizeSelector">
+        <button class="btn-size" data-cols="small" title="Мелкая сетка (много колонок)">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
+            <rect x="1" y="2" width="3" height="16" rx="1"/>
+            <rect x="6" y="2" width="3" height="16" rx="1"/>
+            <rect x="11" y="2" width="3" height="16" rx="1"/>
+            <rect x="16" y="2" width="3" height="16" rx="1"/>
+          </svg>
+        </button>
+        <button class="btn-size active" data-cols="medium" title="Оптимальная сетка (стандарт)">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
+            <rect x="1.5" y="2" width="4.5" height="16" rx="1"/>
+            <rect x="7.75" y="2" width="4.5" height="16" rx="1"/>
+            <rect x="14" y="2" width="4.5" height="16" rx="1"/>
+          </svg>
+        </button>
+        <button class="btn-size" data-cols="large" title="Крупная сетка (2-3 колонки)">
+          <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
+            <rect x="2" y="2" width="7" height="16" rx="1"/>
+            <rect x="11" y="2" width="7" height="16" rx="1"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Переключатель колонок для мобильных (1 или 2 колонки) -->
+      <button class="btn-icon mobile-only" id="btnMobileGridToggle" title="Переключить сетку (1/2 колонки)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      </button>
+
+      <button class="btn-icon desktop-only" id="btnSettings" title="Настройки и Черный список">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Оверлей-затемнение для мобильных шторок и сайдбара -->
+  <div class="drawer-backdrop" id="drawerBackdrop"></div>
+
+  <!-- Главный макет с левым сайдбаром поиска и тегов -->
+  <div class="app-layout">
+    <!-- Левый сайдбар поиска, фильтров и тегов -->
+    <aside class="sidebar-search" id="sidebarSearch">
+      <!-- Мобильный заголовок сайдбара -->
+      <div class="sidebar-mobile-header mobile-only">
+        <div class="sheet-handle"></div>
+        <div class="sidebar-mobile-title-row">
+          <span class="sidebar-mobile-title">🔍 Поиск и фильтры</span>
+          <button class="btn-icon" id="btnCloseSidebar" title="Закрыть">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- 1. Поиск по тегам -->
+      <div class="sidebar-block">
+        <h3 class="sidebar-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          Поиск по тегам
+        </h3>
+        <div class="sidebar-search-box">
+          <div class="search-tags-wrapper" id="searchTagsWrapper">
+            <input type="text" id="searchInput" class="search-input" placeholder="Введите тег (1girl, video)..." autocomplete="off" spellcheck="false">
+          </div>
+          <button class="btn-clear-search" id="btnClearSearch" title="Очистить поиск" style="display: none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+          <button class="btn-refresh-search" id="btnRefreshSearch" title="Обновить выдачу поиска (сброс кеша)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+          </button>
+          <!-- Выпадающий список подсказок -->
+          <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
+        </div>
+      </div>
+
+      <!-- 2. Фильтр ИИ (AI Filter) -->
+      <div class="sidebar-block">
+        <h3 class="sidebar-title">Фильтр ИИ</h3>
+        <div class="ai-filter-toggle" id="aiFilterGroup">
+          <button class="ai-pill" data-ai="all" title="Показывать все работы">Все</button>
+          <button class="ai-pill active" data-ai="no-ai" title="Скрыть ИИ-генерации (только авторский арт)">🚫 Без ИИ</button>
+          <button class="ai-pill" data-ai="only-ai" title="Только ИИ-генерации">🤖 ИИ</button>
+        </div>
+      </div>
+
+      <!-- 2.1 Фильтр Возрастного Рейтинга (SFW / NSFW) -->
+      <div class="sidebar-block">
+        <h3 class="sidebar-title">Возрастной рейтинг</h3>
+        <div class="rating-filter-toggle" id="ratingFilterGroup">
+          <button class="rating-pill active" data-rating="all" title="Показывать все рейтинги">Все</button>
+          <button class="rating-pill" data-rating="nsfw" title="Отсечь SFW: показывать только откровенный 18+ контент">🔞 18+ Only</button>
+          <button class="rating-pill" data-rating="sfw" title="Только безопасный SFW контент">🛡️ Safe</button>
+        </div>
+      </div>
+
+      <!-- 2.2 Переключатель Формата (Видео / Картинки) -->
+      <div class="sidebar-block">
+        <h3 class="sidebar-title">Тип контента</h3>
+        <div class="type-filter-toggle" id="typeFilterGroup">
+          <button class="type-pill active" data-type="all" title="Все форматы (видео, гифки и картинки)">Все</button>
+          <button class="type-pill" data-type="video" title="Все видео и анимации">🎬 Видео</button>
+          <button class="type-pill" data-type="audio" title="Только видео со звуком (озвучка / музыка)">🔊 Звук</button>
+          <button class="type-pill" data-type="image" title="Только статичные изображения">🖼️ Фото</button>
+        </div>
+      </div>
+
+      <!-- 2.3 Фильтр типажа / форм (Мамочки / Лоли) -->
+      <div class="sidebar-block">
+        <h3 class="sidebar-title">Формы / Типаж</h3>
+        <div class="age-filter-toggle" id="ageFilterGroup">
+          <button class="age-pill active" data-age="all" title="Все типажи и комплекции">Все</button>
+          <button class="age-pill" data-age="adult" title="Пышные формы, зрелые, MILF, высокие, большая грудь">👠 Мамочки</button>
+          <button class="age-pill" data-age="young" title="Миниатюрные, невысокие, petite, flat chest, лоли">🌸 Лоли</button>
+        </div>
+      </div>
+
+      <!-- 3. Контентные фильтры (Фурри, Беременные) -->
+      <div class="sidebar-block">
+        <h3 class="sidebar-title">Скрытие контента</h3>
+        <div class="toggles-list">
+          <label class="toggle-row" title="Скрыть фурри, антропоморфных персонажей и животных">
+            <input type="checkbox" id="checkHideFurry" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-name">🚫 Без фурри / антро</span>
+          </label>
+          <label class="toggle-row" title="Скрыть беременность, инфляцию и экспансию живота">
+            <input type="checkbox" id="checkHidePregnant" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-name">🚫 Без беременных</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- 4. Booru-источники (для десктопа) -->
+      <div class="sidebar-block desktop-only">
+        <h3 class="sidebar-title">Booru Источники</h3>
+        <div class="sources-vertical-list" id="sourcesList">
+          <!-- Рендерятся через JS -->
+        </div>
+      </div>
+
+      <!-- 5. Динамические теги на странице -->
+      <div class="sidebar-block" id="pageTagsBlock">
+        <h3 class="sidebar-title">
+          <span>Теги на странице</span>
+          <span class="tags-sidebar-count" id="sidebarTagsCount">0</span>
+        </h3>
+        <div class="sidebar-tags-tree" id="sidebarTagsList">
+          <span class="empty-tags-hint">Загрузка тегов...</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Основная рабочая область с галереей -->
+    <main class="main-content">
+      <!-- Сетка галереи (Masonry) -->
+      <div class="gallery-container">
+        <!-- Панель переключения под-вкладок Избранного (Посты / Авторы) -->
+        <div class="favorites-header-bar" id="favoritesHeaderBar" style="display: none;">
+          <div class="favorites-subnav">
+            <button class="favorites-subnav-btn active" data-subtab="posts" id="btnFavSubPosts" title="Сохраненные посты">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Сохраненные посты</span>
+              <span class="fav-sub-badge" id="favPostsCountBadge">0</span>
+            </button>
+            <button class="favorites-subnav-btn" data-subtab="authors" id="btnFavSubAuthors" title="Любимые авторы">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+              <span>Любимые авторы</span>
+              <span class="fav-sub-badge" id="favAuthorsCountBadge">0</span>
+            </button>
+          </div>
+          
+          <div class="favorites-authors-actions" id="favAuthorsActions" style="display: none;">
+            <div class="fav-authors-search-box">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" id="favAuthorsSearchInput" class="fav-authors-search-input" placeholder="Поиск автора..." autocomplete="off">
+            </div>
+            <button class="btn-action-primary btn-add-author" id="btnAddAuthorModalOpen" title="Добавить автора в избранное">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>+ Автор</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="gallery-grid" id="galleryGrid">
+          <!-- Карточки постов будут добавлены сюда через JS -->
+        </div>
+
+        <!-- Состояния: Загрузка и Пусто -->
+        <div class="state-container" id="loadingSpinner">
+          <div class="spinner"></div>
+          <p class="state-text">Загрузка медиаматериалов...</p>
+        </div>
+
+        <div class="state-container" id="emptyState" style="display: none;">
+          <div class="state-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </div>
+          <h3 class="state-title">Ничего не найдено</h3>
+          <p class="state-desc">Попробуйте изменить теги поиска или переключить Booru-источник.</p>
+        </div>
+
+        <!-- Элемент-триггер для бесконечной прокрутки (Infinite Scroll) -->
+        <div class="infinite-scroll-trigger" id="infiniteScrollTrigger">
+          <div class="scroll-loader" id="scrollLoader" style="display: none;">
+            <div class="mini-spinner"></div>
+            <span>Подгрузка материалов...</span>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Плавающая кнопка «Наверх» -->
+  <button class="btn-scroll-top" id="btnScrollToTop" title="Наверх">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+  </button>
+
+  <!-- Мобильная нижняя панель навигации (Bottom Navigation Bar) -->
+  <nav class="mobile-bottom-nav mobile-only" id="mobileBottomNav">
+    <button class="mobile-nav-item active" id="btnNavFeed" data-nav="feed" title="Лента и разделы">
+      <div class="nav-icon-box">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </div>
+      <span class="nav-label" id="mobileNavFeedLabel">Новое</span>
+    </button>
+
+    <button class="mobile-nav-item" id="btnNavFilters" data-nav="filters" title="Поиск и фильтры">
+      <div class="nav-icon-box">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <span class="nav-badge-dot" id="filterActiveDot" style="display: none;"></span>
+      </div>
+      <span class="nav-label">Поиск</span>
+    </button>
+
+    <button class="mobile-nav-item" id="btnNavSources" data-nav="sources" title="Booru Источники">
+      <div class="nav-icon-box">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      </div>
+      <span class="nav-label">Сайты</span>
+    </button>
+
+    <button class="mobile-nav-item" id="btnNavFavorites" data-nav="favorites" title="Избранное">
+      <div class="nav-icon-box">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+        <span class="badge-fav-count" id="badgeFavCountMobile">0</span>
+      </div>
+      <span class="nav-label">Избранное</span>
+    </button>
+
+    <button class="mobile-nav-item" id="btnNavSettings" data-nav="settings" title="Настройки">
+      <div class="nav-icon-box">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </div>
+      <span class="nav-label">Опции</span>
+    </button>
+  </nav>
+
+  <!-- Мобильная шторка выбора категорий ленты -->
+  <div class="bottom-sheet" id="categoriesSheet">
+    <div class="bottom-sheet-header">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <h3 class="sheet-title">Разделы ленты</h3>
+        <button class="btn-icon sheet-close" id="btnCloseCategoriesSheet">✕</button>
+      </div>
+    </div>
+    <div class="bottom-sheet-content">
+      <div class="category-cards-grid">
+        <button class="category-card active" data-category="new">
+          <div class="category-icon">⚡</div>
+          <div class="category-info">
+            <span class="category-name">Новое</span>
+            <span class="category-desc">Свежие публикации</span>
+          </div>
+        </button>
+        <button class="category-card" data-category="recommended">
+          <div class="category-icon">✨</div>
+          <div class="category-info">
+            <span class="category-name">Для вас</span>
+            <span class="category-desc">Рекомендации по лайкам</span>
+          </div>
+        </button>
+        <button class="category-card" data-category="popular">
+          <div class="category-icon">🔥</div>
+          <div class="category-info">
+            <span class="category-name">Популярное</span>
+            <span class="category-desc">Тренды за неделю</span>
+          </div>
+        </button>
+        <button class="category-card" data-category="top">
+          <div class="category-icon">⭐</div>
+          <div class="category-info">
+            <span class="category-name">Топ</span>
+            <span class="category-desc">Лучшее всех времён</span>
+          </div>
+        </button>
+        <button class="category-card" data-category="random">
+          <div class="category-icon">🎲</div>
+          <div class="category-info">
+            <span class="category-name">Случайно</span>
+            <span class="category-desc">Случайная подборка</span>
+          </div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Мобильная шторка Booru Источников -->
+  <div class="bottom-sheet" id="sourcesSheet">
+    <div class="bottom-sheet-header">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title-row">
+        <h3 class="sheet-title">Booru Источники</h3>
+        <button class="btn-icon sheet-close" id="btnCloseSourcesSheet">✕</button>
+      </div>
+    </div>
+    <div class="bottom-sheet-content">
+      <div class="sources-grid-mobile" id="sourcesListMobile">
+        <!-- Рендерятся через JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно полного просмотра (Media Viewer) -->
+  <div class="viewer-modal" id="viewerModal" style="display: none;">
+    <div class="viewer-backdrop" id="viewerBackdrop"></div>
+    
+    <div class="viewer-content">
+      <div class="viewer-header">
+        <div class="viewer-meta">
+          <span class="viewer-site-badge" id="viewerSiteBadge">Danbooru</span>
+          <span class="viewer-res" id="viewerResolution">1920 × 1080</span>
+          <span class="viewer-ext-badge" id="viewerExtBadge">MP4</span>
+          <button class="viewer-author-badge" id="viewerAuthorBadge" style="display: none;" title="Автор / Создатель (нажмите для поиска всех работ)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+            <span id="viewerAuthorText">Автор</span>
+          </button>
+          <button class="viewer-fav-author-btn" id="viewerFavAuthorBtn" style="display: none;" title="Добавить/удалить автора из избранных">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </button>
+        </div>
+        <div class="viewer-top-actions">
+          <!-- Лайк (Обучение рекомендаций и Booru API) -->
+          <button class="viewer-btn" id="btnLikeModal" title="Нравится (обучает рекомендации и синхронизирует с API)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+          </button>
+          <!-- Избранное (TikTok Закладка-флажок) -->
+          <button class="viewer-btn" id="btnFavModal" title="Сохранить в закладки (Избранное)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+          </button>
+          <button class="viewer-btn mobile-only" id="btnViewerTagsToggle" title="Теги и информация">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            <span class="viewer-tags-badge" id="viewerTagsBadgeCount">0</span>
+          </button>
+          <button class="viewer-btn" id="btnDownload" title="Скачать медиафайл прямо на устройство">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <button class="viewer-btn" id="btnCopyLink" title="Скопировать ссылку">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
+          <button class="viewer-btn viewer-close" id="btnCloseViewer" title="Закрыть (Esc или свайп вниз)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="viewer-body">
+        <button class="viewer-nav-btn nav-prev desktop-only" id="btnViewerPrev" title="Предыдущий (← или свайп)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+
+        <div class="viewer-media-wrapper" id="viewerMediaWrapper"></div>
+
+        <button class="viewer-nav-btn nav-next desktop-only" id="btnViewerNext" title="Следующий (→ или свайп)">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+
+        <!-- Сайдбар / Шторка информации и тегов -->
+        <aside class="viewer-sidebar" id="viewerSidebar">
+          <div class="viewer-sheet-handle mobile-only"></div>
+          <div class="viewer-sidebar-header mobile-only">
+            <span class="viewer-sidebar-title">🏷️ Теги и информация</span>
+            <button class="btn-icon" id="btnCloseViewerTags" title="Скрыть">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+
+          <div class="sidebar-section">
+            <h4 class="sidebar-heading">Информация</h4>
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">Источник:</span>
+                <span class="info-val" id="infoSite">Danbooru</span>
+              </div>
+              <div class="info-item" id="infoAuthorRow" style="display: none;">
+                <span class="info-label">Автор:</span>
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1;">
+                  <span class="info-val info-val-author" id="infoAuthor">Не указан</span>
+                  <button class="btn-fav-author-inline" id="btnFavAuthorSidebar" title="Добавить автора в избранное">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <span id="btnFavAuthorSidebarText">В избранное</span>
+                  </button>
+                </div>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Рейтинг:</span>
+                <span class="info-val" id="infoRating">Explicit</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">Оценка:</span>
+                <span class="info-val" id="infoScore">★ 142</span>
+              </div>
+              <div class="info-item" id="infoAiContainer">
+                <span class="info-label">ИИ:</span>
+                <span class="info-val" id="infoAi">Нет</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="section-header-flex">
+              <h4 class="sidebar-heading">Теги (<span id="tagsCountTotal">0</span>)</h4>
+              <button class="btn-text" id="btnCopyAllTags">Скопировать все</button>
+            </div>
+            <div class="tags-cloud" id="viewerTagsCloud"></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно Настроек -->
+  <div class="settings-modal" id="settingsModal" style="display: none;">
+    <div class="settings-backdrop" id="settingsBackdrop"></div>
+    <div class="settings-dialog">
+      <div class="settings-header">
+        <h3 class="settings-title">Настройки и Фильтры</h3>
+        <button class="btn-icon" id="btnCloseSettings">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="settings-content">
+        <!-- Черный список тегов -->
+        <div class="settings-group">
+          <label class="settings-label" for="blacklistInput">Черный список тегов (Blacklist):</label>
+          <p class="settings-hint">Посты с этими тегами будут скрыты из всех результатов поиска.</p>
+          <div class="tags-input-box" id="blacklistWrapper">
+            <input type="text" id="blacklistInput" placeholder="Введите тег и нажмите Enter..." spellcheck="false">
+          </div>
+        </div>
+
+        <!-- API Ключи для Booru источников -->
+        <div class="settings-group">
+          <label class="settings-label">🔑 Персональные API Ключи (Booru):</label>
+          <p class="settings-hint">Необязательно. Бесплатные ключи снимают ограничения поиска, повышают лимиты и ускоряют выдачу.</p>
+          
+          <div class="api-keys-container">
+            <!-- 1. Rule34.xxx -->
+            <div class="api-key-card">
+              <div class="api-key-card-header">
+                <span class="api-key-site-badge site-r34">Rule34.xxx</span>
+                <a href="https://rule34.xxx/index.php?page=account&s=home" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в профиле Rule34">Где взять? ↗</a>
+              </div>
+              <div class="api-keys-grid">
+                <input type="text" id="inputRule34ApiKey" class="input-setting" placeholder="Rule34 API Key" autocomplete="off" spellcheck="false">
+                <input type="text" id="inputRule34UserId" class="input-setting" placeholder="Rule34 User ID" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
+
+            <!-- 2. Gelbooru -->
+            <div class="api-key-card">
+              <div class="api-key-card-header">
+                <span class="api-key-site-badge site-gelbooru">Gelbooru.com</span>
+                <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в настройках Gelbooru">Где взять? ↗</a>
+              </div>
+              <div class="api-keys-grid">
+                <input type="text" id="inputGelbooruApiKey" class="input-setting" placeholder="Gelbooru API Key" autocomplete="off" spellcheck="false">
+                <input type="text" id="inputGelbooruUserId" class="input-setting" placeholder="Gelbooru User ID" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
+
+            <!-- 3. Danbooru -->
+            <div class="api-key-card">
+              <div class="api-key-card-header">
+                <span class="api-key-site-badge site-danbooru">Danbooru</span>
+                <a href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener" class="api-key-link" title="Получить API Key в профиле Danbooru">Где взять? ↗</a>
+              </div>
+              <div class="api-keys-grid">
+                <input type="text" id="inputDanbooruApiKey" class="input-setting" placeholder="Danbooru API Key" autocomplete="off" spellcheck="false">
+                <input type="text" id="inputDanbooruLogin" class="input-setting" placeholder="Danbooru Username (Логин)" autocomplete="off" spellcheck="false">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Список тегов распознавания ИИ -->
+        <div class="settings-group">
+          <label class="settings-label" for="aiTagsInput">Список тегов ИИ (AI Detector):</label>
+          <p class="settings-hint">Теги, по которым система определяет искусственно сгенерированные работы.</p>
+          <div class="tags-input-box" id="aiTagsWrapper">
+            <input type="text" id="aiTagsInput" placeholder="Добавить AI тег..." spellcheck="false">
+          </div>
+        </div>
+
+        <!-- Настройки загрузки и видео -->
+        <div class="settings-group">
+          <label class="settings-label" for="selectItemsPerPage">Количество постов за один прокрут (порция):</label>
+          <p class="settings-hint">Сколько постов запрашивать с сайтов за один шаг прокрутки ленты.</p>
+          <select id="selectItemsPerPage" class="input-setting" style="padding: 8px 12px; background: var(--bg-surface-elevated); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: var(--radius-md);">
+            <option value="20">20 постов</option>
+            <option value="40">40 постов</option>
+            <option value="60">60 постов</option>
+            <option value="80">80 постов</option>
+            <option value="100" selected>100 постов (Рекомендуется)</option>
+            <option value="150">150 постов</option>
+            <option value="200">200 постов (Максимум)</option>
+          </select>
+        </div>
+
+        <div class="settings-group">
+          <label class="settings-label" for="selectDeepFetchPages">Глубина поиска Danbooru (страниц):</label>
+          <p class="settings-hint">Сколько скрытых страниц скачивать для локальной фильтрации (чем больше, тем больше результатов, но дольше загрузка).</p>
+          <select id="selectDeepFetchPages" class="input-setting" style="padding: 8px 12px; background: var(--bg-surface-elevated); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: var(--radius-md);">
+            <option value="1">1 страница</option>
+            <option value="2" selected>2 страницы</option>
+            <option value="3">3 страницы</option>
+            <option value="4">4 страницы</option>
+            <option value="5">5 страниц (Максимум)</option>
+          </select>
+        </div>
+
+        <div class="settings-group">
+          <label class="settings-label">Специфичные настройки поиска:</label>
+          <div class="toggles-list" style="margin-top: 6px;">
+            <label class="toggle-row" title="Ручные теги (например 'petite') будут иметь приоритет над сортировкой 'Популярное' и 'Видео' при поиске на Danbooru">
+              <input type="checkbox" id="checkPrioritizeUserTags">
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">🎯 Отдавать приоритет ручным тегам перед системными фильтрами (Danbooru)</span>
+            </label>
+            <label class="toggle-row" title="Использовать открытую базу Rule34 Paheal (rule34.paheal.net) при отсутствии или сбое API ключа Rule34.xxx">
+              <input type="checkbox" id="checkEnablePaheal" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">🌐 Использовать Rule34 через Paheal (открытый источник без API ключа)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Качество превью в ленте -->
+        <div class="settings-group">
+          <label class="settings-label" for="selectPreviewQuality">Качество превью в галерее:</label>
+          <p class="settings-hint">Выберите баланс между качеством картинок в ленте и скоростью загрузки / трафиком.</p>
+          <select id="selectPreviewQuality" class="input-setting" style="padding: 8px 12px; background: var(--bg-surface-elevated); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: var(--radius-md);">
+            <option value="low">⚡ Низкое (Миниатюры) — Максимальная скорость, минимум трафика</option>
+            <option value="medium" selected>✨ Среднее (Стандартное) — Оптимальный баланс качества и скорости (Рекомендуется)</option>
+            <option value="high">🔍 Высокое (HD Sample) — Четкая картинка без артефактов сжатия</option>
+            <option value="original">💎 Оригинал (Full HD / 4K) — Максимальная детализация</option>
+          </select>
+        </div>
+
+        <div class="settings-group">
+          <label class="settings-label">Воспроизведение и автоплей видео:</label>
+          <div class="toggles-list" style="margin-top: 6px;">
+            <label class="toggle-row" title="Воспроизводить превью видео при наведении курсора мыши в галерее">
+              <input type="checkbox" id="checkVideoAutoplayHover" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">🎬 Автовоспроизведение в ленте при наведении (ПК)</span>
+            </label>
+            <label class="toggle-row" title="Автоматически запускать видео без звука при прокрутке ленты в фокус на смартфонах">
+              <input type="checkbox" id="checkVideoAutoplayMobile" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">📱 Автовоспроизведение в ленте при прокрутке (Смартфоны)</span>
+            </label>
+            <label class="toggle-row" title="Автоматически начинать проигрывание видео при открытии в полноэкранном просмотрщике">
+              <input type="checkbox" id="checkVideoAutoplayViewer" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">▶️ Автовоспроизведение при открытии в просмотрщике</span>
+            </label>
+            <label class="toggle-row" title="Всегда открывать видео через локальный прокси для обхода блокировок CDN">
+              <input type="checkbox" id="checkProxyVideoDefault" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">🛡️ Проксировать видео по умолчанию (мгновенный запуск без ожидания CDN)</span>
+            </label>
+            <label class="toggle-row" title="Показывать информационную плашку с кнопками кеширования в память, FFmpeg и прокси в просмотрщике">
+              <input type="checkbox" id="checkShowVideoStatusBanner" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">📊 Показывать статусную плашку кеширования у видео (кэш/прокси/фикс)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- PWA Приложение для смартфона/ПК -->
+        <div class="settings-group" id="pwaInstallGroup" style="display: none; background: rgba(59, 130, 246, 0.08); padding: 14px; border-radius: var(--radius-md); border: 1px solid rgba(59, 130, 246, 0.2);">
+          <label class="settings-label" style="color: var(--accent-primary);">📱 Мобильное PWA-приложение:</label>
+          <p class="settings-hint" style="margin-bottom: 10px;">Установите Booru Explorer как отдельное быстрое приложение на рабочий стол смартфона или ПК.</p>
+          <button type="button" class="btn-primary" id="btnInstallPwa" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>Установить Booru Explorer</span>
+          </button>
+        </div>
+
+        <!-- Тема оформления -->
+        <div class="settings-group">
+          <label class="settings-label">Цветовая тема:</label>
+          <div class="theme-options">
+            <button class="btn-theme active" data-theme-val="dark">Графит (Deep Slate)</button>
+            <button class="btn-theme" data-theme-val="oled">OLED Pure Black</button>
+            <button class="btn-theme" data-theme-val="light">Светлая</button>
+          </div>
+        </div>
+
+        <!-- Управление локальным хранилищем и кэшем устройства -->
+        <div class="settings-group storage-settings-group">
+          <div class="storage-header-row">
+            <div>
+              <label class="settings-label">💾 Кэш и память устройства:</label>
+              <p class="settings-hint">Закэшированные медиа-файлы и запросы для мгновенной работы офлайн/онлайн.</p>
+            </div>
+            <button type="button" class="btn-refresh-storage" id="btnRefreshStorage" title="Обновить расчет памяти">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+              </svg>
+            </button>
+          </div>
+          
+          <div class="storage-card">
+            <div class="storage-info-row">
+              <div class="storage-stat">
+                <span class="storage-stat-label">Занято на устройстве:</span>
+                <span class="storage-stat-value" id="storageUsageText">0.0 МБ</span>
+              </div>
+              <div class="storage-stat text-right">
+                <span class="storage-stat-label">Доступная квота:</span>
+                <span class="storage-stat-quota" id="storageQuotaText">-- ГБ</span>
+              </div>
+            </div>
+            
+            <div class="storage-progress-track">
+              <div class="storage-progress-bar" id="storageProgressBar" style="width: 0%;"></div>
+            </div>
+            
+            <div class="storage-breakdown" id="storageBreakdown">
+              <div class="storage-breakdown-item">
+                <span class="storage-dot dot-cache"></span>
+                <span class="storage-breakdown-label">Кэш PWA / Медиа:</span>
+                <span class="storage-breakdown-val" id="storageMediaCacheText">0.0 МБ</span>
+              </div>
+              <div class="storage-breakdown-item">
+                <span class="storage-dot dot-server"></span>
+                <span class="storage-breakdown-label">Серверный кэш:</span>
+                <span class="storage-breakdown-val" id="storageServerCacheText">0.0 МБ</span>
+              </div>
+            </div>
+
+            <div class="storage-actions-row">
+              <button type="button" class="btn-clean-cache" id="btnClearStorageBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/>
+                  <line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+                <span>Очистить кэш медиа</span>
+              </button>
+              <span id="storageClearStatus" class="storage-clear-status"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <button class="btn-secondary" id="btnResetSettings">Сбросить по умолчанию</button>
+        <button class="btn-primary" id="btnSaveSettings">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <!-- Модальное окно добавления автора в избранное -->
+  <div class="modal-backdrop" id="modalAddAuthorBackdrop" style="display: none;">
+    <div class="modal-dialog modal-dialog-sm">
+      <div class="modal-header">
+        <h3 class="modal-title">🎨 Добавить автора в избранное</h3>
+        <button class="btn-icon btn-modal-close" id="btnCloseAddAuthorModal" title="Закрыть">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="formAddAuthor" class="modal-body modal-form">
+        <div class="form-group">
+          <label for="inputAuthorName" class="form-label">Имя автора / Тег артиста:</label>
+          <input type="text" id="inputAuthorName" class="form-input" placeholder="например: ciloru, wlop, sakimichan..." required autocomplete="off" spellcheck="false">
+          <span class="form-hint">Укажите имя художника (как в тегах Danbooru, Gelbooru или Rule34).</span>
+        </div>
+        <div class="form-group">
+          <label for="selectAuthorSite" class="form-label">Предпочитаемый Booru-источник:</label>
+          <select id="selectAuthorSite" class="form-select">
+            <option value="danbooru">Danbooru</option>
+            <option value="gelbooru">Gelbooru</option>
+            <option value="rule34">Rule34</option>
+            <option value="yandere">Yande.re</option>
+            <option value="konachan">Konachan</option>
+            <option value="safebooru">Safebooru</option>
+            <option value="rule34video">Rule34Video</option>
+            <option value="xbooru">Xbooru</option>
+            <option value="hypnohub">Hypnohub</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btnCancelAddAuthor">Отмена</button>
+          <button type="submit" class="btn-primary" id="btnSaveAddAuthor">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script type="module" src="js/app.js?v=5.0"></script>
+</body>
+</html>
