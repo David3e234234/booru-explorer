@@ -1597,39 +1597,3 @@ app.get('/api/sites', (req, res) => {
   res.json({ sites: Object.values(SITES) });
 });
 
-
-export async function fetchTagAutocomplete(query, site) {
-  if (!query) return { tags: [] };
-  let url = '';
-  if (site === 'danbooru') url = 'https://danbooru.donmai.us/tags/autocomplete.json?search[name_matches]=' + encodeURIComponent(query) + '*&limit=10';
-  else if (site === 'gelbooru') url = 'https://gelbooru.com/index.php?page=dapi&s=tag&q=index&json=1&limit=10&name_pattern=' + encodeURIComponent(query) + '%25';
-  else if (site === 'rule34') url = 'https://api.rule34.xxx/index.php?page=dapi&s=tag&q=index&json=1&limit=10&name_pattern=' + encodeURIComponent(query) + '%25';
-  else return { tags: [] };
-
-  try {
-    const res = await fetchProxied(url);
-    if (!res.ok) return { tags: [] };
-    const text = await res.text();
-    const data = safeJsonParse(text, []);
-    if (Array.isArray(data)) {
-      return { tags: data.map(t => t.name).slice(0, 10) };
-    } else if (data && data.tag) {
-      return { tags: data.tag.map(t => t.name).slice(0, 10) };
-    }
-  } catch (e) {}
-  return { tags: [] };
-}
-
-export async function fetchPosts(options) {
-  const s = options.site;
-  if (s === 'danbooru') return await fetchDanbooru(options);
-  if (s === 'gelbooru') return await fetchGelbooru(options);
-  if (s === 'rule34') return await fetchRule34(options);
-  if (s === 'yandere') return await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', options);
-  if (s === 'konachan') return await fetchMoebooru('konachan', 'https://konachan.net', 'Konachan', options);
-  if (s === 'safebooru') return await fetchSafebooru(options);
-  if (s === 'rule34video') return await fetchRule34Video(options);
-  if (s === 'xbooru') return await fetchXbooru(options);
-  if (s === 'hypnohub') return await fetchHypnohub(options);
-  return [];
-}
