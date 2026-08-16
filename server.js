@@ -224,17 +224,61 @@ const PREGNANT_TAGS = [
   'oviposition'
 ];
 
-const YOUNG_TAGS = [
+// Словари телосложения и типажей
+const CURVY_INCLUDE_TAGS = [
+  'milf',
+  'mature_female',
+  'mature',
+  'tall_female',
+  'tall',
+  'curvy',
+  'curvy_female',
+  'wide_hips',
+  'thick_thighs',
+  'huge_breasts',
+  'gigantic_breasts',
+  'large_breasts',
+  'big_breasts',
+  'voluptuous',
+  'plump',
+  'chubby',
+  'bbw',
+  'mother',
+  'housewife',
+  'office_lady',
+  'teacher',
+  'cow_girl'
+];
+
+const CURVY_EXCLUDE_TAGS = [
+  'loli',
+  'shota',
+  'petite',
+  'flat_chest',
+  'underage',
+  'child',
+  'kindergarten',
+  'elementary_school_student',
+  'middle_school_student',
+  'chibi',
+  'toddler',
+  'preschooler'
+];
+
+const PETITE_INCLUDE_TAGS = [
   'loli',
   'shota',
   'petite',
   'flat_chest',
   'small_breasts',
+  'short_female',
+  'short_stature',
+  'smol',
+  'chibi',
   'schoolgirl',
   'young',
   'teenager',
   'underage',
-  'chibi',
   'middle_school_student',
   'elementary_school_student',
   'junior_high_school_student',
@@ -244,20 +288,18 @@ const YOUNG_TAGS = [
   'toddler'
 ];
 
-const ADULT_EXCLUDE_TAGS = [
-  'loli',
-  'shota',
-  'petite',
-  'flat_chest',
-  'small_breasts',
-  'underage',
-  'child',
-  'kindergarten',
-  'elementary_school_student',
-  'middle_school_student',
-  'chibi',
-  'toddler',
-  'preschooler'
+const PETITE_EXCLUDE_TAGS = [
+  'milf',
+  'mature_female',
+  'mature',
+  'tall_female',
+  'huge_breasts',
+  'gigantic_breasts',
+  'large_breasts',
+  'big_breasts',
+  'voluptuous',
+  'curvy',
+  'bbw'
 ];
 
 const DEFAULT_SETTINGS = {
@@ -565,14 +607,26 @@ function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'a
 
   const tagList = tags.split(/\s+/).filter(Boolean);
 
-  // 3. Подмешивание тегов возраста
+  // 3. Подмешивание тегов телосложения / типажей
   if (ageFilter === 'adult') {
     if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
       if (!tagList.some(t => t.startsWith('-loli'))) tagList.push('-loli');
       if (!tagList.some(t => t.startsWith('-shota'))) tagList.push('-shota');
+      if (!tagList.some(t => t.startsWith('-flat_chest'))) tagList.push('-flat_chest');
+    }
+    if (tagList.length === 0) {
+      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+        tagList.push('mature_female');
+      } else if (site === 'yandere' || site === 'konachan') {
+        tagList.push('mature');
+      }
     }
   } else if (ageFilter === 'young') {
-    // Если поиск пустой, подмешиваем категорию молодости
+    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+      if (!tagList.some(t => t.startsWith('-milf'))) tagList.push('-milf');
+      if (!tagList.some(t => t.startsWith('-huge_breasts'))) tagList.push('-huge_breasts');
+    }
+    // Если поиск пустой, подмешиваем категорию миниатюрности
     if (tagList.length === 0) {
       if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
         tagList.push('small_breasts');
@@ -803,9 +857,11 @@ async function fetchDanbooru(params, aiTagsList, settings) {
       if (r !== 's' && r !== 'g' && r !== 'general') return false;
     }
     if (params.ageFilter === 'adult') {
-      if (ADULT_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+      if (CURVY_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+      if (!userTagList.length && !CURVY_INCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
     } else if (params.ageFilter === 'young') {
-      if (!YOUNG_TAGS.some(t => rawTags.includes(t))) return false;
+      if (PETITE_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+      if (!PETITE_INCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
     }
     return true;
   };
@@ -1810,16 +1866,21 @@ app.get('/api/posts', async (req, res) => {
       posts = posts.filter(p => !p.isVideo && !p.isGif);
     }
 
-    // Фильтр возраста (Взрослые / Молодые)
+    // Фильтр телосложения и типажей (Мамочки/Пышные vs Лоли/Мини)
     if (ageFilter === 'adult') {
       posts = posts.filter(post => {
         const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
-        return !ADULT_EXCLUDE_TAGS.some(tag => postTags.includes(tag));
+        if (CURVY_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
+        // Если поиск пустой, требуем наличие хотя бы одного тега пышности/зрелости
+        if (!tags && !CURVY_INCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
+        return true;
       });
     } else if (ageFilter === 'young') {
       posts = posts.filter(post => {
         const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
-        return YOUNG_TAGS.some(tag => postTags.includes(tag));
+        if (PETITE_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
+        if (!tags && !PETITE_INCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
+        return true;
       });
     }
 
