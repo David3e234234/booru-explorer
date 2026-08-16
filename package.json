@@ -1,0 +1,31 @@
+{
+  "name": "booru-explorer",
+  "version": "1.0.0",
+  "description": "Легковесный и современный Booru медиа-клиент с поддержкой видео, системы тегов и умной фильтрацией ИИ",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "adm-zip": "^0.6.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "https-proxy-agent": "^9.1.0",
+    "open": "^10.1.0",
+    "qrcode-terminal": "^0.12.0",
+    "socks-proxy-agent": "^10.1.0",
+    "undici": "^8.10.0"
+  },
+  "keywords": [
+    "booru",
+    "danbooru",
+    "rule34",
+    "gelbooru",
+    "media-viewer",
+    "gallery"
+  ],
+  "author": "Antigravity",
+  "license": "MIT"
+}

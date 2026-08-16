@@ -1,0 +1,28 @@
+{
+  "theme": "dark",
+  "gridColumns": "auto",
+  "cardSpacing": "normal",
+  "prioritizeUserTags": false,
+  "deepFetchPages": 2,
+  "showAiBadge": true,
+  "hideAiByDefault": false,
+  "videoAutoplayHover": true,
+  "videoAutoplayMobile": true,
+  "videoAutoplayViewer": true,
+  "proxyVideoDefault": true,
+  "previewQuality": "high",
+  "showVideoStatusBanner": true,
+  "blacklistTags": [
+    "guro",
+    "scat",
+    "vore",
+    "snuff"
+  ],
+  "danbooruLogin": "",
+  "danbooruApiKey": "",
+  "gelbooruUserId": "",
+  "gelbooruApiKey": "",
+  "rule34UserId": "",
+  "rule34ApiKey": "",
+  "customProxyUrl": ""
+}
