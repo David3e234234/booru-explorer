@@ -169,7 +169,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     mediaWrapper.innerHTML = '';
 
-    const directMedia = currentPost.sampleUrl || currentPost.fileUrl;
+    const directMedia = currentPost.isVideo 
+      ? (currentPost.fileUrl || currentPost.sampleUrl) 
+      : (currentPost.sampleUrl || currentPost.fileUrl);
+
     if (!directMedia) {
       mediaWrapper.innerHTML = `
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); padding: 40px; text-align: center;">
@@ -228,7 +231,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       video.preload = shouldAutoplay ? 'auto' : 'metadata';
 
       const posterQuality = state.settings?.previewQuality || 'high';
-      const videoTarget = currentPost.sampleUrl || currentPost.fileUrl || '';
+      const videoTarget = currentPost.fileUrl || currentPost.sampleUrl || '';
       if (posterQuality === 'high' || posterQuality === 'original') {
         video.poster = videoTarget ? `/api/video-thumbnail?url=${encodeURIComponent(videoTarget)}&quality=${posterQuality}` : (currentPost.previewUrl || '');
       } else if (currentPost.previewUrl) {

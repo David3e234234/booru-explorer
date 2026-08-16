@@ -117,7 +117,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
 
         if (entry.isIntersecting) {
           if (!videoEl.src) {
-            const videoTarget = post.sampleUrl || post.fileUrl;
+            const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget) {
               const shouldUseProxy = state.settings?.proxyVideoDefault !== false;
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
@@ -209,7 +209,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     const isVideoExt = (url) => {
       if (!url) return false;
       const clean = url.split('?')[0].toLowerCase();
-      return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.zip');
+      return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.zip') || clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
     };
 
     // Выбор источника превью в соответствии с настройкой качества: 'low', 'medium', 'high', 'original'
@@ -225,8 +225,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
       } else if (quality === 'medium') {
         if (post.site === 'danbooru' && (post.thumb360 || post.thumb180)) {
           directThumb = post.thumb360 || post.thumb180;
-        } else if (hasStaticPreview && post.sampleUrl && !isVideoExt(post.sampleUrl)) {
-          directThumb = post.sampleUrl;
+        } else if (hasStaticPreview) {
+          directThumb = post.previewUrl;
         } else if (videoTarget) {
           directThumb = `/api/video-thumbnail?url=${encodeURIComponent(videoTarget)}&quality=medium`;
         } else {
@@ -235,10 +235,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
       } else if (quality === 'high' || quality === 'original') {
         if (post.site === 'danbooru' && (post.thumb720 || post.thumbSample)) {
           directThumb = post.thumb720 || post.thumbSample;
+        } else if (hasStaticPreview) {
+          directThumb = post.previewUrl;
         } else if (videoTarget) {
           directThumb = `/api/video-thumbnail?url=${encodeURIComponent(videoTarget)}&quality=${quality}`;
-        } else if (post.sampleUrl && !isVideoExt(post.sampleUrl)) {
-          directThumb = post.sampleUrl;
         } else {
           directThumb = post.previewUrl || '';
         }
@@ -415,7 +415,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
         // Умная задержка (150 мс), чтобы не перегружать сеть при быстром скролле
         hoverTimer = setTimeout(() => {
           if (!videoEl.src) {
-            const videoTarget = post.sampleUrl || post.fileUrl;
+            const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget) {
               const shouldUseProxy = state.settings?.proxyVideoDefault !== false;
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
@@ -448,7 +448,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
       });
 
       videoEl.addEventListener('error', function () {
-        const videoTarget = post.sampleUrl || post.fileUrl;
+        const videoTarget = post.fileUrl || post.sampleUrl;
         const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(videoTarget)}`;
         const proxyUrl = getProxiedUrl(videoTarget);
         if (this.src !== transcodeUrl && (this.src === proxyUrl || !this.src.includes('/api/proxy'))) {
