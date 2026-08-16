@@ -1,5 +1,13 @@
 async function fetchProxied(url, options = {}) {
-  const proxiedUrl = 'https://api.allorigins.win/raw?url=$';
+  const u = typeof url === 'string' ? url : url.toString();
+  // danbooru, rule34 and xbooru support direct CORS
+  if (u.includes('danbooru.donmai.us') || u.includes('rule34.xxx') || u.includes('xbooru.com')) {
+    try {
+      const res = await fetchProxied(u, options);
+      return res;
+    } catch(e) {}
+  }
+  const proxiedUrl = 'https://corsproxy.io/?' + encodeURIComponent(u);
   return fetch(proxiedUrl, options);
 }
 
@@ -190,7 +198,7 @@ async function fetchSafe(url, options = {}) {
   const isBrowserTarget = url.includes('rule34video.com') || url.includes('rule34.xxx') || url.includes('paheal') || url.includes('gelbooru.com') || url.includes('xbooru.com') || url.includes('hypnohub.net');
   const ua = isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT;
   try {
-    const response = await fetch(url, {
+    const response = await fetchProxied(url, {
       ...options,
       signal: controller.signal,
       headers: {
@@ -1593,9 +1601,9 @@ app.get('/api/sites', (req, res) => {
 export async function fetchTagAutocomplete(query, site) {
   if (!query) return { tags: [] };
   let url = '';
-  if (site === 'danbooru') url = 'https://danbooru.donmai.us/tags/autocomplete.json?search[name_matches]=$*&limit=10';
-  else if (site === 'gelbooru') url = 'https://gelbooru.com/index.php?page=dapi&s=tag&q=index&json=1&limit=10&name_pattern=$%';
-  else if (site === 'rule34') url = 'https://api.rule34.xxx/index.php?page=dapi&s=tag&q=index&json=1&limit=10&name_pattern=$%';
+  if (site === 'danbooru') url = 'https://danbooru.donmai.us/tags/autocomplete.json?search[name_matches]=' + encodeURIComponent(query) + '*&limit=10';
+  else if (site === 'gelbooru') url = 'https://gelbooru.com/index.php?page=dapi&s=tag&q=index&json=1&limit=10&name_pattern=' + encodeURIComponent(query) + '%25';
+  else if (site === 'rule34') url = 'https://api.rule34.xxx/index.php?page=dapi&s=tag&q=index&json=1&limit=10&name_pattern=' + encodeURIComponent(query) + '%25';
   else return { tags: [] };
 
   try {
@@ -1625,4 +1633,3 @@ export async function fetchPosts(options) {
   if (s === 'hypnohub') return await fetchHypnohub(options);
   return [];
 }
-
