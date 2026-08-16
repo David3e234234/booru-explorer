@@ -1591,12 +1591,6 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   }
 }
 
-// API Эндпоинты
-
-app.get('/api/sites', (req, res) => {
-  res.json({ sites: Object.values(SITES) });
-});
-
 
 export async function fetchTagAutocomplete(query, site) {
   if (!query) return { tags: [] };
