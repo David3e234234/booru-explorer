@@ -1537,7 +1537,7 @@ export async function fetchHypnohub(params, aiTagsList) {
 }
 
 // Диспетчер
-async function fetchPosts(site, params, aiTagsList, settings) {
+export async function fetchPosts(site, params, aiTagsList, settings) {
   switch (site) {
     case 'danbooru':
       return await fetchDanbooru(params, aiTagsList, settings);
