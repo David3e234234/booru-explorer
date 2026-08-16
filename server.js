@@ -279,6 +279,7 @@ const DEFAULT_SETTINGS = {
   videoMutedDefault: true,
   itemsPerPage: 100,
   proxyVideoDefault: true,
+  enablePaheal: true,
   defaultSite: 'danbooru',
   rule34ApiKey: '',
   rule34UserId: '',
@@ -1191,6 +1192,9 @@ async function fetchRule34(params, aiTagsList, settings) {
   }
 
   // Открытый Paheal API
+  if (settings && settings.enablePaheal === false) {
+    return [];
+  }
   let pahealSearchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
   const fetchPahealLimit = category === 'popular' ? Math.max(limit, 70) : limit;
   if (category === 'top') {

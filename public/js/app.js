@@ -219,6 +219,10 @@ async function loadUserSettings() {
       if (typeof data.settings.videoAutoplayViewer === 'boolean' && checkVideoAutoplayViewer) {
         checkVideoAutoplayViewer.checked = data.settings.videoAutoplayViewer;
       }
+      if (typeof data.settings.enablePaheal === 'boolean') {
+        const checkEnablePaheal = document.getElementById('checkEnablePaheal');
+        if (checkEnablePaheal) checkEnablePaheal.checked = data.settings.enablePaheal;
+      }
     }
   } catch (err) {
     console.error('Ошибка настроек:', err);
@@ -1088,6 +1092,9 @@ function openSettingsModal() {
   const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
   if (checkPrioritizeUserTags) checkPrioritizeUserTags.checked = state.settings.prioritizeUserTags || false;
 
+  const checkEnablePaheal = document.getElementById('checkEnablePaheal');
+  if (checkEnablePaheal) checkEnablePaheal.checked = state.settings.enablePaheal !== false;
+
   const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
   document.querySelectorAll('.btn-theme').forEach(b => {
     b.classList.toggle('active', b.dataset.themeVal === currentTheme);
@@ -1154,6 +1161,9 @@ async function handleSaveSettings() {
   const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
   const prioritizeUserTagsVal = checkPrioritizeUserTags ? checkPrioritizeUserTags.checked : false;
 
+  const checkEnablePaheal = document.getElementById('checkEnablePaheal');
+  const enablePahealVal = checkEnablePaheal ? checkEnablePaheal.checked : true;
+
   const updated = {
     ...state.settings,
     theme,
@@ -1173,7 +1183,8 @@ async function handleSaveSettings() {
     danbooruApiKey: inputDanbooruApiKey ? inputDanbooruApiKey.value.trim() : '',
     danbooruLogin: inputDanbooruLogin ? inputDanbooruLogin.value.trim() : '',
     deepFetchPages: deepFetchPagesVal,
-    prioritizeUserTags: prioritizeUserTagsVal
+    prioritizeUserTags: prioritizeUserTagsVal,
+    enablePaheal: enablePahealVal
   };
 
   try {
@@ -1203,6 +1214,8 @@ async function handleResetSettings() {
   if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = true;
   if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = true;
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = true;
+  const checkEnablePaheal = document.getElementById('checkEnablePaheal');
+  if (checkEnablePaheal) checkEnablePaheal.checked = true;
   renderSettingsChips();
   showToast('Значения сброшены к стандартным');
 }
