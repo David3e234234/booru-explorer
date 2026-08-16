@@ -142,4 +142,5 @@ BooruExp/
   * **Универсальные авторы и метаданные**: Реализован глубокий парсер `extractAuthor()` (распознавание ссылок Pixiv/Twitter/ArtStation/Fanbox/Patreon/Skeb), `normalizeDate()` и `classifyTags()` для всех 11 Booru (Gelbooru, Rule34, Safebooru, Yande.re, Konachan, Rule34Video, Xbooru, Hypnohub).
   * **Интерактивные карточки**: Бейджи авторов `🎨` сделаны кликабельными (поиск в 1 клик), добавлены градации качества (`4K UHD`, `2K QHD`, `HD`), даты и формат.
   * **Подготовка к GitHub**: Добавлен `.gitignore`, исключены личные ключи/настройки, удалены временные файлы, создан шаблон `data/settings.example.json`. Репозиторий выгружен на `https://github.com/David3e234234/booru-explorer`.
+  * **Отметка AI-Generated**: В `README.md` и документацию добавлены бейджи и примечание о том, что весь проект на 100% спроектирован и создан ИИ.
 

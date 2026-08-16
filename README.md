@@ -1,5 +1,11 @@
 # Booru Explorer 🚀
 
+[![100% AI Generated](https://img.shields.io/badge/100%25-AI--Generated-8b5cf6?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/David3e234234/booru-explorer)
+[![Developed with Antigravity](https://img.shields.io/badge/Developed%20with-Antigravity%20AI-4f46e5?style=for-the-badge)](https://github.com/David3e234234/booru-explorer)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+> 🤖 **Этот проект полностью спроектирован, написан и оптимизирован искусственным интеллектом (AI-Generated & AI-Pair-Programmed).** Весь код, архитектура бэкенда, фронтенд, стили и документация созданы с помощью автономного ИИ-ассистента Antigravity.
+
 **Booru Explorer** — современный, сверхлегкий и быстрый медиа-клиент для просмотра, поиска и воспроизведения контента с популярнейших Booru-платформ с полноценной поддержкой видео, аудио, умного извлечения авторов, тегов и фильтрации ИИ.
 
 ---
