@@ -37,7 +37,7 @@ Thumbs.db
 
 # Локальный контекст AI агента
 AGENT_CONTEXT.md
-GEMINI.md
-gemini.md
 *.agent_context.md
+GEMINI.md
+*.gemini.md
 
