@@ -36,15 +36,20 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Process UnhandledRejection]', reason);
 });
 
-// Директория хранилища и кэша
-const DATA_DIR = path.join(__dirname, 'data');
+// Директория хранилища и кэша (автоматическая адаптация для Vercel/Serverless окружения)
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+const DATA_DIR = isServerless ? path.join(os.tmpdir(), 'booru_data') : path.join(__dirname, 'data');
 const CACHE_DIR = path.join(DATA_DIR, 'cache');
 const THUMBS_DIR = path.join(CACHE_DIR, 'thumbnails');
 const VIDEOS_DIR = path.join(CACHE_DIR, 'videos');
 
 [DATA_DIR, CACHE_DIR, THUMBS_DIR, VIDEOS_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  } catch (err) {
+    console.warn(`[FS Warning] Не удалось создать папку ${dir}:`, err.message);
   }
 });
 
@@ -2986,6 +2991,8 @@ function startServer(port) {
   });
 }
 
-startServer(Number(PORT));
+if (!isServerless) {
+  startServer(Number(PORT));
+}
 
 export default app;
