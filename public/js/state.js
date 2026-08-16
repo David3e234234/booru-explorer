@@ -28,6 +28,9 @@ export const state = {
   posts: [],
   favorites: [],
   favoriteIds: new Set(),
+  favoritesSubTab: 'posts', // 'posts' | 'authors'
+  favoriteAuthors: [],
+  favoriteAuthorNames: new Set(),
   settings: {
     theme: 'dark',
     itemsPerPage: 100,
@@ -86,4 +89,17 @@ export function setFavorites(favList) {
 
 export function isPostFavorite(id) {
   return state.favoriteIds.has(id);
+}
+
+export function setFavoriteAuthors(authorsList) {
+  state.favoriteAuthors = authorsList || [];
+  state.favoriteAuthorNames = new Set(
+    state.favoriteAuthors.map(a => (a.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_'))
+  );
+}
+
+export function isAuthorFavorite(name) {
+  if (!name) return false;
+  const clean = String(name).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+  return state.favoriteAuthorNames.has(clean);
 }

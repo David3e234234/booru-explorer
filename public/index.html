@@ -233,6 +233,33 @@
     <main class="main-content">
       <!-- Сетка галереи (Masonry) -->
       <div class="gallery-container">
+        <!-- Панель переключения под-вкладок Избранного (Посты / Авторы) -->
+        <div class="favorites-header-bar" id="favoritesHeaderBar" style="display: none;">
+          <div class="favorites-subnav">
+            <button class="favorites-subnav-btn active" data-subtab="posts" id="btnFavSubPosts" title="Сохраненные посты">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <span>Сохраненные посты</span>
+              <span class="fav-sub-badge" id="favPostsCountBadge">0</span>
+            </button>
+            <button class="favorites-subnav-btn" data-subtab="authors" id="btnFavSubAuthors" title="Любимые авторы">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+              <span>Любимые авторы</span>
+              <span class="fav-sub-badge" id="favAuthorsCountBadge">0</span>
+            </button>
+          </div>
+          
+          <div class="favorites-authors-actions" id="favAuthorsActions" style="display: none;">
+            <div class="fav-authors-search-box">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" id="favAuthorsSearchInput" class="fav-authors-search-input" placeholder="Поиск автора..." autocomplete="off">
+            </div>
+            <button class="btn-action-primary btn-add-author" id="btnAddAuthorModalOpen" title="Добавить автора в избранное">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>+ Автор</span>
+            </button>
+          </div>
+        </div>
+
         <div class="gallery-grid" id="galleryGrid">
           <!-- Карточки постов будут добавлены сюда через JS -->
         </div>
@@ -380,6 +407,9 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
             <span id="viewerAuthorText">Автор</span>
           </button>
+          <button class="viewer-fav-author-btn" id="viewerFavAuthorBtn" style="display: none;" title="Добавить/удалить автора из избранных">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </button>
         </div>
         <div class="viewer-top-actions">
           <button class="viewer-btn" id="btnFavModal" title="Добавить в избранное">
@@ -431,7 +461,13 @@
               </div>
               <div class="info-item" id="infoAuthorRow" style="display: none;">
                 <span class="info-label">Автор:</span>
-                <span class="info-val info-val-author" id="infoAuthor">Не указан</span>
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1;">
+                  <span class="info-val info-val-author" id="infoAuthor">Не указан</span>
+                  <button class="btn-fav-author-inline" id="btnFavAuthorSidebar" title="Добавить автора в избранное">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    <span id="btnFavAuthorSidebarText">В избранное</span>
+                  </button>
+                </div>
               </div>
               <div class="info-item">
                 <span class="info-label">Рейтинг:</span>
@@ -706,6 +742,43 @@
   </div>
 
 
+
+  <!-- Модальное окно добавления автора в избранное -->
+  <div class="modal-backdrop" id="modalAddAuthorBackdrop" style="display: none;">
+    <div class="modal-dialog modal-dialog-sm">
+      <div class="modal-header">
+        <h3 class="modal-title">🎨 Добавить автора в избранное</h3>
+        <button class="btn-icon btn-modal-close" id="btnCloseAddAuthorModal" title="Закрыть">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <form id="formAddAuthor" class="modal-body modal-form">
+        <div class="form-group">
+          <label for="inputAuthorName" class="form-label">Имя автора / Тег артиста:</label>
+          <input type="text" id="inputAuthorName" class="form-input" placeholder="например: ciloru, wlop, sakimichan..." required autocomplete="off" spellcheck="false">
+          <span class="form-hint">Укажите имя художника (как в тегах Danbooru, Gelbooru или Rule34).</span>
+        </div>
+        <div class="form-group">
+          <label for="selectAuthorSite" class="form-label">Предпочитаемый Booru-источник:</label>
+          <select id="selectAuthorSite" class="form-select">
+            <option value="danbooru">Danbooru</option>
+            <option value="gelbooru">Gelbooru</option>
+            <option value="rule34">Rule34</option>
+            <option value="yandere">Yande.re</option>
+            <option value="konachan">Konachan</option>
+            <option value="safebooru">Safebooru</option>
+            <option value="rule34video">Rule34Video</option>
+            <option value="xbooru">Xbooru</option>
+            <option value="hypnohub">Hypnohub</option>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btnCancelAddAuthor">Отмена</button>
+          <button type="submit" class="btn-primary" id="btnSaveAddAuthor">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <div class="toast-container" id="toastContainer"></div>
 

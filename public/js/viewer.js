@@ -1,7 +1,7 @@
-import { state, isPostFavorite } from './state.js';
-import { getProxiedUrl, toggleFavoritePost } from './api.js';
+import { state, isPostFavorite, isAuthorFavorite } from './state.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor } from './api.js';
 
-export function initViewer({ onFavoriteToggle, onTagSelect, showToast }) {
+export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, showToast }) {
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
   const btnClose = document.getElementById('btnCloseViewer');
@@ -22,8 +22,11 @@ export function initViewer({ onFavoriteToggle, onTagSelect, showToast }) {
   const viewerSidebar = document.getElementById('viewerSidebar');
   const viewerAuthorBadge = document.getElementById('viewerAuthorBadge');
   const viewerAuthorText = document.getElementById('viewerAuthorText');
+  const viewerFavAuthorBtn = document.getElementById('viewerFavAuthorBtn');
   const infoAuthorRow = document.getElementById('infoAuthorRow');
   const infoAuthor = document.getElementById('infoAuthor');
+  const btnFavAuthorSidebar = document.getElementById('btnFavAuthorSidebar');
+  const btnFavAuthorSidebarText = document.getElementById('btnFavAuthorSidebarText');
 
   // Сайдбар
   const infoSite = document.getElementById('infoSite');
@@ -114,27 +117,39 @@ export function initViewer({ onFavoriteToggle, onTagSelect, showToast }) {
     const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
     const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
     if (authorName && authorName.trim()) {
+      const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
+
       if (viewerAuthorBadge && viewerAuthorText) {
         viewerAuthorText.textContent = authorName;
         viewerAuthorBadge.style.display = 'inline-flex';
         viewerAuthorBadge.onclick = (e) => {
           e.stopPropagation();
           closeViewer();
-          const mainAuthorTag = authorName.split(',')[0].trim().replace(/\s+/g, '_');
-          onTagSelect(mainAuthorTag);
+          onTagSelect(cleanAuthorTag);
         };
+      }
+      if (viewerFavAuthorBtn) {
+        viewerFavAuthorBtn.style.display = 'inline-flex';
+        viewerFavAuthorBtn.classList.toggle('active', isFavAuthor);
+        viewerFavAuthorBtn.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
       }
       if (infoAuthorRow && infoAuthor) {
         infoAuthor.textContent = authorName;
         infoAuthorRow.style.display = 'flex';
         infoAuthor.onclick = () => {
           closeViewer();
-          const mainAuthorTag = authorName.split(',')[0].trim().replace(/\s+/g, '_');
-          onTagSelect(mainAuthorTag);
+          onTagSelect(cleanAuthorTag);
         };
+      }
+      if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
+        btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
+        btnFavAuthorSidebarText.textContent = isFavAuthor ? 'В избранном' : 'В избранное';
+        btnFavAuthorSidebar.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
       }
     } else {
       if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
+      if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
       if (infoAuthorRow) infoAuthorRow.style.display = 'none';
     }
 
@@ -793,14 +808,73 @@ export function initViewer({ onFavoriteToggle, onTagSelect, showToast }) {
     });
   });
 
-  btnFavModal.addEventListener('click', () => {
+  async function handleAuthorFavToggle() {
     if (!currentPost) return;
-    hapticVibrate([20, 30, 20]);
-    const newState = toggleFavoritePost(currentPost);
-    btnFavModal.classList.toggle('active', newState);
-    btnFavModal.querySelector('svg').setAttribute('fill', newState ? 'currentColor' : 'none');
-    if (onFavoriteToggle) onFavoriteToggle(currentPost, newState);
-  });
+    const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
+    const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
+    if (!authorName || !authorName.trim()) return;
+
+    const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+    hapticVibrate([15, 25, 15]);
+
+    try {
+      const res = await toggleFavoriteAuthor({
+        name: cleanAuthorTag,
+        displayName: authorName,
+        previewUrl: currentPost.previewUrl || currentPost.sampleUrl || '',
+        site: currentPost.site || 'danbooru'
+      });
+
+      if (res.success) {
+        if (res.isFavorite) {
+          state.favoriteAuthorNames.add(cleanAuthorTag.toLowerCase());
+          state.favoriteAuthors.unshift(res.author || {
+            id: cleanAuthorTag,
+            name: cleanAuthorTag,
+            displayName: authorName,
+            previewUrl: currentPost.previewUrl || currentPost.sampleUrl || '',
+            site: currentPost.site || 'danbooru',
+            createdAt: new Date().toISOString()
+          });
+          showToast(`Автор ${authorName} добавлен в любимые ⭐`);
+        } else {
+          state.favoriteAuthorNames.delete(cleanAuthorTag.toLowerCase());
+          state.favoriteAuthors = state.favoriteAuthors.filter(a => (a.name || '').toLowerCase() !== cleanAuthorTag.toLowerCase());
+          showToast(`Автор ${authorName} удален из любимых`);
+        }
+
+        const isFavAuthor = res.isFavorite;
+        if (viewerFavAuthorBtn) {
+          viewerFavAuthorBtn.classList.toggle('active', isFavAuthor);
+          viewerFavAuthorBtn.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+        }
+        if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
+          btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
+          btnFavAuthorSidebarText.textContent = isFavAuthor ? 'В избранном' : 'В избранное';
+          btnFavAuthorSidebar.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+        }
+
+        if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
+      }
+    } catch (err) {
+      console.error('Ошибка добавления автора в любимые:', err);
+      showToast('Не удалось обновить избранного автора', 'error');
+    }
+  }
+
+  if (viewerFavAuthorBtn) {
+    viewerFavAuthorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleAuthorFavToggle();
+    });
+  }
+
+  if (btnFavAuthorSidebar) {
+    btnFavAuthorSidebar.addEventListener('click', (e) => {
+      e.stopPropagation();
+      handleAuthorFavToggle();
+    });
+  }
 
   btnPrev.addEventListener('click', () => {
     if (state.currentViewerIndex > 0) {

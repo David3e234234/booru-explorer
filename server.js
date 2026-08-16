@@ -49,6 +49,7 @@ const VIDEOS_DIR = path.join(CACHE_DIR, 'videos');
 });
 
 const FAVORITES_FILE = path.join(DATA_DIR, 'favorites.json');
+const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 // ==========================================
@@ -957,6 +958,27 @@ async function fetchDanbooru(params, aiTagsList, settings) {
     } catch (err) {
       logError('Danbooru', 'Ошибка стандартного fetch', err);
     }
+  }
+
+  // Если по прямому тегу ничего не найдено, а тег похож на автора/аккаунт (например ti_nira_n)
+  if (allData.length === 0 && userTagList.length === 1 && !userTagList[0].includes(':')) {
+    const rawTag = userTagList[0].replace(/^@/, '');
+    const sourceQuery = `source:*${rawTag}*`;
+    logInfo('Danbooru', `Прямой тег не вернул результатов, пробуем поиск по автору в источнике: tags="${sourceQuery}"`);
+    try {
+      const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)
+        ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
+        : '';
+      const fallbackUrl = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(sourceQuery)}&limit=${fetchLimit}${authParam}`;
+      const res = await fetchSafe(fallbackUrl);
+      if (res.ok) {
+        const text = await res.text();
+        const data = safeJsonParse(text, null);
+        if (Array.isArray(data) && data.length > 0) {
+          allData = data;
+        }
+      }
+    } catch (e) {}
   }
 
   logInfo('Danbooru', `Получено из API: ${allData.length} постов до локальной фильтрации`);
@@ -2529,6 +2551,54 @@ app.delete('/api/favorites/:id', (req, res) => {
   const filtered = favorites.filter(f => f.id !== id);
   writeJsonFileAsync(FAVORITES_FILE, filtered);
   res.json({ success: true, count: filtered.length });
+});
+
+// Любимые авторы (Favorite Authors)
+app.get('/api/favorite-authors', (req, res) => {
+  const authors = readJsonFile(FAVORITE_AUTHORS_FILE, []);
+  res.json({ success: true, authors });
+});
+
+app.post('/api/favorite-authors', (req, res) => {
+  const body = req.body;
+  if (!body || !body.name || !body.name.trim()) {
+    return res.status(400).json({ success: false, message: 'Имя автора не указано' });
+  }
+
+  const rawName = body.name.trim();
+  const cleanName = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').toLowerCase();
+  const displayName = body.displayName ? body.displayName.trim() : rawName;
+  const previewUrl = body.previewUrl || '';
+  const site = body.site || 'danbooru';
+
+  const authors = readJsonFile(FAVORITE_AUTHORS_FILE, []);
+  const existsIndex = authors.findIndex(a => (a.name || '').toLowerCase() === cleanName);
+
+  if (existsIndex >= 0) {
+    authors.splice(existsIndex, 1);
+    writeJsonFileAsync(FAVORITE_AUTHORS_FILE, authors);
+    return res.json({ success: true, isFavorite: false, count: authors.length, authors });
+  } else {
+    const newAuthor = {
+      id: cleanName,
+      name: cleanName,
+      displayName: displayName,
+      previewUrl: previewUrl,
+      site: site,
+      createdAt: new Date().toISOString()
+    };
+    authors.unshift(newAuthor);
+    writeJsonFileAsync(FAVORITE_AUTHORS_FILE, authors);
+    return res.json({ success: true, isFavorite: true, count: authors.length, authors, author: newAuthor });
+  }
+});
+
+app.delete('/api/favorite-authors/:name', (req, res) => {
+  const rawName = (req.params.name || '').trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').toLowerCase();
+  const authors = readJsonFile(FAVORITE_AUTHORS_FILE, []);
+  const filtered = authors.filter(a => (a.name || '').toLowerCase() !== rawName);
+  writeJsonFileAsync(FAVORITE_AUTHORS_FILE, filtered);
+  res.json({ success: true, count: filtered.length, authors: filtered });
 });
 
 function getLocalIpAddress() {

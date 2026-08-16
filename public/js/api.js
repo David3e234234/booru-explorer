@@ -71,6 +71,28 @@ export async function deleteFavoritePost(id) {
   return await res.json();
 }
 
+export async function fetchFavoriteAuthors() {
+  const res = await fetch('/api/favorite-authors');
+  if (!res.ok) return { authors: [] };
+  return await res.json();
+}
+
+export async function toggleFavoriteAuthor(authorData) {
+  const res = await fetch('/api/favorite-authors', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(authorData)
+  });
+  return await res.json();
+}
+
+export async function deleteFavoriteAuthor(name) {
+  const res = await fetch(`/api/favorite-authors/${encodeURIComponent(name)}`, {
+    method: 'DELETE'
+  });
+  return await res.json();
+}
+
 export async function fetchSettings() {
   const res = await fetch('/api/settings');
   if (!res.ok) return { settings: {} };

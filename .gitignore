@@ -8,6 +8,7 @@ package-lock.json
 # Пользовательские персональные данные и API-ключи
 data/settings.json
 data/favorites.json
+data/favorite_authors.json
 data/cache/
 data/*.json.bak
 

@@ -1,5 +1,5 @@
-import { state, setFavorites, addSearchTag } from './state.js';
-import { fetchSites, fetchPosts, fetchFavorites, fetchSettings, saveSettings, fetchCacheInfo, clearCache } from './api.js';
+import { state, setFavorites, setFavoriteAuthors, isAuthorFavorite, addSearchTag } from './state.js';
+import { fetchSites, fetchPosts, fetchFavorites, fetchFavoriteAuthors, toggleFavoriteAuthor, deleteFavoriteAuthor, fetchSettings, saveSettings, fetchCacheInfo, clearCache } from './api.js';
 import { initAutocomplete } from './autocomplete.js';
 import { initGallery } from './gallery.js';
 import { initViewer } from './viewer.js';
@@ -13,6 +13,22 @@ const checkHidePregnant = document.getElementById('checkHidePregnant');
 const sidebarTagsList = document.getElementById('sidebarTagsList');
 const sidebarTagsCount = document.getElementById('sidebarTagsCount');
 const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+
+// Элементы подвкладки Избранного и Любимых авторов
+const favoritesHeaderBar = document.getElementById('favoritesHeaderBar');
+const btnFavSubPosts = document.getElementById('btnFavSubPosts');
+const btnFavSubAuthors = document.getElementById('btnFavSubAuthors');
+const favPostsCountBadge = document.getElementById('favPostsCountBadge');
+const favAuthorsCountBadge = document.getElementById('favAuthorsCountBadge');
+const favAuthorsActions = document.getElementById('favAuthorsActions');
+const favAuthorsSearchInput = document.getElementById('favAuthorsSearchInput');
+const btnAddAuthorModalOpen = document.getElementById('btnAddAuthorModalOpen');
+const modalAddAuthorBackdrop = document.getElementById('modalAddAuthorBackdrop');
+const formAddAuthor = document.getElementById('formAddAuthor');
+const inputAuthorName = document.getElementById('inputAuthorName');
+const selectAuthorSite = document.getElementById('selectAuthorSite');
+const btnCloseAddAuthorModal = document.getElementById('btnCloseAddAuthorModal');
+const btnCancelAddAuthor = document.getElementById('btnCancelAddAuthor');
 
 // Модалка настроек
 const settingsModal = document.getElementById('settingsModal');
@@ -134,6 +150,12 @@ async function init() {
       galleryInstance.renderGallery(false);
       updateFavoritesBadge();
     },
+    onFavoriteAuthorToggle: () => {
+      updateFavoritesBadge();
+      if (state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') {
+        renderFavoriteAuthors();
+      }
+    },
     onTagSelect: (tag) => {
       autocompleteInstance.selectTag(tag);
     },
@@ -151,6 +173,7 @@ async function init() {
   await Promise.allSettled([
     loadUserSettings(),
     loadFavorites(),
+    loadFavoriteAuthors(),
     loadBooruSites()
   ]);
 
@@ -239,11 +262,89 @@ async function loadFavorites() {
   }
 }
 
+async function loadFavoriteAuthors() {
+  try {
+    const data = await fetchFavoriteAuthors();
+    setFavoriteAuthors(data.authors || []);
+    updateFavoritesBadge();
+  } catch (err) {
+    console.error('Ошибка любимых авторов:', err);
+  }
+}
+
 function updateFavoritesBadge() {
-  const countStr = String(state.favorites.length);
+  const postsCount = state.favorites ? state.favorites.length : 0;
+  const authorsCount = state.favoriteAuthors ? state.favoriteAuthors.length : 0;
+  const totalCount = postsCount + authorsCount;
+  const countStr = String(totalCount);
+
   if (badgeFavCount) badgeFavCount.textContent = countStr;
   const badgeFavCountMobile = document.getElementById('badgeFavCountMobile');
   if (badgeFavCountMobile) badgeFavCountMobile.textContent = countStr;
+
+  if (favPostsCountBadge) favPostsCountBadge.textContent = String(postsCount);
+  if (favAuthorsCountBadge) favAuthorsCountBadge.textContent = String(authorsCount);
+}
+
+function switchFavoritesSubTab(tab) {
+  state.favoritesSubTab = tab;
+  if (btnFavSubPosts) btnFavSubPosts.classList.toggle('active', tab === 'posts');
+  if (btnFavSubAuthors) btnFavSubAuthors.classList.toggle('active', tab === 'authors');
+  if (favAuthorsActions) favAuthorsActions.style.display = tab === 'authors' ? 'flex' : 'none';
+
+  if (tab === 'authors') {
+    renderFavoriteAuthors();
+  } else {
+    performSearch(true);
+  }
+}
+
+function renderFavoriteAuthors() {
+  const query = (favAuthorsSearchInput?.value || '').trim().toLowerCase();
+  let authors = [...state.favoriteAuthors];
+  if (query) {
+    authors = authors.filter(a =>
+      (a.name || '').toLowerCase().includes(query) ||
+      (a.displayName || '').toLowerCase().includes(query)
+    );
+  }
+  galleryInstance.renderAuthorCards(authors, {
+    onExplore: handleExploreAuthor,
+    onDelete: handleDeleteAuthor
+  });
+}
+
+function handleExploreAuthor(author) {
+  if (!author || !author.name) return;
+  if (author.site && state.sites.some(s => s.id === author.site)) {
+    state.currentSite = author.site;
+    renderSitesBar();
+  }
+  state.searchTags = [];
+  addSearchTag(author.name);
+  if (autocompleteInstance) {
+    autocompleteInstance.renderTagsChips();
+  }
+  selectCategory('new');
+  showToast(`Поиск работ автора: ${author.displayName || author.name} 🎨`);
+}
+
+async function handleDeleteAuthor(author) {
+  if (!author || !author.name) return;
+  try {
+    const res = await deleteFavoriteAuthor(author.name);
+    if (res.success) {
+      const cleanName = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      state.favoriteAuthorNames.delete(cleanName);
+      state.favoriteAuthors = res.authors || state.favoriteAuthors.filter(a => (a.name || '').toLowerCase() !== cleanName);
+      updateFavoritesBadge();
+      renderFavoriteAuthors();
+      showToast(`Автор ${author.displayName || author.name} удален из любимых`);
+    }
+  } catch (err) {
+    console.error('Ошибка удаления автора:', err);
+    showToast('Не удалось удалить автора', 'error');
+  }
 }
 
 async function loadBooruSites() {
@@ -400,6 +501,15 @@ function updateCategoryTabsUI() {
     }
   });
 
+  if (favoritesHeaderBar) {
+    favoritesHeaderBar.style.display = state.currentCategory === 'favorites' ? 'flex' : 'none';
+    if (state.currentCategory === 'favorites') {
+      btnFavSubPosts?.classList.toggle('active', state.favoritesSubTab === 'posts');
+      btnFavSubAuthors?.classList.toggle('active', state.favoritesSubTab === 'authors');
+      if (favAuthorsActions) favAuthorsActions.style.display = state.favoritesSubTab === 'authors' ? 'flex' : 'none';
+    }
+  }
+
   const mobileNavFeedLabel = document.getElementById('mobileNavFeedLabel');
   if (mobileNavFeedLabel) {
     const catMap = {
@@ -465,6 +575,10 @@ function renderSidebarPageTags() {
 }
 
 async function performSearch(reset = false, options = {}) {
+  if (favoritesHeaderBar) {
+    favoritesHeaderBar.style.display = state.currentCategory === 'favorites' ? 'flex' : 'none';
+  }
+
   if (reset) {
     state.page = 1;
     state.posts = [];
@@ -473,6 +587,10 @@ async function performSearch(reset = false, options = {}) {
   }
 
   if (state.currentCategory === 'favorites') {
+    if (state.favoritesSubTab === 'authors') {
+      renderFavoriteAuthors();
+      return;
+    }
     state.posts = [...state.favorites];
     if (state.searchTags.length > 0) {
       state.posts = state.posts.filter(p => {
@@ -759,6 +877,88 @@ function setupEventListeners() {
       haptic(20);
       closeAllDrawers();
       selectCategory('favorites');
+    });
+  }
+
+  // Переключение подвкладок в разделе Избранное (Посты / Авторы)
+  if (btnFavSubPosts) {
+    btnFavSubPosts.addEventListener('click', () => {
+      haptic(10);
+      switchFavoritesSubTab('posts');
+    });
+  }
+
+  if (btnFavSubAuthors) {
+    btnFavSubAuthors.addEventListener('click', () => {
+      haptic(10);
+      switchFavoritesSubTab('authors');
+    });
+  }
+
+  if (favAuthorsSearchInput) {
+    favAuthorsSearchInput.addEventListener('input', () => {
+      renderFavoriteAuthors();
+    });
+  }
+
+  function openAddAuthorModal() {
+    if (modalAddAuthorBackdrop) modalAddAuthorBackdrop.style.display = 'flex';
+    if (inputAuthorName) {
+      inputAuthorName.value = '';
+      setTimeout(() => inputAuthorName.focus(), 60);
+    }
+  }
+
+  function closeAddAuthorModal() {
+    if (modalAddAuthorBackdrop) modalAddAuthorBackdrop.style.display = 'none';
+  }
+
+  if (btnAddAuthorModalOpen) {
+    btnAddAuthorModalOpen.addEventListener('click', () => {
+      haptic(10);
+      openAddAuthorModal();
+    });
+  }
+
+  if (btnCloseAddAuthorModal) btnCloseAddAuthorModal.addEventListener('click', closeAddAuthorModal);
+  if (btnCancelAddAuthor) btnCancelAddAuthor.addEventListener('click', closeAddAuthorModal);
+
+  if (modalAddAuthorBackdrop) {
+    modalAddAuthorBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalAddAuthorBackdrop) closeAddAuthorModal();
+    });
+  }
+
+  if (formAddAuthor) {
+    formAddAuthor.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rawName = (inputAuthorName?.value || '').trim();
+      const site = selectAuthorSite?.value || 'danbooru';
+      if (!rawName) return;
+
+      const cleanTag = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+
+      try {
+        const res = await toggleFavoriteAuthor({
+          name: cleanTag,
+          displayName: rawName,
+          site
+        });
+
+        if (res.success) {
+          await loadFavoriteAuthors();
+          closeAddAuthorModal();
+          showToast(`Автор ${rawName} сохранён в любимые ⭐`);
+          if (state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') {
+            renderFavoriteAuthors();
+          }
+        } else {
+          showToast(res.message || 'Ошибка сохранения автора', 'error');
+        }
+      } catch (err) {
+        console.error('Ошибка добавления автора:', err);
+        showToast('Ошибка сохранения автора', 'error');
+      }
     });
   }
 

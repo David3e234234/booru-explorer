@@ -1,4 +1,4 @@
-import { state, isPostFavorite } from './state.js';
+import { state, isPostFavorite, isAuthorFavorite } from './state.js';
 import { getProxiedUrl, toggleFavoritePost } from './api.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoadMore, onRefresh }) {
@@ -489,6 +489,100 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     }
   }
 
+  function renderAuthorCards(authorsList, { onExplore, onDelete } = {}) {
+    galleryGrid.innerHTML = '';
+    loadingSpinner.style.display = 'none';
+    scrollLoader.style.display = 'none';
+
+    currentSiteLabel.textContent = 'Любимые авторы';
+
+    const stateTitle = emptyState.querySelector('.state-title');
+    const stateDesc = emptyState.querySelector('.state-desc');
+
+    if (!authorsList || authorsList.length === 0) {
+      emptyState.style.display = 'flex';
+      if (stateTitle) stateTitle.textContent = 'Нет сохраненных авторов';
+      if (stateDesc) stateDesc.textContent = 'Нажмите кнопку «+ Автор» выше или звёздочку возле автора в просмотрщике, чтобы сохранить художника!';
+      resultsCount.textContent = '0 авторов';
+      return;
+    }
+
+    emptyState.style.display = 'none';
+    if (stateTitle) stateTitle.textContent = 'Ничего не найдено';
+    if (stateDesc) stateDesc.textContent = 'Попробуйте изменить теги поиска или переключить Booru-источник.';
+
+    resultsCount.textContent = `Авторов в избранном: ${authorsList.length}`;
+
+    const fragment = document.createDocumentFragment();
+    authorsList.forEach(author => {
+      const card = createAuthorCard(author, { onExplore, onDelete });
+      fragment.appendChild(card);
+    });
+    galleryGrid.appendChild(fragment);
+  }
+
+  function createAuthorCard(author, { onExplore, onDelete } = {}) {
+    const card = document.createElement('div');
+    card.className = 'author-card';
+    card.dataset.authorName = author.name;
+
+    const siteObj = state.sites.find(s => s.id === author.site);
+    const siteName = siteObj ? siteObj.name : (author.site || 'Danbooru');
+    const preview = author.previewUrl ? (author.previewUrl.startsWith('/api/') ? author.previewUrl : getProxiedUrl(author.previewUrl)) : '';
+
+    let formattedDate = '';
+    if (author.createdAt) {
+      try {
+        const d = new Date(author.createdAt);
+        if (!isNaN(d.getTime())) formattedDate = d.toLocaleDateString('ru-RU');
+      } catch (e) {}
+    }
+
+    card.innerHTML = `
+      <div class="author-card-cover">
+        ${preview ? `<img class="author-cover-img" src="${preview}" alt="${author.displayName || author.name}" loading="lazy" decoding="async">` : `<div class="author-cover-placeholder">🎨</div>`}
+        <div class="author-card-gradient"></div>
+        <span class="author-card-site-badge">${siteName}</span>
+      </div>
+      <div class="author-card-body">
+        <div class="author-card-title-row">
+          <span class="author-name-text" title="${author.displayName || author.name}">${author.displayName || author.name}</span>
+          ${formattedDate ? `<span class="author-tag-pill" style="color: var(--text-muted); font-size: 10px;">${formattedDate}</span>` : ''}
+        </div>
+        <div class="author-tag-pill">
+          <span>🏷️ ${author.name}</span>
+        </div>
+        <div class="author-card-actions">
+          <button class="btn-author-explore" title="Открыть работы автора ${author.name}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <span>Смотреть работы</span>
+          </button>
+          <button class="btn-author-delete" title="Удалить из избранных">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
+        </div>
+      </div>
+    `;
+
+    const btnExplore = card.querySelector('.btn-author-explore');
+    if (btnExplore) {
+      btnExplore.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onExplore) onExplore(author);
+      });
+    }
+
+    const btnDelete = card.querySelector('.btn-author-delete');
+    if (btnDelete) {
+      btnDelete.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onDelete) onDelete(author);
+      });
+    }
+
+    return card;
+  }
+
   document.querySelectorAll('.btn-size').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.btn-size').forEach(b => b.classList.remove('active'));
@@ -501,11 +595,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
 
   return {
     renderGallery,
+    renderAuthorCards,
     showLoading: () => {
       loadingSpinner.style.display = 'flex';
       emptyState.style.display = 'none';
       scrollLoader.style.display = 'none';
-      resultsCount.textContent = 'Идёт поиск...'; // Обновляем текст, чтобы было видно активность
+      resultsCount.textContent = 'Идёт поиск...';
     },
     showScrollLoading: () => {
       scrollLoader.style.display = 'flex';
