@@ -43,6 +43,10 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           <span>Новое</span>
         </button>
+        <button class="nav-tab" data-category="recommended" title="Персональные рекомендации на основе ваших лайков">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>
+          <span>Для вас</span>
+        </button>
         <button class="nav-tab" data-category="popular" title="Тренды: горячие посты за последнюю неделю">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>
           <span>Популярное</span>
@@ -55,8 +59,8 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/></svg>
           <span>Случайно</span>
         </button>
-        <button class="nav-tab" data-category="favorites" title="Сохраненное избранное">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+        <button class="nav-tab" data-category="favorites" title="Сохраненные закладки">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
           <span>Избранное</span> <span class="badge-fav-count" id="badgeFavCount">0</span>
         </button>
       </nav>
@@ -320,7 +324,7 @@
 
     <button class="mobile-nav-item" id="btnNavFavorites" data-nav="favorites" title="Избранное">
       <div class="nav-icon-box">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
         <span class="badge-fav-count" id="badgeFavCountMobile">0</span>
       </div>
       <span class="nav-label">Избранное</span>
@@ -350,6 +354,13 @@
           <div class="category-info">
             <span class="category-name">Новое</span>
             <span class="category-desc">Свежие публикации</span>
+          </div>
+        </button>
+        <button class="category-card" data-category="recommended">
+          <div class="category-icon">✨</div>
+          <div class="category-info">
+            <span class="category-name">Для вас</span>
+            <span class="category-desc">Рекомендации по лайкам</span>
           </div>
         </button>
         <button class="category-card" data-category="popular">
@@ -412,8 +423,13 @@
           </button>
         </div>
         <div class="viewer-top-actions">
-          <button class="viewer-btn" id="btnFavModal" title="Добавить в избранное">
+          <!-- Лайк (Обучение рекомендаций и Booru API) -->
+          <button class="viewer-btn" id="btnLikeModal" title="Нравится (обучает рекомендации и синхронизирует с API)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+          </button>
+          <!-- Избранное (TikTok Закладка-флажок) -->
+          <button class="viewer-btn" id="btnFavModal" title="Сохранить в закладки (Избранное)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
           </button>
           <button class="viewer-btn mobile-only" id="btnViewerTagsToggle" title="Теги и информация">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>

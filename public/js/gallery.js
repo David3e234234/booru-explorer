@@ -1,5 +1,5 @@
-import { state, isPostFavorite, isAuthorFavorite } from './state.js';
-import { getProxiedUrl, toggleFavoritePost } from './api.js';
+import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally } from './state.js';
+import { getProxiedUrl, toggleFavoritePost, toggleLikePost } from './api.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoadMore, onRefresh }) {
   const galleryGrid = document.getElementById('galleryGrid');
@@ -327,10 +327,19 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
       } catch (e) {}
     }
 
+    let matchBadge = '';
+    if (state.currentCategory === 'recommended' && post.matchPercent) {
+      matchBadge = `<span class="badge-format match-percent" title="Совпадение с вашими вкусами: ${post.matchPercent}%">✨ ${post.matchPercent}%</span>`;
+    }
+
+    const isFav = isPostFavorite(post.id);
+    const isLiked = isPostLiked(post.id);
+
     card.innerHTML = `
       <div class="media-thumb-container">
         <div class="badge-group-top">
           <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
+            ${matchBadge}
             ${siteBadge}
             ${authorBadge}
             ${formatBadge}
@@ -355,9 +364,16 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 28.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             ${post.score || 0}
           </div>
-          <button class="btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? 'Удалить из избранного' : 'Добавить в избранное'}">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-          </button>
+          <div class="card-action-btns">
+            <!-- Лайк (Сердечко ❤️) -->
+            <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? 'Убрать лайк' : 'Нравится (обучает рекомендации)'}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+            </button>
+            <!-- Избранное (TikTok Флажок 🔖) -->
+            <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? 'Удалить из закладок' : 'Сохранить в закладки'}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -380,6 +396,13 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     }
 
     card.addEventListener('click', (e) => {
+      const likeBtn = e.target.closest('.btn-card-like');
+      if (likeBtn) {
+        e.stopPropagation();
+        if (navigator.vibrate) try { navigator.vibrate([15, 20]); } catch (err) {}
+        handleLikeClick(post, likeBtn);
+        return;
+      }
       const favBtn = e.target.closest('.btn-card-fav');
       if (favBtn) {
         e.stopPropagation();
@@ -461,6 +484,22 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     }
 
     return card;
+  }
+
+  async function handleLikeClick(post, btn) {
+    const isLikedNow = toggleLikeLocally(post);
+    if (isLikedNow) {
+      btn.classList.add('active');
+      btn.querySelector('svg').setAttribute('fill', 'currentColor');
+    } else {
+      btn.classList.remove('active');
+      btn.querySelector('svg').setAttribute('fill', 'none');
+    }
+    try {
+      await toggleLikePost(post);
+    } catch (err) {
+      console.error('Ошибка лайка:', err);
+    }
   }
 
   async function handleFavoriteClick(post, btn) {

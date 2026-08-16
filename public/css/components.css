@@ -53,15 +53,15 @@
     padding: 2px 5px;
   }
 
-  /* На мобильных нижняя панель с лайком всегда плавно видна */
+  /* На мобильных нижняя панель с лайком/закладкой всегда плавно видна */
   .card-overlay-bottom {
     opacity: 1 !important;
     padding: 20px 8px 6px !important;
   }
 
-  .btn-card-fav {
-    width: 34px !important;
-    height: 34px !important;
+  .btn-card-action {
+    width: 32px !important;
+    height: 32px !important;
     background: rgba(15, 23, 42, 0.75) !important;
     border: 1px solid rgba(255, 255, 255, 0.2) !important;
     backdrop-filter: blur(8px) !important;
@@ -233,12 +233,18 @@
   gap: 4px;
 }
 
-.btn-card-fav {
+.card-action-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-card-action {
   width: 28px;
   height: 28px;
   border-radius: var(--radius-full);
   border: none;
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(6px);
   color: #ffffff;
   display: flex;
@@ -248,14 +254,37 @@
   transition: all var(--transition-fast);
 }
 
+/* Лайк (Сердечко ❤️) */
+.btn-card-like:hover {
+  background-color: #ef4444;
+  color: #ffffff;
+  transform: scale(1.15);
+}
+
+.btn-card-like.active {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+/* Избранное (TikTok Флажок 🔖) */
 .btn-card-fav:hover {
-  background-color: var(--accent-danger);
-  transform: scale(1.1);
+  background-color: #f59e0b;
+  color: #ffffff;
+  transform: scale(1.15);
 }
 
 .btn-card-fav.active {
-  background-color: var(--accent-danger);
+  background-color: #f59e0b;
   color: #ffffff;
+}
+
+/* Бейдж процента совпадения в ленте рекомендаций */
+.badge-format.match-percent {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(239, 68, 68, 0.3));
+  border: 1px solid rgba(245, 158, 11, 0.6);
+  color: #fbbf24;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 /* Чипсы тегов в строке поиска */

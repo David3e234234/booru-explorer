@@ -9,6 +9,7 @@ package-lock.json
 data/settings.json
 data/favorites.json
 data/favorite_authors.json
+data/likes.json
 data/cache/
 data/*.json.bak
 

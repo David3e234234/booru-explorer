@@ -9,13 +9,19 @@ import {
   loadLocalFavorites,
   saveLocalFavorites,
   loadLocalFavoriteAuthors,
-  saveLocalFavoriteAuthors
+  saveLocalFavoriteAuthors,
+  setLikes,
+  loadLocalLikes,
+  getUserInterestTags,
+  calculatePostMatchPercent
 } from './state.js';
 import { 
   fetchSites, 
   fetchPosts, 
   fetchFavorites, 
   syncFavorites,
+  fetchLikes,
+  syncLikes,
   fetchFavoriteAuthors, 
   syncFavoriteAuthors,
   toggleFavoriteAuthor, 
@@ -194,11 +200,12 @@ async function init() {
   // 2. СРАЗУ настраиваем слушатели всех кнопок (не блокируя UI)
   setupEventListeners();
 
-  // 3. Загрузка настроек, избранного и сайтов параллельно
+  // 3. Загрузка настроек, избранного, лайков и сайтов параллельно
   await Promise.allSettled([
     loadUserSettings(),
     loadFavorites(),
     loadFavoriteAuthors(),
+    loadLikes(),
     loadBooruSites()
   ]);
 
@@ -357,6 +364,35 @@ async function loadFavoriteAuthors() {
     }
   } catch (err) {
     console.error('Ошибка любимых авторов:', err);
+  }
+}
+
+async function loadLikes() {
+  try {
+    // 1. Мгновенная загрузка из браузера
+    const localLikes = loadLocalLikes() || [];
+    if (localLikes.length > 0) {
+      setLikes(localLikes);
+    }
+
+    // 2. Получение с сервера
+    const data = await fetchLikes();
+    const serverLikes = data.likes || [];
+
+    // 3. Слияние
+    const map = new Map();
+    serverLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
+    localLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
+    const merged = Array.from(map.values());
+
+    setLikes(merged);
+
+    // Синхронизация лайков с сервером
+    if (localLikes.length > serverLikes.length) {
+      syncLikes(merged).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Ошибка лайков:', err);
   }
 }
 
@@ -599,6 +635,7 @@ function updateCategoryTabsUI() {
   if (mobileNavFeedLabel) {
     const catMap = {
       'new': 'Новое',
+      'recommended': 'Для вас',
       'popular': 'Популярное',
       'top': 'Топ',
       'random': 'Случайно',
@@ -686,6 +723,85 @@ async function performSearch(reset = false, options = {}) {
     state.hasMore = false;
     galleryInstance.renderGallery(false);
     renderSidebarPageTags();
+    return;
+  }
+
+  // ✨ Раздел рекомендаций «Для вас»
+  if (state.currentCategory === 'recommended') {
+    try {
+      state.isLoading = true;
+      const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+      if (btnRefreshSearch) btnRefreshSearch.classList.add('refreshing');
+
+      const userInterests = getUserInterestTags();
+      const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
+      
+      let queryCategory = 'popular';
+      let searchTags = state.searchTags.join(' ');
+
+      // Если теги не заданы вручную и есть обученный профиль, формируем срез интересов
+      if (!searchTags && userInterests.length > 0) {
+        const topPool = userInterests.filter(i => i.category === 'artist' || i.category === 'character');
+        const pool = topPool.length > 0 ? topPool : userInterests;
+        const seedIndex = ((state.page - 1) * 2) % pool.length;
+        const seedTag = pool[seedIndex]?.tag;
+        if (seedTag) {
+          searchTags = seedTag;
+          queryCategory = 'new';
+        }
+      }
+
+      const currentLimit = state.settings.itemsPerPage || state.limit || 100;
+      const res = await fetchPosts({
+        site: state.currentSite,
+        tags: searchTags,
+        page: state.page,
+        limit: currentLimit,
+        category: queryCategory,
+        aiFilter: state.aiFilter,
+        ratingFilter: state.ratingFilter,
+        typeFilter: state.typeFilter,
+        ageFilter: state.ageFilter,
+        hideFurry: state.hideFurry,
+        hidePregnant: state.hidePregnant,
+        bustCache: options.bustCache || false
+      });
+
+      if (res.success && Array.isArray(res.posts)) {
+        const scoredPosts = res.posts.map(p => {
+          return {
+            ...p,
+            matchPercent: calculatePostMatchPercent(p, interestMap)
+          };
+        });
+
+        // Сортировка по проценту соответствия
+        scoredPosts.sort((a, b) => (b.matchPercent || 0) - (a.matchPercent || 0));
+
+        if (reset) {
+          state.posts = scoredPosts;
+        } else {
+          const existingIds = new Set(state.posts.map(p => p.id));
+          const newPosts = scoredPosts.filter(p => !existingIds.has(p.id));
+          state.posts.push(...newPosts);
+        }
+        state.hasMore = res.posts.length > 0;
+      } else {
+        if (reset) state.posts = [];
+        state.hasMore = false;
+      }
+
+      galleryInstance.renderGallery(!reset);
+      renderSidebarPageTags();
+    } catch (err) {
+      console.error('Ошибка рекомендаций:', err);
+      if (reset) state.posts = [];
+      galleryInstance.renderGallery(false);
+    } finally {
+      state.isLoading = false;
+      const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+      if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
+    }
     return;
   }
 

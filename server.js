@@ -50,6 +50,7 @@ const VIDEOS_DIR = path.join(CACHE_DIR, 'videos');
 
 const FAVORITES_FILE = path.join(DATA_DIR, 'favorites.json');
 const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json');
+const LIKES_FILE = path.join(DATA_DIR, 'likes.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 // ==========================================
@@ -2755,6 +2756,92 @@ app.post('/api/favorite-authors/sync', (req, res) => {
 
   writeJsonFileAsync(FAVORITE_AUTHORS_FILE, merged);
   res.json({ success: true, count: merged.length, authors: merged });
+});
+
+// Отправка лайка/апвоута на внешние Booru API
+async function sendBooruLike(site, postId, isLike, settings) {
+  try {
+    if (site === 'danbooru' && settings.danbooruLogin && settings.danbooruApiKey) {
+      const auth = Buffer.from(`${settings.danbooruLogin}:${settings.danbooruApiKey}`).toString('base64');
+      if (isLike) {
+        // Добавление в favorites на Danbooru
+        await fetch(`https://danbooru.donmai.us/favorites.json?post_id=${encodeURIComponent(postId)}`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'User-Agent': BROWSER_USER_AGENT
+          }
+        }).catch(() => {});
+        // Апвоут поста (score=1)
+        await fetch(`https://danbooru.donmai.us/posts/${encodeURIComponent(postId)}/votes.json`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json',
+            'User-Agent': BROWSER_USER_AGENT
+          },
+          body: JSON.stringify({ score: 1 })
+        }).catch(() => {});
+      } else {
+        // Удаление из favorites на Danbooru
+        await fetch(`https://danbooru.donmai.us/favorites/${encodeURIComponent(postId)}.json`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'User-Agent': BROWSER_USER_AGENT
+          }
+        }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    logError('LikeSync', `Ошибка отправки лайка на ${site}:`, err);
+  }
+}
+
+// Лайки (Likes & Sync)
+app.get('/api/likes', (req, res) => {
+  const likes = readJsonFile(LIKES_FILE, []);
+  res.json({ success: true, likes });
+});
+
+app.post('/api/like', async (req, res) => {
+  const post = req.body;
+  if (!post || !post.id) return res.status(400).json({ success: false, message: 'Некорректные данные' });
+
+  const likes = readJsonFile(LIKES_FILE, []);
+  const existsIndex = likes.findIndex(l => l.id === post.id);
+  const settings = getSettings();
+  let isLiked = false;
+
+  if (existsIndex >= 0) {
+    likes.splice(existsIndex, 1);
+    writeJsonFileAsync(LIKES_FILE, likes);
+    isLiked = false;
+  } else {
+    likes.unshift({ ...post, likedAt: new Date().toISOString() });
+    writeJsonFileAsync(LIKES_FILE, likes);
+    isLiked = true;
+  }
+
+  // Фоновая отправка в Booru API
+  sendBooruLike(post.site || 'danbooru', post.id, isLiked, settings).catch(() => {});
+
+  return res.json({ success: true, isLiked, count: likes.length });
+});
+
+app.post('/api/likes/sync', (req, res) => {
+  const { likes } = req.body || {};
+  if (!Array.isArray(likes)) {
+    return res.status(400).json({ success: false, message: 'Ожидается массив лайков' });
+  }
+  const current = readJsonFile(LIKES_FILE, []);
+  const map = new Map();
+  current.forEach(l => { if (l && l.id) map.set(l.id, l); });
+  likes.forEach(l => { if (l && l.id) map.set(l.id, l); });
+  const merged = Array.from(map.values());
+
+  writeJsonFileAsync(LIKES_FILE, merged);
+  res.json({ success: true, count: merged.length, likes: merged });
 });
 
 app.delete('/api/favorite-authors/:name', (req, res) => {

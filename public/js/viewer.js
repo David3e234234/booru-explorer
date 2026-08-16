@@ -1,5 +1,5 @@
-import { state, isPostFavorite, isAuthorFavorite } from './state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor } from './api.js';
+import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally } from './state.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost } from './api.js';
 
 export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, showToast }) {
   const modal = document.getElementById('viewerModal');
@@ -13,6 +13,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const siteBadge = document.getElementById('viewerSiteBadge');
   const resBadge = document.getElementById('viewerResolution');
   const extBadge = document.getElementById('viewerExtBadge');
+  const btnLikeModal = document.getElementById('btnLikeModal');
   const btnFavModal = document.getElementById('btnFavModal');
   const btnDownload = document.getElementById('btnDownload');
   const btnCopyLink = document.getElementById('btnCopyLink');
@@ -156,6 +157,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const isFav = isPostFavorite(currentPost.id);
     btnFavModal.classList.toggle('active', isFav);
     btnFavModal.querySelector('svg').setAttribute('fill', isFav ? 'currentColor' : 'none');
+
+    const isLiked = isPostLiked(currentPost.id);
+    if (btnLikeModal) {
+      btnLikeModal.classList.toggle('active', isLiked);
+      btnLikeModal.querySelector('svg').setAttribute('fill', isLiked ? 'currentColor' : 'none');
+    }
 
     // btnDownload behavior is handled by click event below
 
@@ -730,8 +737,24 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     });
   }
 
+  if (btnLikeModal) {
+    btnLikeModal.addEventListener('click', async () => {
+      if (!currentPost) return;
+      hapticVibrate([15, 20]);
+      const isLikedNow = toggleLikeLocally(currentPost);
+      btnLikeModal.classList.toggle('active', isLikedNow);
+      btnLikeModal.querySelector('svg').setAttribute('fill', isLikedNow ? 'currentColor' : 'none');
+      showToast(isLikedNow ? 'Понравилось ❤️ (Рекомендации обучены)' : 'Лайк удален');
+      try {
+        await toggleLikePost(currentPost);
+      } catch (e) {}
+      onFavoriteToggle();
+    });
+  }
+
   btnFavModal.addEventListener('click', async () => {
     if (!currentPost) return;
+    hapticVibrate([15, 25, 15]);
     try {
       const res = await toggleFavoritePost(currentPost);
       if (res.success) {
@@ -740,13 +763,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           state.favorites.unshift(currentPost);
           btnFavModal.classList.add('active');
           btnFavModal.querySelector('svg').setAttribute('fill', 'currentColor');
-          showToast('Добавлено в Избранное ❤️');
+          showToast('Сохранено в закладки 🔖');
         } else {
           state.favoriteIds.delete(currentPost.id);
           state.favorites = state.favorites.filter(f => f.id !== currentPost.id);
           btnFavModal.classList.remove('active');
           btnFavModal.querySelector('svg').setAttribute('fill', 'none');
-          showToast('Удалено из Избранного');
+          showToast('Удалено из закладок');
         }
         onFavoriteToggle();
       }
@@ -1068,6 +1091,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       btnNext.click();
     } else if (e.key.toLowerCase() === 'f') {
       btnFavModal.click();
+    } else if (e.key.toLowerCase() === 'l') {
+      if (btnLikeModal) btnLikeModal.click();
     }
   });
 

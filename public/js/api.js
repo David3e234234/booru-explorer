@@ -80,6 +80,30 @@ export async function syncFavorites(favorites) {
   return await res.json();
 }
 
+export async function fetchLikes() {
+  const res = await fetch('/api/likes');
+  if (!res.ok) return { likes: [] };
+  return await res.json();
+}
+
+export async function toggleLikePost(post) {
+  const res = await fetch('/api/like', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(post)
+  });
+  return await res.json();
+}
+
+export async function syncLikes(likes) {
+  const res = await fetch('/api/likes/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ likes })
+  });
+  return await res.json();
+}
+
 export async function fetchFavoriteAuthors() {
   const res = await fetch('/api/favorite-authors');
   if (!res.ok) return { authors: [] };

@@ -196,6 +196,28 @@
   border-color: var(--accent-danger);
 }
 
+#btnLikeModal.active {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: #ef4444 !important;
+}
+
+#btnLikeModal:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+#btnFavModal.active {
+  background-color: #f59e0b !important;
+  color: #ffffff !important;
+  border-color: #f59e0b !important;
+}
+
+#btnFavModal:hover {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
 .viewer-close:hover {
   background-color: var(--accent-danger-subtle);
   color: var(--accent-danger);
