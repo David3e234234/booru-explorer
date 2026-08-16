@@ -6,8 +6,14 @@ export async function fetchSites() {
 }
 
 export async function fetchPosts(options) {
-  // Вызываем функцию-маршрутизатор из parsers.js
-  return await parserFetchPosts(options);
+  // Вызываем функцию-маршрутизатор из parsers.js с 4 аргументами
+  try {
+    const posts = await parserFetchPosts(options.site || 'danbooru', options, [], {});
+    return { success: true, posts: posts || [] };
+  } catch (err) {
+    console.error('Ошибка в fetchPosts:', err);
+    return { success: false, posts: [] };
+  }
 }
 
 export async function fetchTagAutocomplete(query, site = 'danbooru') {

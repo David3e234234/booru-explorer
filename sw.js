@@ -1,4 +1,4 @@
-const CACHE_NAME = 'booru-explorer-v6.2';
+const CACHE_NAME = 'booru-explorer-v6.3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
