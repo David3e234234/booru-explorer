@@ -1,3 +1,5 @@
+export function logInfo(...args) { console.log(...args); }
+export function logError(...args) { console.error(...args); }
 async function fetchProxied(url, options = {}) {
   const u = typeof url === 'string' ? url : url.toString();
   // danbooru, rule34 and xbooru support direct CORS
