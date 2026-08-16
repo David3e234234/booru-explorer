@@ -2632,7 +2632,16 @@ function getSettings() {
   if (!inMemorySettings) {
     inMemorySettings = readJsonFile(SETTINGS_FILE, DEFAULT_SETTINGS);
   }
-  return inMemorySettings;
+  // Поддержка переменных окружения (например, на Render / Docker)
+  const envOverrides = {};
+  if (process.env.RULE34_API_KEY) envOverrides.rule34ApiKey = process.env.RULE34_API_KEY;
+  if (process.env.RULE34_USER_ID) envOverrides.rule34UserId = process.env.RULE34_USER_ID;
+  if (process.env.GELBOORU_API_KEY) envOverrides.gelbooruApiKey = process.env.GELBOORU_API_KEY;
+  if (process.env.GELBOORU_USER_ID) envOverrides.gelbooruUserId = process.env.GELBOORU_USER_ID;
+  if (process.env.DANBOORU_API_KEY) envOverrides.danbooruApiKey = process.env.DANBOORU_API_KEY;
+  if (process.env.DANBOORU_LOGIN) envOverrides.danbooruLogin = process.env.DANBOORU_LOGIN;
+
+  return { ...inMemorySettings, ...envOverrides };
 }
 
 app.get('/api/settings', (req, res) => {
@@ -2668,6 +2677,21 @@ app.post('/api/favorites', (req, res) => {
     writeJsonFileAsync(FAVORITES_FILE, favorites);
     return res.json({ success: true, isFavorite: true, count: favorites.length });
   }
+});
+
+app.post('/api/favorites/sync', (req, res) => {
+  const { favorites } = req.body || {};
+  if (!Array.isArray(favorites)) {
+    return res.status(400).json({ success: false, message: 'Ожидается массив избранного' });
+  }
+  const current = readJsonFile(FAVORITES_FILE, []);
+  const map = new Map();
+  current.forEach(f => { if (f && f.id) map.set(f.id, f); });
+  favorites.forEach(f => { if (f && f.id) map.set(f.id, f); });
+  const merged = Array.from(map.values());
+
+  writeJsonFileAsync(FAVORITES_FILE, merged);
+  res.json({ success: true, count: merged.length, favorites: merged });
 });
 
 app.delete('/api/favorites/:id', (req, res) => {
@@ -2716,6 +2740,21 @@ app.post('/api/favorite-authors', (req, res) => {
     writeJsonFileAsync(FAVORITE_AUTHORS_FILE, authors);
     return res.json({ success: true, isFavorite: true, count: authors.length, authors, author: newAuthor });
   }
+});
+
+app.post('/api/favorite-authors/sync', (req, res) => {
+  const { authors } = req.body || {};
+  if (!Array.isArray(authors)) {
+    return res.status(400).json({ success: false, message: 'Ожидается массив авторов' });
+  }
+  const current = readJsonFile(FAVORITE_AUTHORS_FILE, []);
+  const map = new Map();
+  current.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
+  authors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
+  const merged = Array.from(map.values());
+
+  writeJsonFileAsync(FAVORITE_AUTHORS_FILE, merged);
+  res.json({ success: true, count: merged.length, authors: merged });
 });
 
 app.delete('/api/favorite-authors/:name', (req, res) => {

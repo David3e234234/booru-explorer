@@ -1,5 +1,30 @@
-import { state, setFavorites, setFavoriteAuthors, isAuthorFavorite, addSearchTag } from './state.js';
-import { fetchSites, fetchPosts, fetchFavorites, fetchFavoriteAuthors, toggleFavoriteAuthor, deleteFavoriteAuthor, fetchSettings, saveSettings, fetchCacheInfo, clearCache } from './api.js';
+import { 
+  state, 
+  setFavorites, 
+  setFavoriteAuthors, 
+  isAuthorFavorite, 
+  addSearchTag,
+  loadLocalSettings,
+  saveLocalSettings,
+  loadLocalFavorites,
+  saveLocalFavorites,
+  loadLocalFavoriteAuthors,
+  saveLocalFavoriteAuthors
+} from './state.js';
+import { 
+  fetchSites, 
+  fetchPosts, 
+  fetchFavorites, 
+  syncFavorites,
+  fetchFavoriteAuthors, 
+  syncFavoriteAuthors,
+  toggleFavoriteAuthor, 
+  deleteFavoriteAuthor, 
+  fetchSettings, 
+  saveSettings, 
+  fetchCacheInfo, 
+  clearCache 
+} from './api.js';
 import { initAutocomplete } from './autocomplete.js';
 import { initGallery } from './gallery.js';
 import { initViewer } from './viewer.js';
@@ -181,72 +206,93 @@ async function init() {
   await performSearch(true);
 }
 
+function applySettingsToUIAndState(s) {
+  if (!s) return;
+  state.settings = { ...state.settings, ...s };
+  if (s.theme) {
+    document.documentElement.setAttribute('data-theme', s.theme);
+  }
+  const savedSite = s.defaultSite || localStorage.getItem('booru_selected_site');
+  if (savedSite) {
+    state.currentSite = savedSite;
+  }
+  if (s.aiFilter) {
+    state.aiFilter = s.aiFilter;
+    updateAiFilterUI();
+  }
+  if (s.ratingFilter) {
+    state.ratingFilter = s.ratingFilter;
+    updateRatingFilterUI();
+  }
+  if (s.typeFilter) {
+    state.typeFilter = s.typeFilter;
+    updateTypeFilterUI();
+  }
+  if (s.ageFilter) {
+    state.ageFilter = s.ageFilter;
+    updateAgeFilterUI();
+  }
+  if (typeof s.hideFurry === 'boolean') {
+    state.hideFurry = s.hideFurry;
+    if (checkHideFurry) checkHideFurry.checked = state.hideFurry;
+  }
+  if (typeof s.hidePregnant === 'boolean') {
+    state.hidePregnant = s.hidePregnant;
+    if (checkHidePregnant) checkHidePregnant.checked = state.hidePregnant;
+  }
+  if (s.rule34ApiKey && inputRule34ApiKey) inputRule34ApiKey.value = s.rule34ApiKey;
+  if (s.rule34UserId && inputRule34UserId) inputRule34UserId.value = s.rule34UserId;
+  if (s.gelbooruApiKey && inputGelbooruApiKey) inputGelbooruApiKey.value = s.gelbooruApiKey;
+  if (s.gelbooruUserId && inputGelbooruUserId) inputGelbooruUserId.value = s.gelbooruUserId;
+  if (s.danbooruApiKey && inputDanbooruApiKey) inputDanbooruApiKey.value = s.danbooruApiKey;
+  if (s.danbooruLogin && inputDanbooruLogin) inputDanbooruLogin.value = s.danbooruLogin;
+  if (s.itemsPerPage) {
+    state.limit = s.itemsPerPage;
+    if (selectItemsPerPage) selectItemsPerPage.value = String(s.itemsPerPage);
+  }
+  if (typeof s.proxyVideoDefault === 'boolean' && checkProxyVideoDefault) {
+    checkProxyVideoDefault.checked = s.proxyVideoDefault;
+  }
+  if (s.previewQuality && selectPreviewQuality) {
+    selectPreviewQuality.value = s.previewQuality;
+  }
+  if (typeof s.videoAutoplayHover === 'boolean' && checkVideoAutoplayHover) {
+    checkVideoAutoplayHover.checked = s.videoAutoplayHover;
+  }
+  if (typeof s.videoAutoplayMobile === 'boolean' && checkVideoAutoplayMobile) {
+    checkVideoAutoplayMobile.checked = s.videoAutoplayMobile;
+  }
+  if (typeof s.videoAutoplayViewer === 'boolean' && checkVideoAutoplayViewer) {
+    checkVideoAutoplayViewer.checked = s.videoAutoplayViewer;
+  }
+  if (typeof s.enablePaheal === 'boolean') {
+    const checkEnablePaheal = document.getElementById('checkEnablePaheal');
+    if (checkEnablePaheal) checkEnablePaheal.checked = s.enablePaheal;
+  }
+}
+
 async function loadUserSettings() {
   try {
-    const data = await fetchSettings();
-    if (data.settings) {
-      state.settings = data.settings;
-      if (data.settings.theme) {
-        document.documentElement.setAttribute('data-theme', data.settings.theme);
-      }
-      const savedSite = data.settings.defaultSite || localStorage.getItem('booru_selected_site');
-      if (savedSite) {
-        state.currentSite = savedSite;
-      }
-      if (data.settings.aiFilter) {
-        state.aiFilter = data.settings.aiFilter;
-        updateAiFilterUI();
-      }
-      if (data.settings.ratingFilter) {
-        state.ratingFilter = data.settings.ratingFilter;
-        updateRatingFilterUI();
-      }
-      if (data.settings.typeFilter) {
-        state.typeFilter = data.settings.typeFilter;
-        updateTypeFilterUI();
-      }
-      if (data.settings.ageFilter) {
-        state.ageFilter = data.settings.ageFilter;
-        updateAgeFilterUI();
-      }
-      if (typeof data.settings.hideFurry === 'boolean') {
-        state.hideFurry = data.settings.hideFurry;
-        checkHideFurry.checked = state.hideFurry;
-      }
-      if (typeof data.settings.hidePregnant === 'boolean') {
-        state.hidePregnant = data.settings.hidePregnant;
-        checkHidePregnant.checked = state.hidePregnant;
-      }
-      if (data.settings.rule34ApiKey) {
-        inputRule34ApiKey.value = data.settings.rule34ApiKey;
-      }
-      if (data.settings.rule34UserId) {
-        inputRule34UserId.value = data.settings.rule34UserId;
-      }
-      if (data.settings.itemsPerPage) {
-        state.limit = data.settings.itemsPerPage;
-        if (selectItemsPerPage) selectItemsPerPage.value = String(data.settings.itemsPerPage);
-      }
-      if (typeof data.settings.proxyVideoDefault === 'boolean') {
-        if (checkProxyVideoDefault) checkProxyVideoDefault.checked = data.settings.proxyVideoDefault;
-      }
-      if (data.settings.previewQuality && selectPreviewQuality) {
-        selectPreviewQuality.value = data.settings.previewQuality;
-      }
-      if (typeof data.settings.videoAutoplayHover === 'boolean' && checkVideoAutoplayHover) {
-        checkVideoAutoplayHover.checked = data.settings.videoAutoplayHover;
-      }
-      if (typeof data.settings.videoAutoplayMobile === 'boolean' && checkVideoAutoplayMobile) {
-        checkVideoAutoplayMobile.checked = data.settings.videoAutoplayMobile;
-      }
-      if (typeof data.settings.videoAutoplayViewer === 'boolean' && checkVideoAutoplayViewer) {
-        checkVideoAutoplayViewer.checked = data.settings.videoAutoplayViewer;
-      }
-      if (typeof data.settings.enablePaheal === 'boolean') {
-        const checkEnablePaheal = document.getElementById('checkEnablePaheal');
-        if (checkEnablePaheal) checkEnablePaheal.checked = data.settings.enablePaheal;
-      }
+    // 1. Мгновенная загрузка из локального хранилища браузера
+    const local = loadLocalSettings();
+    if (local) {
+      applySettingsToUIAndState(local);
     }
+
+    // 2. Получение с сервера
+    const data = await fetchSettings();
+    const serverSettings = data?.settings || {};
+
+    // 3. Слияние: объединяем серверные и локальные настройки
+    const merged = { ...serverSettings, ...(local || {}) };
+    
+    // Синхронизируем настройки с сервером, если у клиента есть заполненные ключи
+    if (local && (local.rule34ApiKey || local.gelbooruApiKey || local.danbooruApiKey || local.theme || local.blacklist)) {
+      saveSettings(merged).catch(() => {});
+    }
+
+    applySettingsToUIAndState(merged);
+    saveLocalSettings(merged);
   } catch (err) {
     console.error('Ошибка настроек:', err);
   }
@@ -254,9 +300,30 @@ async function loadUserSettings() {
 
 async function loadFavorites() {
   try {
+    // 1. Мгновенная загрузка из браузера
+    const localFavs = loadLocalFavorites() || [];
+    if (localFavs.length > 0) {
+      setFavorites(localFavs);
+      updateFavoritesBadge();
+    }
+
+    // 2. Получение с сервера
     const data = await fetchFavorites();
-    setFavorites(data.favorites || []);
+    const serverFavs = data.favorites || [];
+
+    // 3. Слияние
+    const map = new Map();
+    serverFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
+    localFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
+    const merged = Array.from(map.values());
+
+    setFavorites(merged);
     updateFavoritesBadge();
+
+    // Если на клиенте постов больше, чем на сервере (например, после перезапуска контейнера)
+    if (localFavs.length > serverFavs.length) {
+      syncFavorites(merged).catch(() => {});
+    }
   } catch (err) {
     console.error('Ошибка избранного:', err);
   }
@@ -264,9 +331,30 @@ async function loadFavorites() {
 
 async function loadFavoriteAuthors() {
   try {
+    // 1. Мгновенная загрузка из браузера
+    const localAuthors = loadLocalFavoriteAuthors() || [];
+    if (localAuthors.length > 0) {
+      setFavoriteAuthors(localAuthors);
+      updateFavoritesBadge();
+    }
+
+    // 2. Получение с сервера
     const data = await fetchFavoriteAuthors();
-    setFavoriteAuthors(data.authors || []);
+    const serverAuthors = data.authors || [];
+
+    // 3. Слияние
+    const map = new Map();
+    serverAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
+    localAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
+    const merged = Array.from(map.values());
+
+    setFavoriteAuthors(merged);
     updateFavoritesBadge();
+
+    // Синхронизация авторов с сервером
+    if (localAuthors.length > serverAuthors.length) {
+      syncFavoriteAuthors(merged).catch(() => {});
+    }
   } catch (err) {
     console.error('Ошибка любимых авторов:', err);
   }
@@ -335,8 +423,8 @@ async function handleDeleteAuthor(author) {
     const res = await deleteFavoriteAuthor(author.name);
     if (res.success) {
       const cleanName = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
-      state.favoriteAuthorNames.delete(cleanName);
-      state.favoriteAuthors = res.authors || state.favoriteAuthors.filter(a => (a.name || '').toLowerCase() !== cleanName);
+      const updatedList = res.authors || state.favoriteAuthors.filter(a => (a.name || '').toLowerCase() !== cleanName);
+      setFavoriteAuthors(updatedList);
       updateFavoritesBadge();
       renderFavoriteAuthors();
       showToast(`Автор ${author.displayName || author.name} удален из любимых`);
@@ -423,10 +511,7 @@ function renderMobileSourcesSheet() {
 function selectSite(siteId) {
   if (state.currentSite === siteId && state.currentCategory !== 'favorites') return;
   state.currentSite = siteId;
-  try {
-    localStorage.setItem('booru_selected_site', siteId);
-    saveSettings({ defaultSite: siteId }).catch(() => {});
-  } catch {}
+  persistSettings({ defaultSite: siteId });
   if (state.currentCategory === 'favorites') {
     state.currentCategory = 'new';
     updateCategoryTabsUI();
@@ -659,6 +744,12 @@ function selectCategory(category) {
   performSearch(true);
 }
 
+function persistSettings(partial) {
+  state.settings = { ...state.settings, ...partial };
+  saveLocalSettings(partial);
+  saveSettings(partial).catch(() => {});
+}
+
 function setupEventListeners() {
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -674,7 +765,7 @@ function setupEventListeners() {
       if (state.aiFilter === filter) return;
       state.aiFilter = filter;
       updateAiFilterUI();
-      saveSettings({ aiFilter: filter });
+      persistSettings({ aiFilter: filter });
       performSearch(true);
     });
   });
@@ -686,7 +777,7 @@ function setupEventListeners() {
       if (state.ratingFilter === rating) return;
       state.ratingFilter = rating;
       updateRatingFilterUI();
-      saveSettings({ ratingFilter: rating });
+      persistSettings({ ratingFilter: rating });
       performSearch(true);
     });
   });
@@ -698,7 +789,7 @@ function setupEventListeners() {
       if (state.typeFilter === type) return;
       state.typeFilter = type;
       updateTypeFilterUI();
-      saveSettings({ typeFilter: type });
+      persistSettings({ typeFilter: type });
       performSearch(true);
     });
   });
@@ -710,7 +801,7 @@ function setupEventListeners() {
       if (state.ageFilter === age) return;
       state.ageFilter = age;
       updateAgeFilterUI();
-      saveSettings({ ageFilter: age });
+      persistSettings({ ageFilter: age });
       performSearch(true);
     });
   });
@@ -718,13 +809,13 @@ function setupEventListeners() {
   // Тумблеры фурри и беременности
   checkHideFurry.addEventListener('change', () => {
     state.hideFurry = checkHideFurry.checked;
-    saveSettings({ hideFurry: state.hideFurry });
+    persistSettings({ hideFurry: state.hideFurry });
     performSearch(true);
   });
 
   checkHidePregnant.addEventListener('change', () => {
     state.hidePregnant = checkHidePregnant.checked;
-    saveSettings({ hidePregnant: state.hidePregnant });
+    persistSettings({ hidePregnant: state.hidePregnant });
     performSearch(true);
   });
 
@@ -1387,17 +1478,24 @@ async function handleSaveSettings() {
     enablePaheal: enablePahealVal
   };
 
+  saveLocalSettings(updated);
+
   try {
     const res = await saveSettings(updated);
     if (res.success) {
-      state.settings = res.settings;
+      state.settings = { ...updated, ...res.settings };
       state.limit = itemsPerPageVal;
+      saveLocalSettings(state.settings);
       closeSettingsModal();
       showToast('Настройки сохранены ✅');
       performSearch(true);
     }
   } catch (err) {
-    showToast('Ошибка сохранения настроек');
+    state.settings = updated;
+    state.limit = itemsPerPageVal;
+    closeSettingsModal();
+    showToast('Настройки сохранены в браузере ✅');
+    performSearch(true);
   }
 }
 
@@ -1417,6 +1515,16 @@ async function handleResetSettings() {
   const checkEnablePaheal = document.getElementById('checkEnablePaheal');
   if (checkEnablePaheal) checkEnablePaheal.checked = true;
   renderSettingsChips();
+  saveLocalSettings({
+    blacklist: tempBlacklist,
+    aiTags: tempAiTags,
+    rule34ApiKey: '',
+    rule34UserId: '',
+    gelbooruApiKey: '',
+    gelbooruUserId: '',
+    danbooruApiKey: '',
+    danbooruLogin: ''
+  });
   showToast('Значения сброшены к стандартным');
 }
 
