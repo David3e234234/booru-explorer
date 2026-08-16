@@ -205,7 +205,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     card.className = 'media-card';
     card.dataset.index = index;
 
-    const isFav = isPostFavorite(post.id);
     const isVideoExt = (url) => {
       if (!url) return false;
       const clean = url.split('?')[0].toLowerCase();
