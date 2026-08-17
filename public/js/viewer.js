@@ -332,6 +332,122 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         startPreCaching(currentSrc);
       });
 
+      let mediaSourceInstance = null;
+
+      // Функция демультиплексирования и сборки fMP4 в браузере через MediaSource
+      const startClientRemux = async (targetUrl) => {
+        if (activeAbortController) activeAbortController.abort();
+        activeAbortController = new AbortController();
+        isPreCaching = true;
+        currentSource = 'remux';
+        if (btnTranscode) {
+          btnTranscode.classList.add('active');
+          btnTranscode.textContent = '🚀 JS Ремукс...';
+        }
+        setProgress(0, '🚀 Клиентский JS-демуксинг (MSE)...', true);
+
+        try {
+          if (!window.MediaSource || !window.MP4Box) {
+            throw new Error('MediaSource или MP4Box не поддерживается');
+          }
+
+          if (mediaSourceInstance && mediaSourceInstance.readyState === 'open') {
+            try { mediaSourceInstance.endOfStream(); } catch {}
+          }
+
+          const ms = new MediaSource();
+          mediaSourceInstance = ms;
+          if (activeBlobUrl) URL.revokeObjectURL(activeBlobUrl);
+          activeBlobUrl = URL.createObjectURL(ms);
+          video.src = activeBlobUrl;
+
+          const mp4boxfile = window.MP4Box.createFile();
+          let sourceBuffer = null;
+          let fileInfo = null;
+
+          await new Promise((resolve, reject) => {
+            ms.addEventListener('sourceopen', () => resolve(), { once: true });
+            setTimeout(() => reject(new Error('MediaSource timeout')), 3000);
+          });
+
+          mp4boxfile.onReady = (info) => {
+            fileInfo = info;
+            try {
+              // Инициализация сегментов для каждого трека
+              mp4boxfile.setSegmentOptions(info.tracks[0].id, null, { nbSamples: 100 });
+              const mime = `video/mp4; codecs="${info.mime.split('codecs="')[1]?.replace('"', '') || 'avc1.42E01E, mp4a.40.2'}"`;
+              if (MediaSource.isTypeSupported(mime)) {
+                sourceBuffer = ms.addSourceBuffer(mime);
+              } else {
+                sourceBuffer = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+              }
+              sourceBuffer.mode = 'segments';
+              const initSegs = mp4boxfile.initializeSegmentation();
+              if (initSegs && initSegs.length > 0 && initSegs[0].buffer) {
+                sourceBuffer.appendBuffer(initSegs[0].buffer);
+              }
+            } catch (e) {
+              console.warn('[MSE Init Warning]', e);
+            }
+          };
+
+          mp4boxfile.onSegment = (id, user, buffer, sampleNum, is_last) => {
+            if (sourceBuffer && !sourceBuffer.updating && ms.readyState === 'open') {
+              try {
+                sourceBuffer.appendBuffer(buffer);
+              } catch (e) {
+                console.warn('[MSE Append Warning]', e);
+              }
+            }
+          };
+
+          // Читаем видео по чанкам и скармливаем MP4Box
+          const res = await fetch(targetUrl, { signal: activeAbortController.signal });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const contentLength = res.headers.get('content-length');
+          const total = contentLength ? parseInt(contentLength, 10) : 0;
+          let loaded = 0;
+          let fileStart = 0;
+          const reader = res.body.getReader();
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const buffer = value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength);
+            buffer.fileStart = fileStart;
+            fileStart += buffer.byteLength;
+            loaded += value.length;
+
+            mp4boxfile.appendBuffer(buffer);
+            mp4boxfile.flush();
+
+            const pct = total > 0 ? (loaded / total) * 100 : Math.min(95, (loaded / 5000000) * 100);
+            setProgress(pct, `🚀 JS Ремукс: ${(loaded / (1024 * 1024)).toFixed(1)} MB`, true);
+          }
+
+          isPreCaching = false;
+          if (btnTranscode) {
+            btnTranscode.textContent = '🚀 JS Ремукс (OK)';
+          }
+          setProgress(100, '🚀 JS Ремукс готов!', false);
+          video.play().catch(() => {});
+          setTimeout(hideStatus, 1200);
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+          console.warn('[Client Remux Error]', err);
+          isPreCaching = false;
+          // Если JS-демультиплексирование не справилось (например, неподдерживаемый кодек) — аварийный переход на FFmpeg
+          currentSource = 'transcode';
+          if (btnTranscode) {
+            btnTranscode.classList.add('active');
+            btnTranscode.textContent = '🔄 FFmpeg фикс';
+          }
+          setProgress(0, '🔄 Аппаратный кодек не подошел. Переход на FFmpeg (H.264)...', true);
+          video.src = transcodeMedia;
+          video.play().catch(() => {});
+        }
+      };
+
       const handleVideoError = () => {
         if (isPreCaching) return;
         if (currentSource === 'direct') {
@@ -341,9 +457,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           video.src = proxyMedia;
           video.play().catch(() => {});
         } else if (currentSource === 'proxy') {
-          // При ошибке браузерного кодека или блокировке — автоматический переход на FFmpeg транскодер
+          // Шаг 2: Попытка быстрого клиентского демультиплексирования в браузере (0% CPU сервера)
+          startClientRemux(proxyMedia);
+        } else if (currentSource === 'remux') {
+          // Шаг 3: Аварийный переход на серверный FFmpeg транскодер
           currentSource = 'transcode';
-          if (btnTranscode) btnTranscode.classList.add('active');
+          if (btnTranscode) {
+            btnTranscode.classList.add('active');
+            btnTranscode.textContent = '🔄 FFmpeg фикс';
+          }
           setProgress(0, '🔄 Авто-исправление кодека через FFmpeg (H.264)...', true);
           video.src = transcodeMedia;
           video.play().catch(() => {});
@@ -352,7 +474,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         }
       };
 
-      // Кнопка принудительного FFmpeg перекодирования
+      // Кнопка принудительного FFmpeg / Remux перекодирования
       if (btnTranscode) {
         btnTranscode.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -362,11 +484,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             btnCache.classList.remove('active');
             btnCache.textContent = '⚡ Кэш в память';
           }
-          currentSource = 'transcode';
-          btnTranscode.classList.add('active');
-          setProgress(0, '🔄 Декодирование видео через FFmpeg (H.264/AAC)...', true);
-          video.src = transcodeMedia;
-          video.play().catch(() => {});
+          // При ручном клике — сразу пробуем быстрый клиентский демукс
+          startClientRemux(proxyMedia);
         });
       }
 
