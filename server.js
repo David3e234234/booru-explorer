@@ -1095,7 +1095,7 @@ async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList) {
     url = `${siteUrl}/post/popular_by_week.json`;
   } else {
     if (category === 'top') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
-    else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
+    else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
     else if (category === 'random') finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
 
     if (ratingFilter === 'nsfw') {
@@ -1176,7 +1176,8 @@ async function fetchSafebooru(params, aiTagsList) {
   }
 
   let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter);
-  if (category === 'top' || category === 'popular' || category === 'recommended') finalTags += ' sort:score:desc';
+  if (category === 'top') finalTags += ' sort:score:desc';
+  else if (category === 'popular' || category === 'recommended') finalTags += ' sort:updated:desc';
   else if (category === 'random') finalTags += ' sort:random';
 
   const pid = Math.max(0, page - 1);
@@ -1494,7 +1495,7 @@ async function fetchGelbooru(params, aiTagsList, settings) {
   if (category === 'top') {
     searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
   } else if (category === 'popular' || category === 'recommended') {
-    searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    searchTags = searchTags ? `${searchTags} sort:updated:desc` : 'sort:updated:desc';
   } else if (category === 'random') {
     searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
   }
@@ -1793,8 +1794,10 @@ async function fetchXbooru(params, aiTagsList) {
   }
 
   let searchTags = adaptTagsForSite('xbooru', tags, ageFilter, typeFilter);
-  if (category === 'top' || category === 'popular') {
+  if (category === 'top') {
     searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+  } else if (category === 'popular' || category === 'recommended') {
+    searchTags = searchTags ? `${searchTags} sort:updated:desc` : 'sort:updated:desc';
   } else if (category === 'random') {
     searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
   }
@@ -1873,8 +1876,10 @@ async function fetchHypnohub(params, aiTagsList) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('hypnohub', tags, ageFilter, typeFilter);
-  if (category === 'top' || category === 'popular') {
+  if (category === 'top') {
     searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+  } else if (category === 'popular' || category === 'recommended') {
+    searchTags = searchTags ? `${searchTags} sort:updated:desc` : 'sort:updated:desc';
   } else if (category === 'random') {
     searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
   }
@@ -2176,7 +2181,7 @@ app.get('/api/posts', async (req, res) => {
     }
 
     // Локальная сортировка
-    if ((category === 'popular' || category === 'top') && site !== 'all') {
+    if (category === 'top' && site !== 'all') {
       posts.sort((a, b) => (b.score || 0) - (a.score || 0));
     }
 

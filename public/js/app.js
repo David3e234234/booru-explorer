@@ -923,23 +923,71 @@ async function performSearch(reset = false, options = {}) {
           }
         }
 
-        // Г. ВСЕГДА подмешиваем тренды/популярное сайта (гарантия свежести и отсутствия пустого экрана)
-        fetchTasks.push(
-          fetchPosts({
-            site: state.currentSite,
-            tags: '',
-            page: state.page,
-            limit: Math.min(currentLimit, 40),
-            category: 'popular',
-            aiFilter: state.aiFilter,
-            ratingFilter: state.ratingFilter,
-            typeFilter: state.typeFilter,
-            ageFilter: state.ageFilter,
-            hideFurry: state.hideFurry,
-            hidePregnant: state.hidePregnant,
-            bustCache: options.bustCache || false
-          }).catch(() => null)
-        );
+        // Г. Подмешивание контента: если интересы известны — подмешиваем тренды; если профиль чист (холодный старт) — создаем сбалансированный микс трендов, новинок и случайных открытий
+        if (userInterests.length > 0) {
+          fetchTasks.push(
+            fetchPosts({
+              site: state.currentSite,
+              tags: '',
+              page: state.page,
+              limit: Math.min(currentLimit, 40),
+              category: 'popular',
+              aiFilter: state.aiFilter,
+              ratingFilter: state.ratingFilter,
+              typeFilter: state.typeFilter,
+              ageFilter: state.ageFilter,
+              hideFurry: state.hideFurry,
+              hidePregnant: state.hidePregnant,
+              bustCache: options.bustCache || false
+            }).catch(() => null)
+          );
+        } else {
+          // Холодный старт: параллельный микс трендов + новинок + открытий
+          fetchTasks.push(
+            fetchPosts({
+              site: state.currentSite,
+              tags: '',
+              page: state.page,
+              limit: 35,
+              category: 'popular',
+              aiFilter: state.aiFilter,
+              ratingFilter: state.ratingFilter,
+              typeFilter: state.typeFilter,
+              ageFilter: state.ageFilter,
+              hideFurry: state.hideFurry,
+              hidePregnant: state.hidePregnant,
+              bustCache: options.bustCache || false
+            }).catch(() => null),
+            fetchPosts({
+              site: state.currentSite,
+              tags: '',
+              page: state.page,
+              limit: 35,
+              category: 'new',
+              aiFilter: state.aiFilter,
+              ratingFilter: state.ratingFilter,
+              typeFilter: state.typeFilter,
+              ageFilter: state.ageFilter,
+              hideFurry: state.hideFurry,
+              hidePregnant: state.hidePregnant,
+              bustCache: options.bustCache || false
+            }).catch(() => null),
+            fetchPosts({
+              site: state.currentSite,
+              tags: '',
+              page: state.page,
+              limit: 30,
+              category: 'random',
+              aiFilter: state.aiFilter,
+              ratingFilter: state.ratingFilter,
+              typeFilter: state.typeFilter,
+              ageFilter: state.ageFilter,
+              hideFurry: state.hideFurry,
+              hidePregnant: state.hidePregnant,
+              bustCache: options.bustCache || false
+            }).catch(() => null)
+          );
+        }
 
         const results = await Promise.allSettled(fetchTasks);
         for (const res of results) {
