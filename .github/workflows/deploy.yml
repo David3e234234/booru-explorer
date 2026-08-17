@@ -1,0 +1,21 @@
+name: Deploy to Alwaysdata
+
+on:
+  push:
+    branches: [ "main", "master" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and Deploy to Alwaysdata
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ALWAYS_HOST }}
+          username: ${{ secrets.ALWAYS_USERNAME }}
+          password: ${{ secrets.ALWAYS_PASSWORD }}
+          script: |
+            cd ~/booru-explorer
+            git pull origin main
+            npm install
+            mkdir -p tmp && touch tmp/restart.txt
