@@ -1089,18 +1089,24 @@ async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList) {
   }
 
   let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
+  let url = '';
 
-  if (category === 'top') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
-  else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
-  else if (category === 'random') finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
+  if ((category === 'popular' || category === 'recommended') && !tags) {
+    // В Moebooru возвращаем популярное за неделю (возвращает актуальные посты, но ограничен в пагинации)
+    url = `${siteUrl}/post/popular_by_week.json?page=${page}`;
+  } else {
+    if (category === 'top') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
+    else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
+    else if (category === 'random') finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
 
-  if (ratingFilter === 'nsfw') {
-    finalTags += ' rating:questionable,explicit';
-  } else if (ratingFilter === 'sfw') {
-    finalTags += ' rating:safe';
+    if (ratingFilter === 'nsfw') {
+      finalTags += ' rating:questionable,explicit';
+    } else if (ratingFilter === 'sfw') {
+      finalTags += ' rating:safe';
+    }
+
+    url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
   }
-
-  const url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
   let res = null;
   try {
     res = await fetchSafe(url);
