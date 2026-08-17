@@ -1089,23 +1089,18 @@ async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList) {
   }
 
   let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
-  let url = '';
 
-  if ((category === 'popular' || category === 'recommended') && !tags) {
-    url = `${siteUrl}/post/popular_by_week.json`;
-  } else {
-    if (category === 'top') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
-    else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
-    else if (category === 'random') finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
+  if (category === 'top') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
+  else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
+  else if (category === 'random') finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
 
-    if (ratingFilter === 'nsfw') {
-      finalTags += ' rating:questionable,explicit';
-    } else if (ratingFilter === 'sfw') {
-      finalTags += ' rating:safe';
-    }
-
-    url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
+  if (ratingFilter === 'nsfw') {
+    finalTags += ' rating:questionable,explicit';
+  } else if (ratingFilter === 'sfw') {
+    finalTags += ' rating:safe';
   }
+
+  const url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
   let res = null;
   try {
     res = await fetchSafe(url);
