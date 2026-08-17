@@ -325,7 +325,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us'))) ? true : (state.settings?.proxyThumbnails !== false);
+    const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
+    const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us'))) ? true : (!isMyLiveDemo && state.settings?.proxyThumbnails !== false);
     const mainThumbSrc = directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '';
 
     const siteName = post.siteName || (post.site ? post.site.toUpperCase() : '');
@@ -654,8 +655,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     card.dataset.authorName = author.name;
 
     const siteObj = state.sites.find(s => s.id === author.site);
-    const siteName = siteObj ? siteObj.name : (author.site || 'Danbooru');
-    const shouldUseThumbProxy = state.settings?.proxyThumbnails !== false;
+    const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
+    const shouldUseThumbProxy = !isMyLiveDemo && state.settings?.proxyThumbnails !== false;
     const preview = author.previewUrl ? (author.previewUrl.startsWith('/api/') ? author.previewUrl : (shouldUseThumbProxy ? getProxiedUrl(author.previewUrl) : author.previewUrl)) : '';
 
     let formattedDate = '';

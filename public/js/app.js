@@ -95,11 +95,15 @@ const checkShowVideoStatusBanner = document.getElementById('checkShowVideoStatus
 const drawerBackdrop = document.getElementById('drawerBackdrop');
 const sidebarSearch = document.getElementById('sidebarSearch');
 const categoriesSheet = document.getElementById('categoriesSheet');
-const sourcesSheet = document.getElementById('sourcesSheet');
 const pwaInstallGroup = document.getElementById('pwaInstallGroup');
 const btnInstallPwa = document.getElementById('btnInstallPwa');
+const rowProxyThumbnails = document.getElementById('rowProxyThumbnails');
+const proxyThumbnailsVercelNotice = document.getElementById('proxyThumbnailsVercelNotice');
 
-let deferredInstallPrompt = null;
+export const isMyLiveDemoHost = typeof window !== 'undefined' && (
+  window.location.hostname === 'booru-explorer-kappa.vercel.app'
+);
+export const isVercelHost = isMyLiveDemoHost;
 
 function haptic(pattern = 12) {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
@@ -269,7 +273,7 @@ function applySettingsToUIAndState(s) {
     if (selectItemsPerPage) selectItemsPerPage.value = String(s.itemsPerPage);
   }
   if (typeof s.proxyThumbnails === 'boolean' && checkProxyThumbnails) {
-    checkProxyThumbnails.checked = s.proxyThumbnails;
+    checkProxyThumbnails.checked = isVercelHost ? false : s.proxyThumbnails;
   }
   if (typeof s.proxyFullImages === 'boolean' && checkProxyFullImages) {
     checkProxyFullImages.checked = s.proxyFullImages;
@@ -1769,7 +1773,32 @@ function openSettingsModal() {
   if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = state.settings.videoAutoplayMobile !== false;
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = state.settings.videoAutoplayViewer !== false;
   
-  if (checkProxyThumbnails) checkProxyThumbnails.checked = state.settings.proxyThumbnails !== false;
+  if (isVercelHost) {
+    if (checkProxyThumbnails) {
+      checkProxyThumbnails.checked = false;
+      checkProxyThumbnails.disabled = true;
+    }
+    if (rowProxyThumbnails) {
+      rowProxyThumbnails.style.opacity = '0.6';
+      rowProxyThumbnails.style.cursor = 'not-allowed';
+      rowProxyThumbnails.title = 'Проксирование превью недоступно на Vercel для предотвращения перерасхода Fast Origin Transfer';
+    }
+    if (proxyThumbnailsVercelNotice) {
+      proxyThumbnailsVercelNotice.style.display = 'block';
+    }
+  } else {
+    if (checkProxyThumbnails) {
+      checkProxyThumbnails.checked = state.settings.proxyThumbnails !== false;
+      checkProxyThumbnails.disabled = false;
+    }
+    if (rowProxyThumbnails) {
+      rowProxyThumbnails.style.opacity = '1';
+      rowProxyThumbnails.style.cursor = 'pointer';
+    }
+    if (proxyThumbnailsVercelNotice) {
+      proxyThumbnailsVercelNotice.style.display = 'none';
+    }
+  }
   if (checkProxyFullImages) checkProxyFullImages.checked = state.settings.proxyFullImages !== false;
   if (checkProxyVideos) checkProxyVideos.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
   if (checkProxyDownloads) checkProxyDownloads.checked = state.settings.proxyDownloads !== false;
