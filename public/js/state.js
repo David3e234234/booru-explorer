@@ -1,7 +1,8 @@
-// Реактивное состояние приложения
+export const isMyLiveDemoHost = typeof window !== 'undefined' && (
+  window.location.hostname === 'booru-explorer-kappa.vercel.app'
+);
 
-export const DEFAULT_SITES = [
-  { id: 'danbooru', name: 'Danbooru', accentColor: '#3b82f6' },
+const BASE_SITES = [
   { id: 'rule34video', name: 'Rule34Video', accentColor: '#ef4444' },
   { id: 'yandere', name: 'Yande.re', accentColor: '#ec4899' },
   { id: 'safebooru', name: 'Safebooru', accentColor: '#10b981' },
@@ -12,9 +13,13 @@ export const DEFAULT_SITES = [
   { id: 'hypnohub', name: 'Hypnohub', accentColor: '#8b5cf6' }
 ];
 
+export const DEFAULT_SITES = isMyLiveDemoHost
+  ? [...BASE_SITES, { id: 'danbooru', name: 'Danbooru (OFF)', accentColor: '#6b7280', disabled: true }]
+  : [{ id: 'danbooru', name: 'Danbooru', accentColor: '#3b82f6' }, ...BASE_SITES];
+
 export const state = {
   sites: [...DEFAULT_SITES],
-  currentSite: 'danbooru',
+  currentSite: isMyLiveDemoHost ? 'rule34video' : 'danbooru',
   currentCategory: 'new', // 'new', 'recommended', 'popular', 'top', 'random', 'favorites'
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
   ratingFilter: 'all', // 'all', 'nsfw', 'sfw'

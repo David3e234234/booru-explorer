@@ -1969,6 +1969,9 @@ async function fetchPosts(site, params, aiTagsList, settings) {
       } else if (params.ratingFilter === 'nsfw') {
         mainSites = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub'];
       }
+      if (params.excludeSites && params.excludeSites.includes('danbooru')) {
+        mainSites = mainSites.filter(s => s !== 'danbooru');
+      }
       const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / mainSites.length));
       const results = await Promise.allSettled(
         mainSites.map(s => fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, settings))
@@ -2015,9 +2018,10 @@ app.get('/api/posts', async (req, res) => {
     const ageFilter = req.query.ageFilter || 'all'; // 'all', 'adult', 'young'
     const hideFurry = req.query.hideFurry === 'true' || req.query.hideFurry === '1';
     const hidePregnant = req.query.hidePregnant === 'true' || req.query.hidePregnant === '1';
+    const excludeSites = req.query.excludeSites || '';
 
     // Проверка кэша в оперативной памяти (для всего кроме random)
-    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}`;
+    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${excludeSites}`;
     if (category !== 'random') {
       const cached = apiPostsCache.get(cacheKey);
       if (cached) {
@@ -2029,9 +2033,9 @@ app.get('/api/posts', async (req, res) => {
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
     const blacklist = settings.blacklist || [];
 
-    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}`);
+    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}, exclude=${excludeSites}`);
 
-    let posts = await fetchPosts(site, { tags, page, limit, category, ratingFilter, typeFilter, ageFilter }, aiTagsList, settings);
+    let posts = await fetchPosts(site, { tags, page, limit, category, ratingFilter, typeFilter, ageFilter, excludeSites }, aiTagsList, settings);
 
     // Фильтр типа контента (Видео / Со звуком / Фото)
     if (typeFilter === 'audio' || typeFilter === 'sound') {

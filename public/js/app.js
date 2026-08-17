@@ -236,7 +236,7 @@ function applySettingsToUIAndState(s) {
   }
   const savedSite = s.defaultSite || localStorage.getItem('booru_selected_site');
   if (savedSite) {
-    state.currentSite = savedSite;
+    state.currentSite = (isMyLiveDemoHost && savedSite === 'danbooru') ? 'rule34video' : savedSite;
   }
   if (s.aiFilter) {
     state.aiFilter = s.aiFilter;
@@ -500,7 +500,30 @@ async function handleDeleteAuthor(author) {
 async function loadBooruSites() {
   try {
     const data = await fetchSites();
-    state.sites = data.sites || [];
+    let sites = data.sites || [];
+    if (isMyLiveDemoHost) {
+      const danIdx = sites.findIndex(s => s.id === 'danbooru');
+      if (danIdx !== -1) {
+        const dan = sites.splice(danIdx, 1)[0];
+        dan.name = 'Danbooru (OFF)';
+        dan.disabled = true;
+        dan.accentColor = '#6b7280';
+        sites.push(dan);
+      }
+    }
+    state.sites = sites;
+    if (isMyLiveDemoHost && state.currentSite === 'danbooru') {
+      state.currentSite = 'rule34video';
+    }
+    const currentSiteLabel = document.getElementById('currentSiteLabel');
+    if (currentSiteLabel) {
+      if (state.currentSite === 'all') {
+        currentSiteLabel.textContent = 'Все сразу';
+      } else {
+        const siteObj = state.sites.find(s => s.id === state.currentSite);
+        currentSiteLabel.textContent = siteObj ? siteObj.name : state.currentSite;
+      }
+    }
     renderSitesBar();
     renderMobileSourcesSheet();
   } catch (err) {
@@ -522,12 +545,26 @@ function renderSitesBar() {
 
   state.sites.forEach(site => {
     const item = document.createElement('div');
-    item.className = `source-item ${state.currentSite === site.id ? 'active' : ''}`;
+    const isDanDisabled = isMyLiveDemoHost && site.id === 'danbooru';
+    item.className = `source-item ${state.currentSite === site.id ? 'active' : ''} ${isDanDisabled ? 'disabled-source' : ''}`;
+    if (isDanDisabled) {
+      item.style.opacity = '0.4';
+      item.style.cursor = 'not-allowed';
+      item.style.filter = 'grayscale(1)';
+      item.title = 'Danbooru отключен на Live Demo из-за блокировки хотлинка';
+    }
     item.innerHTML = `
       <span class="source-dot" style="background-color: ${site.accentColor || 'var(--text-muted)'}"></span>
       <span>${site.name}</span>
+      ${isDanDisabled ? '<span style="font-size: 10px; margin-left: auto; color: var(--text-muted);">🔒</span>' : ''}
     `;
-    item.addEventListener('click', () => selectSite(site.id));
+    item.addEventListener('click', () => {
+      if (isDanDisabled) {
+        showToast('Danbooru отключен на Live Demo из-за блокировки хотлинка 🔒');
+        return;
+      }
+      selectSite(site.id);
+    });
     sourcesList.appendChild(item);
   });
 }
@@ -554,15 +591,25 @@ function renderMobileSourcesSheet() {
 
   state.sites.forEach(site => {
     const card = document.createElement('div');
-    card.className = `source-mobile-card ${state.currentSite === site.id ? 'active' : ''}`;
+    const isDanDisabled = isMyLiveDemoHost && site.id === 'danbooru';
+    card.className = `source-mobile-card ${state.currentSite === site.id ? 'active' : ''} ${isDanDisabled ? 'disabled-source' : ''}`;
+    if (isDanDisabled) {
+      card.style.opacity = '0.4';
+      card.style.cursor = 'not-allowed';
+      card.style.filter = 'grayscale(1)';
+    }
     card.innerHTML = `
       <div class="source-mobile-title-wrap">
         <span class="source-dot" style="background-color: ${site.accentColor || 'var(--text-muted)'}"></span>
         <span class="source-mobile-name" title="${site.name}">${site.name}</span>
       </div>
-      <span class="source-mobile-badge">${(site.id || '').toUpperCase()}</span>
+      <span class="source-mobile-badge">${isDanDisabled ? 'OFF 🔒' : (site.id || '').toUpperCase()}</span>
     `;
     card.addEventListener('click', () => {
+      if (isDanDisabled) {
+        showToast('Danbooru отключен на Live Demo из-за блокировки хотлинка 🔒');
+        return;
+      }
       selectSite(site.id);
       closeAllDrawers();
     });
@@ -571,6 +618,10 @@ function renderMobileSourcesSheet() {
 }
 
 function selectSite(siteId) {
+  if (isMyLiveDemoHost && siteId === 'danbooru') {
+    showToast('Danbooru отключен на Live Demo из-за блокировки хотлинка 🔒');
+    return;
+  }
   if (state.currentSite === siteId && state.currentCategory !== 'favorites') return;
   state.currentSite = siteId;
   persistSettings({ defaultSite: siteId });
@@ -1142,7 +1193,7 @@ function setupEventListeners() {
   document.getElementById('btnLogo').addEventListener('click', () => {
     state.searchTags = [];
     state.currentCategory = 'new';
-    state.currentSite = 'danbooru';
+    state.currentSite = isMyLiveDemoHost ? 'rule34video' : 'danbooru';
     autocompleteInstance.renderTagsChips();
     updateCategoryTabsUI();
     renderSitesBar();
