@@ -674,23 +674,32 @@
               <span class="toggle-name">🖼️ Проксировать превью в ленте (кэширование на сервере)</span>
             </label>
             <div id="proxyThumbnailsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-              ⚠️ Прокси превью недоступен на Vercel (для экономии Fast Origin Transfer)
+              ⚠️ Прокси превью недоступен на Live Demo (для экономии Fast Origin Transfer)
             </div>
-            <label class="toggle-row" title="Загружать полноразмерные оригиналы артов через серверный прокси в просмотрщике">
+            <label class="toggle-row" id="rowProxyFullImages" title="Загружать полноразмерные оригиналы артов через серверный прокси в просмотрщике">
               <input type="checkbox" id="checkProxyFullImages" checked>
               <span class="toggle-slider"></span>
               <span class="toggle-name">🎨 Проксировать полноразмерные изображения (просмотрщик)</span>
             </label>
-            <label class="toggle-row" title="Загружать видеопотоки через локальный прокси для мгновенного запуска и обхода CDN-ограничений">
+            <div id="proxyFullImagesVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
+              ⚠️ Прокси изображений недоступен на Live Demo (для экономии Fast Origin Transfer)
+            </div>
+            <label class="toggle-row" id="rowProxyVideos" title="Загружать видеопотоки через локальный прокси для мгновенного запуска и обхода CDN-ограничений">
               <input type="checkbox" id="checkProxyVideos" checked>
               <span class="toggle-slider"></span>
               <span class="toggle-name">🎬 Проксировать видеопотоки (лента и полноэкранный плеер)</span>
             </label>
-            <label class="toggle-row" title="Скачивать файлы через серверный прокси для гарантированного сохранения с оригинальным именем">
+            <div id="proxyVideosVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
+              ⚠️ Прокси видео недоступен на Live Demo (для экономии Fast Origin Transfer)
+            </div>
+            <label class="toggle-row" id="rowProxyDownloads" title="Скачивать файлы через серверный прокси для гарантированного сохранения с оригинальным именем">
               <input type="checkbox" id="checkProxyDownloads" checked>
               <span class="toggle-slider"></span>
               <span class="toggle-name">📥 Проксировать скачивание файлов на устройство</span>
             </label>
+            <div id="proxyDownloadsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
+              ⚠️ Прокси скачивания недоступен на Live Demo (для экономии Fast Origin Transfer)
+            </div>
           </div>
         </div>
 

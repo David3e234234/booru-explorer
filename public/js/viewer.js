@@ -258,8 +258,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const fillEl = statusBanner.querySelector('.video-progress-fill');
       const btnCache = statusBanner.querySelector('.btn-cache-toggle');
       const btnTranscode = statusBanner.querySelector('.btn-transcode');
-      const switchBtn = statusBanner.querySelector('.btn-switch-source');
-      const needsProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+      const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
+      const needsProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || (!isMyLiveDemo && state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
       let currentSource = needsProxy ? 'proxy' : 'direct'; // 'direct', 'proxy', 'transcode'
       let isPreCaching = false;
       let loadTimeout = null;
@@ -581,8 +581,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       mediaWrapper.appendChild(statusBanner);
     } else {
       const img = document.createElement('img');
-      img.className = 'viewer-image';
-      const needsImgProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
+      const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
+      const needsImgProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || (!isMyLiveDemo && state.settings?.proxyFullImages !== false);
       img.src = needsImgProxy ? proxyMedia : directMedia;
       img.referrerPolicy = 'no-referrer';
       img.alt = 'Full View';
@@ -923,7 +923,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     showToast('Начата загрузка на устройство... 📥');
     
-    const shouldUseProxyDownload = currentPost.site === 'danbooru' || downloadTarget.includes('donmai.us') || state.settings?.proxyDownloads !== false;
+    const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
+    const shouldUseProxyDownload = currentPost.site === 'danbooru' || downloadTarget.includes('donmai.us') || (!isMyLiveDemo && state.settings?.proxyDownloads !== false);
     
     if (!shouldUseProxyDownload) {
       try {

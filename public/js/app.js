@@ -273,18 +273,18 @@ function applySettingsToUIAndState(s) {
     if (selectItemsPerPage) selectItemsPerPage.value = String(s.itemsPerPage);
   }
   if (typeof s.proxyThumbnails === 'boolean' && checkProxyThumbnails) {
-    checkProxyThumbnails.checked = isVercelHost ? false : s.proxyThumbnails;
+    checkProxyThumbnails.checked = isMyLiveDemoHost ? false : s.proxyThumbnails;
   }
   if (typeof s.proxyFullImages === 'boolean' && checkProxyFullImages) {
-    checkProxyFullImages.checked = s.proxyFullImages;
+    checkProxyFullImages.checked = isMyLiveDemoHost ? false : s.proxyFullImages;
   }
   if (typeof s.proxyVideos === 'boolean' && checkProxyVideos) {
-    checkProxyVideos.checked = s.proxyVideos;
+    checkProxyVideos.checked = isMyLiveDemoHost ? false : s.proxyVideos;
   } else if (typeof s.proxyVideoDefault === 'boolean' && checkProxyVideos) {
-    checkProxyVideos.checked = s.proxyVideoDefault;
+    checkProxyVideos.checked = isMyLiveDemoHost ? false : s.proxyVideoDefault;
   }
   if (typeof s.proxyDownloads === 'boolean' && checkProxyDownloads) {
-    checkProxyDownloads.checked = s.proxyDownloads;
+    checkProxyDownloads.checked = isMyLiveDemoHost ? false : s.proxyDownloads;
   }
   if (s.previewQuality && selectPreviewQuality) {
     selectPreviewQuality.value = s.previewQuality;
@@ -1773,36 +1773,48 @@ function openSettingsModal() {
   if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = state.settings.videoAutoplayMobile !== false;
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = state.settings.videoAutoplayViewer !== false;
   
-  if (isVercelHost) {
-    if (checkProxyThumbnails) {
-      checkProxyThumbnails.checked = false;
-      checkProxyThumbnails.disabled = true;
+  const rowProxyThumbnails = document.getElementById('rowProxyThumbnails');
+  const proxyThumbnailsVercelNotice = document.getElementById('proxyThumbnailsVercelNotice');
+  const rowProxyFullImages = document.getElementById('rowProxyFullImages');
+  const proxyFullImagesVercelNotice = document.getElementById('proxyFullImagesVercelNotice');
+  const rowProxyVideos = document.getElementById('rowProxyVideos');
+  const proxyVideosVercelNotice = document.getElementById('proxyVideosVercelNotice');
+  const rowProxyDownloads = document.getElementById('rowProxyDownloads');
+  const proxyDownloadsVercelNotice = document.getElementById('proxyDownloadsVercelNotice');
+
+  const proxyToggles = [
+    { el: checkProxyThumbnails, row: rowProxyThumbnails, notice: proxyThumbnailsVercelNotice, setting: state.settings.proxyThumbnails !== false },
+    { el: checkProxyFullImages, row: rowProxyFullImages, notice: proxyFullImagesVercelNotice, setting: state.settings.proxyFullImages !== false },
+    { el: checkProxyVideos, row: rowProxyVideos, notice: proxyVideosVercelNotice, setting: (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false) },
+    { el: checkProxyDownloads, row: rowProxyDownloads, notice: proxyDownloadsVercelNotice, setting: state.settings.proxyDownloads !== false }
+  ];
+
+  proxyToggles.forEach(item => {
+    if (isMyLiveDemoHost) {
+      if (item.el) {
+        item.el.checked = false;
+        item.el.disabled = true;
+      }
+      if (item.row) {
+        item.row.style.opacity = '0.6';
+        item.row.style.cursor = 'not-allowed';
+        item.row.title = 'Проксирование отключено на Live Demo для предотвращения перерасхода Fast Origin Transfer';
+      }
+      if (item.notice) item.notice.style.display = 'block';
+    } else {
+      if (item.el) {
+        item.el.checked = item.setting;
+        item.el.disabled = false;
+      }
+      if (item.row) {
+        item.row.style.opacity = '1';
+        item.row.style.cursor = 'pointer';
+      }
+      if (item.notice) item.notice.style.display = 'none';
     }
-    if (rowProxyThumbnails) {
-      rowProxyThumbnails.style.opacity = '0.6';
-      rowProxyThumbnails.style.cursor = 'not-allowed';
-      rowProxyThumbnails.title = 'Проксирование превью недоступно на Vercel для предотвращения перерасхода Fast Origin Transfer';
-    }
-    if (proxyThumbnailsVercelNotice) {
-      proxyThumbnailsVercelNotice.style.display = 'block';
-    }
-  } else {
-    if (checkProxyThumbnails) {
-      checkProxyThumbnails.checked = state.settings.proxyThumbnails !== false;
-      checkProxyThumbnails.disabled = false;
-    }
-    if (rowProxyThumbnails) {
-      rowProxyThumbnails.style.opacity = '1';
-      rowProxyThumbnails.style.cursor = 'pointer';
-    }
-    if (proxyThumbnailsVercelNotice) {
-      proxyThumbnailsVercelNotice.style.display = 'none';
-    }
-  }
-  if (checkProxyFullImages) checkProxyFullImages.checked = state.settings.proxyFullImages !== false;
-  if (checkProxyVideos) checkProxyVideos.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
-  if (checkProxyDownloads) checkProxyDownloads.checked = state.settings.proxyDownloads !== false;
-  if (checkProxyVideoDefault) checkProxyVideoDefault.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
+  });
+
+  if (checkProxyVideoDefault) checkProxyVideoDefault.checked = isMyLiveDemoHost ? false : (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
   if (checkShowVideoStatusBanner) checkShowVideoStatusBanner.checked = state.settings.showVideoStatusBanner !== false;
 
   const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
