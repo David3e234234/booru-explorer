@@ -12,6 +12,7 @@ import {
   saveLocalFavoriteAuthors,
   setLikes,
   loadLocalLikes,
+  loadLocalViewed,
   exportUserData,
   importUserData,
   getUserInterestTags,
@@ -215,6 +216,7 @@ async function init() {
     loadFavorites(),
     loadFavoriteAuthors(),
     loadLikes(),
+    loadLocalViewed(),
     loadBooruSites()
   ]);
 
@@ -746,7 +748,7 @@ async function performSearch(reset = false, options = {}) {
     return;
   }
 
-  // ✨ Раздел рекомендаций «Для вас»
+  // ✨ Раздел рекомендаций «Для вас» (Smart TikTok-style Recommendation Engine)
   if (state.currentCategory === 'recommended') {
     try {
       state.isLoading = true;
@@ -778,87 +780,201 @@ async function performSearch(reset = false, options = {}) {
           candidatePosts = res.posts;
         }
       } else {
-        // 2. Умная выборка рекомендаций:
-        // А. Запрашиваем посты по топ-интересам (если есть)
+        // 2. Умная мульти-сид выборка рекомендаций (TikTok-style Multi-Seed Exploration)
+        const fetchTasks = [];
+
         if (userInterests.length > 0) {
-          const pool = userInterests.filter(i => i.category === 'artist' || i.category === 'character' || i.category === 'copyright');
-          const interestPool = pool.length > 0 ? pool : userInterests;
-          const seedIndex = ((state.page - 1) * 2) % interestPool.length;
-          const seedTag = interestPool[seedIndex]?.tag;
+          const artists = userInterests.filter(i => i.category === 'artist');
+          const characters = userInterests.filter(i => i.category === 'character');
+          const copyrights = userInterests.filter(i => i.category === 'copyright');
+          const generals = userInterests.filter(i => i.category === 'general');
 
-          if (seedTag) {
-            const cleanSeedTag = seedTag.replace(/[()]/g, '').trim();
-            const resSeed = await fetchPosts({
-              site: state.currentSite,
-              tags: cleanSeedTag,
-              page: 1,
-              limit: Math.min(currentLimit, 50),
-              category: 'new',
-              aiFilter: state.aiFilter,
-              ratingFilter: state.ratingFilter,
-              typeFilter: state.typeFilter,
-              ageFilter: state.ageFilter,
-              hideFurry: state.hideFurry,
-              hidePregnant: state.hidePregnant,
-              bustCache: options.bustCache || false
-            }).catch(() => null);
+          const selectedSeeds = [];
 
-            if (resSeed && resSeed.success && Array.isArray(resSeed.posts) && resSeed.posts.length > 0) {
-              candidatePosts.push(...resSeed.posts);
+          // А. Топ-авторы (с ротацией по странице пагинации)
+          if (artists.length > 0) {
+            const idx1 = (state.page - 1) % artists.length;
+            selectedSeeds.push(artists[idx1].tag);
+            if (artists.length > 1) {
+              const idx2 = state.page % artists.length;
+              if (artists[idx2].tag !== artists[idx1].tag) {
+                selectedSeeds.push(artists[idx2].tag);
+              }
             }
+          }
+
+          // Б. Персонаж / Франшиза (для тематического разнообразия)
+          if (characters.length > 0) {
+            const idx = (state.page - 1) % characters.length;
+            selectedSeeds.push(characters[idx].tag);
+          } else if (copyrights.length > 0) {
+            const idx = (state.page - 1) % copyrights.length;
+            selectedSeeds.push(copyrights[idx].tag);
+          }
+
+          // В. Общий интерес / атрибут (для serendipity/открытий)
+          if (generals.length > 0 && selectedSeeds.length < 4) {
+            const idx = ((state.page - 1) * 2) % Math.min(generals.length, 10);
+            selectedSeeds.push(generals[idx].tag);
+          }
+
+          // Заполняем недостающие слоты из общего списка интересов
+          for (let i = 0; selectedSeeds.length < 3 && i < userInterests.length; i++) {
+            const candidateTag = userInterests[(state.page - 1 + i) % userInterests.length].tag;
+            if (!selectedSeeds.includes(candidateTag)) {
+              selectedSeeds.push(candidateTag);
+            }
+          }
+
+          // Запускаем параллельные легковесные запросы по каждому сиду
+          for (const rawSeed of selectedSeeds) {
+            const cleanSeedTag = rawSeed.replace(/[()]/g, '').trim();
+            if (!cleanSeedTag) continue;
+            fetchTasks.push(
+              fetchPosts({
+                site: state.currentSite,
+                tags: cleanSeedTag,
+                page: 1 + Math.floor((state.page - 1) / Math.max(1, selectedSeeds.length)),
+                limit: 25,
+                category: 'new',
+                aiFilter: state.aiFilter,
+                ratingFilter: state.ratingFilter,
+                typeFilter: state.typeFilter,
+                ageFilter: state.ageFilter,
+                hideFurry: state.hideFurry,
+                hidePregnant: state.hidePregnant,
+                bustCache: options.bustCache || false
+              }).catch(() => null)
+            );
           }
         }
 
-        // Б. ВСЕГДА догружаем или страхуем подборку популярным контентом сайта (гарантия отсутствия пустого экрана)
-        const resPopular = await fetchPosts({
-          site: state.currentSite,
-          tags: '',
-          page: state.page,
-          limit: currentLimit,
-          category: 'popular',
-          aiFilter: state.aiFilter,
-          ratingFilter: state.ratingFilter,
-          typeFilter: state.typeFilter,
-          ageFilter: state.ageFilter,
-          hideFurry: state.hideFurry,
-          hidePregnant: state.hidePregnant,
-          bustCache: options.bustCache || false
-        }).catch(() => null);
+        // Г. ВСЕГДА подмешиваем тренды/популярное сайта (гарантия свежести и отсутствия пустого экрана)
+        fetchTasks.push(
+          fetchPosts({
+            site: state.currentSite,
+            tags: '',
+            page: state.page,
+            limit: Math.min(currentLimit, 40),
+            category: 'popular',
+            aiFilter: state.aiFilter,
+            ratingFilter: state.ratingFilter,
+            typeFilter: state.typeFilter,
+            ageFilter: state.ageFilter,
+            hideFurry: state.hideFurry,
+            hidePregnant: state.hidePregnant,
+            bustCache: options.bustCache || false
+          }).catch(() => null)
+        );
 
-        if (resPopular && resPopular.success && Array.isArray(resPopular.posts)) {
-          candidatePosts.push(...resPopular.posts);
+        const results = await Promise.allSettled(fetchTasks);
+        for (const res of results) {
+          if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts)) {
+            candidatePosts.push(...res.value.posts);
+          }
         }
       }
 
-      // Дедупликация постов по ID
+      // 3. Строгая фильтрация:
+      // - Дедупликация постов по ID
+      // - ИСКЛЮЧАЕМ посты, которые пользователь УЖЕ ЛАЙКНУЛ (likedIds) или ДОБАВИЛ В ИЗБРАННОЕ (favoriteIds)
       const seen = new Set();
-      const uniquePosts = [];
+      const filteredCandidates = [];
+
       candidatePosts.forEach(p => {
-        if (p && p.id && !seen.has(p.id)) {
-          seen.add(p.id);
-          uniquePosts.push(p);
+        if (!p || !p.id) return;
+        if (seen.has(p.id)) return;
+        seen.add(p.id);
+
+        // Исключаем посты, которые уже сохранены или пролайканы
+        if (state.likedIds.has(p.id) || state.favoriteIds.has(p.id)) {
+          return;
         }
+
+        filteredCandidates.push(p);
       });
 
-      // Ранжирование по карте интересов
-      const scoredPosts = uniquePosts.map(p => {
+      // 4. Ранжирование по интересам и учет истории просмотров
+      const scoredCandidates = filteredCandidates.map(p => {
+        let baseMatch = calculatePostMatchPercent(p, interestMap);
+        const isViewed = state.viewedIds.has(p.id);
+        // Просмотренные посты дисконтируются, освобождая верх ленты для новинок
+        if (isViewed) {
+          baseMatch = Math.round(baseMatch * 0.55);
+        }
         return {
           ...p,
-          matchPercent: calculatePostMatchPercent(p, interestMap)
+          matchPercent: baseMatch,
+          isViewed
         };
       });
 
-      // Сортировка: посты с наибольшим совпадением идут наверх
-      scoredPosts.sort((a, b) => (b.matchPercent || 0) - (a.matchPercent || 0));
+      // 5. TikTok-Style Диверсификация и чередование авторов (Frequency Capping & Interleaving)
+      // Предотвращает забивание ленты одним и тем же автором
+      const finalRecommended = [];
+      const authorCountMap = new Map();
+      let lastAuthor = null;
+      const candidatePool = [...scoredCandidates];
+
+      while (candidatePool.length > 0 && finalRecommended.length < currentLimit) {
+        let bestIndex = -1;
+        let bestScore = -Infinity;
+
+        for (let i = 0; i < candidatePool.length; i++) {
+          const item = candidatePool[i];
+          const rawAuthor = item.author || (item.tagDetails?.artist?.[0]) || 'unknown';
+          const cleanAuthor = String(rawAuthor).toLowerCase().trim();
+          const seenCount = authorCountMap.get(cleanAuthor) || 0;
+
+          // Прогрессивный штраф за частоту автора:
+          let authorPenalty = 1.0;
+          if (cleanAuthor !== 'unknown') {
+            if (seenCount === 1) authorPenalty = 0.65;
+            else if (seenCount === 2) authorPenalty = 0.35;
+            else if (seenCount >= 3) authorPenalty = 0.10;
+          }
+
+          // Штраф за следование подряд за тем же автором (чередование)
+          const adjacentPenalty = (cleanAuthor !== 'unknown' && cleanAuthor === lastAuthor) ? 0.3 : 1.0;
+
+          // Итоговый эффективный скор
+          const effectiveScore = (item.matchPercent || 0) * authorPenalty * adjacentPenalty;
+
+          if (effectiveScore > bestScore) {
+            bestScore = effectiveScore;
+            bestIndex = i;
+          }
+        }
+
+        if (bestIndex !== -1) {
+          const [selected] = candidatePool.splice(bestIndex, 1);
+          finalRecommended.push(selected);
+          const rawAuthor = selected.author || (selected.tagDetails?.artist?.[0]) || 'unknown';
+          const cleanAuthor = String(rawAuthor).toLowerCase().trim();
+          if (cleanAuthor !== 'unknown') {
+            authorCountMap.set(cleanAuthor, (authorCountMap.get(cleanAuthor) || 0) + 1);
+            lastAuthor = cleanAuthor;
+          } else {
+            lastAuthor = null;
+          }
+        } else {
+          break;
+        }
+      }
+
+      // Догружаем остаток кандидатов, если не набрали лимит
+      if (finalRecommended.length < currentLimit && candidatePool.length > 0) {
+        finalRecommended.push(...candidatePool.slice(0, currentLimit - finalRecommended.length));
+      }
 
       if (reset) {
-        state.posts = scoredPosts;
+        state.posts = finalRecommended;
       } else {
         const existingIds = new Set(state.posts.map(p => p.id));
-        const newPosts = scoredPosts.filter(p => !existingIds.has(p.id));
+        const newPosts = finalRecommended.filter(p => !existingIds.has(p.id));
         state.posts.push(...newPosts);
       }
-      state.hasMore = uniquePosts.length > 0;
+      state.hasMore = candidatePosts.length > 0;
 
       galleryInstance.renderGallery(!reset);
       renderSidebarPageTags();

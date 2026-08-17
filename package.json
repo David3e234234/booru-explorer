@@ -1,6 +1,6 @@
 {
   "name": "booru-explorer",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Легковесный и современный Booru медиа-клиент с поддержкой видео, системы тегов и умной фильтрацией ИИ",
   "main": "server.js",
   "type": "module",

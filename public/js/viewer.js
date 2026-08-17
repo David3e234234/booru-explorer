@@ -1,4 +1,4 @@
-import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally } from './state.js';
+import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, markPostViewed } from './state.js';
 import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost } from './api.js';
 
 export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, showToast }) {
@@ -96,6 +96,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   function renderViewerPost() {
     if (!currentPost) return;
+
+    if (currentPost.id) {
+      markPostViewed(currentPost.id);
+    }
 
     if (activeAbortController) {
       activeAbortController.abort();

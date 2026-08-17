@@ -31,6 +31,7 @@ export const state = {
   favoriteIds: new Set(),
   likes: [],
   likedIds: new Set(),
+  viewedIds: new Set(),
   favoritesSubTab: 'posts', // 'posts' | 'authors'
   favoriteAuthors: [],
   favoriteAuthorNames: new Set(),
@@ -89,8 +90,35 @@ const STORAGE_KEYS = {
   SETTINGS: 'booru_settings_v1',
   FAVORITES: 'booru_favorites_v1',
   FAVORITE_AUTHORS: 'booru_favorite_authors_v1',
-  LIKES: 'booru_likes_v1'
+  LIKES: 'booru_likes_v1',
+  VIEWED: 'booru_viewed_v1'
 };
+
+export function loadLocalViewed() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.VIEWED);
+    const arr = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(arr)) {
+      state.viewedIds = new Set(arr);
+    }
+    return arr;
+  } catch (e) {
+    return [];
+  }
+}
+
+export function markPostViewed(id) {
+  if (!id) return;
+  state.viewedIds.add(id);
+  try {
+    const arr = Array.from(state.viewedIds);
+    if (arr.length > 2000) {
+      arr.splice(0, arr.length - 2000);
+      state.viewedIds = new Set(arr);
+    }
+    localStorage.setItem(STORAGE_KEYS.VIEWED, JSON.stringify(arr));
+  } catch (e) {}
+}
 
 export function loadLocalSettings() {
   try {
