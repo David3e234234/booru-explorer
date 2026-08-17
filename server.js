@@ -574,14 +574,12 @@ const BOORU_USER_AGENT = 'BooruExplorer/3.0 (by booruexplorer)';
 async function fetchSafe(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeout || 25000);
-  const isBrowserTarget = url.includes('rule34video.com') || url.includes('rule34.xxx') || url.includes('paheal') || url.includes('gelbooru.com') || url.includes('xbooru.com') || url.includes('hypnohub.net');
-  const ua = isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT;
   try {
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
       headers: {
-        'User-Agent': ua,
+        'User-Agent': BROWSER_USER_AGENT,
         'Accept': 'application/json, text/xml, text/html, */*',
         ...(options.headers || {})
       }
@@ -1108,9 +1106,24 @@ async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList) {
 
     url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
   }
-  const res = await fetchSafe(url);
-  if (!res.ok) {
-    logError(siteName, `API статус: ${res.status}`);
+  let res = null;
+  try {
+    res = await fetchSafe(url);
+    if (!res.ok && siteId === 'konachan' && siteUrl.includes('.net')) {
+      const altUrl = url.replace('konachan.net', 'konachan.com');
+      const altRes = await fetchSafe(altUrl);
+      if (altRes.ok) res = altRes;
+    }
+  } catch (e) {
+    if (siteId === 'konachan' && siteUrl.includes('.net')) {
+      try {
+        const altUrl = url.replace('konachan.net', 'konachan.com');
+        res = await fetchSafe(altUrl);
+      } catch (err) {}
+    }
+  }
+  if (!res || !res.ok) {
+    logError(siteName, `API статус: ${res?.status || 'network error'}`);
     return [];
   }
   const text = await res.text();
