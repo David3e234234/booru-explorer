@@ -258,6 +258,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const fillEl = statusBanner.querySelector('.video-progress-fill');
       const btnCache = statusBanner.querySelector('.btn-cache-toggle');
       const btnTranscode = statusBanner.querySelector('.btn-transcode');
+      const switchBtn = statusBanner.querySelector('.btn-switch-source');
       const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
       const needsProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || (!isMyLiveDemo && state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
       let currentSource = needsProxy ? 'proxy' : 'direct'; // 'direct', 'proxy', 'transcode'
