@@ -579,7 +579,7 @@ async function fetchSafe(url, options = {}) {
       ...options,
       signal: controller.signal,
       headers: {
-        'User-Agent': BROWSER_USER_AGENT,
+        'User-Agent': BOORU_USER_AGENT,
         'Accept': 'application/json, text/xml, text/html, */*',
         ...(options.headers || {})
       }
