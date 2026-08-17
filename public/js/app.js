@@ -507,6 +507,9 @@ function getSiteDisabledMessage(siteId) {
   if (siteId === 'gelbooru') {
     return 'Gelbooru отключен на Live Demo из-за блокировки хотлинка 🔒. Работает локально!';
   }
+  if (siteId === 'rule34video') {
+    return 'Rule34Video отключен на Live Demo (CDN блокирует прямое встраивание без прокси 🔒). Работает локально!';
+  }
   return 'Сайт отключен на Live Demo 🔒. Работает локально!';
 }
 
@@ -515,11 +518,11 @@ async function loadBooruSites() {
     const data = await fetchSites();
     let sites = data.sites || [];
     if (isMyLiveDemoHost) {
-      ['gelbooru', 'danbooru', 'konachan'].forEach(siteId => {
+      ['gelbooru', 'danbooru', 'konachan', 'rule34video'].forEach(siteId => {
         const idx = sites.findIndex(s => s.id === siteId);
         if (idx !== -1) {
           const s = sites.splice(idx, 1)[0];
-          s.name = siteId === 'danbooru' ? 'Danbooru (OFF)' : (siteId === 'gelbooru' ? 'Gelbooru (OFF)' : 'Konachan (OFF)');
+          s.name = siteId === 'danbooru' ? 'Danbooru (OFF)' : (siteId === 'gelbooru' ? 'Gelbooru (OFF)' : (siteId === 'konachan' ? 'Konachan (OFF)' : 'Rule34Video (OFF)'));
           s.disabled = true;
           s.accentColor = '#6b7280';
           sites.push(s);
@@ -527,8 +530,8 @@ async function loadBooruSites() {
       });
     }
     state.sites = sites;
-    if (isMyLiveDemoHost && (state.currentSite === 'danbooru' || state.currentSite === 'gelbooru' || state.currentSite === 'konachan')) {
-      state.currentSite = 'rule34video';
+    if (isMyLiveDemoHost && (state.currentSite === 'danbooru' || state.currentSite === 'gelbooru' || state.currentSite === 'konachan' || state.currentSite === 'rule34video')) {
+      state.currentSite = 'rule34';
     }
     const currentSiteLabel = document.getElementById('currentSiteLabel');
     if (currentSiteLabel) {

@@ -120,7 +120,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget) {
               const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
-              const shouldUseProxy = (post.site === 'danbooru' || videoTarget.includes('donmai.us')) ? true : (!isMyLiveDemo && state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+              const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (!isMyLiveDemo && state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
             }
           }
@@ -540,7 +540,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget) {
               const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
-              const shouldUseProxy = (post.site === 'danbooru' || videoTarget.includes('donmai.us')) ? true : (!isMyLiveDemo && state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+              const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (!isMyLiveDemo && state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
             }
           }

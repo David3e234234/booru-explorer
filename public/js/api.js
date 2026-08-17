@@ -41,7 +41,7 @@ export async function fetchPosts({
   };
 
   if (isMyLiveDemoHost && site === 'all') {
-    params.excludeSites = 'danbooru,gelbooru,konachan';
+    params.excludeSites = 'danbooru,gelbooru,konachan,rule34video';
   }
 
   if (bustCache) {

@@ -3,10 +3,9 @@ export const isMyLiveDemoHost = typeof window !== 'undefined' && (
 );
 
 const BASE_SITES = [
-  { id: 'rule34video', name: 'Rule34Video', accentColor: '#ef4444' },
+  { id: 'rule34', name: 'Rule34', accentColor: '#aae5a4' },
   { id: 'yandere', name: 'Yande.re', accentColor: '#ec4899' },
   { id: 'safebooru', name: 'Safebooru', accentColor: '#10b981' },
-  { id: 'rule34', name: 'Rule34', accentColor: '#aae5a4' },
   { id: 'xbooru', name: 'Xbooru', accentColor: '#f43f5e' },
   { id: 'hypnohub', name: 'Hypnohub', accentColor: '#8b5cf6' }
 ];
@@ -14,6 +13,7 @@ const BASE_SITES = [
 export const DEFAULT_SITES = isMyLiveDemoHost
   ? [
       ...BASE_SITES,
+      { id: 'rule34video', name: 'Rule34Video (OFF)', accentColor: '#6b7280', disabled: true },
       { id: 'konachan', name: 'Konachan (OFF)', accentColor: '#6b7280', disabled: true },
       { id: 'gelbooru', name: 'Gelbooru (OFF)', accentColor: '#6b7280', disabled: true },
       { id: 'danbooru', name: 'Danbooru (OFF)', accentColor: '#6b7280', disabled: true }
@@ -22,12 +22,13 @@ export const DEFAULT_SITES = isMyLiveDemoHost
       { id: 'danbooru', name: 'Danbooru', accentColor: '#3b82f6' },
       { id: 'gelbooru', name: 'Gelbooru', accentColor: '#6366f1' },
       { id: 'konachan', name: 'Konachan', accentColor: '#f97316' },
+      { id: 'rule34video', name: 'Rule34Video', accentColor: '#ef4444' },
       ...BASE_SITES
     ];
 
 export const state = {
   sites: [...DEFAULT_SITES],
-  currentSite: isMyLiveDemoHost ? 'rule34video' : 'danbooru',
+  currentSite: isMyLiveDemoHost ? 'rule34' : 'danbooru',
   currentCategory: 'new', // 'new', 'recommended', 'popular', 'top', 'random', 'favorites'
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
   ratingFilter: 'all', // 'all', 'nsfw', 'sfw'

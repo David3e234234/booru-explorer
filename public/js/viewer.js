@@ -260,7 +260,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const btnTranscode = statusBanner.querySelector('.btn-transcode');
       const switchBtn = statusBanner.querySelector('.btn-switch-source');
       const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
-      const needsProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || (!isMyLiveDemo && state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+      const needsProxy = currentPost.site === 'danbooru' || currentPost.site === 'rule34video' || directMedia.includes('donmai.us') || directMedia.includes('rule34video.com') || directMedia.includes('boomio-cdn.com') || (!isMyLiveDemo && state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
       let currentSource = needsProxy ? 'proxy' : 'direct'; // 'direct', 'proxy', 'transcode'
       let isPreCaching = false;
       let loadTimeout = null;
@@ -458,13 +458,22 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (currentSource === 'direct') {
           currentSource = 'proxy';
           if (switchBtn) switchBtn.textContent = '⚡ Прямой CDN';
-          setProgress(0, 'Подключение через локальный прокси...', true);
+          setProgress(0, 'Подключение через прокси...', true);
           video.src = proxyMedia;
           video.play().catch(() => {});
         } else if (currentSource === 'proxy') {
+          if (isMyLiveDemo) {
+            // На Live Demo клиентский fetch к заблокированным сторонним CDN может блокироваться CORS
+            startClientRemux(proxyMedia);
+            return;
+          }
           // Шаг 2: Попытка быстрого клиентского демультиплексирования в браузере (0% CPU сервера)
           startClientRemux(proxyMedia);
         } else if (currentSource === 'remux') {
+          if (isMyLiveDemo) {
+            setProgress(0, 'Не удалось воспроизвести видео (FFmpeg доступен в локальной версии)', false, true);
+            return;
+          }
           // Шаг 3: Аварийный переход на серверный FFmpeg транскодер
           currentSource = 'transcode';
           if (btnTranscode) {

@@ -2043,6 +2043,7 @@ app.get('/api/posts', async (req, res) => {
       exSet.add('danbooru');
       exSet.add('gelbooru');
       exSet.add('konachan');
+      exSet.add('rule34video');
       excludeSites = Array.from(exSet).join(',');
     }
 
@@ -2366,7 +2367,7 @@ app.get('/api/proxy', async (req, res) => {
       }
     }
 
-    const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net');
+    const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net');
     const ua = isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT;
 
     const headers = {
@@ -2390,6 +2391,8 @@ app.get('/api/proxy', async (req, res) => {
         if (currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
           headers['Authorization'] = 'Basic ' + Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64');
         }
+      } else if (parsed.hostname.includes('rule34video.com') || parsed.hostname.includes('boomio-cdn.com')) {
+        headers['Referer'] = 'https://rule34video.com/';
       } else if (parsed.hostname.includes('yande.re')) {
         headers['Referer'] = 'https://yande.re/';
       } else if (parsed.hostname.includes('konachan')) {
