@@ -2023,7 +2023,7 @@ app.get('/api/posts', async (req, res) => {
   try {
     const isLiveDemo = (req.headers.host || '').toLowerCase() === 'booru-explorer-kappa.vercel.app';
     const site = req.query.site || (isLiveDemo ? 'rule34video' : 'danbooru');
-    if (isLiveDemo && (site === 'danbooru' || site === 'gelbooru')) {
+    if (isLiveDemo && (site === 'danbooru' || site === 'gelbooru' || site === 'konachan')) {
       return res.json({ success: true, posts: [], total: 0, hasMore: false, page: 1, limit: 100 });
     }
 
@@ -2042,6 +2042,7 @@ app.get('/api/posts', async (req, res) => {
       const exSet = new Set(excludeSites ? excludeSites.split(',') : []);
       exSet.add('danbooru');
       exSet.add('gelbooru');
+      exSet.add('konachan');
       excludeSites = Array.from(exSet).join(',');
     }
 

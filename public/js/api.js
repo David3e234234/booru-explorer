@@ -22,7 +22,7 @@ export async function fetchPosts({
   hidePregnant = true,
   bustCache = false
 }) {
-  if (isMyLiveDemoHost && (site === 'danbooru' || site === 'gelbooru')) {
+  if (isMyLiveDemoHost && (site === 'danbooru' || site === 'gelbooru' || site === 'konachan')) {
     return { success: true, posts: [], total: 0, hasMore: false };
   }
 
@@ -41,7 +41,7 @@ export async function fetchPosts({
   };
 
   if (isMyLiveDemoHost && site === 'all') {
-    params.excludeSites = 'danbooru,gelbooru';
+    params.excludeSites = 'danbooru,gelbooru,konachan';
   }
 
   if (bustCache) {
@@ -55,7 +55,7 @@ export async function fetchPosts({
 
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
-  const effectiveSite = (isMyLiveDemoHost && (site === 'danbooru' || site === 'gelbooru')) ? 'yandere' : site;
+  const effectiveSite = (isMyLiveDemoHost && (site === 'danbooru' || site === 'gelbooru' || site === 'konachan')) ? 'yandere' : site;
   const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(effectiveSite)}`);
   if (!res.ok) return { tags: [] };
   return await res.json();

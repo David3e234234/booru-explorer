@@ -236,7 +236,7 @@ function applySettingsToUIAndState(s) {
   }
   const savedSite = s.defaultSite || localStorage.getItem('booru_selected_site');
   if (savedSite) {
-    state.currentSite = (isMyLiveDemoHost && (savedSite === 'danbooru' || savedSite === 'gelbooru')) ? 'rule34video' : savedSite;
+    state.currentSite = (isMyLiveDemoHost && (savedSite === 'danbooru' || savedSite === 'gelbooru' || savedSite === 'konachan')) ? 'rule34video' : savedSite;
   }
   if (s.aiFilter) {
     state.aiFilter = s.aiFilter;
@@ -497,16 +497,29 @@ async function handleDeleteAuthor(author) {
   }
 }
 
+function getSiteDisabledMessage(siteId) {
+  if (siteId === 'konachan') {
+    return 'Konachan отключен на Live Demo (Cloudflare блокирует сервер Vercel 🔒). Работает локально!';
+  }
+  if (siteId === 'danbooru') {
+    return 'Danbooru отключен на Live Demo из-за блокировки хотлинка 🔒. Работает локально!';
+  }
+  if (siteId === 'gelbooru') {
+    return 'Gelbooru отключен на Live Demo из-за блокировки хотлинка 🔒. Работает локально!';
+  }
+  return 'Сайт отключен на Live Demo 🔒. Работает локально!';
+}
+
 async function loadBooruSites() {
   try {
     const data = await fetchSites();
     let sites = data.sites || [];
     if (isMyLiveDemoHost) {
-      ['gelbooru', 'danbooru'].forEach(siteId => {
+      ['gelbooru', 'danbooru', 'konachan'].forEach(siteId => {
         const idx = sites.findIndex(s => s.id === siteId);
         if (idx !== -1) {
           const s = sites.splice(idx, 1)[0];
-          s.name = siteId === 'danbooru' ? 'Danbooru (OFF)' : 'Gelbooru (OFF)';
+          s.name = siteId === 'danbooru' ? 'Danbooru (OFF)' : (siteId === 'gelbooru' ? 'Gelbooru (OFF)' : 'Konachan (OFF)');
           s.disabled = true;
           s.accentColor = '#6b7280';
           sites.push(s);
@@ -514,7 +527,7 @@ async function loadBooruSites() {
       });
     }
     state.sites = sites;
-    if (isMyLiveDemoHost && (state.currentSite === 'danbooru' || state.currentSite === 'gelbooru')) {
+    if (isMyLiveDemoHost && (state.currentSite === 'danbooru' || state.currentSite === 'gelbooru' || state.currentSite === 'konachan')) {
       state.currentSite = 'rule34video';
     }
     const currentSiteLabel = document.getElementById('currentSiteLabel');
@@ -547,13 +560,13 @@ function renderSitesBar() {
 
   state.sites.forEach(site => {
     const item = document.createElement('div');
-    const isSiteDisabled = isMyLiveDemoHost && (site.id === 'danbooru' || site.id === 'gelbooru');
+    const isSiteDisabled = isMyLiveDemoHost && (site.id === 'danbooru' || site.id === 'gelbooru' || site.id === 'konachan');
     item.className = `source-item ${state.currentSite === site.id ? 'active' : ''} ${isSiteDisabled ? 'disabled-source' : ''}`;
     if (isSiteDisabled) {
       item.style.opacity = '0.4';
       item.style.cursor = 'not-allowed';
       item.style.filter = 'grayscale(1)';
-      item.title = `${site.name} отключен на Live Demo из-за блокировки хотлинка`;
+      item.title = getSiteDisabledMessage(site.id);
     }
     item.innerHTML = `
       <span class="source-dot" style="background-color: ${site.accentColor || 'var(--text-muted)'}"></span>
@@ -562,7 +575,7 @@ function renderSitesBar() {
     `;
     item.addEventListener('click', () => {
       if (isSiteDisabled) {
-        showToast(`${site.id === 'danbooru' ? 'Danbooru' : 'Gelbooru'} отключен на Live Demo из-за блокировки хотлинка 🔒`);
+        showToast(getSiteDisabledMessage(site.id));
         return;
       }
       selectSite(site.id);
@@ -593,12 +606,13 @@ function renderMobileSourcesSheet() {
 
   state.sites.forEach(site => {
     const card = document.createElement('div');
-    const isSiteDisabled = isMyLiveDemoHost && (site.id === 'danbooru' || site.id === 'gelbooru');
+    const isSiteDisabled = isMyLiveDemoHost && (site.id === 'danbooru' || site.id === 'gelbooru' || site.id === 'konachan');
     card.className = `source-mobile-card ${state.currentSite === site.id ? 'active' : ''} ${isSiteDisabled ? 'disabled-source' : ''}`;
     if (isSiteDisabled) {
       card.style.opacity = '0.4';
       card.style.cursor = 'not-allowed';
       card.style.filter = 'grayscale(1)';
+      card.title = getSiteDisabledMessage(site.id);
     }
     card.innerHTML = `
       <div class="source-mobile-title-wrap">
@@ -609,7 +623,7 @@ function renderMobileSourcesSheet() {
     `;
     card.addEventListener('click', () => {
       if (isSiteDisabled) {
-        showToast(`${site.id === 'danbooru' ? 'Danbooru' : 'Gelbooru'} отключен на Live Demo из-за блокировки хотлинка 🔒`);
+        showToast(getSiteDisabledMessage(site.id));
         return;
       }
       selectSite(site.id);
@@ -620,8 +634,8 @@ function renderMobileSourcesSheet() {
 }
 
 function selectSite(siteId) {
-  if (isMyLiveDemoHost && (siteId === 'danbooru' || siteId === 'gelbooru')) {
-    showToast(`${siteId === 'danbooru' ? 'Danbooru' : 'Gelbooru'} отключен на Live Demo из-за блокировки хотлинка 🔒`);
+  if (isMyLiveDemoHost && (siteId === 'danbooru' || siteId === 'gelbooru' || siteId === 'konachan')) {
+    showToast(getSiteDisabledMessage(siteId));
     return;
   }
   if (state.currentSite === siteId && state.currentCategory !== 'favorites') return;
