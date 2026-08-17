@@ -581,6 +581,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       mediaWrapper.appendChild(statusBanner);
     } else {
       const img = document.createElement('img');
+      img.className = 'viewer-image';
       const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
       const needsImgProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || (!isMyLiveDemo && state.settings?.proxyFullImages !== false);
       img.src = needsImgProxy ? proxyMedia : directMedia;

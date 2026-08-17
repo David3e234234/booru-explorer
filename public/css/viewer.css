@@ -245,6 +245,9 @@
 .viewer-image {
   max-width: 95%;
   max-height: 95%;
+  width: auto;
+  height: auto;
+  box-sizing: border-box;
   object-fit: contain;
   box-shadow: var(--shadow-viewer);
   border-radius: var(--radius-sm);
