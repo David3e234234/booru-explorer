@@ -83,7 +83,11 @@ const selectPreviewQuality = document.getElementById('selectPreviewQuality');
 const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
 const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
 const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
-const checkProxyVideoDefault = document.getElementById('checkProxyVideoDefault');
+const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
+const checkProxyFullImages = document.getElementById('checkProxyFullImages');
+const checkProxyVideos = document.getElementById('checkProxyVideos');
+const checkProxyDownloads = document.getElementById('checkProxyDownloads');
+const checkProxyVideoDefault = document.getElementById('checkProxyVideos') || document.getElementById('checkProxyVideoDefault');
 const checkShowVideoStatusBanner = document.getElementById('checkShowVideoStatusBanner');
 const drawerBackdrop = document.getElementById('drawerBackdrop');
 const sidebarSearch = document.getElementById('sidebarSearch');
@@ -257,8 +261,19 @@ function applySettingsToUIAndState(s) {
     state.limit = s.itemsPerPage;
     if (selectItemsPerPage) selectItemsPerPage.value = String(s.itemsPerPage);
   }
-  if (typeof s.proxyVideoDefault === 'boolean' && checkProxyVideoDefault) {
-    checkProxyVideoDefault.checked = s.proxyVideoDefault;
+  if (typeof s.proxyThumbnails === 'boolean' && checkProxyThumbnails) {
+    checkProxyThumbnails.checked = s.proxyThumbnails;
+  }
+  if (typeof s.proxyFullImages === 'boolean' && checkProxyFullImages) {
+    checkProxyFullImages.checked = s.proxyFullImages;
+  }
+  if (typeof s.proxyVideos === 'boolean' && checkProxyVideos) {
+    checkProxyVideos.checked = s.proxyVideos;
+  } else if (typeof s.proxyVideoDefault === 'boolean' && checkProxyVideos) {
+    checkProxyVideos.checked = s.proxyVideoDefault;
+  }
+  if (typeof s.proxyDownloads === 'boolean' && checkProxyDownloads) {
+    checkProxyDownloads.checked = s.proxyDownloads;
   }
   if (s.previewQuality && selectPreviewQuality) {
     selectPreviewQuality.value = s.previewQuality;
@@ -1539,7 +1554,12 @@ function openSettingsModal() {
   if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = state.settings.videoAutoplayHover !== false;
   if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = state.settings.videoAutoplayMobile !== false;
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = state.settings.videoAutoplayViewer !== false;
-  if (checkProxyVideoDefault) checkProxyVideoDefault.checked = state.settings.proxyVideoDefault !== false;
+  
+  if (checkProxyThumbnails) checkProxyThumbnails.checked = state.settings.proxyThumbnails !== false;
+  if (checkProxyFullImages) checkProxyFullImages.checked = state.settings.proxyFullImages !== false;
+  if (checkProxyVideos) checkProxyVideos.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
+  if (checkProxyDownloads) checkProxyDownloads.checked = state.settings.proxyDownloads !== false;
+  if (checkProxyVideoDefault) checkProxyVideoDefault.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
   if (checkShowVideoStatusBanner) checkShowVideoStatusBanner.checked = state.settings.showVideoStatusBanner !== false;
 
   const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
@@ -1608,7 +1628,12 @@ async function handleSaveSettings() {
   const videoAutoplayHoverVal = checkVideoAutoplayHover ? checkVideoAutoplayHover.checked : true;
   const videoAutoplayMobileVal = checkVideoAutoplayMobile ? checkVideoAutoplayMobile.checked : true;
   const videoAutoplayViewerVal = checkVideoAutoplayViewer ? checkVideoAutoplayViewer.checked : true;
-  const proxyVideoDefaultVal = checkProxyVideoDefault ? checkProxyVideoDefault.checked : true;
+  
+  const proxyThumbnailsVal = checkProxyThumbnails ? checkProxyThumbnails.checked : true;
+  const proxyFullImagesVal = checkProxyFullImages ? checkProxyFullImages.checked : true;
+  const proxyVideosVal = checkProxyVideos ? checkProxyVideos.checked : (checkProxyVideoDefault ? checkProxyVideoDefault.checked : true);
+  const proxyDownloadsVal = checkProxyDownloads ? checkProxyDownloads.checked : true;
+  const proxyVideoDefaultVal = proxyVideosVal;
   const showVideoStatusBannerVal = checkShowVideoStatusBanner ? checkShowVideoStatusBanner.checked : true;
   
   const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
@@ -1628,6 +1653,10 @@ async function handleSaveSettings() {
     videoAutoplayHover: videoAutoplayHoverVal,
     videoAutoplayMobile: videoAutoplayMobileVal,
     videoAutoplayViewer: videoAutoplayViewerVal,
+    proxyThumbnails: proxyThumbnailsVal,
+    proxyFullImages: proxyFullImagesVal,
+    proxyVideos: proxyVideosVal,
+    proxyDownloads: proxyDownloadsVal,
     proxyVideoDefault: proxyVideoDefaultVal,
     showVideoStatusBanner: showVideoStatusBannerVal,
     blacklist: tempBlacklist,

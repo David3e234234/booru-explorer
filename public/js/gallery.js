@@ -119,7 +119,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
           if (!videoEl.src) {
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget) {
-              const shouldUseProxy = state.settings?.proxyVideoDefault !== false;
+              const shouldUseProxy = (post.site === 'danbooru' || videoTarget.includes('donmai.us')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
             }
           }
@@ -280,7 +280,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
       }
     }
 
-    const mainThumbSrc = directThumb ? (directThumb.startsWith('/api/') ? directThumb : getProxiedUrl(directThumb)) : '';
+    const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us'))) ? true : (state.settings?.proxyThumbnails !== false);
+    const mainThumbSrc = directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '';
 
     const siteName = post.siteName || (post.site ? post.site.toUpperCase() : '');
     const siteBadge = siteName ? `<span class="badge-site site-${post.site}">${siteName}</span>` : '';
@@ -382,7 +383,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     if (imgEl) {
       imgEl.addEventListener('error', function () {
         const fallback = this.dataset.fallback;
-        if (post.previewUrl && !isVideoExt(post.previewUrl) && !this.src.includes(encodeURIComponent(post.previewUrl))) {
+        const proxyFallback = fallback ? (fallback.startsWith('/api/') ? fallback : getProxiedUrl(fallback)) : '';
+        if (proxyFallback && this.src !== proxyFallback && !this.src.includes('/api/proxy')) {
+          this.src = proxyFallback;
+        } else if (post.previewUrl && !isVideoExt(post.previewUrl) && !this.src.includes(encodeURIComponent(post.previewUrl))) {
           this.src = getProxiedUrl(post.previewUrl);
         } else if (fallback && this.src !== fallback && !this.src.includes(encodeURIComponent(fallback))) {
           this.src = fallback.startsWith('/api/') ? fallback : getProxiedUrl(fallback);
@@ -439,7 +443,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
           if (!videoEl.src) {
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget) {
-              const shouldUseProxy = state.settings?.proxyVideoDefault !== false;
+              const shouldUseProxy = (post.site === 'danbooru' || videoTarget.includes('donmai.us')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
             }
           }
@@ -473,7 +477,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
         const videoTarget = post.fileUrl || post.sampleUrl;
         const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(videoTarget)}`;
         const proxyUrl = getProxiedUrl(videoTarget);
-        if (this.src !== transcodeUrl && (this.src === proxyUrl || !this.src.includes('/api/proxy'))) {
+        if (this.src !== proxyUrl && !this.src.includes('/api/proxy') && this.src !== transcodeUrl) {
+          this.src = proxyUrl;
+          this.play().catch(() => {});
+        } else if (this.src !== transcodeUrl) {
           this.src = transcodeUrl;
           this.play().catch(() => {});
         } else {
@@ -566,7 +573,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
 
     const siteObj = state.sites.find(s => s.id === author.site);
     const siteName = siteObj ? siteObj.name : (author.site || 'Danbooru');
-    const preview = author.previewUrl ? (author.previewUrl.startsWith('/api/') ? author.previewUrl : getProxiedUrl(author.previewUrl)) : '';
+    const shouldUseThumbProxy = state.settings?.proxyThumbnails !== false;
+    const preview = author.previewUrl ? (author.previewUrl.startsWith('/api/') ? author.previewUrl : (shouldUseThumbProxy ? getProxiedUrl(author.previewUrl) : author.previewUrl)) : '';
 
     let formattedDate = '';
     if (author.createdAt) {

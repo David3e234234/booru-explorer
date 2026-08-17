@@ -36,6 +36,10 @@ export const state = {
   settings: {
     theme: 'dark',
     itemsPerPage: 100,
+    proxyThumbnails: true,
+    proxyFullImages: true,
+    proxyVideos: true,
+    proxyDownloads: true,
     proxyVideoDefault: true,
     aiTags: [],
     blacklist: [],

@@ -641,6 +641,34 @@
           </select>
         </div>
 
+        <!-- Настройки Прокси и Экономии трафика сервера -->
+        <div class="settings-group">
+          <label class="settings-label">🛡️ Проксирование и экономия трафика сервера:</label>
+          <p class="settings-hint">Отключайте проксирование для экономии серверного трафика и ресурсов. Если CDN борды блокирует прямой доступ, приложение автоматически подключит прокси (Fallback).</p>
+          <div class="toggles-list" style="margin-top: 6px;">
+            <label class="toggle-row" title="Загружать превью и миниатюры через серверный прокси с сохранением в локальный дисковый кэш">
+              <input type="checkbox" id="checkProxyThumbnails" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">🖼️ Проксировать превью в ленте (кэширование на сервере)</span>
+            </label>
+            <label class="toggle-row" title="Загружать полноразмерные оригиналы артов через серверный прокси в просмотрщике">
+              <input type="checkbox" id="checkProxyFullImages" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">🎨 Проксировать полноразмерные изображения (просмотрщик)</span>
+            </label>
+            <label class="toggle-row" title="Загружать видеопотоки через локальный прокси для мгновенного запуска и обхода CDN-ограничений">
+              <input type="checkbox" id="checkProxyVideos" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">🎬 Проксировать видеопотоки (лента и полноэкранный плеер)</span>
+            </label>
+            <label class="toggle-row" title="Скачивать файлы через серверный прокси для гарантированного сохранения с оригинальным именем">
+              <input type="checkbox" id="checkProxyDownloads" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name">📥 Проксировать скачивание файлов на устройство</span>
+            </label>
+          </div>
+        </div>
+
         <div class="settings-group">
           <label class="settings-label">Воспроизведение и автоплей видео:</label>
           <div class="toggles-list" style="margin-top: 6px;">
@@ -658,11 +686,6 @@
               <input type="checkbox" id="checkVideoAutoplayViewer" checked>
               <span class="toggle-slider"></span>
               <span class="toggle-name">▶️ Автовоспроизведение при открытии в просмотрщике</span>
-            </label>
-            <label class="toggle-row" title="Всегда открывать видео через локальный прокси для обхода блокировок CDN">
-              <input type="checkbox" id="checkProxyVideoDefault" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">🛡️ Проксировать видео по умолчанию (мгновенный запуск без ожидания CDN)</span>
             </label>
             <label class="toggle-row" title="Показывать информационную плашку с кнопками кеширования в память, FFmpeg и прокси в просмотрщике">
               <input type="checkbox" id="checkShowVideoStatusBanner" checked>

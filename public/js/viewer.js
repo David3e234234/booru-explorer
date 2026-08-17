@@ -255,7 +255,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const btnCache = statusBanner.querySelector('.btn-cache-toggle');
       const btnTranscode = statusBanner.querySelector('.btn-transcode');
       const switchBtn = statusBanner.querySelector('.btn-switch-source');
-      const needsProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings.proxyVideoDefault !== false;
+      const needsProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
       let currentSource = needsProxy ? 'proxy' : 'direct'; // 'direct', 'proxy', 'transcode'
       let isPreCaching = false;
       let loadTimeout = null;
@@ -459,7 +459,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     } else {
       const img = document.createElement('img');
       img.className = 'viewer-image';
-      const needsImgProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyVideoDefault !== false;
+      const needsImgProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
       img.src = needsImgProxy ? proxyMedia : directMedia;
       img.referrerPolicy = 'no-referrer';
       img.alt = 'Full View';
@@ -799,6 +799,30 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const filename = `booru_${currentPost.site || 'post'}_${currentPost.id}.${ext}`;
 
     showToast('Начата загрузка на устройство... 📥');
+    
+    const shouldUseProxyDownload = currentPost.site === 'danbooru' || downloadTarget.includes('donmai.us') || state.settings?.proxyDownloads !== false;
+    
+    if (!shouldUseProxyDownload) {
+      try {
+        const directRes = await fetch(downloadTarget, { mode: 'cors' });
+        if (directRes.ok) {
+          const blob = await directRes.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+          showToast('Файл сохранён напрямую с CDN! 💾');
+          return;
+        }
+      } catch (directErr) {
+        console.warn('[Direct download failed, switching to proxy]', directErr);
+      }
+    }
+
     try {
       const proxyUrl = getProxiedUrl(downloadTarget);
       const res = await fetch(proxyUrl);

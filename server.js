@@ -327,6 +327,10 @@ const DEFAULT_SETTINGS = {
   previewQuality: 'medium', // 'low', 'medium', 'high', 'original'
   videoMutedDefault: true,
   itemsPerPage: 100,
+  proxyThumbnails: true,
+  proxyFullImages: true,
+  proxyVideos: true,
+  proxyDownloads: true,
   proxyVideoDefault: true,
   enablePaheal: true,
   defaultSite: 'danbooru',
