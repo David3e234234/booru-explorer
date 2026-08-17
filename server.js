@@ -2315,6 +2315,11 @@ app.get('/api/proxy', async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).send('Требуется параметр url');
 
+  const host = (req.headers.host || '').toLowerCase();
+  if (host === 'booru-explorer-kappa.vercel.app') {
+    return res.redirect(302, targetUrl);
+  }
+
   try {
     const cleanPath = targetUrl.split('?')[0].toLowerCase();
     const isImage = cleanPath.endsWith('.jpg') || cleanPath.endsWith('.jpeg') || cleanPath.endsWith('.png') || cleanPath.endsWith('.webp') || cleanPath.endsWith('.gif');

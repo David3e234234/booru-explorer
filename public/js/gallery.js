@@ -444,6 +444,18 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const imgEl = card.querySelector('.media-thumb');
     if (imgEl) {
       imgEl.addEventListener('error', function () {
+        const isMyLiveDemo = typeof window !== 'undefined' && window.location.hostname === 'booru-explorer-kappa.vercel.app';
+        if (isMyLiveDemo) {
+          const fallback = this.dataset.fallback;
+          if (fallback && this.src !== fallback && !fallback.includes('/api/')) {
+            this.src = fallback;
+          } else if (post.previewUrl && !isVideoExt(post.previewUrl) && this.src !== post.previewUrl && !post.previewUrl.includes('/api/')) {
+            this.src = post.previewUrl;
+          } else {
+            this.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' fill='%231a202e'><rect width='200' height='200'/><text x='50%' y='50%' fill='%2364748b' text-anchor='middle' font-size='12'>🖼️ Ошибка</text></svg>`;
+          }
+          return;
+        }
         const fallback = this.dataset.fallback;
         const proxyFallback = fallback ? (fallback.startsWith('/api/') ? fallback : getProxiedUrl(fallback)) : '';
         if (proxyFallback && this.src !== proxyFallback && !this.src.includes('/api/proxy')) {

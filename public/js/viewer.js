@@ -588,6 +588,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       img.alt = 'Full View';
 
       img.addEventListener('error', function () {
+        if (isMyLiveDemo) {
+          showToast('Не удалось загрузить фото напрямую с CDN');
+          return;
+        }
         if (this.src !== proxyMedia) {
           console.warn('[Viewer Image Fallback] Переключение на прокси');
           this.src = proxyMedia;
