@@ -1969,8 +1969,9 @@ async function fetchPosts(site, params, aiTagsList, settings) {
       } else if (params.ratingFilter === 'nsfw') {
         mainSites = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub'];
       }
-      if (params.excludeSites && params.excludeSites.includes('danbooru')) {
-        mainSites = mainSites.filter(s => s !== 'danbooru');
+      if (params.excludeSites) {
+        const excluded = params.excludeSites.split(',').map(s => s.trim().toLowerCase());
+        mainSites = mainSites.filter(s => !excluded.includes(s));
       }
       const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / mainSites.length));
       const results = await Promise.allSettled(
@@ -2007,7 +2008,12 @@ app.get('/api/sites', (req, res) => {
 
 app.get('/api/posts', async (req, res) => {
   try {
-    const site = req.query.site || 'danbooru';
+    const isLiveDemo = (req.headers.host || '').toLowerCase() === 'booru-explorer-kappa.vercel.app';
+    const site = req.query.site || (isLiveDemo ? 'rule34video' : 'danbooru');
+    if (isLiveDemo && (site === 'danbooru' || site === 'gelbooru')) {
+      return res.json({ success: true, posts: [], total: 0, hasMore: false, page: 1, limit: 100 });
+    }
+
     const tags = req.query.tags || '';
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 100;
@@ -2018,7 +2024,13 @@ app.get('/api/posts', async (req, res) => {
     const ageFilter = req.query.ageFilter || 'all'; // 'all', 'adult', 'young'
     const hideFurry = req.query.hideFurry === 'true' || req.query.hideFurry === '1';
     const hidePregnant = req.query.hidePregnant === 'true' || req.query.hidePregnant === '1';
-    const excludeSites = req.query.excludeSites || '';
+    let excludeSites = req.query.excludeSites || '';
+    if (isLiveDemo && site === 'all') {
+      const exSet = new Set(excludeSites ? excludeSites.split(',') : []);
+      exSet.add('danbooru');
+      exSet.add('gelbooru');
+      excludeSites = Array.from(exSet).join(',');
+    }
 
     // Проверка кэша в оперативной памяти (для всего кроме random)
     const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${excludeSites}`;
