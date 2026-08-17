@@ -12,6 +12,8 @@ import {
   saveLocalFavoriteAuthors,
   setLikes,
   loadLocalLikes,
+  exportUserData,
+  importUserData,
   getUserInterestTags,
   calculatePostMatchPercent
 } from './state.js';
@@ -166,6 +168,9 @@ async function init() {
     onOpenViewer: (index) => viewerInstance.openViewer(index),
     onFavoriteToggle: updateFavoritesBadge,
     onTagClick: (tag) => {
+      autocompleteInstance.selectTag(tag);
+    },
+    onTagSelect: (tag) => {
       autocompleteInstance.selectTag(tag);
     },
     onLoadMore: () => {
@@ -986,6 +991,20 @@ function setupEventListeners() {
     });
   });
 
+  // Сортировка видео по длительности
+  document.querySelectorAll('.video-sort-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const sort = pill.dataset.sort;
+      if (state.videoDurationSort === sort) return;
+      state.videoDurationSort = sort;
+      document.querySelectorAll('.video-sort-pill').forEach(p => {
+        p.classList.toggle('active', p.dataset.sort === sort);
+      });
+      // Мгновенная локальная пересортировка и перерисовка галереи
+      galleryInstance.renderGallery(false);
+    });
+  });
+
   // Тумблеры фурри и беременности
   checkHideFurry.addEventListener('change', () => {
     state.hideFurry = checkHideFurry.checked;
@@ -1093,6 +1112,85 @@ function setupEventListeners() {
   const btnClearStorageBtn = document.getElementById('btnClearStorageBtn');
   if (btnClearStorageBtn) {
     btnClearStorageBtn.addEventListener('click', handleClearStorageCache);
+  }
+
+  // 📦 Экспорт данных в JSON файл
+  const btnExportData = document.getElementById('btnExportData');
+  if (btnExportData) {
+    btnExportData.addEventListener('click', () => {
+      try {
+        const data = exportUserData();
+        const jsonStr = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonStr], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        a.href = url;
+        a.download = `booru_explorer_backup_${dateStr}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Резервная копия скачана 📦');
+      } catch (err) {
+        showToast('Ошибка при экспорте данных');
+      }
+    });
+  }
+
+  // 📥 Импорт данных из JSON файла
+  const btnImportData = document.getElementById('btnImportData');
+  const inputImportFile = document.getElementById('inputImportFile');
+  if (btnImportData && inputImportFile) {
+    btnImportData.addEventListener('click', () => {
+      inputImportFile.value = '';
+      inputImportFile.click();
+    });
+
+    inputImportFile.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const counts = importUserData(parsed);
+
+        // Синхронизируем с сервером если доступен
+        if (counts.settings) {
+          try { await saveSettings(state.settings); } catch (err) {}
+          applySettingsToUIAndState(state.settings);
+        }
+        if (counts.favorites > 0) {
+          try { await syncFavorites(state.favorites); } catch (err) {}
+          updateFavoritesBadge();
+        }
+        if (counts.likes > 0) {
+          try { await syncLikes(state.likes); } catch (err) {}
+        }
+        if (counts.favoriteAuthors > 0) {
+          try { await syncFavoriteAuthors(state.favoriteAuthors); } catch (err) {}
+          updateFavoritesBadge();
+        }
+
+        // Обновляем поля ввода настроек в модалке
+        if (inputRule34ApiKey) inputRule34ApiKey.value = state.settings.rule34ApiKey || '';
+        if (inputRule34UserId) inputRule34UserId.value = state.settings.rule34UserId || '';
+        if (inputGelbooruApiKey) inputGelbooruApiKey.value = state.settings.gelbooruApiKey || '';
+        if (inputGelbooruUserId) inputGelbooruUserId.value = state.settings.gelbooruUserId || '';
+        if (inputDanbooruApiKey) inputDanbooruApiKey.value = state.settings.danbooruApiKey || '';
+        if (inputDanbooruLogin) inputDanbooruLogin.value = state.settings.danbooruLogin || '';
+        tempBlacklist = state.settings.blacklist || [];
+        tempAiTags = state.settings.aiTags || [];
+        renderSettingsChips();
+
+        showToast(`Данные загружены! Настройки, ${counts.favorites} закладок, ${counts.favoriteAuthors} авторов ✅`);
+        performSearch(true);
+      } catch (err) {
+        showToast('Ошибка импорта: неверный JSON файл');
+      }
+    });
   }
 
   document.querySelectorAll('.btn-theme').forEach(btn => {

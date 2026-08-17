@@ -679,11 +679,16 @@
   .viewer-meta {
     gap: 6px;
     min-width: 0;
-    flex: 1;
-    margin-right: 8px;
+    flex-shrink: 0;
+    margin-right: 6px;
   }
 
   .viewer-res {
+    display: none !important;
+  }
+
+  /* На смартфонах прячем автора из верхней шапки — он есть в шторке тегов */
+  .viewer-author-badge, .viewer-fav-author-btn {
     display: none !important;
   }
 
@@ -701,14 +706,25 @@
   .viewer-top-actions {
     gap: 4px;
     flex-shrink: 0;
+    margin-left: auto;
   }
 
   .viewer-btn {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     border-radius: var(--radius-md);
     position: relative;
     flex-shrink: 0;
+  }
+
+  .viewer-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  /* Скрываем второстепенную кнопку копирования ссылки на узких мобильных экранах */
+  #btnCopyLink {
+    display: none !important;
   }
 
   .viewer-body {

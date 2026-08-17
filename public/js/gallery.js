@@ -1,7 +1,7 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally } from './state.js';
 import { getProxiedUrl, toggleFavoritePost, toggleLikePost } from './api.js';
 
-export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoadMore, onRefresh }) {
+export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh }) {
   const galleryGrid = document.getElementById('galleryGrid');
   const loadingSpinner = document.getElementById('loadingSpinner');
   const emptyState = document.getElementById('emptyState');
@@ -152,7 +152,40 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     });
   }
 
+  const loadMoreContainer = document.getElementById('loadMoreContainer');
+  const btnLoadMore = document.getElementById('btnLoadMore');
+
+  if (btnLoadMore) {
+    btnLoadMore.addEventListener('click', () => {
+      if (!state.isLoading && state.hasMore && state.currentCategory !== 'favorites') {
+        btnLoadMore.classList.add('loading');
+        onLoadMore();
+      }
+    });
+  }
+
+  function getProcessedPosts() {
+    if (!state.videoDurationSort || state.videoDurationSort === 'none') {
+      return state.posts;
+    }
+    const postsCopy = [...state.posts];
+    if (state.videoDurationSort === 'longest') {
+      return postsCopy.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+    } else if (state.videoDurationSort === 'shortest') {
+      return postsCopy.sort((a, b) => {
+        const durA = a.duration || (a.isVideo ? 999999 : 0);
+        const durB = b.duration || (b.isVideo ? 999999 : 0);
+        return durA - durB;
+      });
+    }
+    return postsCopy;
+  }
+
   function renderGallery(append = false) {
+    if (btnLoadMore) {
+      btnLoadMore.classList.remove('loading');
+    }
+
     if (!append) {
       galleryGrid.innerHTML = '';
     }
@@ -167,17 +200,29 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
       currentSiteLabel.textContent = siteObj ? siteObj.name : state.currentSite;
     }
 
-    if (state.posts.length === 0) {
+    const postsToDisplay = getProcessedPosts();
+
+    if (postsToDisplay.length === 0) {
       emptyState.style.display = 'flex';
       resultsCount.textContent = '0 постов';
+      if (loadMoreContainer) loadMoreContainer.style.display = 'none';
       return;
     }
 
     emptyState.style.display = 'none';
-    resultsCount.textContent = `Загружено: ${state.posts.length} постов`;
+    resultsCount.textContent = `Загружено: ${postsToDisplay.length} постов`;
+
+    // Отображение кнопки «Загрузить еще»
+    if (loadMoreContainer) {
+      if (state.hasMore && state.currentCategory !== 'favorites' && postsToDisplay.length >= 10) {
+        loadMoreContainer.style.display = 'flex';
+      } else {
+        loadMoreContainer.style.display = 'none';
+      }
+    }
 
     const startIndex = append ? galleryGrid.children.length : 0;
-    const postsToRender = state.posts.slice(startIndex);
+    const postsToRender = postsToDisplay.slice(startIndex);
 
     // Батчевая вставка через DocumentFragment для минимизации перерисовок DOM
     const fragment = document.createDocumentFragment();
@@ -313,16 +358,28 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
       ratingBadge = `<span class="badge-format" style="background-color: rgba(244,63,94,0.85);">18+</span>`;
     }
 
-    const rawAuthor = post.author || (post.tagDetails?.artist && post.tagDetails.artist.length > 0 ? post.tagDetails.artist[0] : '');
-    const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
-    const authorBadge = authorName ? `<span class="badge-format author" title="Автор: ${authorName} (нажмите для поиска)" style="background-color: rgba(244, 63, 94, 0.25); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.35); cursor: pointer;">🎨 ${authorName.split(',')[0].slice(0, 18)}</span>` : '';
+    // Очищаем автора от мусорных суффиксов, но отображаем полное имя автора
+    const rawAuthor = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
+    let cleanAuthor = rawAuthor.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
+    cleanAuthor = cleanAuthor.replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').replace(/\([^)]*\)$/, '').trim();
+    const authorBadge = cleanAuthor ? `<span class="badge-format author" title="Автор: ${cleanAuthor} (нажмите для поиска)">🎨 ${cleanAuthor}</span>` : '';
+
+    let durationBadge = '';
+    if (post.isVideo && (post.durationText || post.duration > 0)) {
+      const durLabel = post.durationText || `${Math.floor(post.duration / 60)}:${Math.floor(post.duration % 60) < 10 ? '0' : ''}${Math.floor(post.duration % 60)}`;
+      durationBadge = `<span class="badge-format badge-duration" title="Длительность: ${durLabel}">⏱️ ${durLabel}</span>`;
+    }
 
     let dateBadge = '';
     if (post.createdAt) {
       try {
         const d = new Date(post.createdAt);
         if (!isNaN(d.getTime())) {
-          dateBadge = `<span class="badge-format" style="background-color: rgba(0,0,0,0.55);" title="Дата: ${d.toLocaleString('ru-RU')}">${d.toLocaleDateString('ru-RU')}</span>`;
+          const day = String(d.getDate()).padStart(2, '0');
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const year = String(d.getFullYear()).slice(-2);
+          const shortDate = `${day}.${month}.${year}`;
+          dateBadge = `<span class="badge-format badge-date" title="Дата: ${d.toLocaleString('ru-RU')}">📅 ${shortDate}</span>`;
         }
       } catch (e) {}
     }
@@ -338,20 +395,22 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     card.innerHTML = `
       <div class="media-thumb-container">
         <div class="badge-group-top">
-          <div style="display: flex; gap: 4px; align-items: center; flex-wrap: wrap;">
-            ${matchBadge}
+          <div style="display: flex; gap: 3px; align-items: center; flex-wrap: wrap; max-width: 65%;">
             ${siteBadge}
-            ${authorBadge}
             ${formatBadge}
-            ${ratingBadge}
-            ${dateBadge}
+            ${durationBadge}
+            ${matchBadge}
           </div>
-          <div>${aiBadge}</div>
+          <div style="display: flex; gap: 3px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+            ${dateBadge}
+            ${ratingBadge}
+            ${aiBadge}
+          </div>
         </div>
 
         <img class="media-thumb" 
              src="${mainThumbSrc}" 
-             alt="" 
+             alt="Booru Media" 
              loading="lazy" 
              decoding="async"
              referrerpolicy="no-referrer"
@@ -359,17 +418,19 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
         
         ${post.isVideo ? `<video class="hover-video-preview" loop muted playsinline preload="none" referrerpolicy="no-referrer"></video>` : ''}
 
+        <div class="badge-group-bottom">
+          ${authorBadge}
+        </div>
+
         <div class="card-overlay-bottom">
           <div class="card-score">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 28.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
             ${post.score || 0}
           </div>
           <div class="card-action-btns">
-            <!-- Лайк (Сердечко ❤️) -->
-            <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? 'Убрать лайк' : 'Нравится (обучает рекомендации)'}">
+            <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? 'Убрать лайк' : 'Нравится'}">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
             </button>
-            <!-- Избранное (TikTok Флажок 🔖) -->
             <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? 'Удалить из закладок' : 'Сохранить в закладки'}">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
             </button>
@@ -378,7 +439,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
       </div>
     `;
 
-    // Быстрый Fallback при ошибке прямой загрузки CDN
     const imgEl = card.querySelector('.media-thumb');
     if (imgEl) {
       imgEl.addEventListener('error', function () {
@@ -429,6 +489,28 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onLoad
     if (post.isVideo) {
       const videoEl = card.querySelector('.hover-video-preview');
       let hoverTimer = null;
+
+      if (videoEl) {
+        videoEl.addEventListener('loadedmetadata', () => {
+          if (videoEl.duration && !post.duration) {
+            post.duration = videoEl.duration;
+            const mins = Math.floor(videoEl.duration / 60);
+            const secs = Math.floor(videoEl.duration % 60);
+            post.durationText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+            let durBadge = card.querySelector('.badge-duration');
+            if (!durBadge) {
+              const topGroup = card.querySelector('.badge-group-top > div');
+              if (topGroup) {
+                durBadge = document.createElement('span');
+                durBadge.className = 'badge-format badge-duration';
+                durBadge.style.cssText = 'background-color: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
+                topGroup.appendChild(durBadge);
+              }
+            }
+            if (durBadge) durBadge.textContent = `⏱️ ${post.durationText}`;
+          }
+        }, { once: true });
+      }
 
       if (mobileVideoObserver && state.settings?.videoAutoplayMobile !== false) {
         mobileVideoObserver.observe(card);

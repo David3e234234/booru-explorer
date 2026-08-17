@@ -821,8 +821,8 @@ async function fetchDanbooru(params, aiTagsList, settings) {
 
   // Приоритет Сортировка
   if (queryTags.length < 2) {
-    if (category === 'top') queryTags.push('order:rank');          // Топ всех времён (индексированный рейтинг)
-    else if (category === 'popular' || category === 'recommended') queryTags.push('order:rank_week'); // Тренды за неделю
+    if (category === 'top') queryTags.push('order:score');          // Топ всех времён (индексированный рейтинг)
+    else if (category === 'popular' || category === 'recommended') queryTags.push('order:rank'); // Тренды
     else if (category === 'random') queryTags.push('order:random');
   }
 
@@ -1033,8 +1033,15 @@ async function fetchDanbooru(params, aiTagsList, settings) {
     const thumbOriginal = (!isVideo && (findImgVariant(['original'])?.url || item.file_url || fileUrl)) || '';
     const previewUrl = resolvePreviewUrl(thumb180 || item.preview_file_url, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList) || (item.tag_string_meta && item.tag_string_meta.includes('ai_generated'));
-
     const author = (item.tag_string_artist || '').split(' ').filter(Boolean).join(', ') || item.uploader_name || '';
+
+    const duration = item.media_asset?.duration || any_video?.duration || 0;
+    let durationText = '';
+    if (duration > 0) {
+      const mins = Math.floor(duration / 60);
+      const secs = Math.floor(duration % 60);
+      durationText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
 
     return {
       id: `danbooru_${item.id}`,
@@ -1053,6 +1060,8 @@ async function fetchDanbooru(params, aiTagsList, settings) {
       isVideo,
       isGif,
       hasSound,
+      duration,
+      durationText,
       author,
       tags: rawTags,
       tagDetails: {
@@ -1700,6 +1709,21 @@ async function fetchRule34Video(params, aiTagsList) {
         const isAi = checkIsAi(rawTags, aiTagsList);
         const tagDetails = classifyTags(rawTags, author);
 
+        // Извлечение длительности видео (например: class="duration">05:32</span> или data-duration)
+        let duration = 0;
+        let durationText = '';
+        const durMatch = block.match(/class="[^"]*duration[^"]*">([^<]+)<\/span>/i) || block.match(/data-duration="([^"]+)"/i) || block.match(/(\d+:\d+(?::\d+)?)/);
+        if (durMatch) {
+          const rawDur = durMatch[1].trim();
+          durationText = rawDur;
+          const parts = rawDur.split(':').map(Number);
+          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            duration = parts[0] * 60 + parts[1];
+          } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+            duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          }
+        }
+
         pageResults.push({
           id: `rule34video_${id}`,
           originalId: String(id),
@@ -1714,6 +1738,8 @@ async function fetchRule34Video(params, aiTagsList) {
           isVideo: true,
           isGif: false,
           hasSound: true,
+          duration,
+          durationText,
           tags: rawTags,
           tagDetails,
           score: 100,

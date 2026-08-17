@@ -290,8 +290,8 @@ html, body {
   color: var(--text-muted);
 }
 
-/* Переключатели фильтра ИИ, Рейтинга, Типа контента и Возраста */
-.ai-filter-toggle, .rating-filter-toggle, .type-filter-toggle, .age-filter-toggle {
+/* Переключатели фильтра ИИ, Рейтинга, Типа контента, Возраста и Сортировки видео */
+.ai-filter-toggle, .rating-filter-toggle, .type-filter-toggle, .age-filter-toggle, .video-sort-toggle {
   display: flex;
   background-color: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
@@ -300,7 +300,7 @@ html, body {
   gap: 2px;
 }
 
-.ai-pill, .rating-pill, .type-pill, .age-pill {
+.ai-pill, .rating-pill, .type-pill, .age-pill, .video-sort-pill {
   flex: 1;
   border: none;
   background: transparent;
@@ -316,15 +316,67 @@ html, body {
   white-space: nowrap;
 }
 
-.ai-pill:hover, .rating-pill:hover, .type-pill:hover, .age-pill:hover {
+.ai-pill:hover, .rating-pill:hover, .type-pill:hover, .age-pill:hover, .video-sort-pill:hover {
   color: var(--text-primary);
 }
 
-.ai-pill.active, .rating-pill.active, .type-pill.active, .age-pill.active {
+.ai-pill.active, .rating-pill.active, .type-pill.active, .age-pill.active, .video-sort-pill.active {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* Контейнер и кнопка «Загрузить еще» */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 16px 12px 16px;
+  width: 100%;
+}
+
+.btn-load-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: linear-gradient(135deg, var(--bg-surface-elevated), var(--bg-surface-hover));
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-normal);
+}
+
+.btn-load-more:hover {
+  background: linear-gradient(135deg, var(--accent-primary-subtle), var(--bg-surface-hover));
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+.btn-load-more:active {
+  transform: scale(0.98);
+}
+
+.btn-load-more.loading {
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.btn-load-more.loading svg {
+  display: none;
+}
+
+.btn-load-more.loading .btn-load-more-spinner {
+  display: inline-block !important;
 }
 
 .rating-pill[data-rating="nsfw"].active {

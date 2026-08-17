@@ -20,6 +20,7 @@ export const state = {
   ratingFilter: 'all', // 'all', 'nsfw', 'sfw'
   typeFilter: 'all', // 'all', 'video', 'image'
   ageFilter: 'all', // 'all', 'adult', 'young'
+  videoDurationSort: 'none', // 'none' | 'longest' | 'shortest'
   hideFurry: true,
   hidePregnant: true,
   searchTags: [],
@@ -151,6 +152,72 @@ export function saveLocalLikes(likesList) {
   try {
     localStorage.setItem(STORAGE_KEYS.LIKES, JSON.stringify(likesList || []));
   } catch (e) {}
+}
+
+// 📦 Экспорт всех данных пользователя (Настройки, Закладки, Лайки, Авторы) в JSON объект
+export function exportUserData() {
+  const exportObject = {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    settings: loadLocalSettings() || state.settings || {},
+    favorites: loadLocalFavorites() || state.favorites || [],
+    favoriteAuthors: loadLocalFavoriteAuthors() || state.favoriteAuthors || [],
+    likes: loadLocalLikes() || state.likes || []
+  };
+  return exportObject;
+}
+
+// 📥 Импорт данных пользователя из JSON
+export function importUserData(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('Некорректный формат файла данных');
+  }
+
+  let importedCounts = { settings: false, favorites: 0, favoriteAuthors: 0, likes: 0 };
+
+  // 1. Настройки
+  if (data.settings && typeof data.settings === 'object') {
+    saveLocalSettings(data.settings);
+    state.settings = { ...state.settings, ...data.settings };
+    importedCounts.settings = true;
+  }
+
+  // 2. Закладки (Favorites)
+  if (Array.isArray(data.favorites)) {
+    const existing = loadLocalFavorites() || [];
+    const mergedMap = new Map();
+    existing.forEach(p => mergedMap.set(p.id, p));
+    data.favorites.forEach(p => { if (p && p.id) mergedMap.set(p.id, p); });
+    const mergedList = Array.from(mergedMap.values());
+    setFavorites(mergedList);
+    importedCounts.favorites = mergedList.length;
+  }
+
+  // 3. Любимые авторы
+  if (Array.isArray(data.favoriteAuthors)) {
+    const existing = loadLocalFavoriteAuthors() || [];
+    const mergedMap = new Map();
+    existing.forEach(a => mergedMap.set((a.name || '').toLowerCase(), a));
+    data.favoriteAuthors.forEach(a => {
+      if (a && a.name) mergedMap.set((a.name || '').toLowerCase(), a);
+    });
+    const mergedList = Array.from(mergedMap.values());
+    setFavoriteAuthors(mergedList);
+    importedCounts.favoriteAuthors = mergedList.length;
+  }
+
+  // 4. Лайки
+  if (Array.isArray(data.likes)) {
+    const existing = loadLocalLikes() || [];
+    const mergedMap = new Map();
+    existing.forEach(l => mergedMap.set(l.id, l));
+    data.likes.forEach(l => { if (l && l.id) mergedMap.set(l.id, l); });
+    const mergedList = Array.from(mergedMap.values());
+    setLikes(mergedList);
+    importedCounts.likes = mergedList.length;
+  }
+
+  return importedCounts;
 }
 
 export function clearSearchTags() {

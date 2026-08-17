@@ -16,10 +16,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/variables.css?v=5.5">
-  <link rel="stylesheet" href="css/main.css?v=5.5">
-  <link rel="stylesheet" href="css/components.css?v=5.5">
-  <link rel="stylesheet" href="css/viewer.css?v=5.5">
+  <link rel="stylesheet" href="css/variables.css?v=6.2">
+  <link rel="stylesheet" href="css/main.css?v=6.2">
+  <link rel="stylesheet" href="css/components.css?v=6.2">
+  <link rel="stylesheet" href="css/viewer.css?v=6.2">
   <script src="js/mp4box.all.min.js"></script>
 </head>
 <body>
@@ -187,6 +187,16 @@
         </div>
       </div>
 
+      <!-- 2.2.1 Сортировка видео по длительности -->
+      <div class="sidebar-block" id="videoSortBlock">
+        <h3 class="sidebar-title">Сортировка видео</h3>
+        <div class="video-sort-toggle" id="videoSortGroup">
+          <button class="video-sort-pill active" data-sort="none" title="Без сортировки по длительности">Обычная</button>
+          <button class="video-sort-pill" data-sort="longest" title="Сначала самые длинные видео">⏱️ Длинные</button>
+          <button class="video-sort-pill" data-sort="shortest" title="Сначала короткие клипы">⚡ Короткие</button>
+        </div>
+      </div>
+
       <!-- 2.3 Фильтр типажа / форм (Мамочки / Лоли) -->
       <div class="sidebar-block">
         <h3 class="sidebar-title">Формы / Типаж</h3>
@@ -281,6 +291,17 @@
           </div>
           <h3 class="state-title">Ничего не найдено</h3>
           <p class="state-desc">Попробуйте изменить теги поиска или переключить Booru-источник.</p>
+        </div>
+
+        <!-- Кнопка «Загрузить еще» -->
+        <div class="load-more-container" id="loadMoreContainer" style="display: none;">
+          <button class="btn-load-more" id="btnLoadMore" title="Загрузить следующую страницу">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M12 5v14M5 12l7 7 7-7"/>
+            </svg>
+            <span class="btn-load-more-text">Загрузить еще материалы</span>
+            <span class="btn-load-more-spinner mini-spinner" style="display: none;"></span>
+          </button>
         </div>
 
         <!-- Элемент-триггер для бесконечной прокрутки (Infinite Scroll) -->
@@ -772,6 +793,33 @@
             </div>
           </div>
         </div>
+
+        <!-- Резервное копирование и перенос данных (Экспорт / Импорт) -->
+        <div class="settings-group backup-settings-group">
+          <label class="settings-label">📦 Резервное копирование и перенос данных:</label>
+          <p class="settings-hint">Выгрузите все свои настройки, API-ключи, закладки, лайки и список любимых авторов в файл или загрузите их на новом устройстве / хостинге.</p>
+          
+          <div class="backup-actions-grid">
+            <button type="button" class="btn-backup btn-export" id="btnExportData">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Экспорт в файл (JSON)</span>
+            </button>
+
+            <button type="button" class="btn-backup btn-import" id="btnImportData">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <span>Импорт из файла</span>
+            </button>
+            <input type="file" id="inputImportFile" accept=".json" style="display: none;">
+          </div>
+        </div>
       </div>
 
       <div class="settings-footer">
@@ -822,6 +870,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=5.0"></script>
+  <script type="module" src="js/app.js?v=6.2"></script>
 </body>
 </html>
