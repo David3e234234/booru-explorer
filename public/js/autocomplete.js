@@ -55,7 +55,8 @@ export function initAutocomplete({ onSearch }) {
       return;
     }
 
-    const cacheKey = `${state.currentSite}:${val.toLowerCase()}`;
+    const normalizedVal = val.replace(/\s+/g, '_');
+    const cacheKey = `${state.currentSite}:${normalizedVal.toLowerCase()}`;
     if (suggestionsCache.has(cacheKey)) {
       const cached = suggestionsCache.get(cacheKey);
       if (Array.isArray(cached) && cached.length > 0) {
@@ -67,7 +68,7 @@ export function initAutocomplete({ onSearch }) {
 
     debounceTimer = setTimeout(async () => {
       try {
-        const data = await fetchTagAutocomplete(val, state.currentSite);
+        const data = await fetchTagAutocomplete(normalizedVal, state.currentSite);
         currentSuggestions = data.tags || [];
         if (currentSuggestions.length > 0) {
           if (suggestionsCache.size > 200) {
@@ -80,7 +81,7 @@ export function initAutocomplete({ onSearch }) {
       } catch (err) {
         hideDropdown();
       }
-    }, 100);
+    }, 80);
   });
 
   searchInput.addEventListener('keydown', (e) => {
