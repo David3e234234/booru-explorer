@@ -155,6 +155,22 @@ export async function fetchRule34Video(params, aiTagsList) {
     }
   }
 
+  // Параллельно пред-разрешаем полные оригинальные HD-видео со звуком для первой партии постов (по 8 за раз)
+  const resolveQueue = allPosts.slice(0, 30);
+  const concurrency = 8;
+  for (let i = 0; i < resolveQueue.length; i += concurrency) {
+    const chunk = resolveQueue.slice(i, i + concurrency);
+    await Promise.allSettled(chunk.map(async (post) => {
+      try {
+        const resolved = await resolveRule34VideoFullMedia(post.source, post.originalId);
+        if (resolved && resolved.fullVideoUrl) {
+          post.fileUrl = resolved.fullVideoUrl;
+          post.hasSound = true;
+        }
+      } catch {}
+    }));
+  }
+
   return allPosts;
 }
 
@@ -181,30 +197,45 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
     if (!res.ok) return null;
     const html = await res.text();
 
+    const candidateUrls = [];
+    
+    // 1. Поиск ссылок в flashvars и js-объектах плеера KVS
+    const jsMatches = html.matchAll(/(?:video_url|video_alt_url\d*|flashvars\.video_\w+)\s*[:=]\s*['"]([^'"]+)['"]/gi);
+    for (const m of jsMatches) {
+      if (m[1] && !m[1].includes('preview') && (m[1].includes('/get_file/') || m[1].includes('.mp4'))) {
+        candidateUrls.push(m[1]);
+      }
+    }
+
+    // 2. Поиск ссылок в <source> и <a href="..."> тегах скачивания
+    const tagMatches = html.matchAll(/(?:src|href)=['"]([^'"]*\/get_file\/[^'"]+|\bhttps?:\/\/[^'"]+\.mp4[^'"]*)['"]/gi);
+    for (const m of tagMatches) {
+      if (m[1] && !m[1].includes('preview')) {
+        candidateUrls.push(m[1]);
+      }
+    }
+
     let fullVideoUrl = '';
-    let quality = '720p';
+    let quality = '720p HD';
 
-    // 1. Ищем ссылки в flashvars и KVS плеере
-    const altMatch = html.match(/video_alt_url:\s*['"]([^'"]+)['"]/i) || 
-                     html.match(/video_alt_url2:\s*['"]([^'"]+)['"]/i) ||
-                     html.match(/video_alt_url3:\s*['"]([^'"]+)['"]/i) ||
-                     html.match(/flashvars\.video_alt_url\s*=\s*['"]([^'"]+)['"]/i);
-    const mainMatch = html.match(/video_url:\s*['"]([^'"]+)['"]/i) ||
-                      html.match(/flashvars\.video_url\s*=\s*['"]([^'"]+)['"]/i);
-    const sourceMatch = html.match(/<source[^>]+src=['"]([^'"]+\.mp4[^'"]*)['"]/i);
-    const getFileMatch = html.match(/href=['"]([^'"]*\/get_file\/[^'"]+)['"]/i);
-
-    if (altMatch && altMatch[1] && !altMatch[1].includes('preview')) {
-      fullVideoUrl = altMatch[1];
-      quality = '1080p';
-    } else if (mainMatch && mainMatch[1] && !mainMatch[1].includes('preview')) {
-      fullVideoUrl = mainMatch[1];
-      quality = '720p';
-    } else if (getFileMatch && getFileMatch[1] && !getFileMatch[1].includes('preview')) {
-      fullVideoUrl = getFileMatch[1];
-      quality = 'HD';
-    } else if (sourceMatch && sourceMatch[1] && !sourceMatch[1].includes('preview')) {
-      fullVideoUrl = sourceMatch[1];
+    if (candidateUrls.length > 0) {
+      const p1080 = candidateUrls.find(u => u.includes('1080p') || u.includes('4k') || u.includes('2160p'));
+      const p720 = candidateUrls.find(u => u.includes('720p') || u.includes('hd'));
+      const p480 = candidateUrls.find(u => u.includes('480p') || u.includes('hq'));
+      
+      if (p1080) {
+        fullVideoUrl = p1080;
+        quality = '1080p Full HD';
+      } else if (p720) {
+        fullVideoUrl = p720;
+        quality = '720p HD';
+      } else if (p480) {
+        fullVideoUrl = p480;
+        quality = '480p HQ';
+      } else {
+        fullVideoUrl = candidateUrls[0];
+        quality = 'HD';
+      }
     }
 
     if (fullVideoUrl) {
@@ -229,4 +260,5 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
     return null;
   }
 }
+
 
