@@ -17,10 +17,9 @@ export async function fetchRule34Video(params, aiTagsList) {
 
   const cleanQuery = rawTags
     .replace(/^(?:channel|user|account|artist|author|uploader):\s*/i, '')
-    .trim()
-    .replace(/[_+\s]+/g, '-')
-    .replace(/-+/g, '-')
-    .toLowerCase();
+    .replace(/[_+]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   
   const pagesPerBatch = 4;
   const startFrom = (page - 1) * pagesPerBatch + 1;
