@@ -49,6 +49,8 @@ export async function handleProxyRequest(req, res) {
         headers['Referer'] = 'https://rule34.paheal.net/';
       } else if (parsed.hostname.includes('rule34.xxx')) {
         headers['Referer'] = 'https://rule34.xxx/';
+      } else if (parsed.hostname.includes('paheal.net') || parsed.hostname.includes('paheal-cdn')) {
+        headers['Referer'] = 'https://rule34.paheal.net/';
       } else if (parsed.hostname.includes('donmai.us')) {
         headers['Referer'] = 'https://danbooru.donmai.us/';
         if (currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
@@ -56,6 +58,8 @@ export async function handleProxyRequest(req, res) {
         }
       } else if (parsed.hostname.includes('rule34video.com') || parsed.hostname.includes('boomio-cdn.com')) {
         headers['Referer'] = 'https://rule34video.com/';
+      } else if (parsed.hostname.includes('gelbooru.com')) {
+        headers['Referer'] = 'https://gelbooru.com/';
       } else if (parsed.hostname.includes('yande.re')) {
         headers['Referer'] = 'https://yande.re/';
       } else if (parsed.hostname.includes('konachan')) {
@@ -80,11 +84,30 @@ export async function handleProxyRequest(req, res) {
       try { controller.abort(); } catch {}
     });
 
-    const response = await fetch(targetUrl, {
+    let response = await fetch(targetUrl, {
       headers,
       redirect: 'follow',
       signal: controller.signal
     });
+
+    // Умный fallback для расширений файлов (mp4 <-> webm, jpg <-> png) при 404
+    if (response.status === 404 && (targetUrl.includes('rule34.xxx') || targetUrl.includes('gelbooru.com') || targetUrl.includes('paheal.net'))) {
+      let alternateUrl = null;
+      if (targetUrl.endsWith('.mp4')) alternateUrl = targetUrl.replace(/\.mp4$/, '.webm');
+      else if (targetUrl.endsWith('.webm')) alternateUrl = targetUrl.replace(/\.webm$/, '.mp4');
+      else if (targetUrl.endsWith('.jpg')) alternateUrl = targetUrl.replace(/\.jpg$/, '.png');
+      else if (targetUrl.endsWith('.png')) alternateUrl = targetUrl.replace(/\.png$/, '.jpg');
+
+      if (alternateUrl) {
+        try {
+          const altResp = await fetch(alternateUrl, { headers, redirect: 'follow', signal: controller.signal });
+          if (altResp.ok || altResp.status === 206) {
+            response = altResp;
+            targetUrl = alternateUrl;
+          }
+        } catch {}
+      }
+    }
     clearTimeout(abortTimeout);
 
     res.status(response.status);
@@ -102,14 +125,22 @@ export async function handleProxyRequest(req, res) {
       }
     });
 
+    const normalizedPath = targetUrl.split('?')[0].replace(/\/+$/, '').toLowerCase();
     let currentType = res.getHeader('content-type') || '';
-    if (!currentType || currentType.includes('octet-stream') || currentType.includes('text/plain')) {
-      if (cleanPath.endsWith('.mp4') || cleanPath.endsWith('.m4v')) res.setHeader('Content-Type', 'video/mp4');
-      else if (cleanPath.endsWith('.webm')) res.setHeader('Content-Type', 'video/webm');
-      else if (cleanPath.endsWith('.gif')) res.setHeader('Content-Type', 'image/gif');
-      else if (cleanPath.endsWith('.png')) res.setHeader('Content-Type', 'image/png');
-      else if (cleanPath.endsWith('.webp')) res.setHeader('Content-Type', 'image/webp');
-      else if (cleanPath.endsWith('.jpg') || cleanPath.endsWith('.jpeg')) res.setHeader('Content-Type', 'image/jpeg');
+    if (!currentType || currentType.includes('octet-stream') || currentType.includes('text/plain') || currentType.includes('text/html')) {
+      if (normalizedPath.includes('.mp4') || normalizedPath.includes('.m4v') || targetUrl.toLowerCase().includes('.mp4')) {
+        res.setHeader('Content-Type', 'video/mp4');
+      } else if (normalizedPath.includes('.webm') || targetUrl.toLowerCase().includes('.webm')) {
+        res.setHeader('Content-Type', 'video/webm');
+      } else if (normalizedPath.endsWith('.gif')) {
+        res.setHeader('Content-Type', 'image/gif');
+      } else if (normalizedPath.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (normalizedPath.endsWith('.webp')) {
+        res.setHeader('Content-Type', 'image/webp');
+      } else if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg')) {
+        res.setHeader('Content-Type', 'image/jpeg');
+      }
     }
 
     if (!res.getHeader('cache-control')) {

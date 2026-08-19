@@ -260,7 +260,7 @@ router.get('/tags/autocomplete', async (req, res) => {
   try {
     let tagsResult = [];
 
-    if (site === 'danbooru' || site === 'all' || site === 'rule34') {
+    if (site === 'danbooru') {
       try {
         const url = `https://danbooru.donmai.us/tags.json?search[name_matches]=${encodeURIComponent(query)}*&limit=15&search[order]=count`;
         const resp = await fetchSafe(url, { timeout: 4000 });
@@ -276,27 +276,86 @@ router.get('/tags/autocomplete', async (req, res) => {
           }
         }
       } catch {}
-      
+    } else if (site === 'rule34') {
+      try {
+        const url = `https://rule34.xxx/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
+        const resp = await fetchSafe(url, { 
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://rule34.xxx/' },
+          timeout: 4000 
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data)) {
+            tagsResult = data.map(item => {
+              const val = typeof item === 'string' ? item : (item.value || item.label || '');
+              const total = typeof item === 'object' ? (parseInt(item.total || item.count, 10) || 0) : 0;
+              const type = typeof item === 'object' ? (item.type || 'general') : 'general';
+              return {
+                value: val,
+                label: val.replace(/_/g, ' '),
+                count: total,
+                category: type
+              };
+            });
+          }
+        }
+      } catch {}
+
       if (tagsResult.length === 0) {
         try {
-          const fallbackUrl = `https://safebooru.org/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
-          const resp = await fetchSafe(fallbackUrl, { timeout: 3500 });
+          const dapiUrl = `https://rule34.xxx/index.php?page=dapi&s=tag&q=index&json=1&name_pattern=${encodeURIComponent(query)}%25&limit=15`;
+          const resp = await fetchSafe(dapiUrl, { timeout: 3500 });
           if (resp.ok) {
             const data = await resp.json();
-            if (Array.isArray(data)) {
-              tagsResult = data.map(item => ({
-                value: item.value,
-                label: item.label || item.value.replace(/_/g, ' '),
-                count: parseInt(item.total, 10) || 0,
-                category: 'general'
-              }));
-            }
+            const list = Array.isArray(data) ? data : (data && Array.isArray(data.tag) ? data.tag : []);
+            tagsResult = list.map(item => ({
+              value: item.name,
+              label: item.name.replace(/_/g, ' '),
+              count: parseInt(item.count, 10) || 0,
+              category: item.type === 1 ? 'artist' : item.type === 3 ? 'copyright' : item.type === 4 ? 'character' : 'general'
+            }));
+          }
+        } catch {}
+      }
+    } else if (site === 'gelbooru') {
+      try {
+        const url = `https://gelbooru.com/index.php?page=autocomplete2&term=${encodeURIComponent(query.toLowerCase())}&type=tag_query&limit=15`;
+        const resp = await fetchSafe(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://gelbooru.com/' },
+          timeout: 4000
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data)) {
+            tagsResult = data.map(item => ({
+              value: item.value || item.label,
+              label: (item.label || item.value || '').replace(/_/g, ' '),
+              count: parseInt(item.post_count || item.count, 10) || 0,
+              category: item.category || 'general'
+            }));
+          }
+        }
+      } catch {}
+
+      if (tagsResult.length === 0) {
+        try {
+          const dapiUrl = `https://gelbooru.com/index.php?page=dapi&s=tag&q=index&json=1&name_pattern=${encodeURIComponent(query)}%25&limit=15`;
+          const resp = await fetchSafe(dapiUrl, { timeout: 3500 });
+          if (resp.ok) {
+            const data = await resp.json();
+            const list = Array.isArray(data) ? data : (data && Array.isArray(data.tag) ? data.tag : []);
+            tagsResult = list.map(item => ({
+              value: item.name,
+              label: item.name.replace(/_/g, ' '),
+              count: parseInt(item.count, 10) || 0,
+              category: item.type === 1 ? 'artist' : item.type === 3 ? 'copyright' : item.type === 4 ? 'character' : 'general'
+            }));
           }
         } catch {}
       }
     } else if (site === 'yandere' || site === 'konachan') {
       const base = site === 'yandere' ? 'https://yande.re' : 'https://konachan.net';
-      const url = `${base}/tag.json?name=${encodeURIComponent(query)}&limit=15`;
+      const url = `${base}/tag.json?name=${encodeURIComponent(query)}&limit=15&order=count`;
       const resp = await fetchSafe(url, { timeout: 4000 });
       if (resp.ok) {
         const data = await resp.json();
@@ -309,16 +368,53 @@ router.get('/tags/autocomplete', async (req, res) => {
           }));
         }
       }
+    } else if (site === 'rule34video') {
+      // Для Rule34Video используем автокомплит открытых тегов Rule34 без скобок
+      try {
+        const url = `https://rule34.xxx/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
+        const resp = await fetchSafe(url, { timeout: 3500 });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data)) {
+            tagsResult = data.map(item => {
+              const val = typeof item === 'string' ? item : (item.value || item.label || '');
+              return {
+                value: val,
+                label: val.replace(/_/g, ' '),
+                count: typeof item === 'object' ? (parseInt(item.total || item.count, 10) || 0) : 0,
+                category: typeof item === 'object' ? (item.type || 'general') : 'general'
+              };
+            });
+          }
+        }
+      } catch {}
+    } else if (site === 'xbooru' || site === 'hypnohub') {
+      const base = site === 'xbooru' ? 'https://xbooru.com' : 'https://hypnohub.net';
+      try {
+        const url = `${base}/index.php?page=dapi&s=tag&q=index&json=1&name_pattern=${encodeURIComponent(query)}%25&limit=15`;
+        const resp = await fetchSafe(url, { timeout: 4000 });
+        if (resp.ok) {
+          const data = await resp.json();
+          const list = Array.isArray(data) ? data : (data && Array.isArray(data.tag) ? data.tag : []);
+          tagsResult = list.map(item => ({
+            value: item.name,
+            label: item.name.replace(/_/g, ' '),
+            count: parseInt(item.count, 10) || 0,
+            category: item.type === 1 ? 'artist' : item.type === 3 ? 'copyright' : item.type === 4 ? 'character' : 'general'
+          }));
+        }
+      } catch {}
     } else {
+      // Safebooru / all fallback
       const url = `https://safebooru.org/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
       const resp = await fetchSafe(url, { timeout: 4000 });
       if (resp.ok) {
         const data = await resp.json();
         if (Array.isArray(data)) {
           tagsResult = data.map(item => ({
-            value: item.value,
-            label: item.label || item.value.replace(/_/g, ' '),
-            count: parseInt(item.total, 10) || 0,
+            value: item.value || item.label,
+            label: (item.label || item.value || '').replace(/_/g, ' '),
+            count: parseInt(item.total || item.count, 10) || 0,
             category: 'general'
           }));
         }
