@@ -14,6 +14,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
   let observer = null;
   let mobileVideoObserver = null;
+  let videoMetadataObserver = null;
 
   // Custom Pull-to-Refresh
   if (mainContent) {
