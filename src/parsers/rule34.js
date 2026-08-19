@@ -261,12 +261,18 @@ export async function fetchRule34(params, aiTagsList, settings) {
   }
   const parsePahealXml = async (queryTags) => {
     const pahealUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=${encodeURIComponent(queryTags)}&limit=${fetchPahealLimit}&page=${page}`;
-    const pahealRes = await fetchSafe(pahealUrl);
+    const pahealRes = await fetchSafe(pahealUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://rule34.paheal.net/'
+      },
+      timeout: 6000
+    });
     if (!pahealRes.ok) return [];
     const text = await pahealRes.text();
 
     const posts = [];
-    const tagRegex = /<tag\s+([^>]+)>/g;
+    const tagRegex = /<(?:post|tag)\b\s+([^>]+)>/gi;
     let match;
     while ((match = tagRegex.exec(text)) !== null) {
       const attrsStr = match[1];
