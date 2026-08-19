@@ -26,7 +26,7 @@ const router = express.Router();
 
 // GET & POST /api/git-pull (Deploy hook для Alwaysdata / серверов)
 router.all('/git-pull', (req, res) => {
-  exec('git pull origin main', { cwd: ROOT_DIR }, (err, stdout, stderr) => {
+  exec('git reset --hard origin/main && git pull origin main', { cwd: ROOT_DIR }, (err, stdout, stderr) => {
     if (err) {
       return res.status(500).json({ success: false, error: err.message, stderr });
     }
@@ -36,6 +36,11 @@ router.all('/git-pull', (req, res) => {
       fs.writeFileSync(restartFile, 'reloaded at ' + new Date().toISOString());
     } catch {}
     res.json({ success: true, stdout, stderr, time: new Date().toISOString() });
+
+    // Перезапуск процесса для немедленной загрузки нового кода в память
+    setTimeout(() => {
+      process.exit(0);
+    }, 500);
   });
 });
 
