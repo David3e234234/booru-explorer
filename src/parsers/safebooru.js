@@ -1,0 +1,68 @@
+import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+
+export async function fetchSafebooru(params, aiTagsList) {
+  const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ratingFilter = 'all', ageFilter = 'all' } = params;
+  if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound' || ratingFilter === 'nsfw') {
+    return [];
+  }
+
+  let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter);
+  if (category === 'top') finalTags += ' sort:score:desc';
+  else if (category === 'popular' || category === 'recommended') finalTags += ' sort:updated:desc';
+  else if (category === 'random') finalTags += ' sort:random';
+
+  const pid = Math.max(0, page - 1);
+  const url = `https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(finalTags)}&pid=${pid}&limit=${limit}`;
+  const res = await fetchSafe(url);
+  if (!res.ok) return [];
+  const text = await res.text();
+  const data = safeJsonParse(text, []);
+  const posts = Array.isArray(data) ? data : (data?.post || []);
+
+  return posts.map(item => {
+    const rawTags = (item.tags || '').split(' ').filter(Boolean);
+    let fileUrl = item.file_url || '';
+    if (fileUrl.startsWith('//')) fileUrl = 'https:' + fileUrl;
+    else if (fileUrl.startsWith('/')) fileUrl = 'https://safebooru.org' + fileUrl;
+
+    let sampleUrl = item.sample_url || fileUrl;
+    if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+    else if (sampleUrl.startsWith('/')) sampleUrl = 'https://safebooru.org' + sampleUrl;
+
+    let previewUrlRaw = item.preview_url || item.sample_url || fileUrl;
+    if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
+    else if (previewUrlRaw.startsWith('/')) previewUrlRaw = 'https://safebooru.org' + previewUrlRaw;
+
+    const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+    const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+    const isAi = checkIsAi(rawTags, aiTagsList);
+    const author = extractAuthor(rawTags, item.source, item.author || item.owner);
+    const tagDetails = classifyTags(rawTags, author);
+    const createdAt = normalizeDate(item.created_at || item.change);
+
+    return {
+      id: `safebooru_${item.id}`,
+      originalId: String(item.id),
+      site: 'safebooru',
+      siteName: 'Safebooru',
+      previewUrl,
+      sampleUrl,
+      fileUrl,
+      fileExt,
+      isVideo,
+      isGif,
+      hasSound: isVideo && hasSound,
+      author,
+      tags: rawTags,
+      tagDetails,
+      score: parseInt(item.score, 10) || 0,
+      rating: item.rating || 's',
+      width: parseInt(item.width, 10) || 0,
+      height: parseInt(item.height, 10) || 0,
+      source: item.source || '',
+      createdAt,
+      isAi
+    };
+  });
+}

@@ -1,6 +1,4 @@
-export const isMyLiveDemoHost = typeof window !== 'undefined' && (
-  window.location.hostname === 'booru-explorer-kappa.vercel.app'
-);
+export const isMyLiveDemoHost = false;
 
 export async function fetchSites() {
   const res = await fetch('/api/sites');
@@ -22,10 +20,6 @@ export async function fetchPosts({
   hidePregnant = true,
   bustCache = false
 }) {
-  if (isMyLiveDemoHost && (site === 'danbooru' || site === 'gelbooru' || site === 'konachan')) {
-    return { success: true, posts: [], total: 0, hasMore: false };
-  }
-
   const params = {
     site,
     tags,
@@ -40,10 +34,6 @@ export async function fetchPosts({
     hidePregnant: hidePregnant ? 'true' : 'false'
   };
 
-  if (isMyLiveDemoHost && site === 'all') {
-    params.excludeSites = 'danbooru,gelbooru,konachan,rule34video';
-  }
-
   if (bustCache) {
     params._t = String(Date.now());
   }
@@ -55,8 +45,7 @@ export async function fetchPosts({
 
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
-  const effectiveSite = (isMyLiveDemoHost && (site === 'danbooru' || site === 'gelbooru' || site === 'konachan')) ? 'yandere' : site;
-  const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(effectiveSite)}`);
+  const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`);
   if (!res.ok) return { tags: [] };
   return await res.json();
 }
