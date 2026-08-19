@@ -164,10 +164,21 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           const chosenUrl = currentPost.previewUrl || currentPost.sampleUrl || currentPost.fileUrl;
           if (!chosenUrl) return;
 
+          const sampleUrl = currentPost.sampleUrl || '';
+          const fileUrl = currentPost.fileUrl || '';
+          const thumb180 = currentPost.thumb180 || '';
+          const thumb360 = currentPost.thumb360 || '';
+          const thumb720 = currentPost.thumb720 || '';
+
           // 1. Оптимистичное локальное обновление
           const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === cleanAuthorTag.toLowerCase());
           if (target) {
             target.previewUrl = chosenUrl;
+            target.sampleUrl = sampleUrl;
+            target.fileUrl = fileUrl;
+            target.thumb180 = thumb180;
+            target.thumb360 = thumb360;
+            target.thumb720 = thumb720;
             if (currentPost.site) target.site = currentPost.site;
           }
           setFavoriteAuthors([...state.favoriteAuthors]);
@@ -176,7 +187,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
           // 2. Отправка на бэкенд
           try {
-            await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl, currentPost.site || 'danbooru');
+            await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl, currentPost.site || 'danbooru', { sampleUrl, fileUrl, thumb180, thumb360, thumb720 });
             await syncFavoriteAuthors(state.favoriteAuthors);
           } catch (err) {
             console.warn('Сервер не ответил, сохранено локально:', err);

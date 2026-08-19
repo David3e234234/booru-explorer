@@ -729,6 +729,59 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     galleryGrid.appendChild(fragment);
   }
 
+  function getAuthorPreviewByQuality(author) {
+    if (!author) return '';
+    const quality = state.settings?.previewQuality || 'medium';
+
+    // 1. Прямые поля разрешений, если сохранены
+    if (quality === 'low') {
+      if (author.thumb180) return author.thumb180;
+      if (author.previewUrl) return author.previewUrl;
+    } else if (quality === 'medium') {
+      if (author.thumb360) return author.thumb360;
+      if (author.sampleUrl) return author.sampleUrl;
+      if (author.previewUrl) return author.previewUrl;
+    } else if (quality === 'high') {
+      if (author.thumb720) return author.thumb720;
+      if (author.sampleUrl) return author.sampleUrl;
+      if (author.fileUrl) return author.fileUrl;
+      if (author.previewUrl) return author.previewUrl;
+    } else if (quality === 'original') {
+      if (author.fileUrl) return author.fileUrl;
+      if (author.sampleUrl) return author.sampleUrl;
+      if (author.thumbOriginal) return author.thumbOriginal;
+      if (author.previewUrl) return author.previewUrl;
+    }
+
+    const raw = author.previewUrl || author.sampleUrl || author.fileUrl || '';
+    if (!raw) return '';
+
+    // 2. Адаптивное преобразование для Danbooru CDN
+    if (raw.includes('donmai.us') || (raw.includes('danbooru') && raw.includes('/180x180/'))) {
+      if (quality === 'low') return raw.replace(/\/(360x360|720x720|original|sample)\//g, '/180x180/');
+      if (quality === 'medium') return raw.replace(/\/(180x180|720x720|original)\//g, '/360x360/');
+      if (quality === 'high') return raw.replace(/\/(180x180|360x360)\//g, '/720x720/');
+      if (quality === 'original') return raw.replace(/\/(180x180|360x360|720x720)\//g, '/original/');
+    }
+
+    // Moebooru / Yande.re / Konachan
+    if (raw.includes('yande.re') || raw.includes('konachan')) {
+      if (quality === 'low') return raw;
+      if (quality === 'medium' || quality === 'high' || quality === 'original') {
+        if (author.sampleUrl) return author.sampleUrl;
+        if (author.fileUrl) return author.fileUrl;
+      }
+    }
+
+    // Gelbooru / Safebooru / Rule34
+    if (quality === 'high' || quality === 'original') {
+      if (author.sampleUrl) return author.sampleUrl;
+      if (author.fileUrl) return author.fileUrl;
+    }
+
+    return raw;
+  }
+
   function createAuthorCard(author, { onExplore, onDelete, onChangePreview } = {}) {
     const card = document.createElement('div');
     card.className = 'author-card';
@@ -736,8 +789,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     const siteObj = state.sites.find(s => s.id === author.site);
     const siteName = siteObj ? siteObj.name : (author.site ? author.site.toUpperCase() : 'Danbooru');
-    const shouldUseThumbProxy = state.settings?.proxyThumbnails !== false;
-    const preview = author.previewUrl ? (author.previewUrl.startsWith('/api/') ? author.previewUrl : (shouldUseThumbProxy ? getProxiedUrl(author.previewUrl) : author.previewUrl)) : '';
+    const rawPreview = getAuthorPreviewByQuality(author);
+    const shouldUseThumbProxy = (author.site === 'danbooru' || (rawPreview && rawPreview.includes('donmai.us'))) ? true : (state.settings?.proxyThumbnails !== false);
+    const preview = rawPreview ? (rawPreview.startsWith('/api/') ? rawPreview : (shouldUseThumbProxy ? getProxiedUrl(rawPreview) : rawPreview)) : '';
 
     let formattedDate = '';
     if (author.createdAt) {
@@ -770,9 +824,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <span>Смотреть работы</span>
           </button>
-          <button class="btn-author-change-cover-action" title="Выбрать обложку из постов автора">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          </button>
           <button class="btn-author-delete" title="Удалить из избранных">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
           </button>
@@ -783,14 +834,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const btnCoverTop = card.querySelector('.btn-author-change-cover');
     if (btnCoverTop) {
       btnCoverTop.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (onChangePreview) onChangePreview(author);
-      });
-    }
-
-    const btnCoverAction = card.querySelector('.btn-author-change-cover-action');
-    if (btnCoverAction) {
-      btnCoverAction.addEventListener('click', (e) => {
         e.stopPropagation();
         if (onChangePreview) onChangePreview(author);
       });

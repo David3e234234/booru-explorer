@@ -188,7 +188,7 @@ router.delete('/favorite-authors/:name', (req, res) => {
 
 // POST /api/favorite-authors/preview
 router.post('/favorite-authors/preview', (req, res) => {
-  const { name, previewUrl, site } = req.body || {};
+  const { name, previewUrl, sampleUrl, fileUrl, thumb180, thumb360, thumb720, site } = req.body || {};
   if (!name || !previewUrl) {
     return res.status(400).json({ success: false, message: 'Не указано имя автора или ссылка на превью' });
   }
@@ -207,6 +207,11 @@ router.post('/favorite-authors/preview', (req, res) => {
 
   if (target) {
     target.previewUrl = previewUrl;
+    if (sampleUrl !== undefined) target.sampleUrl = sampleUrl;
+    if (fileUrl !== undefined) target.fileUrl = fileUrl;
+    if (thumb180 !== undefined) target.thumb180 = thumb180;
+    if (thumb360 !== undefined) target.thumb360 = thumb360;
+    if (thumb720 !== undefined) target.thumb720 = thumb720;
     if (site) target.site = site;
   } else {
     target = {
@@ -214,6 +219,11 @@ router.post('/favorite-authors/preview', (req, res) => {
       name: cleanName,
       displayName: rawName,
       previewUrl: previewUrl,
+      sampleUrl: sampleUrl || '',
+      fileUrl: fileUrl || '',
+      thumb180: thumb180 || '',
+      thumb360: thumb360 || '',
+      thumb720: thumb720 || '',
       site: site || 'danbooru',
       createdAt: new Date().toISOString()
     };

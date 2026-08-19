@@ -199,12 +199,12 @@ export async function deleteFavoriteAuthor(name) {
   return await res.json();
 }
 
-export async function updateFavoriteAuthorPreview(name, previewUrl, site = 'danbooru') {
+export async function updateFavoriteAuthorPreview(name, previewUrl, site = 'danbooru', extra = {}) {
   try {
     const res = await fetch('/api/favorite-authors/preview', {
       method: 'POST',
       headers: getAuthHeaders(true),
-      body: JSON.stringify({ name, previewUrl, site })
+      body: JSON.stringify({ name, previewUrl, site, ...extra })
     });
     if (res.ok) {
       return await res.json();

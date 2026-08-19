@@ -201,7 +201,12 @@ async function init() {
 
   initSettingsModal({
     onSettingsChanged: () => {
-      performSearch(true);
+      if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
+          (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
+        renderFavoriteAuthors();
+      } else {
+        performSearch(true);
+      }
     },
     onDataImported: () => {
       updateFavoritesBadge();
@@ -1196,7 +1201,12 @@ function setupEventListeners() {
     selectPreviewQuality.addEventListener('change', () => {
       state.settings.previewQuality = selectPreviewQuality.value;
       if (galleryInstance) {
-        galleryInstance.renderGallery(false);
+        if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
+            (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
+          renderFavoriteAuthors();
+        } else {
+          galleryInstance.renderGallery(false);
+        }
       }
     });
   }

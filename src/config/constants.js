@@ -281,7 +281,7 @@ export const SITES = {
   },
   rule34: {
     id: 'rule34',
-    name: 'Rule34 (Paheal / XXX)',
+    name: 'Rule34',
     baseUrl: 'https://rule34.paheal.net',
     rating: 'nsfw',
     supportsVideo: true,

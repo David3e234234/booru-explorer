@@ -139,7 +139,7 @@ function renderCoverPickerPosts(posts, author, site) {
 
     item.addEventListener('click', async () => {
       haptic(15);
-      await handleSelectAuthorCover(author, rawPreview, site);
+      await handleSelectAuthorCover(author, post, site);
     });
 
     fragment.appendChild(item);
@@ -148,8 +148,15 @@ function renderCoverPickerPosts(posts, author, site) {
   grid.appendChild(fragment);
 }
 
-async function handleSelectAuthorCover(author, chosenUrl, site) {
-  if (!author || !chosenUrl) return;
+async function handleSelectAuthorCover(author, post, site) {
+  if (!author || !post) return;
+
+  const chosenUrl = post.previewUrl || post.sampleUrl || post.fileUrl || '';
+  const sampleUrl = post.sampleUrl || '';
+  const fileUrl = post.fileUrl || '';
+  const thumb180 = post.thumb180 || '';
+  const thumb360 = post.thumb360 || '';
+  const thumb720 = post.thumb720 || '';
 
   // 1. Оптимистично обновляем в локальном состоянии state.favoriteAuthors
   const cleanName = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
@@ -160,9 +167,19 @@ async function handleSelectAuthorCover(author, chosenUrl, site) {
 
   if (target) {
     target.previewUrl = chosenUrl;
+    target.sampleUrl = sampleUrl;
+    target.fileUrl = fileUrl;
+    target.thumb180 = thumb180;
+    target.thumb360 = thumb360;
+    target.thumb720 = thumb720;
     if (site) target.site = site;
   } else {
     author.previewUrl = chosenUrl;
+    author.sampleUrl = sampleUrl;
+    author.fileUrl = fileUrl;
+    author.thumb180 = thumb180;
+    author.thumb360 = thumb360;
+    author.thumb720 = thumb720;
     if (site) author.site = site;
     state.favoriteAuthors.unshift(author);
   }
@@ -174,7 +191,7 @@ async function handleSelectAuthorCover(author, chosenUrl, site) {
 
   // 2. Отправляем обновление на сервер
   try {
-    await updateFavoriteAuthorPreview(author.name, chosenUrl, site);
+    await updateFavoriteAuthorPreview(author.name, chosenUrl, site, { sampleUrl, fileUrl, thumb180, thumb360, thumb720 });
     await syncFavoriteAuthors(state.favoriteAuthors);
   } catch (err) {
     console.warn('Сервер не ответил, сохранено локально:', err);
