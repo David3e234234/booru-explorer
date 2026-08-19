@@ -385,34 +385,25 @@ async function performSearch(reset = false, options = {}) {
 
           const selectedSeeds = [];
 
-          if (artists.length > 0) {
-            const idx1 = (state.page - 1) % artists.length;
-            selectedSeeds.push(artists[idx1].tag);
-            if (artists.length > 1) {
-              const idx2 = state.page % artists.length;
-              if (artists[idx2].tag !== artists[idx1].tag) {
-                selectedSeeds.push(artists[idx2].tag);
-              }
+          // Функция для перемешивания массива (Fisher-Yates)
+          const shuffle = (array) => {
+            const arr = [...array];
+            for (let i = arr.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [arr[i], arr[j]] = [arr[j], arr[i]];
             }
-          }
+            return arr;
+          };
 
-          if (characters.length > 0) {
-            const idx = (state.page - 1) % characters.length;
-            selectedSeeds.push(characters[idx].tag);
-          } else if (copyrights.length > 0) {
-            const idx = (state.page - 1) % copyrights.length;
-            selectedSeeds.push(copyrights[idx].tag);
-          }
-
-          if (generals.length > 0 && selectedSeeds.length < 4) {
-            const idx = ((state.page - 1) * 2) % Math.min(generals.length, 10);
-            selectedSeeds.push(generals[idx].tag);
-          }
-
-          for (let i = 0; selectedSeeds.length < 3 && i < userInterests.length; i++) {
-            const candidateTag = userInterests[(state.page - 1 + i) % userInterests.length].tag;
-            if (!selectedSeeds.includes(candidateTag)) {
-              selectedSeeds.push(candidateTag);
+          // Берем топ-20 интересов пользователя
+          const topInterests = userInterests.slice(0, 20);
+          
+          // Выбираем 3 случайных сида из топа для обеспечения разнообразия ленты
+          const shuffledTop = shuffle(topInterests);
+          for (const item of shuffledTop) {
+            if (selectedSeeds.length >= 3) break;
+            if (!selectedSeeds.includes(item.tag)) {
+              selectedSeeds.push(item.tag);
             }
           }
 

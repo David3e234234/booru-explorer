@@ -317,20 +317,30 @@ export function isAuthorFavorite(name) {
 
 // 🧠 Алгоритм извлечения карты интересов пользователя
 export function getUserInterestTags() {
-  const scores = new Map(); // tag -> weight
+  const counts = new Map(); // tag -> count
+  const weights = new Map(); // tag -> baseWeight
   const catMap = new Map(); // tag -> category
 
   // 1. Анализируем все пролайканные посты (вес × 2.0)
   for (const post of state.likes) {
-    extractTagsFromPost(post, scores, catMap, 2.0);
+    extractTagsFromPost(post, counts, weights, catMap, 2.0);
   }
 
   // 2. Анализируем закладки (вес × 1.5)
   for (const post of state.favorites) {
-    extractTagsFromPost(post, scores, catMap, 1.5);
+    extractTagsFromPost(post, counts, weights, catMap, 1.5);
   }
 
-  // 3. Анализируем любимых авторов (вес × 5.0)
+  const scores = new Map();
+
+  // Применяем сублинейное сглаживание: базовая значимость * log2(1 + кол-во)
+  for (const [tag, count] of counts.entries()) {
+    const baseWeight = weights.get(tag) || 1.0;
+    const score = baseWeight * Math.log2(1 + count);
+    scores.set(tag, score);
+  }
+
+  // 3. Анализируем любимых авторов (вес × 5.0) -> фиксированный бонус
   for (const author of state.favoriteAuthors) {
     const raw = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
     if (raw) {
@@ -348,53 +358,42 @@ export function getUserInterestTags() {
   return list;
 }
 
-function extractTagsFromPost(post, scores, catMap, multiplier = 1.0) {
+function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {
   if (!post) return;
+
+  const addTag = (rawTag, category, baseWeight) => {
+    if (!rawTag) return;
+    const clean = String(rawTag).toLowerCase().split(',')[0].replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+    if (!clean) return;
+    
+    counts.set(clean, (counts.get(clean) || 0) + multiplier);
+    
+    const currentWeight = weights.get(clean) || 0;
+    if (baseWeight > currentWeight) {
+      weights.set(clean, baseWeight);
+      catMap.set(clean, category);
+    }
+  };
 
   // Авторы (вес 5.0)
   if (post.author) {
-    const cleanAuthor = String(post.author).toLowerCase().split(',')[0].replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
-    if (cleanAuthor) {
-      scores.set(cleanAuthor, (scores.get(cleanAuthor) || 0) + 5.0 * multiplier);
-      catMap.set(cleanAuthor, 'artist');
-    }
+    addTag(post.author, 'artist', 5.0);
   }
 
   const td = post.tagDetails || {};
   if (td.artist) {
-    for (const a of td.artist) {
-      const clean = a.toLowerCase().trim();
-      scores.set(clean, (scores.get(clean) || 0) + 5.0 * multiplier);
-      catMap.set(clean, 'artist');
-    }
+    for (const a of td.artist) addTag(a, 'artist', 5.0);
   }
   if (td.character) {
-    for (const c of td.character) {
-      const clean = c.toLowerCase().trim();
-      scores.set(clean, (scores.get(clean) || 0) + 3.5 * multiplier);
-      catMap.set(clean, 'character');
-    }
+    for (const c of td.character) addTag(c, 'character', 3.5);
   }
   if (td.copyright) {
-    for (const cp of td.copyright) {
-      const clean = cp.toLowerCase().trim();
-      scores.set(clean, (scores.get(clean) || 0) + 3.0 * multiplier);
-      catMap.set(clean, 'copyright');
-    }
+    for (const cp of td.copyright) addTag(cp, 'copyright', 3.0);
   }
   if (td.general) {
-    for (const g of td.general) {
-      const clean = g.toLowerCase().trim();
-      scores.set(clean, (scores.get(clean) || 0) + 1.2 * multiplier);
-      catMap.set(clean, 'general');
-    }
+    for (const g of td.general) addTag(g, 'general', 1.2);
   } else if (Array.isArray(post.tags)) {
-    for (const t of post.tags) {
-      const clean = String(t).toLowerCase().trim();
-      if (!scores.has(clean)) {
-        scores.set(clean, (scores.get(clean) || 0) + 1.0 * multiplier);
-      }
-    }
+    for (const t of post.tags) addTag(t, 'general', 1.0);
   }
 }
 
