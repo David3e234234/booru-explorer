@@ -1587,6 +1587,140 @@
   color: var(--text-muted);
 }
 
+/* Карточка Telegram Автобэкапа */
+.telegram-backup-group {
+  background: var(--bg-surface-elevated) !important;
+  padding: 18px !important;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  margin-top: 14px;
+}
+
+.settings-group-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-group-header-row .settings-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
+.tg-icon-svg {
+  color: #2aabee;
+  flex-shrink: 0;
+}
+
+.settings-sublabel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tg-helper-link {
+  font-size: 11px;
+  font-weight: 500;
+  color: #2aabee;
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+.tg-helper-link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.telegram-backup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  transition: opacity var(--transition-fast);
+}
+
+.telegram-backup-form.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.telegram-backup-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tg-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tg-status-dot.dot-idle {
+  background: var(--text-muted);
+}
+
+.tg-status-dot.dot-paused {
+  background: var(--accent-warning, #f59e0b);
+}
+
+.tg-status-dot.dot-active {
+  background: var(--accent-success, #10b981);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+}
+
+.telegram-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.btn-tg-test {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+}
+
+.btn-tg-test:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.btn-tg-send {
+  background: rgba(42, 171, 238, 0.12);
+  color: #2aabee;
+  border: 1px solid rgba(42, 171, 238, 0.35);
+}
+
+.btn-tg-send:hover:not(:disabled) {
+  background: #2aabee;
+  color: #ffffff;
+  border-color: #2aabee;
+  transform: translateY(-1px);
+}
+
+.btn-backup:disabled,
+.btn-backup.is-loading {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
 /* Карточки API ключей */
 .api-keys-container {
   display: flex;

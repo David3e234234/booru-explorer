@@ -220,7 +220,12 @@ export const DEFAULT_SETTINGS = {
   gelbooruApiKey: '',
   gelbooruUserId: '',
   danbooruApiKey: '',
-  danbooruLogin: ''
+  danbooruLogin: '',
+  telegramBackupEnabled: false,
+  telegramBotToken: '',
+  telegramChatId: '',
+  telegramBackupInterval: 'daily', // 'daily', 'every_3_days', 'weekly'
+  telegramLastBackupAt: null
 };
 
 export const SITES = {

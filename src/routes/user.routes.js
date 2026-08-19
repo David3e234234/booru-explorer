@@ -22,6 +22,7 @@ import {
 import { getLocalIpAddress } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
 import { authMiddleware } from '../services/userService.js';
+import { testTelegramBot, performTelegramBackup } from '../services/backupService.js';
 
 const router = express.Router();
 
@@ -321,6 +322,60 @@ router.get('/tunnel', (req, res) => {
     localUrl,
     tunnelUrl: tunnelUrl || null,
     isStartingTunnel: !!tunnelProcess && !tunnelUrl
+  });
+});
+
+// POST /api/backup/telegram/test - Проверка связи с ботом
+router.post('/backup/telegram/test', async (req, res) => {
+  try {
+    const { token, chatId } = req.body || {};
+    const userId = req.user?.id || null;
+    const settings = getSettings(userId);
+    
+    const botToken = token || settings.telegramBotToken;
+    const targetChatId = chatId || settings.telegramChatId;
+
+    if (!botToken || !targetChatId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Укажите токен бота и Chat ID' 
+      });
+    }
+
+    const result = await testTelegramBot(botToken, targetChatId);
+    res.json({ success: true, message: `Связь установлена! Бот: ${result.botName}`, result });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/backup/telegram/send - Отправка бэкапа в Telegram
+router.post('/backup/telegram/send', async (req, res) => {
+  try {
+    const userId = req.user?.id || null;
+    const result = await performTelegramBackup(userId, true);
+    res.json({ 
+      success: true, 
+      message: 'Резервная копия успешно отправлена в Telegram!', 
+      result 
+    });
+  } catch (err) {
+    logError('Backup', 'Ошибка при ручной отправке бэкапа:', err);
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/backup/telegram/status - Статус последнего бэкапа
+router.get('/backup/telegram/status', (req, res) => {
+  const userId = req.user?.id || null;
+  const settings = getSettings(userId);
+  res.json({
+    success: true,
+    enabled: !!settings.telegramBackupEnabled,
+    hasToken: !!settings.telegramBotToken,
+    hasChatId: !!settings.telegramChatId,
+    interval: settings.telegramBackupInterval || 'daily',
+    lastBackupAt: settings.telegramLastBackupAt || null
   });
 });
 

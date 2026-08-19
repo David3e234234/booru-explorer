@@ -19,6 +19,7 @@ import postsRoutes from './src/routes/posts.routes.js';
 import mediaRoutes from './src/routes/media.routes.js';
 import userRoutes from './src/routes/user.routes.js';
 import authRoutes from './src/routes/auth.routes.js';
+import { initBackupScheduler } from './src/services/backupService.js';
 
 // Принудительный выбор IPv4 в первую очередь для надежных сетевых запросов к зарубежным Booru
 if (dns.setDefaultResultOrder) {
@@ -142,6 +143,7 @@ function startServer(port) {
 }
 
 if (!isServerless) {
+  initBackupScheduler();
   startServer(Number(PORT));
 }
 

@@ -240,3 +240,28 @@ export async function clearCache() {
   const res = await fetch('/api/cache-clear', { method: 'POST' });
   return await res.json();
 }
+
+export async function testTelegramConnection(token, chatId) {
+  const res = await fetch('/api/backup/telegram/test', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ token, chatId })
+  });
+  return await res.json();
+}
+
+export async function sendTelegramBackupNow() {
+  const res = await fetch('/api/backup/telegram/send', {
+    method: 'POST',
+    headers: getAuthHeaders(true)
+  });
+  return await res.json();
+}
+
+export async function fetchTelegramBackupStatus() {
+  const res = await fetch('/api/backup/telegram/status', {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) return { enabled: false, lastBackupAt: null };
+  return await res.json();
+}

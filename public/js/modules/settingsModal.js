@@ -10,7 +10,10 @@ import {
   clearCache, 
   syncFavorites, 
   syncLikes, 
-  syncFavoriteAuthors 
+  syncFavoriteAuthors,
+  testTelegramConnection,
+  sendTelegramBackupNow,
+  fetchTelegramBackupStatus
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
 import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI } from './filtersUI.js';
@@ -169,6 +172,64 @@ export function applySettingsToUIAndState(s) {
   }
   if (typeof s.videoAutoplayViewer === 'boolean' && checkVideoAutoplayViewer) {
     checkVideoAutoplayViewer.checked = s.videoAutoplayViewer;
+  }
+
+  // Telegram автобэкап
+  const checkTelegramBackupEnabled = document.getElementById('checkTelegramBackupEnabled');
+  const inputTelegramBotToken = document.getElementById('inputTelegramBotToken');
+  const inputTelegramChatId = document.getElementById('inputTelegramChatId');
+  const selectTelegramBackupInterval = document.getElementById('selectTelegramBackupInterval');
+  const telegramBackupForm = document.getElementById('telegramBackupForm');
+
+  if (checkTelegramBackupEnabled && typeof s.telegramBackupEnabled === 'boolean') {
+    checkTelegramBackupEnabled.checked = s.telegramBackupEnabled;
+    if (telegramBackupForm) {
+      telegramBackupForm.classList.toggle('is-disabled', !s.telegramBackupEnabled);
+    }
+  }
+  if (inputTelegramBotToken && typeof s.telegramBotToken === 'string') {
+    inputTelegramBotToken.value = s.telegramBotToken;
+  }
+  if (inputTelegramChatId && (typeof s.telegramChatId === 'string' || typeof s.telegramChatId === 'number')) {
+    inputTelegramChatId.value = String(s.telegramChatId);
+  }
+  if (selectTelegramBackupInterval && s.telegramBackupInterval) {
+    selectTelegramBackupInterval.value = s.telegramBackupInterval;
+  }
+
+  updateTelegramBackupStatusUI(s);
+}
+
+export function updateTelegramBackupStatusUI(s = state.settings) {
+  const statusDot = document.getElementById('telegramStatusDot');
+  const statusText = document.getElementById('telegramStatusText');
+  if (!statusText || !statusDot) return;
+
+  const hasConfig = !!(s?.telegramBotToken && s?.telegramChatId);
+  const isEnabled = !!s?.telegramBackupEnabled;
+  const lastBackup = s?.telegramLastBackupAt;
+
+  if (!hasConfig) {
+    statusDot.className = 'tg-status-dot dot-idle';
+    statusText.textContent = 'Бот не настроен (введите Token и Chat ID)';
+  } else if (!isEnabled) {
+    statusDot.className = 'tg-status-dot dot-paused';
+    statusText.textContent = 'Автобэкап выключен (доступна ручная отправка)';
+  } else {
+    statusDot.className = 'tg-status-dot dot-active';
+    if (lastBackup) {
+      const d = new Date(lastBackup);
+      const dateStr = d.toLocaleString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      statusText.textContent = `Активен. Последний бэкап: ${dateStr}`;
+    } else {
+      statusText.textContent = 'Активен. Ожидание первого автобэкапа';
+    }
   }
 }
 
@@ -666,6 +727,118 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     });
   }
 
+  // Telegram Автобэкап события
+  const checkTelegramBackupEnabled = document.getElementById('checkTelegramBackupEnabled');
+  const telegramBackupForm = document.getElementById('telegramBackupForm');
+  const btnTestTelegram = document.getElementById('btnTestTelegram');
+  const btnSendTelegramBackup = document.getElementById('btnSendTelegramBackup');
+
+  if (checkTelegramBackupEnabled) {
+    checkTelegramBackupEnabled.addEventListener('change', () => {
+      if (telegramBackupForm) {
+        telegramBackupForm.classList.toggle('is-disabled', !checkTelegramBackupEnabled.checked);
+      }
+      updateTelegramBackupStatusUI({
+        ...state.settings,
+        telegramBackupEnabled: checkTelegramBackupEnabled.checked
+      });
+    });
+  }
+
+  if (btnTestTelegram) {
+    btnTestTelegram.addEventListener('click', async () => {
+      const tokenInput = document.getElementById('inputTelegramBotToken');
+      const chatInput = document.getElementById('inputTelegramChatId');
+      const token = tokenInput ? tokenInput.value.trim() : '';
+      const chatId = chatInput ? chatInput.value.trim() : '';
+
+      if (!token || !chatId) {
+        showToast('Укажите токен бота и Chat ID для проверки связи');
+        return;
+      }
+
+      const originalHtml = btnTestTelegram.innerHTML;
+      btnTestTelegram.disabled = true;
+      btnTestTelegram.classList.add('is-loading');
+      btnTestTelegram.innerHTML = '<span>Проверка...</span>';
+
+      try {
+        const res = await testTelegramConnection(token, chatId);
+        if (res.success) {
+          showToast(res.message || 'Связь с ботом успешно установлена!');
+          updateTelegramBackupStatusUI({ 
+            ...state.settings, 
+            telegramBotToken: token, 
+            telegramChatId: chatId, 
+            telegramBackupEnabled: checkTelegramBackupEnabled ? checkTelegramBackupEnabled.checked : true 
+          });
+        } else {
+          showToast(`Ошибка: ${res.message || 'Сбой проверки'}`);
+        }
+      } catch (err) {
+        showToast(`Ошибка: ${err.message || 'Не удалось связаться с сервером'}`);
+      } finally {
+        btnTestTelegram.disabled = false;
+        btnTestTelegram.classList.remove('is-loading');
+        btnTestTelegram.innerHTML = originalHtml;
+      }
+    });
+  }
+
+  if (btnSendTelegramBackup) {
+    btnSendTelegramBackup.addEventListener('click', async () => {
+      const tokenInput = document.getElementById('inputTelegramBotToken');
+      const chatInput = document.getElementById('inputTelegramChatId');
+      const intervalSelect = document.getElementById('selectTelegramBackupInterval');
+      const enabledCheck = document.getElementById('checkTelegramBackupEnabled');
+
+      const token = tokenInput ? tokenInput.value.trim() : '';
+      const chatId = chatInput ? chatInput.value.trim() : '';
+
+      if (!token || !chatId) {
+        showToast('Сначала введите токен бота и Chat ID');
+        return;
+      }
+
+      // Сохраняем текущие введенные настройки перед отправкой
+      const currentSettings = {
+        ...state.settings,
+        telegramBackupEnabled: enabledCheck ? enabledCheck.checked : false,
+        telegramBotToken: token,
+        telegramChatId: chatId,
+        telegramBackupInterval: intervalSelect ? intervalSelect.value : 'daily'
+      };
+      state.settings = currentSettings;
+      saveLocalSettings(currentSettings);
+      await saveSettings(currentSettings).catch(() => {});
+
+      const originalHtml = btnSendTelegramBackup.innerHTML;
+      btnSendTelegramBackup.disabled = true;
+      btnSendTelegramBackup.classList.add('is-loading');
+      btnSendTelegramBackup.innerHTML = '<span>Отправка...</span>';
+
+      try {
+        const res = await sendTelegramBackupNow();
+        if (res.success) {
+          showToast('Резервная копия доставлена в Telegram!');
+          if (res.result?.lastBackupAt) {
+            state.settings.telegramLastBackupAt = res.result.lastBackupAt;
+            saveLocalSettings(state.settings);
+            updateTelegramBackupStatusUI(state.settings);
+          }
+        } else {
+          showToast(`Ошибка: ${res.message || 'Сбой отправки бэкапа'}`);
+        }
+      } catch (err) {
+        showToast(`Ошибка: ${err.message || 'Сбой соединения'}`);
+      } finally {
+        btnSendTelegramBackup.disabled = false;
+        btnSendTelegramBackup.classList.remove('is-loading');
+        btnSendTelegramBackup.innerHTML = originalHtml;
+      }
+    });
+  }
+
   document.querySelectorAll('.btn-theme').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.btn-theme').forEach(b => b.classList.remove('active'));
@@ -726,6 +899,11 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
       const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
 
+      const checkTgEnabled = document.getElementById('checkTelegramBackupEnabled');
+      const inputTgToken = document.getElementById('inputTelegramBotToken');
+      const inputTgChat = document.getElementById('inputTelegramChatId');
+      const selectTgInterval = document.getElementById('selectTelegramBackupInterval');
+
       const updated = {
         ...state.settings,
         theme,
@@ -750,6 +928,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         gelbooruUserId: inputGelbooruUserId ? inputGelbooruUserId.value.trim() : '',
         danbooruApiKey: inputDanbooruApiKey ? inputDanbooruApiKey.value.trim() : '',
         danbooruLogin: inputDanbooruLogin ? inputDanbooruLogin.value.trim() : '',
+        telegramBackupEnabled: checkTgEnabled ? checkTgEnabled.checked : false,
+        telegramBotToken: inputTgToken ? inputTgToken.value.trim() : '',
+        telegramChatId: inputTgChat ? inputTgChat.value.trim() : '',
+        telegramBackupInterval: selectTgInterval ? selectTgInterval.value : 'daily',
         deepFetchPages: deepFetchPagesVal,
         prioritizeUserTags: prioritizeUserTagsVal,
         enablePaheal: enablePahealVal,
@@ -798,12 +980,23 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkEnablePaheal = document.getElementById('checkEnablePaheal');
       const checkEnableJsDemuxing = document.getElementById('checkEnableJsDemuxing');
 
+      const checkTgEnabled = document.getElementById('checkTelegramBackupEnabled');
+      const inputTgToken = document.getElementById('inputTelegramBotToken');
+      const inputTgChat = document.getElementById('inputTelegramChatId');
+      const selectTgInterval = document.getElementById('selectTelegramBackupInterval');
+      const telegramBackupForm = document.getElementById('telegramBackupForm');
+
       if (inputRule34ApiKey) inputRule34ApiKey.value = '';
       if (inputRule34UserId) inputRule34UserId.value = '';
       if (inputGelbooruApiKey) inputGelbooruApiKey.value = '';
       if (inputGelbooruUserId) inputGelbooruUserId.value = '';
       if (inputDanbooruApiKey) inputDanbooruApiKey.value = '';
       if (inputDanbooruLogin) inputDanbooruLogin.value = '';
+      if (inputTgToken) inputTgToken.value = '';
+      if (inputTgChat) inputTgChat.value = '';
+      if (checkTgEnabled) checkTgEnabled.checked = false;
+      if (selectTgInterval) selectTgInterval.value = 'daily';
+      if (telegramBackupForm) telegramBackupForm.classList.add('is-disabled');
       if (selectPreviewQuality) selectPreviewQuality.value = 'medium';
       if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = true;
       if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = true;
@@ -811,6 +1004,13 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
       if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       renderSettingsChips();
+      updateTelegramBackupStatusUI({
+        telegramBackupEnabled: false,
+        telegramBotToken: '',
+        telegramChatId: '',
+        telegramBackupInterval: 'daily',
+        telegramLastBackupAt: null
+      });
       saveLocalSettings({
         blacklist: tempBlacklist,
         aiTags: tempAiTags,
@@ -822,6 +1022,11 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         gelbooruUserId: '',
         danbooruApiKey: '',
         danbooruLogin: '',
+        telegramBackupEnabled: false,
+        telegramBotToken: '',
+        telegramChatId: '',
+        telegramBackupInterval: 'daily',
+        telegramLastBackupAt: null,
         enableJsDemuxing: true
       });
       showToast('Значения сброшены к стандартным');
