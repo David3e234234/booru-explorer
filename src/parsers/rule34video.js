@@ -41,7 +41,8 @@ export async function fetchRule34Video(params, aiTagsList) {
       } else {
         sortByParam = '&sort_by=post_date';
       }
-      url = `https://rule34video.com/search/${encodeURIComponent(cleanQuery)}/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&q=${encodeURIComponent(cleanQuery)}${sortByParam}&from_videos=${p}`;
+      const urlSlug = cleanQuery.replace(/\s+/g, '-');
+      url = `https://rule34video.com/search/${encodeURIComponent(urlSlug)}/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&q=${encodeURIComponent(cleanQuery)}${sortByParam}&from_videos=${p}`;
     } else if (category === 'top') {
       url = `https://rule34video.com/top-rated/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&from=${p}`;
     } else if (category === 'popular' || category === 'recommended') {
