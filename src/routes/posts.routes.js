@@ -52,7 +52,21 @@ router.get('/posts', async (req, res) => {
       }
     }
 
-    const settings = getSettings();
+    let clientAuth = {};
+    if (req.headers['x-booru-auth']) {
+      try {
+        clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
+      } catch {
+        try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
+      }
+    }
+
+    const baseSettings = getSettings();
+    const settings = {
+      ...baseSettings,
+      ...clientAuth
+    };
+
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
     const blacklist = settings.blacklist || [];
 
@@ -70,9 +84,8 @@ router.get('/posts', async (req, res) => {
     }
 
     // Фильтр телосложения и типажей (Мамочки/Пышные vs Лоли/Мини)
-    const userSettings = getSettings();
-    const activeCurvyTags = (Array.isArray(userSettings.curvyTags) && userSettings.curvyTags.length > 0) ? userSettings.curvyTags : CURVY_INCLUDE_TAGS;
-    const activePetiteTags = (Array.isArray(userSettings.petiteTags) && userSettings.petiteTags.length > 0) ? userSettings.petiteTags : PETITE_INCLUDE_TAGS;
+    const activeCurvyTags = (Array.isArray(settings.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS;
+    const activePetiteTags = (Array.isArray(settings.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS;
 
     if (ageFilter === 'adult') {
       posts = posts.filter(post => {
@@ -90,41 +103,17 @@ router.get('/posts', async (req, res) => {
       });
     }
 
-    // Локальная фильтрация по запрошенным тегам
-    if (tags && site !== 'rule34video') {
-      const searchTokens = tags
-        .toLowerCase()
-        .replace(/([a-zA-Z0-9_-]+)_\(([^)]+)\)/g, '$1 $2')
-        .replace(/([a-zA-Z0-9_-]+)\s*\(([^)]+)\)/g, '$1 $2')
-        .replace(/[()]/g, '')
+    // Локальная фильтрация по исключающим (-tag) тегам
+    if (tags) {
+      const negativeTokens = tags
         .split(/\s+/)
-        .map(t => t.trim())
-        .filter(Boolean);
+        .filter(t => t.startsWith('-') && t.length > 1)
+        .map(t => t.substring(1).toLowerCase().replace(/_/g, ' '));
 
-      if (searchTokens.length > 0) {
+      if (negativeTokens.length > 0) {
         posts = posts.filter(post => {
-          const postTags = Array.isArray(post.tags) ? post.tags.map(t => (typeof t === 'string' ? t.toLowerCase() : String(t || '').toLowerCase())) : [];
-          const postTagsFlat = postTags.join(' ');
-          const titleLower = String(post.title || '').toLowerCase();
-          const authorLower = String(post.author || '').toLowerCase();
-
-          return searchTokens.every(token => {
-            if (token.startsWith('-')) {
-              const neg = token.substring(1).replace(/_/g, ' ');
-              const negUnderscore = token.substring(1);
-              return !postTags.includes(negUnderscore) && !postTagsFlat.includes(neg) && !titleLower.includes(neg);
-            }
-            if (token.includes(':')) return true;
-
-            const tokenNorm = token.replace(/_/g, ' ');
-            const inTags = postTags.some(t => t === token || t === tokenNorm || t.includes(token) || t.includes(tokenNorm)) || 
-                           postTagsFlat.includes(token) || 
-                           postTagsFlat.includes(tokenNorm);
-            const inTitle = titleLower.includes(tokenNorm) || titleLower.includes(token);
-            const inAuthor = authorLower.includes(tokenNorm) || authorLower.includes(token);
-
-            return inTags || inTitle || inAuthor;
-          });
+          const postTagsFlat = (Array.isArray(post.tags) ? post.tags.join(' ') : '').toLowerCase().replace(/_/g, ' ');
+          return !negativeTokens.some(neg => postTagsFlat.includes(neg));
         });
       }
     }
@@ -251,6 +240,16 @@ router.get('/tags/autocomplete', async (req, res) => {
   const site = req.query.site || 'danbooru';
   if (!query) return res.json({ tags: [] });
 
+  let clientAuth = {};
+  if (req.headers['x-booru-auth']) {
+    try {
+      clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
+    } catch {
+      try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
+    }
+  }
+  const settings = { ...getSettings(), ...clientAuth };
+
   const cacheKey = `${site}:${query.toLowerCase()}`;
   const cached = tagAutocompleteCache.get(cacheKey);
   if (cached) {
@@ -277,8 +276,11 @@ router.get('/tags/autocomplete', async (req, res) => {
         }
       } catch {}
     } else if (site === 'rule34') {
+      const authQuery = (settings?.rule34ApiKey && settings?.rule34UserId)
+        ? `&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`
+        : '';
       try {
-        const url = `https://rule34.xxx/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
+        const url = `https://api.rule34.xxx/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}${authQuery}`;
         const resp = await fetchSafe(url, { 
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://rule34.xxx/' },
           timeout: 4000 

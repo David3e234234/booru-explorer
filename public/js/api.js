@@ -1,4 +1,24 @@
+import { state } from './state.js';
+
 export const isMyLiveDemoHost = false;
+
+function getAuthHeaders() {
+  const headers = {};
+  if (state && state.settings) {
+    const authData = {
+      rule34ApiKey: state.settings.rule34ApiKey || '',
+      rule34UserId: state.settings.rule34UserId || '',
+      gelbooruApiKey: state.settings.gelbooruApiKey || '',
+      gelbooruUserId: state.settings.gelbooruUserId || '',
+      danbooruApiKey: state.settings.danbooruApiKey || '',
+      danbooruLogin: state.settings.danbooruLogin || '',
+      curvyTags: state.settings.curvyTags || [],
+      petiteTags: state.settings.petiteTags || []
+    };
+    headers['x-booru-auth'] = encodeURIComponent(JSON.stringify(authData));
+  }
+  return headers;
+}
 
 export async function fetchSites() {
   const res = await fetch('/api/sites');
@@ -38,14 +58,18 @@ export async function fetchPosts({
     params._t = String(Date.now());
   }
   const query = new URLSearchParams(params);
-  const res = await fetch(`/api/posts?${query.toString()}`);
+  const res = await fetch(`/api/posts?${query.toString()}`, {
+    headers: getAuthHeaders()
+  });
   if (!res.ok) return { success: true, posts: [] };
   return await res.json();
 }
 
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
-  const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`);
+  const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`, {
+    headers: getAuthHeaders()
+  });
   if (!res.ok) return { tags: [] };
   return await res.json();
 }
