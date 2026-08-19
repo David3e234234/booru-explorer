@@ -116,25 +116,45 @@ export async function fetchRule34Video(params, aiTagsList) {
     return [];
   }
 
-  let rawTags = tags.trim();
+  let rawTags = (tags || '').trim();
   if (ageFilter === 'young' && !rawTags) {
     rawTags = 'small tits';
   } else if (ageFilter === 'adult' && !rawTags) {
     rawTags = 'big tits';
   }
 
-  const isExplicitAuthorQuery = /^(?:channel|user|account|artist|author|uploader|creator|member|model):\s*/i.test(rawTags);
+  const tokens = rawTags.split(/\s+/).filter(Boolean);
+  const authorTokens = tokens.filter(t => /^(?:channel|user|account|artist|author|uploader|creator|member|model):/i.test(t));
+  const generalTokens = tokens.filter(t => !/^(?:channel|user|account|artist|author|uploader|creator|member|model):/i.test(t) && !t.startsWith('-'));
 
-  const cleanQuery = rawTags
-    .replace(/^(?:channel|user|account|artist|author|uploader|creator|member|model):\s*/i, '')
-    .replace(/[_+]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  let extractedAuthor = '';
+  if (authorTokens.length > 0) {
+    extractedAuthor = authorTokens[0]
+      .replace(/^(?:channel|user|account|artist|author|uploader|creator|member|model):\s*/i, '')
+      .replace(/[_+]+/g, ' ')
+      .trim();
+  } else if (tokens.length === 1 && !tokens[0].startsWith('-') && !category) {
+    // Если единственный тег без двоеточия, пробуем проверить его как автора
+    extractedAuthor = tokens[0].replace(/[_+]+/g, ' ').trim();
+  }
 
-  // Если это явный поиск по автору или короткий одиночный запрос, пробуем разрешить автора в ID
+  const cleanGeneralQuery = generalTokens.map(t => t.replace(/[_+]+/g, ' ')).join(' ').trim();
+
   let authorTarget = null;
-  if (cleanQuery && (isExplicitAuthorQuery || !cleanQuery.includes(' '))) {
-    authorTarget = await resolveRule34VideoAuthor(rawTags);
+  if (extractedAuthor) {
+    authorTarget = await resolveRule34VideoAuthor(extractedAuthor);
+  }
+
+  // Поисковый запрос для KVS search
+  let cleanQuery = '';
+  if (authorTarget && cleanGeneralQuery) {
+    cleanQuery = cleanGeneralQuery;
+  } else if (cleanGeneralQuery && extractedAuthor && !authorTarget) {
+    cleanQuery = `${extractedAuthor} ${cleanGeneralQuery}`.trim();
+  } else if (cleanGeneralQuery) {
+    cleanQuery = cleanGeneralQuery;
+  } else if (extractedAuthor && !authorTarget) {
+    cleanQuery = extractedAuthor;
   }
   
   const pagesPerBatch = 4;
@@ -155,9 +175,16 @@ export async function fetchRule34Video(params, aiTagsList) {
     sortByParam = '&sort_by=post_date';
   }
 
+  const nonAuthorTags = new Set([
+    'pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd', 'animated', 'loop', 
+    'audio', 'voiced', 'preview', 'commission', 'no ai', 'rus sub', 'eng sub', 
+    'full video', 'wuthering waves', 'genshin impact', 'zenless zone zero', 
+    'honkai star rail', 'christmas', 'sex', 'r18', 'uncensored', 'decensored', 'mmd', 'compilation'
+  ]);
+
   const fetchPromises = pageNumbers.map(async (p) => {
     let url = '';
-    if (authorTarget) {
+    if (authorTarget && !cleanGeneralQuery) {
       // Поиск видео конкретного автора по ID (канал, участник или модель)
       if (authorTarget.type === 'channel') {
         const slugPart = authorTarget.slug ? `${authorTarget.slug}/` : '';
@@ -168,7 +195,7 @@ export async function fetchRule34Video(params, aiTagsList) {
         url = `https://rule34video.com/models/${authorTarget.id}/?mode=async&function=get_block&block_id=custom_list_videos_model_videos${sortByParam}&from=${p}`;
       }
     } else if (cleanQuery) {
-      const urlSlug = cleanQuery.replace(/\s+/g, '-');
+      const urlSlug = cleanQuery.replace(/[\s_]+/g, '-');
       url = `https://rule34video.com/search/${encodeURIComponent(urlSlug)}/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&q=${encodeURIComponent(cleanQuery)}${sortByParam}&from_videos=${p}`;
     } else if (category === 'top') {
       url = `https://rule34video.com/top-rated/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&from=${p}`;
@@ -176,6 +203,9 @@ export async function fetchRule34Video(params, aiTagsList) {
       url = `https://rule34video.com/most-popular/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&from=${p}`;
     } else if (category === 'random') {
       url = `https://rule34video.com/most-popular/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&sort_by=random&from=${p}`;
+    } else if (rawTags) {
+      // Если запрос был передан пользователем, но не сформировал URL, НЕ возвращаем случайные видео!
+      return [];
     } else {
       url = `https://rule34video.com/latest-updates/?mode=async&function=get_block&block_id=custom_list_videos_latest_videos_list&from=${p}`;
     }
@@ -222,34 +252,74 @@ export async function fetchRule34Video(params, aiTagsList) {
           author = uploaderMatch[1].trim();
         }
 
-        // 2. Если в блоке нет ссылки на аккаунт, fallback на паттерны из названия
+        // 2. Если в блоке нет ссылки на аккаунт, глубокий поиск автора в названии
         if (!author) {
           const authorPipeMatch = title.match(/\|\s*([a-zA-Z0-9_\- ]+)$/);
-          const authorByMatch = title.match(/by\s+([a-zA-Z0-9_\- ]+)/i);
-          const authorParenMatch = title.match(/\(([a-zA-Z0-9_][a-zA-Z0-9_\- ]{1,40})\)\s*$/);
-          const authorBracketMatch = title.match(/^\[([^\]]+)\]/);
-
-          if (authorPipeMatch) {
+          const authorByMatch = title.match(/\bby\s+@?([a-zA-Z0-9_\- ]+)/i);
+          const authorDashMatch = title.match(/\s+-\s+([a-zA-Z0-9_\- ]+)$/);
+          
+          if (authorPipeMatch && !nonAuthorTags.has(authorPipeMatch[1].trim().toLowerCase())) {
             author = authorPipeMatch[1].trim();
-          } else if (authorByMatch) {
+          } else if (authorByMatch && !nonAuthorTags.has(authorByMatch[1].trim().toLowerCase())) {
             author = authorByMatch[1].trim();
-          } else if (authorParenMatch) {
-            const parenTag = authorParenMatch[1].trim();
-            if (!['pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd', 'animated', 'loop', 'audio', 'voiced', 'preview', 'commission', 'no ai'].includes(parenTag.toLowerCase())) {
-              author = parenTag;
+          } else if (authorDashMatch && !nonAuthorTags.has(authorDashMatch[1].trim().toLowerCase())) {
+            author = authorDashMatch[1].trim();
+          } else {
+            // Ищем автора в любых квадратных скобках [Author] с конца заголовка
+            const brackets = [...title.matchAll(/\[([^\]]+)\]/g)];
+            for (let bIdx = brackets.length - 1; bIdx >= 0; bIdx--) {
+              const bTag = brackets[bIdx][1].trim();
+              if (!nonAuthorTags.has(bTag.toLowerCase()) && bTag.length >= 2 && bTag.length <= 40) {
+                author = bTag;
+                break;
+              }
             }
-          }
-          if (authorBracketMatch) {
-            const bracketTag = authorBracketMatch[1].trim();
-            if (!['pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd'].includes(bracketTag.toLowerCase())) {
-              author = bracketTag;
+            // И в круглых скобках (Author)
+            if (!author) {
+              const parens = [...title.matchAll(/\(([^)]+)\)/g)];
+              for (let pIdx = parens.length - 1; pIdx >= 0; pIdx--) {
+                const pTag = parens[pIdx][1].trim();
+                if (!nonAuthorTags.has(pTag.toLowerCase()) && pTag.length >= 2 && pTag.length <= 40) {
+                  author = pTag;
+                  break;
+                }
+              }
             }
           }
         }
 
         // 3. Fallback на найденного автора / канал из запроса
         if (!author && authorTarget) {
-          author = authorTarget.name || authorTarget.slug || cleanQuery;
+          author = authorTarget.name || authorTarget.slug || extractedAuthor;
+        }
+
+        // Фильтрация по автору, если пользователь явно искал конкретного автора (artist:xxx)
+        if (authorTokens.length > 0 && extractedAuthor) {
+          const cleanRequestedAuthor = extractedAuthor.toLowerCase().replace(/[\s_]+/g, '');
+          const postAuthorClean = (author || '').toLowerCase().replace(/[\s_]+/g, '');
+          const titleClean = title.toLowerCase().replace(/[\s_]+/g, '');
+          const slugClean = slug.toLowerCase().replace(/[\s_]+/g, '');
+          
+          const matchesAuthor = postAuthorClean.includes(cleanRequestedAuthor) ||
+                                titleClean.includes(cleanRequestedAuthor) ||
+                                slugClean.includes(cleanRequestedAuthor);
+          if (!matchesAuthor) {
+            continue; // Пропускаем ролики других авторов
+          }
+        }
+
+        // Фильтрация по общим тегам, если заданы (например zenless_zone_zero)
+        if (generalTokens.length > 0) {
+          const titleAndSlug = `${title.toLowerCase()} ${slug.toLowerCase()}`;
+          const allGeneralMatch = generalTokens.every(gt => {
+            const cleanGt = gt.toLowerCase().replace(/_/g, ' ');
+            const parts = cleanGt.split(/\s+/).filter(p => p.length > 2);
+            return titleAndSlug.includes(cleanGt) || 
+                   (parts.length > 0 && parts.some(p => titleAndSlug.includes(p)));
+          });
+          if (!allGeneralMatch) {
+            continue;
+          }
         }
 
         const rawTagsSet = new Set(['video', 'animated']);
@@ -257,8 +327,7 @@ export async function fetchRule34Video(params, aiTagsList) {
         title.toLowerCase().split(/[\s,()\[\]\-_/|"]+/).filter(s => s.length > 1).forEach(s => rawTagsSet.add(s));
 
         if (cleanQuery) {
-          cleanQuery.split('-').filter(Boolean).forEach(q => rawTagsSet.add(q));
-          rawTagsSet.add(cleanQuery.replace(/-/g, '_'));
+          cleanQuery.split(/[\s-]+/).filter(Boolean).forEach(q => rawTagsSet.add(q.toLowerCase()));
         }
         if (author) {
           rawTagsSet.add(author.toLowerCase().replace(/\s+/g, '_'));
