@@ -297,12 +297,14 @@ export async function fetchRule34Video(params, aiTagsList) {
         }
 
         // 3. Fallback на найденного автора / канал из запроса
-        if (!author && authorTarget) {
-          author = authorTarget.name || authorTarget.slug || extractedAuthor;
+        if (authorTarget) {
+          author = authorTarget.name || author;
+        } else if (!author && extractedAuthor) {
+          author = extractedAuthor;
         }
 
-        // Фильтрация по автору, если пользователь явно искал конкретного автора (artist:xxx)
-        if (authorTokens.length > 0 && extractedAuthor) {
+        // Фильтрация по автору только если автор НЕ был разрешен в точный ID модели/канала (текстовый поиск)
+        if (!authorTarget && authorTokens.length > 0 && extractedAuthor) {
           const cleanRequestedAuthor = extractedAuthor.toLowerCase().replace(/[\s_]+/g, '');
           const postAuthorClean = (author || '').toLowerCase().replace(/[\s_]+/g, '');
           const titleClean = title.toLowerCase().replace(/[\s_]+/g, '');
