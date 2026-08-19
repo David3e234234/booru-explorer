@@ -290,6 +290,37 @@ html, body {
   color: var(--text-muted);
 }
 
+.btn-sidebar-search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, var(--accent-primary), #4f46e5);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
+  transition: all var(--transition-fast);
+}
+
+.btn-sidebar-search:hover {
+  background: linear-gradient(135deg, var(--accent-primary-hover), #4338ca);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-sidebar-search:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.2);
+}
+
 /* Переключатели фильтра ИИ, Рейтинга, Типа контента, Возраста и Сортировки видео */
 .ai-filter-toggle, .rating-filter-toggle, .type-filter-toggle, .age-filter-toggle, .video-sort-toggle {
   display: flex;

@@ -39,7 +39,6 @@ export function initAutocomplete({ onSearch }) {
       const tag = removeBtn.dataset.tag;
       removeSearchTag(tag);
       renderTagsChips();
-      onSearch();
     } else {
       searchInput.focus();
     }
@@ -88,7 +87,6 @@ export function initAutocomplete({ onSearch }) {
     if (e.key === 'Backspace' && !searchInput.value && state.searchTags.length > 0) {
       state.searchTags.pop();
       renderTagsChips();
-      onSearch();
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (currentSuggestions.length > 0) {
@@ -104,12 +102,12 @@ export function initAutocomplete({ onSearch }) {
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (activeIndex >= 0 && currentSuggestions[activeIndex]) {
-        selectTag(currentSuggestions[activeIndex].value);
+        selectTag(currentSuggestions[activeIndex].value, false);
       } else if (searchInput.value.trim()) {
-        selectTag(searchInput.value.trim());
-      } else {
-        onSearch();
+        selectTag(searchInput.value.trim(), false);
       }
+      hideDropdown();
+      onSearch();
     } else if (e.key === 'Escape') {
       hideDropdown();
     }
@@ -132,7 +130,7 @@ export function initAutocomplete({ onSearch }) {
 
     dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
       item.addEventListener('click', () => {
-        selectTag(item.dataset.val);
+        selectTag(item.dataset.val, false);
       });
     });
   }
@@ -147,12 +145,14 @@ export function initAutocomplete({ onSearch }) {
     }
   }
 
-  function selectTag(val) {
+  function selectTag(val, triggerSearch = false) {
     if (addSearchTag(val)) {
       searchInput.value = '';
       renderTagsChips();
       hideDropdown();
-      onSearch();
+      if (triggerSearch) {
+        onSearch();
+      }
     }
   }
 
@@ -167,7 +167,6 @@ export function initAutocomplete({ onSearch }) {
     searchInput.value = '';
     renderTagsChips();
     hideDropdown();
-    onSearch();
   });
 
   document.addEventListener('click', (e) => {

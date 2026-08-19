@@ -77,10 +77,10 @@ async function init() {
     onOpenViewer: (index) => viewerInstance.openViewer(index),
     onFavoriteToggle: updateFavoritesBadge,
     onTagClick: (tag) => {
-      autocompleteInstance.selectTag(tag);
+      autocompleteInstance.selectTag(tag, true);
     },
     onTagSelect: (tag) => {
-      autocompleteInstance.selectTag(tag);
+      autocompleteInstance.selectTag(tag, true);
     },
     onLoadMore: () => {
       if (!state.isLoading && state.hasMore) {
@@ -106,7 +106,7 @@ async function init() {
       }
     },
     onTagSelect: (tag) => {
-      autocompleteInstance.selectTag(tag);
+      autocompleteInstance.selectTag(tag, true);
     },
     showToast
   });
@@ -679,7 +679,6 @@ function setupEventListeners() {
       state.aiFilter = filter;
       updateAiFilterUI();
       persistSettings({ aiFilter: filter });
-      performSearch(true);
     });
   });
 
@@ -691,7 +690,6 @@ function setupEventListeners() {
       state.ratingFilter = rating;
       updateRatingFilterUI();
       persistSettings({ ratingFilter: rating });
-      performSearch(true);
     });
   });
 
@@ -703,7 +701,6 @@ function setupEventListeners() {
       state.typeFilter = type;
       updateTypeFilterUI();
       persistSettings({ typeFilter: type });
-      performSearch(true);
     });
   });
 
@@ -715,7 +712,6 @@ function setupEventListeners() {
       state.ageFilter = age;
       updateAgeFilterUI();
       persistSettings({ ageFilter: age });
-      performSearch(true);
     });
   });
 
@@ -737,7 +733,7 @@ function setupEventListeners() {
     checkHideFurry.addEventListener('change', () => {
       state.hideFurry = checkHideFurry.checked;
       persistSettings({ hideFurry: state.hideFurry });
-      performSearch(true);
+      updateFilterActiveDot();
     });
   }
 
@@ -746,6 +742,19 @@ function setupEventListeners() {
     checkHidePregnant.addEventListener('change', () => {
       state.hidePregnant = checkHidePregnant.checked;
       persistSettings({ hidePregnant: state.hidePregnant });
+      updateFilterActiveDot();
+    });
+  }
+
+  // Кнопка «Искать» в сайдбаре
+  const btnApplySearch = document.getElementById('btnApplySearch');
+  if (btnApplySearch) {
+    btnApplySearch.addEventListener('click', () => {
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput && searchInput.value.trim() && autocompleteInstance) {
+        autocompleteInstance.selectTag(searchInput.value.trim(), false);
+      }
+      closeAllDrawers();
       performSearch(true);
     });
   }
