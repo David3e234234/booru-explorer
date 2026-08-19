@@ -1,5 +1,5 @@
 import { state, addSearchTag, setFavoriteAuthors } from '../state.js';
-import { deleteFavoriteAuthor, toggleFavoriteAuthor, fetchFavoriteAuthors, updateFavoriteAuthorPreview, fetchPosts, getProxiedUrl } from '../api.js';
+import { deleteFavoriteAuthor, toggleFavoriteAuthor, fetchFavoriteAuthors, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchPosts, getProxiedUrl } from '../api.js';
 import { showToast, haptic } from './uiUtils.js';
 
 let currentPickerAuthor = null;
@@ -175,6 +175,7 @@ async function handleSelectAuthorCover(author, chosenUrl, site) {
   // 2. Отправляем обновление на сервер
   try {
     await updateFavoriteAuthorPreview(author.name, chosenUrl, site);
+    await syncFavoriteAuthors(state.favoriteAuthors);
   } catch (err) {
     console.warn('Сервер не ответил, сохранено локально:', err);
   }

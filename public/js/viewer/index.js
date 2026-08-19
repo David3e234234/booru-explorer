@@ -1,5 +1,5 @@
-import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, markPostViewed } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost } from '../api.js';
+import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, updateFavoriteAuthorPreview, syncFavoriteAuthors } from '../api.js';
 import { showToast, haptic } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -177,6 +177,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           // 2. Отправка на бэкенд
           try {
             await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl, currentPost.site || 'danbooru');
+            await syncFavoriteAuthors(state.favoriteAuthors);
           } catch (err) {
             console.warn('Сервер не ответил, сохранено локально:', err);
           }

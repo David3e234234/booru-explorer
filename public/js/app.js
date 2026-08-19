@@ -355,31 +355,34 @@ async function loadFavorites() {
 
 async function loadFavoriteAuthors() {
   try {
-    if (state.currentUser) {
-      const data = await fetchFavoriteAuthors();
-      const serverAuthors = Array.isArray(data?.authors) ? data.authors : [];
-      setFavoriteAuthors(serverAuthors);
+    const localAuthors = loadLocalFavoriteAuthors() || [];
+    if (localAuthors.length > 0) {
+      setFavoriteAuthors(localAuthors);
       updateFavoritesBadge();
-    } else {
-      const localAuthors = loadLocalFavoriteAuthors() || [];
-      if (localAuthors.length > 0) {
-        setFavoriteAuthors(localAuthors);
-        updateFavoritesBadge();
-      }
-      const data = await fetchFavoriteAuthors();
-      const serverAuthors = data?.authors || [];
-      const map = new Map();
-      serverAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
-      localAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
-      const merged = Array.from(map.values());
-
-      setFavoriteAuthors(merged);
-      updateFavoritesBadge();
-
-      if (localAuthors.length > serverAuthors.length) {
-        syncFavoriteAuthors(merged).catch(() => {});
-      }
     }
+
+    const data = await fetchFavoriteAuthors();
+    const serverAuthors = Array.isArray(data?.authors) ? data.authors : [];
+
+    const map = new Map();
+    serverAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
+    localAuthors.forEach(a => {
+      if (a && a.name) {
+        const key = (a.name || '').toLowerCase();
+        const s = map.get(key);
+        if (s) {
+          map.set(key, { ...s, ...a, previewUrl: a.previewUrl || s.previewUrl });
+        } else {
+          map.set(key, a);
+        }
+      }
+    });
+    const merged = Array.from(map.values());
+
+    setFavoriteAuthors(merged);
+    updateFavoritesBadge();
+
+    syncFavoriteAuthors(merged).catch(() => {});
   } catch (err) {
     console.error('Ошибка любимых авторов:', err);
   }
