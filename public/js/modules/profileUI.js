@@ -106,6 +106,11 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
     if (profileTabFavsCount) profileTabFavsCount.textContent = favsCount;
     if (profileTabAuthorsCount) profileTabAuthorsCount.textContent = authorsCount;
 
+    const profileAuthorsToolbar = document.getElementById('profileAuthorsToolbar');
+    if (profileAuthorsToolbar) {
+      profileAuthorsToolbar.style.display = state.profileSubTab === 'authors' ? 'flex' : 'none';
+    }
+
     renderInterestsCloud();
   }
 
@@ -203,6 +208,11 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
     state.profileSubTab = subTab;
     [btnTabLikes, btnTabFavs, btnTabAuthors, btnTabAnalytics].forEach(btn => btn?.classList.remove('active'));
     
+    const profileAuthorsToolbar = document.getElementById('profileAuthorsToolbar');
+    if (profileAuthorsToolbar) {
+      profileAuthorsToolbar.style.display = subTab === 'authors' ? 'flex' : 'none';
+    }
+
     if (subTab === 'likes') {
       btnTabLikes?.classList.add('active');
       if (analyticsPane) analyticsPane.style.display = 'none';
@@ -220,6 +230,15 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
     if (typeof onTabChange === 'function') {
       onTabChange('profile-subtab', subTab);
     }
+  }
+
+  const profileAuthorsSearchInput = document.getElementById('profileAuthorsSearchInput');
+  if (profileAuthorsSearchInput) {
+    profileAuthorsSearchInput.addEventListener('input', () => {
+      if (typeof onTabChange === 'function') {
+        onTabChange('profile-authors-search', profileAuthorsSearchInput.value);
+      }
+    });
   }
 
   btnTabLikes?.addEventListener('click', () => setProfileSubTab('likes'));

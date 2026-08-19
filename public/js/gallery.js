@@ -683,7 +683,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
   }
 
-  function renderAuthorCards(authorsList, { onExplore, onDelete } = {}) {
+  function renderAuthorCards(authorsList, { onExplore, onDelete, onAddAuthor } = {}) {
     galleryGrid.innerHTML = '';
     loadingSpinner.style.display = 'none';
     scrollLoader.style.display = 'none';
@@ -696,7 +696,21 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (!authorsList || authorsList.length === 0) {
       emptyState.style.display = 'flex';
       if (stateTitle) stateTitle.textContent = 'Нет сохраненных авторов';
-      if (stateDesc) stateDesc.textContent = 'Нажмите кнопку «+ Автор» выше или звёздочку возле автора в просмотрщике, чтобы сохранить художника!';
+      if (stateDesc) {
+        stateDesc.innerHTML = `
+          <span>У вас пока нет сохраненных авторов в подписках.</span>
+          <div style="margin-top: 14px;">
+            <button type="button" class="btn-action-primary btn-add-author" id="btnAddAuthorEmpty" style="padding: 9px 18px; font-size: 13px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>+ Добавить автора вручную</span>
+            </button>
+          </div>
+        `;
+        const btnEmptyAdd = document.getElementById('btnAddAuthorEmpty');
+        if (btnEmptyAdd && onAddAuthor) {
+          btnEmptyAdd.addEventListener('click', onAddAuthor);
+        }
+      }
       resultsCount.textContent = '0 авторов';
       return;
     }

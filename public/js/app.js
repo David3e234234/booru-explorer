@@ -125,6 +125,8 @@ async function init() {
         } else {
           performSearch(true);
         }
+      } else if (type === 'profile-authors-search') {
+        renderFavoriteAuthors();
       }
     },
     onReloadState: async () => {

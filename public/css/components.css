@@ -1848,11 +1848,21 @@
   color: #ffffff;
 }
 
-.favorites-authors-actions {
+.favorites-authors-actions,
+.profile-authors-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.profile-authors-toolbar {
+  justify-content: space-between;
+  padding: 12px 14px;
+  margin-top: 12px;
+  background: var(--bg-surface-elevated);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
 }
 
 .fav-authors-search-box {

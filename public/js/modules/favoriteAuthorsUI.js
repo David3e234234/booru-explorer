@@ -21,7 +21,8 @@ export function switchFavoritesSubTab(tab, { onSearch, onRenderAuthors }) {
 
 export function renderFavoriteAuthorsList(galleryInstance, { onExploreAuthor, onUpdateBadge }) {
   const favAuthorsSearchInput = document.getElementById('favAuthorsSearchInput');
-  const query = (favAuthorsSearchInput?.value || '').trim().toLowerCase();
+  const profileAuthorsSearchInput = document.getElementById('profileAuthorsSearchInput');
+  const query = (favAuthorsSearchInput?.value || profileAuthorsSearchInput?.value || '').trim().toLowerCase();
   let authors = [...state.favoriteAuthors];
   if (query) {
     authors = authors.filter(a =>
@@ -31,6 +32,7 @@ export function renderFavoriteAuthorsList(galleryInstance, { onExploreAuthor, on
   }
   galleryInstance.renderAuthorCards(authors, {
     onExplore: onExploreAuthor,
+    onAddAuthor: openAddAuthorModal,
     onDelete: async (author) => {
       if (!author || !author.name) return;
       try {
@@ -51,6 +53,21 @@ export function renderFavoriteAuthorsList(galleryInstance, { onExploreAuthor, on
   });
 }
 
+export function openAddAuthorModal() {
+  const modalAddAuthorBackdrop = document.getElementById('modalAddAuthorBackdrop');
+  const inputAuthorName = document.getElementById('inputAuthorName');
+  if (modalAddAuthorBackdrop) modalAddAuthorBackdrop.style.display = 'flex';
+  if (inputAuthorName) {
+    inputAuthorName.value = '';
+    setTimeout(() => inputAuthorName.focus(), 60);
+  }
+}
+
+export function closeAddAuthorModal() {
+  const modalAddAuthorBackdrop = document.getElementById('modalAddAuthorBackdrop');
+  if (modalAddAuthorBackdrop) modalAddAuthorBackdrop.style.display = 'none';
+}
+
 export function initAddAuthorModal({ onAuthorSaved }) {
   const modalAddAuthorBackdrop = document.getElementById('modalAddAuthorBackdrop');
   const formAddAuthor = document.getElementById('formAddAuthor');
@@ -59,18 +76,7 @@ export function initAddAuthorModal({ onAuthorSaved }) {
   const btnCloseAddAuthorModal = document.getElementById('btnCloseAddAuthorModal');
   const btnCancelAddAuthor = document.getElementById('btnCancelAddAuthor');
   const btnAddAuthorModalOpen = document.getElementById('btnAddAuthorModalOpen');
-
-  function openAddAuthorModal() {
-    if (modalAddAuthorBackdrop) modalAddAuthorBackdrop.style.display = 'flex';
-    if (inputAuthorName) {
-      inputAuthorName.value = '';
-      setTimeout(() => inputAuthorName.focus(), 60);
-    }
-  }
-
-  function closeAddAuthorModal() {
-    if (modalAddAuthorBackdrop) modalAddAuthorBackdrop.style.display = 'none';
-  }
+  const btnProfileAddAuthor = document.getElementById('btnProfileAddAuthor');
 
   if (btnAddAuthorModalOpen) {
     btnAddAuthorModalOpen.addEventListener('click', () => {
@@ -78,6 +84,22 @@ export function initAddAuthorModal({ onAuthorSaved }) {
       openAddAuthorModal();
     });
   }
+
+  if (btnProfileAddAuthor) {
+    btnProfileAddAuthor.addEventListener('click', () => {
+      haptic(10);
+      openAddAuthorModal();
+    });
+  }
+
+  // Делегирование клика для динамических кнопок добавления автора
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('#btnAddAuthorEmpty, .btn-add-author-action, [data-action="open-add-author"]');
+    if (btn) {
+      haptic(10);
+      openAddAuthorModal();
+    }
+  });
 
   if (btnCloseAddAuthorModal) btnCloseAddAuthorModal.addEventListener('click', closeAddAuthorModal);
   if (btnCancelAddAuthor) btnCancelAddAuthor.addEventListener('click', closeAddAuthorModal);
