@@ -40,7 +40,7 @@ export const state = {
   favoriteAuthors: [],
   favoriteAuthorNames: new Set(),
   settings: {
-    theme: 'dark',
+    theme: 'midnight',
     itemsPerPage: 100,
     proxyThumbnails: true,
     proxyFullImages: true,
@@ -133,6 +133,11 @@ export function saveLocalAuth(token, user) {
 
 export function clearLocalAuth() {
   saveLocalAuth(null, null);
+  try {
+    localStorage.removeItem(STORAGE_KEYS.FAVORITES);
+    localStorage.removeItem(STORAGE_KEYS.LIKES);
+    localStorage.removeItem(STORAGE_KEYS.FAVORITE_AUTHORS);
+  } catch (e) {}
 }
 
 export function loadLocalViewed() {
@@ -353,7 +358,7 @@ export function isAuthorFavorite(name) {
 }
 
 // 🧠 Алгоритм извлечения карты интересов пользователя
-export function getUserInterestTags() {
+export function getUserInterestTags(limit = null) {
   const counts = new Map(); // tag -> count
   const weights = new Map(); // tag -> baseWeight
   const catMap = new Map(); // tag -> category
@@ -392,7 +397,7 @@ export function getUserInterestTags() {
   }
 
   list.sort((a, b) => b.score - a.score);
-  return list;
+  return (typeof limit === 'number' && limit > 0) ? list.slice(0, limit) : list;
 }
 
 function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {

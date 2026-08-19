@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="ru" data-theme="dark">
+<html lang="ru" data-theme="midnight">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Booru Explorer">
-  <meta name="theme-color" content="#0c0e14">
-  <title>Booru Explorer — Медиа & Видео Поисковик</title>
+  <meta name="theme-color" content="#090b11">
+  <title>Booru Explorer: медиа и видео поисковик</title>
   <link rel="manifest" href="manifest.json?v=5.5">
   <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon.png?v=5.5">
   <link rel="icon" type="image/svg+xml" href="icons/icon.svg?v=5.5">
@@ -73,7 +73,7 @@
 
     <!-- Правая часть: опции и настройки -->
     <div class="header-right">
-      <button class="btn-user-profile" id="btnHeaderAuth" title="Личный кабинет">
+      <button class="btn-user-profile desktop-only" id="btnHeaderAuth" title="Личный кабинет">
         <div class="user-avatar-mini" id="headerUserAvatar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </div>
@@ -137,7 +137,7 @@
       <div class="sidebar-mobile-header mobile-only">
         <div class="sheet-handle"></div>
         <div class="sidebar-mobile-title-row">
-          <span class="sidebar-mobile-title">🔍 Поиск и фильтры</span>
+          <span class="sidebar-mobile-title">Поиск и фильтры</span>
           <button class="btn-icon" id="btnCloseSidebar" title="Закрыть">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -178,8 +178,8 @@
         <h3 class="sidebar-title">Фильтр ИИ</h3>
         <div class="ai-filter-toggle" id="aiFilterGroup">
           <button class="ai-pill" data-ai="all" title="Показывать все работы">Все</button>
-          <button class="ai-pill active" data-ai="no-ai" title="Скрыть ИИ-генерации (только авторский арт)">🚫 Без ИИ</button>
-          <button class="ai-pill" data-ai="only-ai" title="Только ИИ-генерации">🤖 ИИ</button>
+          <button class="ai-pill active" data-ai="no-ai" title="Скрыть ИИ-генерации (только авторский арт)">Без ИИ</button>
+          <button class="ai-pill" data-ai="only-ai" title="Только ИИ-генерации">ИИ</button>
         </div>
       </div>
 
@@ -188,8 +188,8 @@
         <h3 class="sidebar-title">Возрастной рейтинг</h3>
         <div class="rating-filter-toggle" id="ratingFilterGroup">
           <button class="rating-pill active" data-rating="all" title="Показывать все рейтинги">Все</button>
-          <button class="rating-pill" data-rating="nsfw" title="Отсечь SFW: показывать только откровенный 18+ контент">🔞 18+ Only</button>
-          <button class="rating-pill" data-rating="sfw" title="Только безопасный SFW контент">🛡️ Safe</button>
+          <button class="rating-pill" data-rating="nsfw" title="Отсечь SFW: показывать только откровенный 18+ контент">18+</button>
+          <button class="rating-pill" data-rating="sfw" title="Только безопасный SFW контент">Безопасно</button>
         </div>
       </div>
 
@@ -198,9 +198,9 @@
         <h3 class="sidebar-title">Тип контента</h3>
         <div class="type-filter-toggle" id="typeFilterGroup">
           <button class="type-pill active" data-type="all" title="Все форматы (видео, гифки и картинки)">Все</button>
-          <button class="type-pill" data-type="video" title="Все видео и анимации">🎬 Видео</button>
-          <button class="type-pill" data-type="audio" title="Только видео со звуком (озвучка / музыка)">🔊 Звук</button>
-          <button class="type-pill" data-type="image" title="Только статичные изображения">🖼️ Фото</button>
+          <button class="type-pill" data-type="video" title="Все видео и анимации">Видео</button>
+          <button class="type-pill" data-type="audio" title="Только видео со звуком (озвучка / музыка)">Со звуком</button>
+          <button class="type-pill" data-type="image" title="Только статичные изображения">Изображения</button>
         </div>
       </div>
 
@@ -209,18 +209,18 @@
         <h3 class="sidebar-title">Сортировка видео</h3>
         <div class="video-sort-toggle" id="videoSortGroup">
           <button class="video-sort-pill active" data-sort="none" title="Без сортировки по длительности">Обычная</button>
-          <button class="video-sort-pill" data-sort="longest" title="Сначала самые длинные видео">⏱️ Длинные</button>
-          <button class="video-sort-pill" data-sort="shortest" title="Сначала короткие клипы">⚡ Короткие</button>
+          <button class="video-sort-pill" data-sort="longest" title="Сначала самые длинные видео">Длинные</button>
+          <button class="video-sort-pill" data-sort="shortest" title="Сначала короткие клипы">Короткие</button>
         </div>
       </div>
 
-      <!-- 2.3 Фильтр типажа / форм (Мамочки / Лоли) -->
+      <!-- 2.3 Фильтр типажа / форм -->
       <div class="sidebar-block">
         <h3 class="sidebar-title">Формы / Типаж</h3>
         <div class="age-filter-toggle" id="ageFilterGroup">
           <button class="age-pill active" data-age="all" title="Все типажи и комплекции">Все</button>
-          <button class="age-pill" data-age="adult" title="Пышные формы, зрелые, MILF, высокие, большая грудь">👠 Мамочки</button>
-          <button class="age-pill" data-age="young" title="Миниатюрные, невысокие, petite, flat chest, лоли">🌸 Лоли</button>
+          <button class="age-pill" data-age="adult" title="Пышные формы, зрелые, MILF, высокие, большая грудь">Пышные</button>
+          <button class="age-pill" data-age="young" title="Миниатюрные, невысокие, petite, flat chest, лоли">Миниатюрные</button>
         </div>
       </div>
 
@@ -231,12 +231,12 @@
           <label class="toggle-row" title="Скрыть фурри, антропоморфных персонажей и животных">
             <input type="checkbox" id="checkHideFurry" checked>
             <span class="toggle-slider"></span>
-            <span class="toggle-name">🚫 Без фурри / антро</span>
+            <span class="toggle-name">Скрыть фурри и антро</span>
           </label>
           <label class="toggle-row" title="Скрыть беременность, инфляцию и экспансию живота">
             <input type="checkbox" id="checkHidePregnant" checked>
             <span class="toggle-slider"></span>
-            <span class="toggle-name">🚫 Без беременных</span>
+            <span class="toggle-name">Скрыть беременность</span>
           </label>
         </div>
       </div>
@@ -271,7 +271,9 @@
           <div class="profile-header-content">
             <div class="profile-avatar-wrapper">
               <div class="profile-avatar" id="profileAvatar">
-                <span id="profileAvatarText">👤</span>
+                <span id="profileAvatarText">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </span>
               </div>
             </div>
             
@@ -288,26 +290,38 @@
             </div>
           </div>
 
-          <!-- Счетчики статистики как в TikTok -->
+          <!-- Счетчики статистики -->
           <div class="profile-stats-bar">
             <div class="profile-stat-item" id="statLikesItem" title="Понравившиеся посты">
               <span class="profile-stat-value" id="statLikesCount">0</span>
-              <span class="profile-stat-label">❤️ Лайки</span>
+              <span class="profile-stat-label">
+                <span class="profile-stat-emoji">❤️</span>
+                <span>Лайки</span>
+              </span>
             </div>
             <div class="profile-stat-divider"></div>
             <div class="profile-stat-item" id="statFavsItem" title="Сохраненное в закладки">
               <span class="profile-stat-value" id="statFavsCount">0</span>
-              <span class="profile-stat-label">🔖 Избранное</span>
+              <span class="profile-stat-label">
+                <span class="profile-stat-emoji">🔖</span>
+                <span>Избранное</span>
+              </span>
             </div>
             <div class="profile-stat-divider"></div>
             <div class="profile-stat-item" id="statAuthorsItem" title="Отслеживаемые авторы">
               <span class="profile-stat-value" id="statAuthorsCount">0</span>
-              <span class="profile-stat-label">🎨 Подписки</span>
+              <span class="profile-stat-label">
+                <span class="profile-stat-emoji">🎨</span>
+                <span>Подписки</span>
+              </span>
             </div>
             <div class="profile-stat-divider"></div>
             <div class="profile-stat-item" id="statViewsItem" title="Изучено постов">
               <span class="profile-stat-value" id="statViewsCount">0</span>
-              <span class="profile-stat-label">👁️ Просмотры</span>
+              <span class="profile-stat-label">
+                <span class="profile-stat-emoji">👁️</span>
+                <span>Просмотры</span>
+              </span>
             </div>
           </div>
 
@@ -330,7 +344,7 @@
             </button>
             <button class="profile-tab-btn" data-profile-tab="analytics" id="btnProfileTabAnalytics">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
-              <span>Интересы («Для вас»)</span>
+              <span>Интересы</span>
             </button>
           </div>
         </div>
@@ -339,8 +353,8 @@
         <div class="profile-analytics-pane" id="profileAnalyticsPane" style="display: none;">
           <div class="analytics-card">
             <div class="analytics-header">
-              <h3 class="analytics-title">✨ Карта ваших вкусов и интересов</h3>
-              <p class="analytics-desc">На основе этих тегов обучается и формируется ваша персональная лента «Для вас».</p>
+              <h3 class="analytics-title">Карта ваших вкусов и интересов</h3>
+              <p class="analytics-desc">На основе этих тегов формируется ваша персональная лента «Для вас».</p>
             </div>
             <div class="interests-cloud" id="profileInterestsCloud">
               <!-- Теги и веса генерируются через JS -->
@@ -482,45 +496,48 @@
     <div class="bottom-sheet-content">
       <div class="category-cards-grid">
         <button class="category-card active" data-category="new">
-          <div class="category-icon">⚡</div>
+          <div class="category-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
           <div class="category-info">
             <span class="category-name">Новое</span>
             <span class="category-desc">Свежие публикации</span>
           </div>
         </button>
         <button class="category-card" data-category="recommended">
-          <div class="category-icon">✨</div>
+          <div class="category-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>
+          </div>
           <div class="category-info">
             <span class="category-name">Для вас</span>
-            <span class="category-desc">Рекомендации по лайкам</span>
+            <span class="category-desc">Рекомендации по вкусам</span>
           </div>
         </button>
         <button class="category-card" data-category="popular">
-          <div class="category-icon">🔥</div>
+          <div class="category-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>
+          </div>
           <div class="category-info">
             <span class="category-name">Популярное</span>
             <span class="category-desc">Тренды за неделю</span>
           </div>
         </button>
         <button class="category-card" data-category="top">
-          <div class="category-icon">⭐</div>
+          <div class="category-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
           <div class="category-info">
             <span class="category-name">Топ</span>
             <span class="category-desc">Лучшее всех времён</span>
           </div>
         </button>
         <button class="category-card" data-category="random">
-          <div class="category-icon">🎲</div>
+          <div class="category-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/></svg>
+          </div>
           <div class="category-info">
             <span class="category-name">Случайно</span>
             <span class="category-desc">Случайная подборка</span>
-          </div>
-        </button>
-        <button class="category-card" data-category="profile">
-          <div class="category-icon">👤</div>
-          <div class="category-info">
-            <span class="category-name">Профиль</span>
-            <span class="category-desc">Лайки, подписки, аккаунт</span>
           </div>
         </button>
       </div>
@@ -601,7 +618,7 @@
         <aside class="viewer-sidebar" id="viewerSidebar">
           <div class="viewer-sheet-handle mobile-only"></div>
           <div class="viewer-sidebar-header mobile-only">
-            <span class="viewer-sidebar-title">🏷️ Теги и информация</span>
+            <span class="viewer-sidebar-title">Теги и информация</span>
             <button class="btn-icon" id="btnCloseViewerTags" title="Скрыть">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
@@ -661,7 +678,7 @@
     <div class="settings-dialog">
       <div class="settings-header">
         <div class="settings-header-title-row">
-          <h3 class="settings-title">⚙️ Настройки и Фильтры</h3>
+          <h3 class="settings-title">Настройки и фильтры</h3>
         </div>
         <button class="btn-icon" id="btnCloseSettings" title="Закрыть">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -671,27 +688,21 @@
       <!-- Вкладки категорий настроек -->
       <div class="settings-nav-tabs">
         <button type="button" class="settings-nav-tab active" data-tab="general" title="Общие параметры интерфейса и тем">
-          <span class="tab-icon">🎨</span>
           <span class="tab-label">Общие</span>
         </button>
         <button type="button" class="settings-nav-tab" data-tab="filters" title="Черный список и фильтрация ИИ">
-          <span class="tab-icon">🛡️</span>
           <span class="tab-label">Фильтры</span>
         </button>
         <button type="button" class="settings-nav-tab" data-tab="archetypes" title="Слова для фильтров Мамочки и Лоли">
-          <span class="tab-icon">🎭</span>
           <span class="tab-label">Типажи</span>
         </button>
         <button type="button" class="settings-nav-tab" data-tab="apikeys" title="API ключи для Booru">
-          <span class="tab-icon">🔑</span>
           <span class="tab-label">API Ключи</span>
         </button>
         <button type="button" class="settings-nav-tab" data-tab="proxy" title="Настройки проксирования и сети">
-          <span class="tab-icon">🌐</span>
           <span class="tab-label">Прокси</span>
         </button>
         <button type="button" class="settings-nav-tab" data-tab="storage" title="Кэш, память и перенос данных">
-          <span class="tab-icon">💾</span>
           <span class="tab-label">Память</span>
         </button>
       </div>
@@ -703,9 +714,26 @@
           <div class="settings-group">
             <label class="settings-label">Цветовая тема:</label>
             <div class="theme-options">
-              <button class="btn-theme active" data-theme-val="dark">Графит (Deep Slate)</button>
-              <button class="btn-theme" data-theme-val="oled">OLED Pure Black</button>
-              <button class="btn-theme" data-theme-val="light">Светлая</button>
+              <button class="btn-theme active" data-theme-val="midnight" title="Глубокий обсидиан и сапфировый акцент">
+                <span class="theme-preview-dot" style="background: linear-gradient(135deg, #090b11 50%, #3b82f6 50%);"></span>
+                <span>Полночь</span>
+              </button>
+              <button class="btn-theme" data-theme-val="emerald" title="Хвойный малахит и мятный акцент">
+                <span class="theme-preview-dot" style="background: linear-gradient(135deg, #070d0b 50%, #10b981 50%);"></span>
+                <span>Нефрит</span>
+              </button>
+              <button class="btn-theme" data-theme-val="tokyo-night" title="Индиго-ноктюрн и неоновый коралл">
+                <span class="theme-preview-dot" style="background: linear-gradient(135deg, #0c0b17 50%, #f43f5e 50%);"></span>
+                <span>Токио</span>
+              </button>
+              <button class="btn-theme" data-theme-val="nordic-frost" title="Арктический гранит и ледяной циан">
+                <span class="theme-preview-dot" style="background: linear-gradient(135deg, #0c1017 50%, #06b6d4 50%);"></span>
+                <span>Нордик</span>
+              </button>
+              <button class="btn-theme" data-theme-val="warm-paper" title="Тёплая бумага и янтарный акцент">
+                <span class="theme-preview-dot" style="background: linear-gradient(135deg, #f5f2eb 50%, #d97706 50%); border-color: rgba(0,0,0,0.15);"></span>
+                <span>Манускрипт</span>
+              </button>
             </div>
           </div>
 
@@ -727,12 +755,12 @@
           <!-- Качество превью в ленте -->
           <div class="settings-group">
             <label class="settings-label" for="selectPreviewQuality">Качество превью в галерее:</label>
-            <p class="settings-hint">Выберите баланс между качеством картинок в ленте и скоростью загрузки / трафиком.</p>
+            <p class="settings-hint">Выберите баланс между качеством картинок в ленте и скоростью загрузки.</p>
             <select id="selectPreviewQuality" class="input-setting">
-              <option value="low">⚡ Низкое (Миниатюры) — Максимальная скорость, минимум трафика</option>
-              <option value="medium" selected>✨ Среднее (Стандартное) — Оптимальный баланс качества и скорости (Рекомендуется)</option>
-              <option value="high">🔍 Высокое (HD Sample) — Четкая картинка без артефактов сжатия</option>
-              <option value="original">💎 Оригинал (Full HD / 4K) — Максимальная детализация</option>
+              <option value="low">Низкое (миниатюры), максимальная скорость</option>
+              <option value="medium" selected>Среднее (стандартное), оптимальный баланс (Рекомендуется)</option>
+              <option value="high">Высокое (HD Sample), повышенная четкость</option>
+              <option value="original">Оригинал (Full HD / 4K), максимальная детализация</option>
             </select>
           </div>
 
@@ -743,29 +771,29 @@
               <label class="toggle-row" title="Воспроизводить превью видео при наведении курсора мыши в галерее">
                 <input type="checkbox" id="checkVideoAutoplayHover" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">🎬 Автовоспроизведение в ленте при наведении (ПК)</span>
+                <span class="toggle-name">Автовоспроизведение в ленте при наведении (ПК)</span>
               </label>
               <label class="toggle-row" title="Автоматически запускать видео без звука при прокрутке ленты в фокус на смартфонах">
                 <input type="checkbox" id="checkVideoAutoplayMobile" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">📱 Автовоспроизведение в ленте при прокрутке (Смартфоны)</span>
+                <span class="toggle-name">Автовоспроизведение в ленте при прокрутке (Смартфоны)</span>
               </label>
               <label class="toggle-row" title="Автоматически начинать проигрывание видео при открытии в полноэкранном просмотрщике">
                 <input type="checkbox" id="checkVideoAutoplayViewer" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">▶️ Автовоспроизведение при открытии в просмотрщике</span>
+                <span class="toggle-name">Автовоспроизведение при открытии в просмотрщике</span>
               </label>
               <label class="toggle-row" title="Показывать информационную плашку с кнопками кеширования в память, FFmpeg и прокси в просмотрщике">
                 <input type="checkbox" id="checkShowVideoStatusBanner" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">📊 Показывать статусную плашку кеширования у видео (кэш/прокси/фикс)</span>
+                <span class="toggle-name">Показывать статусную плашку видео (кэш, прокси, транскодер)</span>
               </label>
             </div>
           </div>
 
           <!-- PWA Приложение для смартфона/ПК -->
-          <div class="settings-group" id="pwaInstallGroup" style="display: none; background: rgba(59, 130, 246, 0.08); padding: 14px; border-radius: var(--radius-md); border: 1px solid rgba(59, 130, 246, 0.2);">
-            <label class="settings-label" style="color: var(--accent-primary);">📱 Мобильное PWA-приложение:</label>
+          <div class="settings-group" id="pwaInstallGroup" style="display: none; background: var(--accent-primary-subtle); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-medium);">
+            <label class="settings-label" style="color: var(--accent-primary);">Мобильное PWA-приложение:</label>
             <p class="settings-hint" style="margin-bottom: 10px;">Установите Booru Explorer как отдельное быстрое приложение на рабочий стол смартфона или ПК.</p>
             <button type="button" class="btn-primary" id="btnInstallPwa" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -799,10 +827,10 @@
         <div class="settings-tab-pane" id="tabPane-archetypes" style="display: none;">
           <div class="settings-group">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="curvyTagsInput">👠 Слова для «Мамочки / Пышные» (Curvy / Mature):</label>
+              <label class="settings-label" for="curvyTagsInput">Слова для «Пышные / Мамочки» (Curvy / Mature):</label>
               <button type="button" class="btn-text" id="btnResetCurvyTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, используемые при активации фильтра «👠 Мамочки» для отбора зрелых и пышных персонажей.</p>
+            <p class="settings-hint">Теги, используемые при активации фильтра для отбора зрелых и пышных персонажей.</p>
             <div class="tags-input-box" id="curvyTagsWrapper">
               <input type="text" id="curvyTagsInput" placeholder="Добавить тег (например: milf, mature)..." spellcheck="false">
             </div>
@@ -810,10 +838,10 @@
 
           <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="petiteTagsInput">🌸 Слова для «Лоли / Миниатюрные» (Petite / Loli):</label>
+              <label class="settings-label" for="petiteTagsInput">Слова для «Миниатюрные / Лоли» (Petite / Loli):</label>
               <button type="button" class="btn-text" id="btnResetPetiteTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, используемые при активации фильтра «🌸 Лоли» для отбора миниатюрных персонажей.</p>
+            <p class="settings-hint">Теги, используемые при активации фильтра для отбора миниатюрных персонажей.</p>
             <div class="tags-input-box" id="petiteTagsWrapper">
               <input type="text" id="petiteTagsInput" placeholder="Добавить тег (например: loli, petite)..." spellcheck="false">
             </div>
@@ -823,7 +851,7 @@
         <!-- 4. ВКЛАДКА: API КЛЮЧИ -->
         <div class="settings-tab-pane" id="tabPane-apikeys" style="display: none;">
           <div class="settings-group">
-            <label class="settings-label">🔑 Персональные API Ключи (Booru):</label>
+            <label class="settings-label">Персональные API Ключи (Booru):</label>
             <p class="settings-hint">Необязательно. Бесплатные ключи снимают ограничения поиска, повышают лимиты и ускоряют выдачу.</p>
             
             <div class="api-keys-container">
@@ -869,40 +897,40 @@
         <!-- 5. ВКЛАДКА: ПРОКСИ & СЕТЬ -->
         <div class="settings-tab-pane" id="tabPane-proxy" style="display: none;">
           <div class="settings-group">
-            <label class="settings-label">🛡️ Проксирование и экономия трафика сервера:</label>
+            <label class="settings-label">Проксирование и экономия трафика сервера:</label>
             <p class="settings-hint">Отключайте проксирование для прямой загрузки с CDN. Если CDN борды блокирует доступ, приложение автоматически подключит прокси (Fallback).</p>
             <div class="toggles-list" style="margin-top: 6px;">
               <label class="toggle-row" id="rowProxyThumbnails" title="Загружать превью и миниатюры через серверный прокси с сохранением в локальный дисковый кэш">
                 <input type="checkbox" id="checkProxyThumbnails" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">🖼️ Проксировать превью в ленте (кэширование на сервере)</span>
+                <span class="toggle-name">Проксировать превью в ленте (кэширование на сервере)</span>
               </label>
               <div id="proxyThumbnailsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-                ⚠️ Прокси превью недоступен на Live Demo (для экономии Fast Origin Transfer)
+                Прокси превью недоступен на Live Demo (для экономии Fast Origin Transfer)
               </div>
               <label class="toggle-row" id="rowProxyFullImages" title="Загружать полноразмерные оригиналы артов через серверный прокси в просмотрщике">
                 <input type="checkbox" id="checkProxyFullImages" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">🎨 Проксировать полноразмерные изображения (просмотрщик)</span>
+                <span class="toggle-name">Проксировать полноразмерные изображения (просмотрщик)</span>
               </label>
               <div id="proxyFullImagesVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-                ⚠️ Прокси изображений недоступен на Live Demo (для экономии Fast Origin Transfer)
+                Прокси изображений недоступен на Live Demo (для экономии Fast Origin Transfer)
               </div>
               <label class="toggle-row" id="rowProxyVideos" title="Загружать видеопотоки через локальный прокси для мгновенного запуска и обхода CDN-ограничений">
                 <input type="checkbox" id="checkProxyVideos" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">🎬 Проксировать видеопотоки (лента и полноэкранный плеер)</span>
+                <span class="toggle-name">Проксировать видеопотоки (лента и полноэкранный плеер)</span>
               </label>
               <div id="proxyVideosVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-                ⚠️ Прокси видео недоступен на Live Demo (для экономии Fast Origin Transfer)
+                Прокси видео недоступен на Live Demo (для экономии Fast Origin Transfer)
               </div>
               <label class="toggle-row" id="rowProxyDownloads" title="Скачивать файлы через серверный прокси для гарантированного сохранения с оригинальным именем">
                 <input type="checkbox" id="checkProxyDownloads" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">📥 Проксировать скачивание файлов на устройство</span>
+                <span class="toggle-name">Проксировать скачивание файлов на устройство</span>
               </label>
               <div id="proxyDownloadsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-                ⚠️ Прокси скачивания недоступен на Live Demo (для экономии Fast Origin Transfer)
+                Прокси скачивания недоступен на Live Demo (для экономии Fast Origin Transfer)
               </div>
             </div>
           </div>
@@ -925,17 +953,17 @@
               <label class="toggle-row" title="Мгновенное воспроизведение проблемных видео прямо в браузере через MediaSource. При отключении плеер сразу использует серверный FFmpeg транскодер.">
                 <input type="checkbox" id="checkEnableJsDemuxing" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">🚀 Клиентский MP4Box демуксинг (выключите для прямого перехода на FFmpeg)</span>
+                <span class="toggle-name">Клиентский MP4Box демуксинг (выключите для прямого перехода на FFmpeg)</span>
               </label>
               <label class="toggle-row" title="Ручные теги (например 'petite') будут иметь приоритет над сортировкой 'Популярное' и 'Видео' при поиске на Danbooru">
                 <input type="checkbox" id="checkPrioritizeUserTags">
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">🎯 Отдавать приоритет ручным тегам перед системными фильтрами (Danbooru)</span>
+                <span class="toggle-name">Отдавать приоритет ручным тегам перед системными фильтрами (Danbooru)</span>
               </label>
               <label class="toggle-row" title="Использовать открытую базу Rule34 Paheal (rule34.paheal.net) при отсутствии или сбое API ключа Rule34.xxx">
                 <input type="checkbox" id="checkEnablePaheal" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">🌐 Использовать Rule34 через Paheal (открытый источник без API ключа)</span>
+                <span class="toggle-name">Использовать Rule34 через Paheal (открытый источник без API ключа)</span>
               </label>
             </div>
           </div>
@@ -947,7 +975,7 @@
           <div class="settings-group storage-settings-group">
             <div class="storage-header-row">
               <div>
-                <label class="settings-label">💾 Кэш и память устройства:</label>
+                <label class="settings-label">Кэш и память устройства:</label>
                 <p class="settings-hint">Закэшированные медиа-файлы и запросы для мгновенной работы офлайн/онлайн.</p>
               </div>
               <button type="button" class="btn-refresh-storage" id="btnRefreshStorage" title="Обновить расчет памяти">
@@ -1002,7 +1030,7 @@
 
           <!-- Резервное копирование и перенос данных -->
           <div class="settings-group backup-settings-group">
-            <label class="settings-label">📦 Резервное копирование и перенос данных:</label>
+            <label class="settings-label">Резервное копирование и перенос данных:</label>
             <p class="settings-hint">Выгрузите свои настройки, слова типажей, API-ключи, закладки, лайки и список любимых авторов в файл или перенесите на другое устройство.</p>
             
             <div class="backup-actions-grid">
@@ -1036,13 +1064,11 @@
     </div>
   </div>
 
-
-
   <!-- Модальное окно добавления автора в избранное -->
   <div class="modal-backdrop" id="modalAddAuthorBackdrop" style="display: none;">
     <div class="modal-dialog modal-dialog-sm">
       <div class="modal-header">
-        <h3 class="modal-title">🎨 Добавить автора в избранное</h3>
+        <h3 class="modal-title">Добавить автора в избранное</h3>
         <button class="btn-icon btn-modal-close" id="btnCloseAddAuthorModal" title="Закрыть">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -1123,7 +1149,7 @@
           <label class="toggle-switch">
             <input type="checkbox" id="checkMigrateLocalData" checked>
             <span class="toggle-slider"></span>
-            <span class="toggle-name">✨ Перенести текущие закладки, лайки и настройки в новый аккаунт</span>
+            <span class="toggle-name">Перенести текущие закладки, лайки и настройки в новый аккаунт</span>
           </label>
         </div>
 

@@ -13,17 +13,28 @@ export function initAuthModal({ onAuthSuccess, onLogout }) {
   const regErrorMsg = document.getElementById('regErrorMsg');
   const btnHeaderAuth = document.getElementById('btnHeaderAuth');
 
+  function clearInputs() {
+    const inputs = modalBackdrop?.querySelectorAll('input[type="text"], input[type="password"]');
+    inputs?.forEach(inp => { inp.value = ''; });
+  }
+
   function openAuthModal(mode = 'login') {
     if (!modalBackdrop) return;
     switchTab(mode);
     clearErrors();
+    clearInputs();
     modalBackdrop.style.display = 'flex';
+    setTimeout(() => {
+      const firstInp = mode === 'login' ? document.getElementById('inputLoginUsername') : document.getElementById('inputRegUsername');
+      firstInp?.focus();
+    }, 60);
   }
 
   function closeAuthModal() {
     if (!modalBackdrop) return;
     modalBackdrop.style.display = 'none';
     clearErrors();
+    clearInputs();
   }
 
   function clearErrors() {
@@ -36,6 +47,11 @@ export function initAuthModal({ onAuthSuccess, onLogout }) {
       regErrorMsg.textContent = '';
     }
   }
+
+  // Очистка сообщений об ошибках при наборе
+  modalBackdrop?.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('input', clearErrors);
+  });
 
   function switchTab(mode) {
     clearErrors();

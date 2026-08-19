@@ -153,7 +153,7 @@ export const PETITE_EXCLUDE_TAGS = [
 ];
 
 export const DEFAULT_SETTINGS = {
-  theme: 'dark',
+  theme: 'midnight',
   gridColumns: 'auto',
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
   ratingFilter: 'all', // 'all', 'nsfw', 'sfw'

@@ -17,7 +17,7 @@ html, body {
   -webkit-text-size-adjust: 100%;
 }
 
-/* Базовые стили для всех кнопок-иконок в приложении */
+/* Базовые стили для кнопок-иконок */
 .btn-icon {
   width: 36px;
   height: 36px;
@@ -35,7 +35,6 @@ html, body {
   transition: all var(--transition-fast);
   -webkit-tap-highlight-color: transparent;
   flex-shrink: 0;
-  outline: none;
   box-shadow: var(--shadow-sm);
 }
 
@@ -48,6 +47,11 @@ html, body {
   transform: scale(0.94);
   background: var(--bg-surface-hover) !important;
   border-color: var(--accent-primary) !important;
+}
+
+.btn-icon:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
 }
 
 .btn-icon svg {
@@ -109,10 +113,10 @@ html, body {
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--accent-primary), #818cf8);
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-primary-hover));
   color: #ffffff;
   border-radius: var(--radius-md);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 2px 10px var(--accent-primary-subtle);
   transition: transform var(--transition-fast);
 }
 
@@ -164,6 +168,11 @@ html, body {
   background-color: var(--bg-surface-hover);
 }
 
+.nav-tab:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .nav-tab.active {
   color: #ffffff;
   background-color: var(--accent-primary);
@@ -200,7 +209,7 @@ html, body {
   padding: 2px 8px;
   background-color: var(--accent-primary-subtle);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid var(--border-medium);
 }
 
 .results-count {
@@ -215,7 +224,7 @@ html, body {
   width: 100%;
 }
 
-/* Левый сайдбар поиска и тегов (как на Danbooru) */
+/* Левый сайдбар поиска и тегов */
 .sidebar-search {
   width: 280px;
   min-width: 280px;
@@ -263,7 +272,7 @@ html, body {
 
 .sidebar-search-box:focus-within {
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  box-shadow: var(--focus-ring);
 }
 
 .search-tags-wrapper {
@@ -298,7 +307,7 @@ html, body {
   width: 100%;
   margin-top: 8px;
   padding: 8px 14px;
-  background: linear-gradient(135deg, var(--accent-primary), #4f46e5);
+  background: var(--gradient-accent);
   color: #ffffff;
   border: none;
   border-radius: var(--radius-md);
@@ -306,22 +315,27 @@ html, body {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.25);
+  box-shadow: var(--shadow-sm);
   transition: all var(--transition-fast);
 }
 
 .btn-sidebar-search:hover {
-  background: linear-gradient(135deg, var(--accent-primary-hover), #4338ca);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  background: var(--accent-primary-hover);
+  box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
 
 .btn-sidebar-search:active {
   transform: translateY(0);
-  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
-/* Переключатели фильтра ИИ, Рейтинга, Типа контента, Возраста и Сортировки видео */
+.btn-sidebar-search:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Переключатели фильтров */
 .ai-filter-toggle, .rating-filter-toggle, .type-filter-toggle, .age-filter-toggle, .video-sort-toggle {
   display: flex;
   background-color: var(--bg-surface-elevated);
@@ -349,6 +363,11 @@ html, body {
 
 .ai-pill:hover, .rating-pill:hover, .type-pill:hover, .age-pill:hover, .video-sort-pill:hover {
   color: var(--text-primary);
+}
+
+.ai-pill:focus-visible, .rating-pill:focus-visible, .type-pill:focus-visible, .age-pill:focus-visible, .video-sort-pill:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
 }
 
 .ai-pill.active, .rating-pill.active, .type-pill.active, .age-pill.active, .video-sort-pill.active {
@@ -681,28 +700,15 @@ html, body {
   min-height: 56px;
   padding-top: 6px;
   padding-bottom: max(14px, env(safe-area-inset-bottom, 16px));
-  background: rgba(12, 14, 20, 0.96);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--bg-surface);
   border-top: 1px solid var(--border-medium);
   display: flex;
   align-items: center;
   justify-content: space-around;
   z-index: 9999 !important;
-  box-shadow: 0 -4px 25px rgba(0, 0, 0, 0.7);
+  box-shadow: var(--shadow-lg);
   -webkit-transform: translate3d(0, 0, 0);
   transform: translate3d(0, 0, 0);
-}
-
-[data-theme="oled"] .mobile-bottom-nav {
-  background: rgba(0, 0, 0, 0.96);
-  border-top-color: var(--border-medium);
-}
-
-[data-theme="light"] .mobile-bottom-nav {
-  background: rgba(255, 255, 255, 0.96);
-  border-top-color: var(--border-subtle);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .mobile-nav-item {
@@ -730,6 +736,12 @@ html, body {
   transform: scale(0.92);
 }
 
+.mobile-nav-item:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
 .mobile-nav-item.active {
   color: var(--accent-primary);
   font-weight: 700;
@@ -737,7 +749,6 @@ html, body {
 
 .mobile-nav-item.active .nav-icon-box svg {
   stroke: var(--accent-primary);
-  filter: drop-shadow(0 0 8px var(--accent-primary-subtle));
 }
 
 .nav-icon-box {
@@ -871,6 +882,12 @@ html, body {
   transition: all var(--transition-fast);
 }
 
+.category-card:focus-visible,
+.source-mobile-card:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 .category-card:active {
   transform: scale(0.97);
 }
@@ -881,8 +898,22 @@ html, body {
 }
 
 .category-icon {
-  font-size: 22px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.category-card.active .category-icon {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
 }
 
 .category-info {

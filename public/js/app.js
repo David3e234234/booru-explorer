@@ -74,19 +74,33 @@ async function init() {
     onCloseSettingsModal: closeSettingsModal
   });
 
-  // 1. Инициализация подсистем
+  // 1. Инициализация подсистем и валидация токена
   loadLocalAuth();
+  if (state.authToken) {
+    try {
+      const me = await apiGetMe();
+      if (me && me.user) {
+        state.currentUser = me.user;
+        saveLocalAuth(state.authToken, me.user);
+      } else {
+        clearLocalAuth();
+      }
+    } catch (e) {
+      clearLocalAuth();
+    }
+  }
   updateHeaderAuthUI();
 
   authModalInstance = initAuthModal({
     onAuthSuccess: async (user) => {
       updateHeaderAuthUI();
-      if (profileUIInstance) profileUIInstance.renderProfile();
       await refreshAllUserData();
+      if (profileUIInstance) profileUIInstance.renderProfile();
       selectCategory('profile');
     },
-    onLogout: () => {
+    onLogout: async () => {
       updateHeaderAuthUI();
+      await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
       selectCategory('new');
     }
@@ -111,6 +125,7 @@ async function init() {
     onReloadState: async () => {
       updateHeaderAuthUI();
       await refreshAllUserData();
+      if (profileUIInstance) profileUIInstance.renderProfile();
       selectCategory('new');
     }
   });
@@ -233,7 +248,7 @@ function handleExploreAuthor(author) {
     autocompleteInstance.renderTagsChips();
   }
   selectCategory('new');
-  showToast(`Поиск работ автора: ${author.displayName || author.name} 🎨`);
+  showToast(`Поиск работ автора: ${author.displayName || author.name}`);
 }
 
 function selectSite(siteId) {
@@ -267,20 +282,22 @@ function selectCategory(category) {
 
 async function loadUserSettings() {
   try {
-    const local = loadLocalSettings();
-    if (local) {
-      applySettingsToUIAndState(local);
+    if (state.currentUser) {
+      const data = await fetchSettings();
+      const serverSettings = data?.settings || {};
+      applySettingsToUIAndState(serverSettings);
+      saveLocalSettings(serverSettings);
+    } else {
+      const local = loadLocalSettings();
+      if (local) {
+        applySettingsToUIAndState(local);
+      }
+      const data = await fetchSettings();
+      const serverSettings = data?.settings || {};
+      const merged = { ...serverSettings, ...(local || {}) };
+      applySettingsToUIAndState(merged);
+      saveLocalSettings(merged);
     }
-    const data = await fetchSettings();
-    const serverSettings = data?.settings || {};
-    const merged = { ...serverSettings, ...(local || {}) };
-    
-    if (local && (local.rule34ApiKey || local.gelbooruApiKey || local.danbooruApiKey || local.theme || local.blacklist)) {
-      saveSettings(merged).catch(() => {});
-    }
-
-    applySettingsToUIAndState(merged);
-    saveLocalSettings(merged);
   } catch (err) {
     console.error('Ошибка настроек:', err);
   }
@@ -288,23 +305,30 @@ async function loadUserSettings() {
 
 async function loadFavorites() {
   try {
-    const localFavs = loadLocalFavorites() || [];
-    if (localFavs.length > 0) {
-      setFavorites(localFavs);
+    if (state.currentUser) {
+      const data = await fetchFavorites();
+      const serverFavs = Array.isArray(data?.favorites) ? data.favorites : [];
+      setFavorites(serverFavs);
       updateFavoritesBadge();
-    }
-    const data = await fetchFavorites();
-    const serverFavs = data.favorites || [];
-    const map = new Map();
-    serverFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
-    localFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
-    const merged = Array.from(map.values());
+    } else {
+      const localFavs = loadLocalFavorites() || [];
+      if (localFavs.length > 0) {
+        setFavorites(localFavs);
+        updateFavoritesBadge();
+      }
+      const data = await fetchFavorites();
+      const serverFavs = data?.favorites || [];
+      const map = new Map();
+      serverFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
+      localFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
+      const merged = Array.from(map.values());
 
-    setFavorites(merged);
-    updateFavoritesBadge();
+      setFavorites(merged);
+      updateFavoritesBadge();
 
-    if (localFavs.length > serverFavs.length) {
-      syncFavorites(merged).catch(() => {});
+      if (localFavs.length > serverFavs.length) {
+        syncFavorites(merged).catch(() => {});
+      }
     }
   } catch (err) {
     console.error('Ошибка избранного:', err);
@@ -313,23 +337,30 @@ async function loadFavorites() {
 
 async function loadFavoriteAuthors() {
   try {
-    const localAuthors = loadLocalFavoriteAuthors() || [];
-    if (localAuthors.length > 0) {
-      setFavoriteAuthors(localAuthors);
+    if (state.currentUser) {
+      const data = await fetchFavoriteAuthors();
+      const serverAuthors = Array.isArray(data?.authors) ? data.authors : [];
+      setFavoriteAuthors(serverAuthors);
       updateFavoritesBadge();
-    }
-    const data = await fetchFavoriteAuthors();
-    const serverAuthors = data.authors || [];
-    const map = new Map();
-    serverAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
-    localAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
-    const merged = Array.from(map.values());
+    } else {
+      const localAuthors = loadLocalFavoriteAuthors() || [];
+      if (localAuthors.length > 0) {
+        setFavoriteAuthors(localAuthors);
+        updateFavoritesBadge();
+      }
+      const data = await fetchFavoriteAuthors();
+      const serverAuthors = data?.authors || [];
+      const map = new Map();
+      serverAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
+      localAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
+      const merged = Array.from(map.values());
 
-    setFavoriteAuthors(merged);
-    updateFavoritesBadge();
+      setFavoriteAuthors(merged);
+      updateFavoritesBadge();
 
-    if (localAuthors.length > serverAuthors.length) {
-      syncFavoriteAuthors(merged).catch(() => {});
+      if (localAuthors.length > serverAuthors.length) {
+        syncFavoriteAuthors(merged).catch(() => {});
+      }
     }
   } catch (err) {
     console.error('Ошибка любимых авторов:', err);
@@ -338,21 +369,27 @@ async function loadFavoriteAuthors() {
 
 async function loadLikes() {
   try {
-    const localLikes = loadLocalLikes() || [];
-    if (localLikes.length > 0) {
-      setLikes(localLikes);
-    }
-    const data = await fetchLikes();
-    const serverLikes = data.likes || [];
-    const map = new Map();
-    serverLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
-    localLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
-    const merged = Array.from(map.values());
+    if (state.currentUser) {
+      const data = await fetchLikes();
+      const serverLikes = Array.isArray(data?.likes) ? data.likes : [];
+      setLikes(serverLikes);
+    } else {
+      const localLikes = loadLocalLikes() || [];
+      if (localLikes.length > 0) {
+        setLikes(localLikes);
+      }
+      const data = await fetchLikes();
+      const serverLikes = data?.likes || [];
+      const map = new Map();
+      serverLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
+      localLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
+      const merged = Array.from(map.values());
 
-    setLikes(merged);
+      setLikes(merged);
 
-    if (localLikes.length > serverLikes.length) {
-      syncLikes(merged).catch(() => {});
+      if (localLikes.length > serverLikes.length) {
+        syncLikes(merged).catch(() => {});
+      }
     }
   } catch (err) {
     console.error('Ошибка лайков:', err);
@@ -857,7 +894,7 @@ function setupEventListeners() {
       try {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         await performSearch(true, { bustCache: true });
-        showToast('Поиск обновлен 🔄');
+        showToast('Поиск обновлен');
       } catch (e) {
         showToast('Ошибка при обновлении поиска');
       } finally {
@@ -882,7 +919,7 @@ function setupEventListeners() {
       }
       galleryInstance.renderGallery(false);
       renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
-      showToast('Лента перемешана вразнобой 🔀');
+      showToast('Лента перемешана');
     });
   }
 

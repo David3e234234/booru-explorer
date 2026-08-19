@@ -12,7 +12,17 @@ import {
 import { logError } from '../utils/logger.js';
 import { getUserDataDir } from './userService.js';
 
+const pendingWrites = new Map();
+const pendingData = new Map();
+
 export function readJsonFile(filePath, defaultData) {
+  if (pendingData.has(filePath)) {
+    try {
+      return JSON.parse(JSON.stringify(pendingData.get(filePath)));
+    } catch {
+      return pendingData.get(filePath);
+    }
+  }
   try {
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf-8');
@@ -25,10 +35,14 @@ export function readJsonFile(filePath, defaultData) {
 }
 
 export function writeJsonFile(filePath, data) {
+  pendingData.set(filePath, data);
   try {
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    if (!pendingWrites.has(filePath)) {
+      pendingData.delete(filePath);
+    }
     return true;
   } catch (err) {
     logError('Storage', `Ошибка записи ${filePath}`, err);
@@ -36,8 +50,8 @@ export function writeJsonFile(filePath, data) {
   }
 }
 
-const pendingWrites = new Map();
 export function writeJsonFileAsync(filePath, data, debounceMs = 150) {
+  pendingData.set(filePath, data);
   if (pendingWrites.has(filePath)) {
     clearTimeout(pendingWrites.get(filePath));
   }
@@ -47,6 +61,9 @@ export function writeJsonFileAsync(filePath, data, debounceMs = 150) {
       const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) await fs.promises.mkdir(dir, { recursive: true });
       await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+      if (!pendingWrites.has(filePath)) {
+        pendingData.delete(filePath);
+      }
     } catch (err) {
       logError('Storage', `Ошибка асинхронной записи ${filePath}`, err);
     }
@@ -67,7 +84,8 @@ export function getSettings(userId = null) {
   if (!userId && inMemorySettings) {
     settings = inMemorySettings;
   } else {
-    settings = readJsonFile(filePath, DEFAULT_SETTINGS);
+    const raw = readJsonFile(filePath, {});
+    settings = { ...DEFAULT_SETTINGS, ...raw };
     if (!userId) inMemorySettings = settings;
   }
   

@@ -6,8 +6,8 @@
   "id": "/",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#0c0e14",
-  "theme_color": "#0c0e14",
+  "background_color": "#090b11",
+  "theme_color": "#090b11",
   "categories": ["entertainment", "photo", "video"],
   "icons": [
     {

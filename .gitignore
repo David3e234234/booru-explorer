@@ -12,6 +12,7 @@ data/favorite_authors.json
 data/likes.json
 data/users.json
 data/users/
+data/.session_secret*
 data/cache/
 data/*.json.bak
 

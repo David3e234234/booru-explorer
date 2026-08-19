@@ -66,7 +66,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
         profileJoinedDate.textContent = 'Данные сохраняются локально в вашем браузере';
       }
       if (profileAvatar) {
-        profileAvatar.innerHTML = '👤';
+        profileAvatar.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
       }
 
       if (profileHeaderActions) {
@@ -106,16 +106,19 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
 
     const interestTags = getUserInterestTags ? getUserInterestTags(30) : [];
     if (!interestTags || interestTags.length === 0) {
-      cloud.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Ставьте больше лайков ❤️, чтобы сформировать карту интересов для рекомендаций.</span>';
+      cloud.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Оценивайте работы лайками, чтобы сформировать карту интересов для персональных рекомендаций.</span>';
       return;
     }
 
-    cloud.innerHTML = interestTags.map(item => `
-      <div class="interest-tag-chip" data-tag="${item.tag}">
-        <span>${item.tag}</span>
-        <span class="interest-tag-weight">${item.weight.toFixed(1)}</span>
-      </div>
-    `).join('');
+    cloud.innerHTML = interestTags.map(item => {
+      const displayScore = typeof item.score === 'number' ? item.score.toFixed(1) : (typeof item.weight === 'number' ? item.weight.toFixed(1) : '');
+      return `
+        <div class="interest-tag-chip" data-tag="${item.tag}">
+          <span>${item.tag}</span>
+          ${displayScore ? `<span class="interest-tag-weight">${displayScore}</span>` : ''}
+        </div>
+      `;
+    }).join('');
 
     cloud.querySelectorAll('.interest-tag-chip').forEach(chip => {
       chip.addEventListener('click', () => {

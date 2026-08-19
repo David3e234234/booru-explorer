@@ -226,6 +226,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     if (state.currentCategory === 'favorites') {
       currentSiteLabel.textContent = 'Избранное';
+    } else if (state.currentCategory === 'profile') {
+      currentSiteLabel.textContent = 'Профиль';
     } else {
       const siteObj = state.sites.find(s => s.id === state.currentSite);
       currentSiteLabel.textContent = siteObj ? siteObj.name : state.currentSite;
@@ -236,6 +238,28 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     if (postsToDisplay.length === 0) {
       emptyState.style.display = 'flex';
+      const emptyTitle = emptyState.querySelector('.state-title');
+      const emptyDesc = emptyState.querySelector('.state-desc');
+
+      if (state.currentCategory === 'profile') {
+        if (state.profileSubTab === 'likes') {
+          if (emptyTitle) emptyTitle.textContent = 'Нет понравившихся постов';
+          if (emptyDesc) emptyDesc.textContent = 'Оценивайте посты сердечком в галерее или просмотрщике, чтобы собрать коллекцию.';
+        } else if (state.profileSubTab === 'favorites') {
+          if (emptyTitle) emptyTitle.textContent = 'В закладках пока пусто';
+          if (emptyDesc) emptyDesc.textContent = 'Сохраняйте работы в закладки, чтобы быстро возвращаться к ним в любое время.';
+        } else if (state.profileSubTab === 'authors') {
+          if (emptyTitle) emptyTitle.textContent = 'Нет отслеживаемых авторов';
+          if (emptyDesc) emptyDesc.textContent = 'Добавляйте художников в любимые, чтобы отслеживать их новые работы.';
+        }
+      } else if (state.currentCategory === 'favorites') {
+        if (emptyTitle) emptyTitle.textContent = 'В избранном пока пусто';
+        if (emptyDesc) emptyDesc.textContent = 'Нажмите на значок закладки на любой карточке, чтобы сохранить пост.';
+      } else {
+        if (emptyTitle) emptyTitle.textContent = 'Ничего не найдено';
+        if (emptyDesc) emptyDesc.textContent = 'Попробуйте изменить теги поиска или переключить Booru-источник.';
+      }
+
       resultsCount.textContent = '0 постов';
       if (loadMoreContainer) loadMoreContainer.style.display = 'none';
       return;
@@ -246,7 +270,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     // Отображение кнопки «Загрузить еще»
     if (loadMoreContainer) {
-      if (state.hasMore && state.currentCategory !== 'favorites' && postsToDisplay.length >= 10) {
+      if (state.hasMore && state.currentCategory !== 'favorites' && state.currentCategory !== 'profile' && postsToDisplay.length >= 10) {
         loadMoreContainer.style.display = 'flex';
       } else {
         loadMoreContainer.style.display = 'none';
@@ -324,7 +348,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     } else {
       // Статичные изображения
       if (quality === 'low') {
-        // Danbooru: 180x180 эскиз, остальные — previewUrl
+        // Danbooru: 180x180 эскиз, остальные: previewUrl
         directThumb = (post.site === 'danbooru' && post.thumb180) ? post.thumb180
           : ((!isVideoExt(post.previewUrl) && post.previewUrl) || post.sampleUrl || post.fileUrl || '');
       } else if (quality === 'medium') {
@@ -368,9 +392,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     let formatBadge = '';
     if (post.isVideo) {
       if (post.hasSound) {
-        formatBadge = `<span class="badge-format video" style="background: linear-gradient(135deg, #7c3aed, #db2777);">🔊 ЗВУК</span>`;
+        formatBadge = `<span class="badge-format video" style="background-color: var(--accent-primary);">Звук</span>`;
       } else {
-        formatBadge = `<span class="badge-format video">🎬 VIDEO</span>`;
+        formatBadge = `<span class="badge-format video">Видео</span>`;
       }
     } else if (post.isGif) {
       formatBadge = `<span class="badge-format gif">GIF</span>`;
@@ -384,7 +408,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    const aiBadge = post.isAi ? `<span class="badge-ai" title="Работа создана с помощью ИИ">🤖 ИИ</span>` : '';
+    const aiBadge = post.isAi ? `<span class="badge-ai" title="Работа создана с помощью ИИ">ИИ</span>` : '';
 
     let ratingBadge = '';
     const r = (post.rating || '').toLowerCase();
@@ -396,12 +420,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const rawAuthor = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
     let cleanAuthor = rawAuthor.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
     cleanAuthor = cleanAuthor.replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').replace(/\([^)]*\)$/, '').trim();
-    const authorBadge = cleanAuthor ? `<span class="badge-format author" title="Автор: ${cleanAuthor} (нажмите для поиска)">🎨 ${cleanAuthor}</span>` : '';
+    const authorBadge = cleanAuthor ? `<span class="badge-format author" title="Автор: ${cleanAuthor} (нажмите для поиска)">${cleanAuthor}</span>` : '';
 
     let durationBadge = '';
     if (post.isVideo && (post.durationText || post.duration > 0)) {
       const durLabel = post.durationText || `${Math.floor(post.duration / 60)}:${Math.floor(post.duration % 60) < 10 ? '0' : ''}${Math.floor(post.duration % 60)}`;
-      durationBadge = `<span class="badge-format badge-duration" title="Длительность: ${durLabel}">⏱️ ${durLabel}</span>`;
+      durationBadge = `<span class="badge-format badge-duration" title="Длительность: ${durLabel}">${durLabel}</span>`;
     }
 
     let dateBadge = '';
@@ -413,14 +437,14 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           const month = String(d.getMonth() + 1).padStart(2, '0');
           const year = String(d.getFullYear()).slice(-2);
           const shortDate = `${day}.${month}.${year}`;
-          dateBadge = `<span class="badge-format badge-date" title="Дата: ${d.toLocaleString('ru-RU')}">📅 ${shortDate}</span>`;
+          dateBadge = `<span class="badge-format badge-date" title="Дата: ${d.toLocaleString('ru-RU')}">${shortDate}</span>`;
         }
       } catch (e) {}
     }
 
     let matchBadge = '';
     if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
-      matchBadge = `<span class="badge-format match-percent" title="Совпадение с вашими вкусами: ${post.matchPercent}%">✨ ${post.matchPercent}%</span>`;
+      matchBadge = `<span class="badge-format match-percent" title="Совпадение со вкусами: ${post.matchPercent}%">${post.matchPercent}%</span>`;
     }
 
     const isFav = isPostFavorite(post.id);
@@ -620,7 +644,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     } else {
       btn.classList.remove('active');
       btn.querySelector('svg').setAttribute('fill', 'none');
+      if (state.currentCategory === 'profile' && state.profileSubTab === 'likes') {
+        state.posts = state.posts.filter(p => p.id !== post.id);
+        renderGallery();
+      }
     }
+    if (onFavoriteToggle) onFavoriteToggle();
     try {
       await toggleLikePost(post);
     } catch (err) {
@@ -642,12 +671,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           state.favorites = state.favorites.filter(f => f.id !== post.id);
           btn.classList.remove('active');
           btn.querySelector('svg').setAttribute('fill', 'none');
-          if (state.currentCategory === 'favorites') {
+          if (state.currentCategory === 'favorites' || (state.currentCategory === 'profile' && state.profileSubTab === 'favorites')) {
             state.posts = state.posts.filter(p => p.id !== post.id);
             renderGallery();
           }
         }
-        onFavoriteToggle();
+        if (onFavoriteToggle) onFavoriteToggle();
       }
     } catch (err) {
       console.error('Ошибка избранного:', err);
@@ -706,7 +735,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     card.innerHTML = `
       <div class="author-card-cover">
-        ${preview ? `<img class="author-cover-img" src="${preview}" alt="${author.displayName || author.name}" loading="lazy" decoding="async">` : `<div class="author-cover-placeholder">🎨</div>`}
+        ${preview ? `<img class="author-cover-img" src="${preview}" alt="${author.displayName || author.name}" loading="lazy" decoding="async">` : `<div class="author-cover-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>`}
         <div class="author-card-gradient"></div>
         <span class="author-card-site-badge">${siteName}</span>
       </div>
@@ -716,7 +745,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           ${formattedDate ? `<span class="author-tag-pill" style="color: var(--text-muted); font-size: 10px;">${formattedDate}</span>` : ''}
         </div>
         <div class="author-tag-pill">
-          <span>🏷️ ${author.name}</span>
+          <span>${author.name}</span>
         </div>
         <div class="author-card-actions">
           <button class="btn-author-explore" title="Открыть работы автора ${author.name}">

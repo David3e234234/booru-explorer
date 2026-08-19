@@ -275,7 +275,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const isLikedNow = toggleLikeLocally(currentPost);
       btnLikeModal.classList.toggle('active', isLikedNow);
       btnLikeModal.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'currentColor' : 'none');
-      showToast(isLikedNow ? 'Понравилось ❤️ (Рекомендации обучены)' : 'Лайк удален');
+      showToast(isLikedNow ? 'Понравилось (рекомендации обновлены)' : 'Лайк удален');
       try {
         await toggleLikePost(currentPost);
       } catch (e) {}
@@ -295,7 +295,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             state.favorites.unshift(currentPost);
             btnFavModal.classList.add('active');
             btnFavModal.querySelector('svg')?.setAttribute('fill', 'currentColor');
-            showToast('Сохранено в закладки 🔖');
+            showToast('Сохранено в закладки');
           } else {
             state.favoriteIds.delete(currentPost.id);
             state.favorites = state.favorites.filter(f => f.id !== currentPost.id);
@@ -316,7 +316,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (!currentPost) return;
       const url = currentPost.fileUrl || currentPost.sampleUrl;
       navigator.clipboard.writeText(url).then(() => {
-        showToast('Прямая ссылка скопирована 📋');
+        showToast('Прямая ссылка скопирована');
       });
     });
   }
@@ -333,7 +333,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const ext = currentPost.fileExt || (currentPost.isVideo ? 'mp4' : 'jpg');
       const filename = `booru_${currentPost.site || 'post'}_${currentPost.id}.${ext}`;
 
-      showToast('Начата загрузка на устройство... 📥');
+      showToast('Начата загрузка на устройство...');
       
       const shouldUseProxyDownload = currentPost.site === 'danbooru' || downloadTarget.includes('donmai.us') || state.settings?.proxyDownloads !== false;
       
@@ -350,7 +350,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             a.click();
             a.remove();
             setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-            showToast('Файл сохранён напрямую с CDN! 💾');
+            showToast('Файл сохранён напрямую с CDN');
             return;
           }
         } catch (directErr) {
@@ -372,7 +372,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-        showToast('Файл сохранён в память устройства! 💾');
+        showToast('Файл сохранён в память устройства');
       } catch (err) {
         console.warn('[Direct download fallback]', err);
         const a = document.createElement('a');
@@ -391,7 +391,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     btnCopyAllTags.addEventListener('click', () => {
       if (!currentPost || !Array.isArray(currentPost.tags)) return;
       navigator.clipboard.writeText(currentPost.tags.join(' ')).then(() => {
-        showToast('Все теги поста скопированы 📋');
+        showToast('Все теги поста скопированы');
       });
     });
   }
@@ -424,7 +424,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             site: currentPost.site || 'danbooru',
             createdAt: new Date().toISOString()
           });
-          showToast(`Автор ${authorName} добавлен в любимые ⭐`);
+          showToast(`Автор ${authorName} добавлен в любимые`);
         } else {
           state.favoriteAuthorNames.delete(cleanAuthorTag.toLowerCase());
           state.favoriteAuthors = state.favoriteAuthors.filter(a => (a.name || '').toLowerCase() !== cleanAuthorTag.toLowerCase());

@@ -70,10 +70,15 @@ let tempPetiteTags = [];
 
 export function applySettingsToUIAndState(s) {
   if (!s) return;
-  state.settings = { ...state.settings, ...s };
-  if (s.theme) {
-    document.documentElement.setAttribute('data-theme', s.theme);
+  let theme = s.theme;
+  if (theme === 'dark' || theme === 'oled') theme = 'midnight';
+  else if (theme === 'light') theme = 'warm-paper';
+  else if (!['midnight', 'emerald', 'tokyo-night', 'nordic-frost', 'warm-paper'].includes(theme)) {
+    theme = 'midnight';
   }
+  s.theme = theme;
+  state.settings = { ...state.settings, ...s, theme };
+  document.documentElement.setAttribute('data-theme', theme);
   const savedSite = s.defaultSite || localStorage.getItem('booru_selected_site');
   if (savedSite) {
     state.currentSite = savedSite;
@@ -351,10 +356,10 @@ export async function handleClearStorageCache() {
 
     await updateStorageUsageInfo();
     if (statusEl) {
-      statusEl.textContent = 'Кэш очищен! ✨';
+      statusEl.textContent = 'Кэш очищен';
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
     }
-    showToast('Кэш медиа успешно очищен 🧹');
+    showToast('Кэш медиа успешно очищен');
   } catch (err) {
     if (statusEl) statusEl.textContent = 'Ошибка очистки';
     showToast('Не удалось полностью очистить кэш');
@@ -442,7 +447,7 @@ export function openSettingsModal() {
   if (checkProxyVideoDefault) checkProxyVideoDefault.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
   if (checkShowVideoStatusBanner) checkShowVideoStatusBanner.checked = state.settings.showVideoStatusBanner !== false;
 
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'midnight';
   document.querySelectorAll('.btn-theme').forEach(b => {
     b.classList.toggle('active', b.dataset.themeVal === currentTheme);
   });
@@ -589,7 +594,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast('Резервная копия скачана 📦');
+        showToast('Резервная копия скачана');
       } catch (err) {
         showToast('Ошибка при экспорте данных');
       }
@@ -646,7 +651,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         tempPetiteTags = state.settings.petiteTags || [...DEFAULT_PETITE_TAGS];
         renderSettingsChips();
 
-        showToast(`Данные загружены! Настройки, ${counts.favorites} закладок, ${counts.favoriteAuthors} авторов ✅`);
+        showToast(`Данные загружены: настройки, ${counts.favorites} закладок, ${counts.favoriteAuthors} авторов`);
         if (onDataImported) onDataImported();
       } catch (err) {
         showToast('Ошибка импорта: неверный JSON файл');
@@ -658,15 +663,17 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     btn.addEventListener('click', () => {
       document.querySelectorAll('.btn-theme').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const themeVal = btn.dataset.themeVal;
+      const themeVal = btn.dataset.themeVal || 'midnight';
       document.documentElement.setAttribute('data-theme', themeVal);
+      state.settings.theme = themeVal;
+      saveLocalSettings(state.settings);
     });
   });
 
   if (btnSaveSettings) {
     btnSaveSettings.addEventListener('click', async () => {
       const activeThemeBtn = document.querySelector('.btn-theme.active');
-      const theme = activeThemeBtn ? activeThemeBtn.dataset.themeVal : 'dark';
+      const theme = activeThemeBtn ? activeThemeBtn.dataset.themeVal : 'midnight';
 
       const selectItemsPerPage = document.getElementById('selectItemsPerPage');
       const selectPreviewQuality = document.getElementById('selectPreviewQuality');
@@ -751,14 +758,14 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
           state.limit = itemsPerPageVal;
           saveLocalSettings(state.settings);
           closeSettingsModal();
-          showToast('Настройки сохранены ✅');
+          showToast('Настройки сохранены');
           if (onSettingsChanged) onSettingsChanged();
         }
       } catch (err) {
         state.settings = updated;
         state.limit = itemsPerPageVal;
         closeSettingsModal();
-        showToast('Настройки сохранены в браузере ✅');
+        showToast('Настройки сохранены в браузере');
         if (onSettingsChanged) onSettingsChanged();
       }
     });

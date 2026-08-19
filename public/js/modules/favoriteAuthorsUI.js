@@ -110,7 +110,7 @@ export function initAddAuthorModal({ onAuthorSaved }) {
             setFavoriteAuthors(authData.authors);
           }
           closeAddAuthorModal();
-          showToast(`Автор ${rawName} сохранён в любимые ⭐`);
+          showToast(`Автор ${rawName} сохранён в любимые`);
           if (onAuthorSaved) onAuthorSaved();
         } else {
           showToast(res.message || 'Ошибка сохранения автора');

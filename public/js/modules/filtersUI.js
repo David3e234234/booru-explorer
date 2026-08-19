@@ -85,9 +85,10 @@ export function updateCategoryTabsUI() {
       'popular': 'Популярное',
       'top': 'Топ',
       'random': 'Случайно',
-      'favorites': 'Избранное',
-      'profile': 'Профиль'
+      'favorites': 'Избранное'
     };
-    mobileNavFeedLabel.textContent = catMap[state.currentCategory] || 'Лента';
+    if (state.currentCategory !== 'profile') {
+      mobileNavFeedLabel.textContent = catMap[state.currentCategory] || 'Лента';
+    }
   }
 }

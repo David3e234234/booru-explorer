@@ -17,8 +17,23 @@ if (!fs.existsSync(USERS_DIR)) {
   }
 }
 
-// Секретный ключ для подписи токенов (генерируется при старте или берется из env)
-const JWT_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+// Секретный ключ для подписи токенов (персистентный при перезапусках сервера)
+function getSessionSecret() {
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  const secretFile = path.join(DATA_DIR, '.session_secret');
+  try {
+    if (fs.existsSync(secretFile)) {
+      const secret = fs.readFileSync(secretFile, 'utf-8').trim();
+      if (secret) return secret;
+    }
+    const newSecret = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(secretFile, newSecret, 'utf-8');
+    return newSecret;
+  } catch (err) {
+    return crypto.randomBytes(32).toString('hex');
+  }
+}
+const JWT_SECRET = getSessionSecret();
 
 /**
  * Хэширование пароля через crypto.scryptSync
