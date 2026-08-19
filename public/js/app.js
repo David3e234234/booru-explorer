@@ -493,6 +493,7 @@ async function performSearch(reset = false, options = {}) {
           ageFilter: state.ageFilter,
           hideFurry: state.hideFurry,
           hidePregnant: state.hidePregnant,
+          hideLgbt: state.hideLgbt,
           bustCache: options.bustCache || false
         });
         if (res.success && Array.isArray(res.posts)) {
@@ -547,6 +548,7 @@ async function performSearch(reset = false, options = {}) {
                 ageFilter: state.ageFilter,
                 hideFurry: state.hideFurry,
                 hidePregnant: state.hidePregnant,
+                hideLgbt: state.hideLgbt,
                 bustCache: options.bustCache || false
               }).catch(() => null)
             );
@@ -567,6 +569,7 @@ async function performSearch(reset = false, options = {}) {
               ageFilter: state.ageFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
+              hideLgbt: state.hideLgbt,
               bustCache: options.bustCache || false
             }).catch(() => null)
           );
@@ -584,6 +587,7 @@ async function performSearch(reset = false, options = {}) {
               ageFilter: state.ageFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
+              hideLgbt: state.hideLgbt,
               bustCache: options.bustCache || false
             }).catch(() => null),
             fetchPosts({
@@ -598,6 +602,7 @@ async function performSearch(reset = false, options = {}) {
               ageFilter: state.ageFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
+              hideLgbt: state.hideLgbt,
               bustCache: options.bustCache || false
             }).catch(() => null),
             fetchPosts({
@@ -612,6 +617,7 @@ async function performSearch(reset = false, options = {}) {
               ageFilter: state.ageFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
+              hideLgbt: state.hideLgbt,
               bustCache: options.bustCache || false
             }).catch(() => null)
           );
@@ -745,6 +751,7 @@ async function performSearch(reset = false, options = {}) {
       ageFilter: state.ageFilter,
       hideFurry: state.hideFurry,
       hidePregnant: state.hidePregnant,
+      hideLgbt: state.hideLgbt,
       bustCache: options.bustCache || false
     });
 
@@ -854,6 +861,15 @@ function setupEventListeners() {
     checkHidePregnant.addEventListener('change', () => {
       state.hidePregnant = checkHidePregnant.checked;
       persistSettings({ hidePregnant: state.hidePregnant });
+      updateFilterActiveDot();
+    });
+  }
+
+  const checkHideLgbt = document.getElementById('checkHideLgbt');
+  if (checkHideLgbt) {
+    checkHideLgbt.addEventListener('change', () => {
+      state.hideLgbt = checkHideLgbt.checked;
+      persistSettings({ hideLgbt: state.hideLgbt });
       updateFilterActiveDot();
     });
   }

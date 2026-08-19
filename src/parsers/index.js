@@ -100,6 +100,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     ratingFilter: params.ratingFilter || 'all',
     hideFurry: params.hideFurry || settings?.hideFurry,
     hidePregnant: params.hidePregnant || settings?.hidePregnant,
+    hideLgbt: params.hideLgbt || settings?.hideLgbt,
     blacklist: settings?.blacklist || [],
     negativeTokens,
     activeCurvyTags: (Array.isArray(settings?.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS,
@@ -114,6 +115,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
                            (settings?.blacklist && settings.blacklist.length > 0) ||
                            settings?.hideFurry ||
                            settings?.hidePregnant ||
+                           settings?.hideLgbt ||
                            negativeTokens.length > 0;
 
   const shouldDeepFetch = hasStrictFilters || deepFetchPagesSetting > 1 || targetLimit > 40;

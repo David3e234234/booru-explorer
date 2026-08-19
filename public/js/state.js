@@ -23,6 +23,7 @@ export const state = {
   videoDurationSort: 'none', // 'none' | 'longest' | 'shortest'
   hideFurry: true,
   hidePregnant: true,
+  hideLgbt: false,
   searchTags: [],
   page: 1,
   limit: 100,
@@ -56,6 +57,8 @@ export const state = {
     ageFilter: 'all',
     hideFurry: true,
     hidePregnant: true,
+    hideLgbt: false,
+    excludedInterestTags: [],
     videoAutoplayHover: true,
     videoAutoplayMobile: true,
     videoAutoplayViewer: true,
@@ -391,13 +394,38 @@ export function getUserInterestTags(limit = null) {
     }
   }
 
+  const excludedSet = new Set((state.settings.excludedInterestTags || []).map(t => String(t).toLowerCase().trim()));
+
   const list = [];
   for (const [tag, score] of scores.entries()) {
+    if (excludedSet.has(tag)) continue;
     list.push({ tag, score, category: catMap.get(tag) || 'general' });
   }
 
   list.sort((a, b) => b.score - a.score);
   return (typeof limit === 'number' && limit > 0) ? list.slice(0, limit) : list;
+}
+
+export function excludeInterestTag(tag) {
+  if (!tag) return;
+  const clean = String(tag).toLowerCase().trim();
+  if (!clean) return;
+  if (!Array.isArray(state.settings.excludedInterestTags)) {
+    state.settings.excludedInterestTags = [];
+  }
+  if (!state.settings.excludedInterestTags.includes(clean)) {
+    state.settings.excludedInterestTags.push(clean);
+  }
+}
+
+export function restoreInterestTag(tag) {
+  if (!tag || !Array.isArray(state.settings.excludedInterestTags)) return;
+  const clean = String(tag).toLowerCase().trim();
+  state.settings.excludedInterestTags = state.settings.excludedInterestTags.filter(t => t !== clean);
+}
+
+export function resetExcludedInterestTags() {
+  state.settings.excludedInterestTags = [];
 }
 
 function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {

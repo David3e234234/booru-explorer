@@ -1,5 +1,5 @@
-import { state, clearLocalAuth, getUserInterestTags } from '../state.js';
-import { apiLogout } from '../api.js';
+import { state, clearLocalAuth, getUserInterestTags, excludeInterestTag, restoreInterestTag, resetExcludedInterestTags, saveLocalSettings } from '../state.js';
+import { apiLogout, saveSettings } from '../api.js';
 import { showToast } from './uiUtils.js';
 
 export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
@@ -24,54 +24,63 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   const btnTabAuthors = document.getElementById('btnProfileTabAuthors');
   const btnTabAnalytics = document.getElementById('btnProfileTabAnalytics');
   const analyticsPane = document.getElementById('profileAnalyticsPane');
+  const btnEditInterests = document.getElementById('btnEditInterests');
+
+  let isEditingInterests = false;
+
+  btnEditInterests?.addEventListener('click', () => {
+    isEditingInterests = !isEditingInterests;
+    btnEditInterests.classList.toggle('active', isEditingInterests);
+    btnEditInterests.setAttribute('title', isEditingInterests ? 'Завершить редактирование' : 'Редактировать интересы');
+    renderInterestsCloud();
+  });
 
   function renderProfile() {
     const isAuth = Boolean(state.currentUser);
     const user = state.currentUser;
 
-    if (isAuth && user) {
-      if (profileUsername) profileUsername.textContent = `@${user.username}`;
-      if (profileBadgeStatus) {
-        profileBadgeStatus.textContent = 'Авторизован';
-        profileBadgeStatus.style.background = 'rgba(16, 185, 129, 0.15)';
-        profileBadgeStatus.style.color = '#10b981';
-        profileBadgeStatus.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-      }
-      if (profileJoinedDate) {
-        const dateStr = user.createdAt ? new Date(user.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Недавно';
-        profileJoinedDate.textContent = `В клубе с ${dateStr}`;
-      }
-      if (profileAvatar) {
-        profileAvatar.textContent = user.username.charAt(0).toUpperCase();
-      }
+    if (profileUsername) {
+      profileUsername.textContent = isAuth ? `@${user.username}` : 'Гостевой режим';
+    }
 
-      if (profileHeaderActions) {
+    if (profileBadgeStatus) {
+      profileBadgeStatus.textContent = isAuth ? 'Авторизован' : 'Локальный гость';
+      profileBadgeStatus.className = `profile-badge ${isAuth ? 'badge-auth' : 'badge-guest'}`;
+    }
+
+    if (profileJoinedDate) {
+      if (isAuth && user.createdAt) {
+        try {
+          const date = new Date(user.createdAt);
+          profileJoinedDate.textContent = `В клубе с ${date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}`;
+        } catch {
+          profileJoinedDate.textContent = 'В клубе';
+        }
+      } else {
+        profileJoinedDate.textContent = 'Данные сохраняются локально в вашем браузере';
+      }
+    }
+
+    if (profileAvatar) {
+      if (isAuth && user.username) {
+        profileAvatar.textContent = user.username.charAt(0).toUpperCase();
+      } else {
+        profileAvatar.innerHTML = '<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+      }
+    }
+
+    if (profileHeaderActions) {
+      if (isAuth) {
         profileHeaderActions.innerHTML = `
-          <button class="btn-secondary" id="btnProfileLogout" style="font-size: 13px; padding: 8px 14px; gap: 6px;">
+          <button type="button" class="btn-profile-logout" id="btnProfileLogout" title="Выйти из текущего аккаунта">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             <span>Выйти</span>
           </button>
         `;
         document.getElementById('btnProfileLogout')?.addEventListener('click', handleLogout);
-      }
-    } else {
-      if (profileUsername) profileUsername.textContent = 'Гостевой режим';
-      if (profileBadgeStatus) {
-        profileBadgeStatus.textContent = 'Локальный гость';
-        profileBadgeStatus.style.background = 'rgba(245, 158, 11, 0.15)';
-        profileBadgeStatus.style.color = '#f59e0b';
-        profileBadgeStatus.style.borderColor = 'rgba(245, 158, 11, 0.3)';
-      }
-      if (profileJoinedDate) {
-        profileJoinedDate.textContent = 'Данные сохраняются локально в вашем браузере';
-      }
-      if (profileAvatar) {
-        profileAvatar.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`;
-      }
-
-      if (profileHeaderActions) {
+      } else {
         profileHeaderActions.innerHTML = `
-          <button class="btn-primary" id="btnProfileLoginAction" style="font-size: 13px; padding: 8px 16px; gap: 6px;">
+          <button type="button" class="btn-primary btn-profile-login" id="btnProfileLoginAction">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
             <span>Войти / Регистрация</span>
           </button>
@@ -104,29 +113,82 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
     const cloud = document.getElementById('profileInterestsCloud');
     if (!cloud) return;
 
-    const interestTags = getUserInterestTags ? getUserInterestTags(30) : [];
+    const interestTags = getUserInterestTags ? getUserInterestTags(35) : [];
+    const excludedCount = state.settings?.excludedInterestTags?.length || 0;
+
     if (!interestTags || interestTags.length === 0) {
-      cloud.innerHTML = '<span style="color: var(--text-muted); font-size: 13px;">Оценивайте работы лайками, чтобы сформировать карту интересов для персональных рекомендаций.</span>';
+      cloud.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;">
+          <span style="color: var(--text-muted); font-size: 13px;">
+            ${excludedCount > 0 ? 'Все основные теги исключены из карты.' : 'Оценивайте работы лайками, чтобы сформировать карту интересов для персональных рекомендаций.'}
+          </span>
+          ${excludedCount > 0 ? `
+            <button type="button" class="btn-restore-interests" id="btnRestoreInterests">
+              Восстановить исключенные теги (${excludedCount})
+            </button>
+          ` : ''}
+        </div>
+      `;
+      document.getElementById('btnRestoreInterests')?.addEventListener('click', () => {
+        resetExcludedInterestTags();
+        saveSettings(state.settings).catch(() => {});
+        saveLocalSettings(state.settings);
+        showToast('Исключенные теги восстановлены', 'info');
+        renderInterestsCloud();
+      });
       return;
     }
 
-    cloud.innerHTML = interestTags.map(item => {
-      const displayScore = typeof item.score === 'number' ? item.score.toFixed(1) : (typeof item.weight === 'number' ? item.weight.toFixed(1) : '');
-      return `
-        <div class="interest-tag-chip" data-tag="${item.tag}">
-          <span>${item.tag}</span>
-          ${displayScore ? `<span class="interest-tag-weight">${displayScore}</span>` : ''}
-        </div>
-      `;
-    }).join('');
+    cloud.innerHTML = `
+      <div class="interests-tags-grid">
+        ${interestTags.map(item => {
+          const displayScore = typeof item.score === 'number' ? item.score.toFixed(1) : (typeof item.weight === 'number' ? item.weight.toFixed(1) : '');
+          return `
+            <div class="interest-tag-chip ${isEditingInterests ? 'editing' : ''}" data-tag="${item.tag}">
+              <span class="interest-tag-name">${item.tag}</span>
+              ${displayScore ? `<span class="interest-tag-weight">${displayScore}</span>` : ''}
+              ${isEditingInterests ? `
+                <button type="button" class="btn-chip-delete" data-tag="${item.tag}" title="Удалить тег из интересов">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+      ${(isEditingInterests && excludedCount > 0) ? `
+        <button type="button" class="btn-restore-interests" id="btnRestoreInterests" style="margin-top: 12px;">
+          Восстановить удаленные теги (${excludedCount})
+        </button>
+      ` : ''}
+    `;
 
     cloud.querySelectorAll('.interest-tag-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
+      chip.addEventListener('click', (e) => {
         const tag = chip.getAttribute('data-tag');
-        if (tag && typeof onTabChange === 'function') {
-          onTabChange('search-tag', tag);
+        if (!tag) return;
+
+        if (isEditingInterests) {
+          e.stopPropagation();
+          excludeInterestTag(tag);
+          saveSettings(state.settings).catch(() => {});
+          saveLocalSettings(state.settings);
+          showToast(`Тег "${tag}" удален из интересов`, 'info');
+          renderInterestsCloud();
+        } else {
+          if (typeof onTabChange === 'function') {
+            onTabChange('search-tag', tag);
+          }
         }
       });
+    });
+
+    document.getElementById('btnRestoreInterests')?.addEventListener('click', () => {
+      resetExcludedInterestTags();
+      saveSettings(state.settings).catch(() => {});
+      saveLocalSettings(state.settings);
+      showToast('Удаленные теги восстановлены', 'info');
+      renderInterestsCloud();
     });
   }
 

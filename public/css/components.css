@@ -2014,6 +2014,37 @@
   position: relative;
 }
 
+.btn-profile-settings {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  z-index: 5;
+}
+
+.btn-profile-settings:hover {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  transform: rotate(30deg);
+}
+
+.btn-profile-settings:active {
+  transform: scale(0.92);
+}
+
 .profile-header-content {
   padding: 0 24px 20px;
   display: flex;
@@ -2156,22 +2187,28 @@
 .profile-tabs-nav {
   display: flex;
   align-items: center;
-  padding: 6px 12px;
-  gap: 8px;
+  justify-content: space-between;
+  padding: 6px 8px;
+  gap: 4px;
   background: var(--bg-surface);
-  overflow-x: auto;
+  border-top: 1px solid var(--border-subtle);
+  overflow-x: hidden;
+  width: 100%;
 }
 
 .profile-tab-btn {
+  flex: 1;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 6px;
   border-radius: var(--radius-md);
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -2191,7 +2228,7 @@
 .profile-tab-count {
   font-size: 11px;
   font-weight: 700;
-  padding: 2px 7px;
+  padding: 1px 6px;
   border-radius: var(--radius-full);
   background: var(--bg-surface-elevated);
   color: var(--text-secondary);
@@ -2214,20 +2251,60 @@
   padding: 24px;
 }
 
+.analytics-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.analytics-header-content {
+  flex: 1;
+}
+
 .analytics-title {
   font-size: 18px;
   font-weight: 700;
   color: var(--text-primary);
-  margin: 0 0 6px;
+  margin: 0 0 4px;
 }
 
 .analytics-desc {
   font-size: 13px;
   color: var(--text-muted);
-  margin: 0 0 20px;
+  margin: 0;
 }
 
-.interests-cloud {
+.btn-edit-interests {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.btn-edit-interests:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-primary-subtle);
+}
+
+.btn-edit-interests.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+.interests-tags-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -2245,12 +2322,62 @@
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-fast);
+  user-select: none;
 }
 
 .interest-tag-chip:hover {
   border-color: var(--accent-primary);
   color: var(--text-primary);
   transform: translateY(-1px);
+}
+
+.interest-tag-chip.editing {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  padding-right: 6px;
+}
+
+.interest-tag-chip.editing:hover {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.16);
+}
+
+.btn-chip-delete {
+  background: transparent;
+  border: none;
+  color: #f87171;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  margin-left: 2px;
+}
+
+.btn-chip-delete:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fff;
+}
+
+.btn-restore-interests {
+  background: transparent;
+  border: 1px dashed var(--border-medium);
+  border-radius: var(--radius-md);
+  color: var(--accent-primary);
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-restore-interests:hover {
+  background: var(--accent-primary-subtle);
+  border-color: var(--accent-primary);
 }
 
 .interest-tag-weight {
@@ -2358,6 +2485,27 @@
     font-size: 11px;
     width: 12px;
     height: 12px;
+  }
+
+  .profile-tabs-nav {
+    padding: 4px;
+    gap: 2px;
+  }
+
+  .profile-tab-btn {
+    padding: 7px 2px;
+    font-size: 11.5px;
+    gap: 3px;
+  }
+
+  .profile-tab-btn svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .profile-tab-count {
+    font-size: 9.5px;
+    padding: 1px 4px;
   }
 }
 

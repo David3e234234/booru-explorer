@@ -109,6 +109,11 @@ export function applySettingsToUIAndState(s) {
     state.hidePregnant = s.hidePregnant;
     if (checkHidePregnant) checkHidePregnant.checked = state.hidePregnant;
   }
+  const checkHideLgbt = document.getElementById('checkHideLgbt');
+  if (typeof s.hideLgbt === 'boolean') {
+    state.hideLgbt = s.hideLgbt;
+    if (checkHideLgbt) checkHideLgbt.checked = state.hideLgbt;
+  }
   const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
   const inputRule34UserId = document.getElementById('inputRule34UserId');
   const inputGelbooruApiKey = document.getElementById('inputGelbooruApiKey');
@@ -493,7 +498,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     });
   });
 
+  const btnProfileSettings = document.getElementById('btnProfileSettings');
   if (btnSettings) btnSettings.addEventListener('click', openSettingsModal);
+  if (btnProfileSettings) btnProfileSettings.addEventListener('click', openSettingsModal);
   if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
   if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
 

@@ -76,6 +76,7 @@ export async function fetchPosts({
   ageFilter = 'all',
   hideFurry = true,
   hidePregnant = true,
+  hideLgbt = false,
   bustCache = false
 }) {
   const params = {
@@ -89,7 +90,8 @@ export async function fetchPosts({
     typeFilter,
     ageFilter,
     hideFurry: hideFurry ? 'true' : 'false',
-    hidePregnant: hidePregnant ? 'true' : 'false'
+    hidePregnant: hidePregnant ? 'true' : 'false',
+    hideLgbt: hideLgbt ? 'true' : 'false'
   };
 
   if (bustCache) {

@@ -6,7 +6,8 @@ import {
   PETITE_INCLUDE_TAGS, 
   PETITE_EXCLUDE_TAGS,
   FURRY_TAGS,
-  PREGNANT_TAGS
+  PREGNANT_TAGS,
+  LGBT_TAGS
 } from '../config/constants.js';
 
 export function isPostMatchingFilters(post, criteria = {}) {
@@ -19,6 +20,7 @@ export function isPostMatchingFilters(post, criteria = {}) {
     ratingFilter = 'all',
     hideFurry = false,
     hidePregnant = false,
+    hideLgbt = false,
     blacklist = [],
     negativeTokens = [],
     activeCurvyTags = CURVY_INCLUDE_TAGS,
@@ -76,6 +78,11 @@ export function isPostMatchingFilters(post, criteria = {}) {
   // 7. Фильтр беременности
   if (hidePregnant) {
     if (PREGNANT_TAGS.some(pTag => postTags.some(t => t === pTag || t.includes(pTag)))) return false;
+  }
+
+  // 8. Фильтр ЛГБТ
+  if (hideLgbt) {
+    if (LGBT_TAGS.some(lTag => postTags.some(t => t === lTag || t.startsWith(lTag + '_') || t.endsWith('_' + lTag) || t.includes('_' + lTag + '_')))) return false;
   }
 
   // 8. Черный список

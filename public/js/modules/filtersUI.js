@@ -37,6 +37,7 @@ export function updateFilterActiveDot() {
                    state.ageFilter !== 'all' ||
                    !state.hideFurry ||
                    !state.hidePregnant ||
+                   state.hideLgbt ||
                    (state.searchTags && state.searchTags.length > 0);
   filterActiveDot.style.display = isCustom ? 'block' : 'none';
 }

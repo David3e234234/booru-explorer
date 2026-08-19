@@ -152,6 +152,39 @@ export const PETITE_EXCLUDE_TAGS = [
   'bbw'
 ];
 
+export const LGBT_TAGS = [
+  'yaoi',
+  'gay',
+  'bara',
+  'males_only',
+  'male_only',
+  'male_on_male',
+  'multiple_males',
+  'shounen_ai',
+  'boys_love',
+  'dansei_shounen_ai',
+  'otoko_no_ko',
+  'femboy',
+  'crossdressing',
+  'trap',
+  'futanari',
+  'dickgirl',
+  'futa',
+  'shemale',
+  'newhalf',
+  'transgender',
+  'trans_woman',
+  'trans_man',
+  'gender_bender',
+  'genderswap',
+  'yuri',
+  'lesbian',
+  'shoujo_ai',
+  'girls_love',
+  'lgbt',
+  'lgbtq'
+];
+
 export const DEFAULT_SETTINGS = {
   theme: 'midnight',
   gridColumns: 'auto',
@@ -161,6 +194,8 @@ export const DEFAULT_SETTINGS = {
   ageFilter: 'all', // 'all', 'adult', 'young'
   hideFurry: true,
   hidePregnant: true,
+  hideLgbt: false,
+  excludedInterestTags: [],
   showVideoStatusBanner: true,
   aiTags: DEFAULT_AI_TAGS,
   blacklist: ['guro', 'scat', 'snuff', 'vomit', 'fart'],
