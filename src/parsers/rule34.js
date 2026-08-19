@@ -82,33 +82,34 @@ export async function fetchRule34(params, aiTagsList, settings) {
     if (res.ok) {
       const html = await res.text();
       const posts = [];
-      const spanRegex = /<span id="s(\d+)" class="thumb"[^>]*>([\s\S]*?)<\/span>/g;
+      // Универсальный поиск блоков превью: <span class="thumb" id="s123"> или <span id="s123" class="thumb">
+      const spanRegex = /<span\b[^>]*?(?:class="[^"]*\bthumb\b[^"]*"[^>]*?id="s?(\d+)"|id="s?(\d+)"[^>]*?class="[^"]*\bthumb\b[^"]*")[^>]*>([\s\S]*?)<\/span>/gi;
       let match;
       while ((match = spanRegex.exec(html)) !== null) {
-        const id = match[1];
-        const block = match[2];
+        const id = match[1] || match[2];
+        const block = match[3];
 
-        const imgMatch = block.match(/<img[^>]+src="([^"]+)"/);
+        const imgMatch = block.match(/<img[^>]+(?:src|data-src)="([^"]+)"/i);
         const thumbUrl = imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : '';
 
-        const titleMatch = block.match(/title="([^"]*)"/);
-        const altMatch = block.match(/alt="([^"]*)"/);
+        const titleMatch = block.match(/title="([^"]*)"/i);
+        const altMatch = block.match(/alt="([^"]*)"/i);
         const titleAttr = (titleMatch ? titleMatch[1] : (altMatch ? altMatch[1] : '')).replace(/&amp;/g, '&');
 
-        const classMatch = block.match(/class="([^"]*)"/);
+        const classMatch = block.match(/class="([^"]*)"/i);
         const classAttr = classMatch ? classMatch[1] : '';
 
         if (!id || !thumbUrl) continue;
 
         let score = 0;
-        const scoreMatch = titleAttr.match(/score:(-?\d+)/);
+        const scoreMatch = titleAttr.match(/score:(-?\d+)/i);
         if (scoreMatch) score = parseInt(scoreMatch[1], 10);
 
         let rating = 'e';
-        const ratingMatch = titleAttr.match(/rating:(\w+)/);
+        const ratingMatch = titleAttr.match(/rating:(\w+)/i);
         if (ratingMatch) rating = ratingMatch[1].charAt(0).toLowerCase();
 
-        const cleanTitleTags = titleAttr.replace(/score:-?\d+/g, '').replace(/rating:\w+/g, '').trim();
+        const cleanTitleTags = titleAttr.replace(/score:-?\d+/gi, '').replace(/rating:\w+/gi, '').trim();
         const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
 
         const isVideoClass = classAttr.includes('webm-thumb') || classAttr.includes('video-thumb');
@@ -169,6 +170,73 @@ export async function fetchRule34(params, aiTagsList, settings) {
         });
       }
 
+      // Fallback: поиск по тегам <img title="..." id="p..."> если span с классом thumb не найден
+      if (posts.length === 0 && html.includes('id="p')) {
+        const altImgRegex = /<a[^>]*id="p(\d+)"[^>]*href="[^"]*id=(\d+)"[^>]*>[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"[^>]*title="([^"]*)"/gi;
+        let altMatch;
+        while ((altMatch = altImgRegex.exec(html)) !== null) {
+          const id = altMatch[1] || altMatch[2];
+          const thumbUrl = altMatch[3].replace(/&amp;/g, '&');
+          const titleAttr = altMatch[4].replace(/&amp;/g, '&');
+          if (!id || !thumbUrl) continue;
+
+          let score = 0;
+          const scoreMatch = titleAttr.match(/score:(-?\d+)/i);
+          if (scoreMatch) score = parseInt(scoreMatch[1], 10);
+
+          let rating = 'e';
+          const ratingMatch = titleAttr.match(/rating:(\w+)/i);
+          if (ratingMatch) rating = ratingMatch[1].charAt(0).toLowerCase();
+
+          const cleanTitleTags = titleAttr.replace(/score:-?\d+/gi, '').replace(/rating:\w+/gi, '').trim();
+          const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
+
+          const isVideo = rawTags.includes('video') || rawTags.includes('animated') || rawTags.includes('webm') || rawTags.includes('mp4');
+          const cleanThumb = thumbUrl.split('?')[0];
+          const thumbMatch = cleanThumb.match(/\/thumbnails\/+(\d+)\/thumbnail_([a-f0-9]+)\./i);
+
+          let fileUrl = thumbUrl;
+          let sampleUrl = thumbUrl;
+          let fileExt = isVideo ? 'mp4' : 'jpg';
+
+          if (thumbMatch) {
+            const dir = thumbMatch[1];
+            const hash = thumbMatch[2];
+            const host = cleanThumb.includes('wimg.rule34.xxx') ? 'https://wimg.rule34.xxx' : (cleanThumb.includes('us.rule34.xxx') ? 'https://us.rule34.xxx' : 'https://rule34.xxx');
+            fileUrl = isVideo ? `${host}/images/${dir}/${hash}.mp4` : `${host}/images/${dir}/${hash}.jpg`;
+            sampleUrl = isVideo ? fileUrl : `${host}/samples/${dir}/sample_${hash}.jpg`;
+          }
+
+          const source = `https://rule34.xxx/index.php?page=post&s=view&id=${id}`;
+          const author = extractAuthor(rawTags, source, '');
+          const tagDetails = classifyTags(rawTags, author);
+
+          posts.push({
+            id: `rule34_${id}`,
+            originalId: id,
+            site: 'rule34',
+            siteName: 'Rule34.xxx',
+            previewUrl: thumbUrl,
+            sampleUrl,
+            fileUrl,
+            fileExt,
+            isVideo,
+            isGif: rawTags.includes('gif'),
+            hasSound: isVideo && (rawTags.includes('sound') || rawTags.includes('audio')),
+            author,
+            tags: rawTags,
+            tagDetails,
+            score,
+            rating,
+            width: 0,
+            height: 0,
+            source,
+            createdAt: '',
+            isAi: checkIsAi(rawTags, aiTagsList)
+          });
+        }
+      }
+
       if (posts.length > 0) {
         return posts.slice(0, limit);
       }
@@ -186,8 +254,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
   if (category === 'top') {
     pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
   }
-  const pahealUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=${encodeURIComponent(pahealSearchTags)}&limit=${fetchPahealLimit}&page=${page}`;
-  try {
+  const parsePahealXml = async (queryTags) => {
+    const pahealUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=${encodeURIComponent(queryTags)}&limit=${fetchPahealLimit}&page=${page}`;
     const pahealRes = await fetchSafe(pahealUrl);
     if (!pahealRes.ok) return [];
     const text = await pahealRes.text();
@@ -238,6 +306,21 @@ export async function fetchRule34(params, aiTagsList, settings) {
           createdAt,
           isAi: checkIsAi(rawTags, aiTagsList)
         });
+      }
+    }
+    return posts;
+  };
+
+  try {
+    let posts = await parsePahealXml(pahealSearchTags);
+    
+    // Если по snake_case тегам ничего не найдено на Paheal, пробуем Capitalized вариант (например Hu_Tao)
+    if (posts.length === 0 && pahealSearchTags && !pahealSearchTags.includes(':')) {
+      const capitalizedTags = pahealSearchTags.split(/\s+/).map(t => {
+        return t.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('_');
+      }).join(' ');
+      if (capitalizedTags !== pahealSearchTags) {
+        posts = await parsePahealXml(capitalizedTags);
       }
     }
 
