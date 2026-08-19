@@ -1,4 +1,5 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { BROWSER_USER_AGENT } from '../config/constants.js';
 import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { logError } from '../utils/logger.js';
 
@@ -16,9 +17,17 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
   // 1. Попытка через официальный DAPI если есть API ключ
   if (settings?.rule34ApiKey && settings?.rule34UserId) {
-    const url = `https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`;
+    let dapiTags = searchTags;
+    if (category === 'top') dapiTags = dapiTags ? `${dapiTags} order:score` : 'order:score';
+    const url = `https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(dapiTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`;
     try {
-      const res = await fetchSafe(url);
+      const res = await fetchSafe(url, {
+        headers: {
+          'User-Agent': BROWSER_USER_AGENT,
+          'Referer': 'https://rule34.xxx/'
+        },
+        timeout: 6000
+      });
       if (res.ok) {
         const text = await res.text();
         if (!text.includes('Missing authentication')) {
@@ -75,7 +84,13 @@ export async function fetchRule34(params, aiTagsList, settings) {
   // 2. Универсальный веб-парсер Rule34.xxx (открытая выдача без API ключа)
   const htmlUrl = `https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(searchTags)}&pid=${pid * 42}`;
   try {
-    const res = await fetchSafe(htmlUrl);
+    const res = await fetchSafe(htmlUrl, {
+      headers: {
+        'User-Agent': BROWSER_USER_AGENT,
+        'Referer': 'https://rule34.xxx/'
+      },
+      timeout: 8000
+    });
     if (res.ok) {
       const html = await res.text();
       const posts = [];
