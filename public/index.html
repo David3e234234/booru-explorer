@@ -642,6 +642,10 @@
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                     <span id="btnFavAuthorSidebarText">В избранное</span>
                   </button>
+                  <button class="btn-fav-author-inline btn-cover-author-inline" id="btnSetAuthorCoverSidebar" title="Сделать этот арт обложкой автора" style="display: none;">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span>Сделать обложкой</span>
+                  </button>
                 </div>
               </div>
               <div class="info-item" id="infoDurationRow" style="display: none;">
@@ -1163,6 +1167,57 @@
           <button type="submit" class="btn-primary" id="btnSaveAddAuthor">Сохранить</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно выбора обложки автора из его постов -->
+  <div class="modal-backdrop" id="modalPickAuthorCoverBackdrop" style="display: none;">
+    <div class="modal-dialog modal-dialog-cover-picker">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <h3 class="modal-title" id="pickAuthorCoverTitle">Выбор обложки автора</h3>
+          <span class="modal-subtitle" id="pickAuthorCoverSubtitle">Нажмите на любой арт, чтобы сделать его превью автора</span>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btnClosePickAuthorCoverModal" title="Закрыть">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div class="modal-body cover-picker-body">
+        <div class="cover-picker-toolbar">
+          <div class="cover-picker-site-box">
+            <label for="selectCoverPickerSite" class="form-label" style="margin: 0; font-size: 12px;">Источник:</label>
+            <select id="selectCoverPickerSite" class="form-select cover-picker-site-select">
+              <option value="danbooru">Danbooru</option>
+              <option value="gelbooru">Gelbooru</option>
+              <option value="rule34">Rule34</option>
+              <option value="yandere">Yande.re</option>
+              <option value="konachan">Konachan</option>
+              <option value="safebooru">Safebooru</option>
+              <option value="rule34video">Rule34Video</option>
+              <option value="xbooru">Xbooru</option>
+              <option value="hypnohub">Hypnohub</option>
+            </select>
+          </div>
+          <button type="button" class="btn-secondary btn-sm" id="btnRefreshCoverPicker" title="Обновить список работ">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span>Обновить</span>
+          </button>
+        </div>
+
+        <div class="cover-picker-status" id="coverPickerStatus" style="display: none;">
+          <div class="loading-spinner" style="width: 24px; height: 24px;"></div>
+          <span>Загрузка работ художника...</span>
+        </div>
+
+        <div class="cover-picker-empty" id="coverPickerEmpty" style="display: none;">
+          <p>Не удалось найти работы этого автора на выбранном источнике. Попробуйте переключить Booru-сайт выше.</p>
+        </div>
+
+        <div class="cover-picker-grid" id="coverPickerGrid">
+          <!-- Карточки миниатюр постов заполняются через JS -->
+        </div>
+      </div>
     </div>
   </div>
 

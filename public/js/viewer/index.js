@@ -156,10 +156,38 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         btnFavAuthorSidebarText.textContent = isFavAuthor ? 'В избранном' : 'В избранное';
         btnFavAuthorSidebar.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
       }
+      if (btnSetAuthorCoverSidebar) {
+        btnSetAuthorCoverSidebar.style.display = isFavAuthor ? 'inline-flex' : 'none';
+        btnSetAuthorCoverSidebar.onclick = async (e) => {
+          e.stopPropagation();
+          haptic(15);
+          const chosenUrl = currentPost.previewUrl || currentPost.sampleUrl || currentPost.fileUrl;
+          if (!chosenUrl) return;
+          try {
+            const res = await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl);
+            if (res.success) {
+              const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === cleanAuthorTag.toLowerCase());
+              if (target) {
+                target.previewUrl = chosenUrl;
+                if (currentPost.site) target.site = currentPost.site;
+              }
+              setFavoriteAuthors([...state.favoriteAuthors]);
+              showToast(`Этот арт установлен обложкой автора ${authorName}!`);
+              if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
+            } else {
+              showToast(res.message || 'Ошибка установки обложкой');
+            }
+          } catch (err) {
+            console.error('Ошибка смены обложки автора:', err);
+            showToast('Не удалось установить обложку');
+          }
+        };
+      }
     } else {
       if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
       if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
       if (infoAuthorRow) infoAuthorRow.style.display = 'none';
+      if (btnSetAuthorCoverSidebar) btnSetAuthorCoverSidebar.style.display = 'none';
     }
 
     const isFav = isPostFavorite(currentPost.id);
@@ -440,6 +468,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
           btnFavAuthorSidebarText.textContent = isFavAuthor ? 'В избранном' : 'В избранное';
           btnFavAuthorSidebar.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+        }
+        if (btnSetAuthorCoverSidebar) {
+          btnSetAuthorCoverSidebar.style.display = isFavAuthor ? 'inline-flex' : 'none';
         }
 
         if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();

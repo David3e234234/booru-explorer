@@ -199,6 +199,15 @@ export async function deleteFavoriteAuthor(name) {
   return await res.json();
 }
 
+export async function updateFavoriteAuthorPreview(name, previewUrl) {
+  const res = await fetch('/api/favorite-authors/preview', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ name, previewUrl })
+  });
+  return await res.json();
+}
+
 export async function syncFavoriteAuthors(authors) {
   const res = await fetch('/api/favorite-authors/sync', {
     method: 'POST',

@@ -48,7 +48,8 @@ import {
 import { 
   switchFavoritesSubTab, 
   renderFavoriteAuthorsList, 
-  initAddAuthorModal 
+  initAddAuthorModal,
+  initCoverPickerModal
 } from './modules/favoriteAuthorsUI.js';
 import { 
   initSettingsModal, 
@@ -182,7 +183,17 @@ async function init() {
   initAddAuthorModal({
     onAuthorSaved: () => {
       updateFavoritesBadge();
-      if (state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') {
+      if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
+          (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
+        renderFavoriteAuthors();
+      }
+    }
+  });
+
+  initCoverPickerModal({
+    onCoverUpdated: () => {
+      if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
+          (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
         renderFavoriteAuthors();
       }
     }

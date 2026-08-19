@@ -186,6 +186,27 @@ router.delete('/favorite-authors/:name', (req, res) => {
   res.json({ success: true, count: filtered.length, authors: filtered });
 });
 
+// POST /api/favorite-authors/preview
+router.post('/favorite-authors/preview', (req, res) => {
+  const { name, previewUrl } = req.body || {};
+  if (!name || !previewUrl) {
+    return res.status(400).json({ success: false, message: 'Не указано имя автора или ссылка на превью' });
+  }
+
+  const cleanName = name.trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').toLowerCase();
+  const userId = req.user?.id || null;
+  const authors = getFavoriteAuthors(userId);
+  const target = authors.find(a => (a.name || '').toLowerCase() === cleanName);
+
+  if (!target) {
+    return res.status(404).json({ success: false, message: 'Автор не найден в избранном' });
+  }
+
+  target.previewUrl = previewUrl;
+  saveFavoriteAuthors(authors, userId);
+  res.json({ success: true, author: target, authors });
+});
+
 // GET /api/likes
 router.get('/likes', (req, res) => {
   const userId = req.user?.id || null;

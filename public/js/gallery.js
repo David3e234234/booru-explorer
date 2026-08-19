@@ -683,7 +683,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
   }
 
-  function renderAuthorCards(authorsList, { onExplore, onDelete, onAddAuthor } = {}) {
+  function renderAuthorCards(authorsList, { onExplore, onDelete, onAddAuthor, onChangePreview } = {}) {
     galleryGrid.innerHTML = '';
     loadingSpinner.style.display = 'none';
     scrollLoader.style.display = 'none';
@@ -723,13 +723,13 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     const fragment = document.createDocumentFragment();
     authorsList.forEach(author => {
-      const card = createAuthorCard(author, { onExplore, onDelete });
+      const card = createAuthorCard(author, { onExplore, onDelete, onChangePreview });
       fragment.appendChild(card);
     });
     galleryGrid.appendChild(fragment);
   }
 
-  function createAuthorCard(author, { onExplore, onDelete } = {}) {
+  function createAuthorCard(author, { onExplore, onDelete, onChangePreview } = {}) {
     const card = document.createElement('div');
     card.className = 'author-card';
     card.dataset.authorName = author.name;
@@ -752,6 +752,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         ${preview ? `<img class="author-cover-img" src="${preview}" alt="${author.displayName || author.name}" loading="lazy" decoding="async">` : `<div class="author-cover-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>`}
         <div class="author-card-gradient"></div>
         <span class="author-card-site-badge">${siteName}</span>
+        <button type="button" class="btn-author-change-cover" title="Сменить обложку автора">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span class="change-cover-text">Обложка</span>
+        </button>
       </div>
       <div class="author-card-body">
         <div class="author-card-title-row">
@@ -766,12 +770,31 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <span>Смотреть работы</span>
           </button>
+          <button class="btn-author-change-cover-action" title="Выбрать обложку из постов автора">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          </button>
           <button class="btn-author-delete" title="Удалить из избранных">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
           </button>
         </div>
       </div>
     `;
+
+    const btnCoverTop = card.querySelector('.btn-author-change-cover');
+    if (btnCoverTop) {
+      btnCoverTop.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onChangePreview) onChangePreview(author);
+      });
+    }
+
+    const btnCoverAction = card.querySelector('.btn-author-change-cover-action');
+    if (btnCoverAction) {
+      btnCoverAction.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onChangePreview) onChangePreview(author);
+      });
+    }
 
     const btnExplore = card.querySelector('.btn-author-explore');
     if (btnExplore) {
