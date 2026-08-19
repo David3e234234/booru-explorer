@@ -539,297 +539,366 @@
     <div class="settings-backdrop" id="settingsBackdrop"></div>
     <div class="settings-dialog">
       <div class="settings-header">
-        <h3 class="settings-title">Настройки и Фильтры</h3>
-        <button class="btn-icon" id="btnCloseSettings">
+        <div class="settings-header-title-row">
+          <h3 class="settings-title">⚙️ Настройки и Фильтры</h3>
+        </div>
+        <button class="btn-icon" id="btnCloseSettings" title="Закрыть">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
+      <!-- Вкладки категорий настроек -->
+      <div class="settings-nav-tabs">
+        <button type="button" class="settings-nav-tab active" data-tab="general">
+          <span class="tab-icon">🎨</span>
+          <span class="tab-label">Общие</span>
+        </button>
+        <button type="button" class="settings-nav-tab" data-tab="filters">
+          <span class="tab-icon">🛡️</span>
+          <span class="tab-label">Фильтры & ИИ</span>
+        </button>
+        <button type="button" class="settings-nav-tab" data-tab="archetypes">
+          <span class="tab-icon">🎭</span>
+          <span class="tab-label">Слова типажей</span>
+        </button>
+        <button type="button" class="settings-nav-tab" data-tab="apikeys">
+          <span class="tab-icon">🔑</span>
+          <span class="tab-label">API Ключи</span>
+        </button>
+        <button type="button" class="settings-nav-tab" data-tab="proxy">
+          <span class="tab-icon">🌐</span>
+          <span class="tab-label">Прокси & Сеть</span>
+        </button>
+        <button type="button" class="settings-nav-tab" data-tab="storage">
+          <span class="tab-icon">💾</span>
+          <span class="tab-label">Память & Бэкап</span>
+        </button>
+      </div>
+
       <div class="settings-content">
-        <!-- Черный список тегов -->
-        <div class="settings-group">
-          <label class="settings-label" for="blacklistInput">Черный список тегов (Blacklist):</label>
-          <p class="settings-hint">Посты с этими тегами будут скрыты из всех результатов поиска.</p>
-          <div class="tags-input-box" id="blacklistWrapper">
-            <input type="text" id="blacklistInput" placeholder="Введите тег и нажмите Enter..." spellcheck="false">
-          </div>
-        </div>
-
-        <!-- API Ключи для Booru источников -->
-        <div class="settings-group">
-          <label class="settings-label">🔑 Персональные API Ключи (Booru):</label>
-          <p class="settings-hint">Необязательно. Бесплатные ключи снимают ограничения поиска, повышают лимиты и ускоряют выдачу.</p>
-          
-          <div class="api-keys-container">
-            <!-- 1. Rule34.xxx -->
-            <div class="api-key-card">
-              <div class="api-key-card-header">
-                <span class="api-key-site-badge site-r34">Rule34.xxx</span>
-                <a href="https://rule34.xxx/index.php?page=account&s=home" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в профиле Rule34">Где взять? ↗</a>
-              </div>
-              <div class="api-keys-grid">
-                <input type="text" id="inputRule34ApiKey" class="input-setting" placeholder="Rule34 API Key" autocomplete="off" spellcheck="false">
-                <input type="text" id="inputRule34UserId" class="input-setting" placeholder="Rule34 User ID" autocomplete="off" spellcheck="false">
-              </div>
-            </div>
-
-            <!-- 2. Gelbooru -->
-            <div class="api-key-card">
-              <div class="api-key-card-header">
-                <span class="api-key-site-badge site-gelbooru">Gelbooru.com</span>
-                <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в настройках Gelbooru">Где взять? ↗</a>
-              </div>
-              <div class="api-keys-grid">
-                <input type="text" id="inputGelbooruApiKey" class="input-setting" placeholder="Gelbooru API Key" autocomplete="off" spellcheck="false">
-                <input type="text" id="inputGelbooruUserId" class="input-setting" placeholder="Gelbooru User ID" autocomplete="off" spellcheck="false">
-              </div>
-            </div>
-
-            <!-- 3. Danbooru -->
-            <div class="api-key-card">
-              <div class="api-key-card-header">
-                <span class="api-key-site-badge site-danbooru">Danbooru</span>
-                <a href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener" class="api-key-link" title="Получить API Key в профиле Danbooru">Где взять? ↗</a>
-              </div>
-              <div class="api-keys-grid">
-                <input type="text" id="inputDanbooruApiKey" class="input-setting" placeholder="Danbooru API Key" autocomplete="off" spellcheck="false">
-                <input type="text" id="inputDanbooruLogin" class="input-setting" placeholder="Danbooru Username (Логин)" autocomplete="off" spellcheck="false">
-              </div>
+        <!-- 1. ВКЛАДКА: ОБЩИЕ -->
+        <div class="settings-tab-pane active" id="tabPane-general">
+          <!-- Тема оформления -->
+          <div class="settings-group">
+            <label class="settings-label">Цветовая тема:</label>
+            <div class="theme-options">
+              <button class="btn-theme active" data-theme-val="dark">Графит (Deep Slate)</button>
+              <button class="btn-theme" data-theme-val="oled">OLED Pure Black</button>
+              <button class="btn-theme" data-theme-val="light">Светлая</button>
             </div>
           </div>
-        </div>
 
-        <!-- Список тегов распознавания ИИ -->
-        <div class="settings-group">
-          <label class="settings-label" for="aiTagsInput">Список тегов ИИ (AI Detector):</label>
-          <p class="settings-hint">Теги, по которым система определяет искусственно сгенерированные работы.</p>
-          <div class="tags-input-box" id="aiTagsWrapper">
-            <input type="text" id="aiTagsInput" placeholder="Добавить AI тег..." spellcheck="false">
+          <!-- Количество постов -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectItemsPerPage">Количество постов за один прокрут (порция):</label>
+            <p class="settings-hint">Сколько постов запрашивать с сайтов за один шаг прокрутки ленты.</p>
+            <select id="selectItemsPerPage" class="input-setting">
+              <option value="20">20 постов</option>
+              <option value="40">40 постов</option>
+              <option value="60">60 постов</option>
+              <option value="80">80 постов</option>
+              <option value="100" selected>100 постов (Рекомендуется)</option>
+              <option value="150">150 постов</option>
+              <option value="200">200 постов (Максимум)</option>
+            </select>
           </div>
-        </div>
 
-        <!-- Настройки загрузки и видео -->
-        <div class="settings-group">
-          <label class="settings-label" for="selectItemsPerPage">Количество постов за один прокрут (порция):</label>
-          <p class="settings-hint">Сколько постов запрашивать с сайтов за один шаг прокрутки ленты.</p>
-          <select id="selectItemsPerPage" class="input-setting" style="padding: 8px 12px; background: var(--bg-surface-elevated); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: var(--radius-md);">
-            <option value="20">20 постов</option>
-            <option value="40">40 постов</option>
-            <option value="60">60 постов</option>
-            <option value="80">80 постов</option>
-            <option value="100" selected>100 постов (Рекомендуется)</option>
-            <option value="150">150 постов</option>
-            <option value="200">200 постов (Максимум)</option>
-          </select>
-        </div>
-
-        <div class="settings-group">
-          <label class="settings-label" for="selectDeepFetchPages">Глубина поиска Danbooru (страниц):</label>
-          <p class="settings-hint">Сколько скрытых страниц скачивать для локальной фильтрации (чем больше, тем больше результатов, но дольше загрузка).</p>
-          <select id="selectDeepFetchPages" class="input-setting" style="padding: 8px 12px; background: var(--bg-surface-elevated); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: var(--radius-md);">
-            <option value="1">1 страница</option>
-            <option value="2" selected>2 страницы</option>
-            <option value="3">3 страницы</option>
-            <option value="4">4 страницы</option>
-            <option value="5">5 страниц (Максимум)</option>
-          </select>
-        </div>
-
-        <div class="settings-group">
-          <label class="settings-label">Специфичные настройки поиска:</label>
-          <div class="toggles-list" style="margin-top: 6px;">
-            <label class="toggle-row" title="Ручные теги (например 'petite') будут иметь приоритет над сортировкой 'Популярное' и 'Видео' при поиске на Danbooru">
-              <input type="checkbox" id="checkPrioritizeUserTags">
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">🎯 Отдавать приоритет ручным тегам перед системными фильтрами (Danbooru)</span>
-            </label>
-            <label class="toggle-row" title="Использовать открытую базу Rule34 Paheal (rule34.paheal.net) при отсутствии или сбое API ключа Rule34.xxx">
-              <input type="checkbox" id="checkEnablePaheal" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">🌐 Использовать Rule34 через Paheal (открытый источник без API ключа)</span>
-            </label>
+          <!-- Качество превью в ленте -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectPreviewQuality">Качество превью в галерее:</label>
+            <p class="settings-hint">Выберите баланс между качеством картинок в ленте и скоростью загрузки / трафиком.</p>
+            <select id="selectPreviewQuality" class="input-setting">
+              <option value="low">⚡ Низкое (Миниатюры) — Максимальная скорость, минимум трафика</option>
+              <option value="medium" selected>✨ Среднее (Стандартное) — Оптимальный баланс качества и скорости (Рекомендуется)</option>
+              <option value="high">🔍 Высокое (HD Sample) — Четкая картинка без артефактов сжатия</option>
+              <option value="original">💎 Оригинал (Full HD / 4K) — Максимальная детализация</option>
+            </select>
           </div>
-        </div>
 
-        <!-- Качество превью в ленте -->
-        <div class="settings-group">
-          <label class="settings-label" for="selectPreviewQuality">Качество превью в галерее:</label>
-          <p class="settings-hint">Выберите баланс между качеством картинок в ленте и скоростью загрузки / трафиком.</p>
-          <select id="selectPreviewQuality" class="input-setting" style="padding: 8px 12px; background: var(--bg-surface-elevated); color: var(--text-primary); border: 1px solid var(--border-medium); border-radius: var(--radius-md);">
-            <option value="low">⚡ Низкое (Миниатюры) — Максимальная скорость, минимум трафика</option>
-            <option value="medium" selected>✨ Среднее (Стандартное) — Оптимальный баланс качества и скорости (Рекомендуется)</option>
-            <option value="high">🔍 Высокое (HD Sample) — Четкая картинка без артефактов сжатия</option>
-            <option value="original">💎 Оригинал (Full HD / 4K) — Максимальная детализация</option>
-          </select>
-        </div>
-
-        <!-- Настройки Прокси и Экономии трафика сервера -->
-        <div class="settings-group">
-          <label class="settings-label">🛡️ Проксирование и экономия трафика сервера:</label>
-          <p class="settings-hint">Отключайте проксирование для экономии серверного трафика и ресурсов. Если CDN борды блокирует прямой доступ, приложение автоматически подключит прокси (Fallback).</p>
-          <div class="toggles-list" style="margin-top: 6px;">
-            <label class="toggle-row" id="rowProxyThumbnails" title="Загружать превью и миниатюры через серверный прокси с сохранением в локальный дисковый кэш">
-              <input type="checkbox" id="checkProxyThumbnails" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">🖼️ Проксировать превью в ленте (кэширование на сервере)</span>
-            </label>
-            <div id="proxyThumbnailsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-              ⚠️ Прокси превью недоступен на Live Demo (для экономии Fast Origin Transfer)
-            </div>
-            <label class="toggle-row" id="rowProxyFullImages" title="Загружать полноразмерные оригиналы артов через серверный прокси в просмотрщике">
-              <input type="checkbox" id="checkProxyFullImages" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">🎨 Проксировать полноразмерные изображения (просмотрщик)</span>
-            </label>
-            <div id="proxyFullImagesVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-              ⚠️ Прокси изображений недоступен на Live Demo (для экономии Fast Origin Transfer)
-            </div>
-            <label class="toggle-row" id="rowProxyVideos" title="Загружать видеопотоки через локальный прокси для мгновенного запуска и обхода CDN-ограничений">
-              <input type="checkbox" id="checkProxyVideos" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">🎬 Проксировать видеопотоки (лента и полноэкранный плеер)</span>
-            </label>
-            <div id="proxyVideosVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-              ⚠️ Прокси видео недоступен на Live Demo (для экономии Fast Origin Transfer)
-            </div>
-            <label class="toggle-row" id="rowProxyDownloads" title="Скачивать файлы через серверный прокси для гарантированного сохранения с оригинальным именем">
-              <input type="checkbox" id="checkProxyDownloads" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">📥 Проксировать скачивание файлов на устройство</span>
-            </label>
-            <div id="proxyDownloadsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-              ⚠️ Прокси скачивания недоступен на Live Demo (для экономии Fast Origin Transfer)
+          <!-- Воспроизведение видео -->
+          <div class="settings-group">
+            <label class="settings-label">Воспроизведение и автоплей видео:</label>
+            <div class="toggles-list">
+              <label class="toggle-row" title="Воспроизводить превью видео при наведении курсора мыши в галерее">
+                <input type="checkbox" id="checkVideoAutoplayHover" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">🎬 Автовоспроизведение в ленте при наведении (ПК)</span>
+              </label>
+              <label class="toggle-row" title="Автоматически запускать видео без звука при прокрутке ленты в фокус на смартфонах">
+                <input type="checkbox" id="checkVideoAutoplayMobile" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">📱 Автовоспроизведение в ленте при прокрутке (Смартфоны)</span>
+              </label>
+              <label class="toggle-row" title="Автоматически начинать проигрывание видео при открытии в полноэкранном просмотрщике">
+                <input type="checkbox" id="checkVideoAutoplayViewer" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">▶️ Автовоспроизведение при открытии в просмотрщике</span>
+              </label>
+              <label class="toggle-row" title="Показывать информационную плашку с кнопками кеширования в память, FFmpeg и прокси в просмотрщике">
+                <input type="checkbox" id="checkShowVideoStatusBanner" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">📊 Показывать статусную плашку кеширования у видео (кэш/прокси/фикс)</span>
+              </label>
             </div>
           </div>
-        </div>
 
-        <div class="settings-group">
-          <label class="settings-label">Воспроизведение и автоплей видео:</label>
-          <div class="toggles-list" style="margin-top: 6px;">
-            <label class="toggle-row" title="Воспроизводить превью видео при наведении курсора мыши в галерее">
-              <input type="checkbox" id="checkVideoAutoplayHover" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">🎬 Автовоспроизведение в ленте при наведении (ПК)</span>
-            </label>
-            <label class="toggle-row" title="Автоматически запускать видео без звука при прокрутке ленты в фокус на смартфонах">
-              <input type="checkbox" id="checkVideoAutoplayMobile" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">📱 Автовоспроизведение в ленте при прокрутке (Смартфоны)</span>
-            </label>
-            <label class="toggle-row" title="Автоматически начинать проигрывание видео при открытии в полноэкранном просмотрщике">
-              <input type="checkbox" id="checkVideoAutoplayViewer" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">▶️ Автовоспроизведение при открытии в просмотрщике</span>
-            </label>
-            <label class="toggle-row" title="Показывать информационную плашку с кнопками кеширования в память, FFmpeg и прокси в просмотрщике">
-              <input type="checkbox" id="checkShowVideoStatusBanner" checked>
-              <span class="toggle-slider"></span>
-              <span class="toggle-name">📊 Показывать статусную плашку кеширования у видео (кэш/прокси/фикс)</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- PWA Приложение для смартфона/ПК -->
-        <div class="settings-group" id="pwaInstallGroup" style="display: none; background: rgba(59, 130, 246, 0.08); padding: 14px; border-radius: var(--radius-md); border: 1px solid rgba(59, 130, 246, 0.2);">
-          <label class="settings-label" style="color: var(--accent-primary);">📱 Мобильное PWA-приложение:</label>
-          <p class="settings-hint" style="margin-bottom: 10px;">Установите Booru Explorer как отдельное быстрое приложение на рабочий стол смартфона или ПК.</p>
-          <button type="button" class="btn-primary" id="btnInstallPwa" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span>Установить Booru Explorer</span>
-          </button>
-        </div>
-
-        <!-- Тема оформления -->
-        <div class="settings-group">
-          <label class="settings-label">Цветовая тема:</label>
-          <div class="theme-options">
-            <button class="btn-theme active" data-theme-val="dark">Графит (Deep Slate)</button>
-            <button class="btn-theme" data-theme-val="oled">OLED Pure Black</button>
-            <button class="btn-theme" data-theme-val="light">Светлая</button>
-          </div>
-        </div>
-
-        <!-- Управление локальным хранилищем и кэшем устройства -->
-        <div class="settings-group storage-settings-group">
-          <div class="storage-header-row">
-            <div>
-              <label class="settings-label">💾 Кэш и память устройства:</label>
-              <p class="settings-hint">Закэшированные медиа-файлы и запросы для мгновенной работы офлайн/онлайн.</p>
-            </div>
-            <button type="button" class="btn-refresh-storage" id="btnRefreshStorage" title="Обновить расчет памяти">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-              </svg>
+          <!-- PWA Приложение для смартфона/ПК -->
+          <div class="settings-group" id="pwaInstallGroup" style="display: none; background: rgba(59, 130, 246, 0.08); padding: 14px; border-radius: var(--radius-md); border: 1px solid rgba(59, 130, 246, 0.2);">
+            <label class="settings-label" style="color: var(--accent-primary);">📱 Мобильное PWA-приложение:</label>
+            <p class="settings-hint" style="margin-bottom: 10px;">Установите Booru Explorer как отдельное быстрое приложение на рабочий стол смартфона или ПК.</p>
+            <button type="button" class="btn-primary" id="btnInstallPwa" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Установить Booru Explorer</span>
             </button>
           </div>
-          
-          <div class="storage-card">
-            <div class="storage-info-row">
-              <div class="storage-stat">
-                <span class="storage-stat-label">Занято на устройстве:</span>
-                <span class="storage-stat-value" id="storageUsageText">0.0 МБ</span>
-              </div>
-              <div class="storage-stat text-right">
-                <span class="storage-stat-label">Доступная квота:</span>
-                <span class="storage-stat-quota" id="storageQuotaText">-- ГБ</span>
-              </div>
-            </div>
-            
-            <div class="storage-progress-track">
-              <div class="storage-progress-bar" id="storageProgressBar" style="width: 0%;"></div>
-            </div>
-            
-            <div class="storage-breakdown" id="storageBreakdown">
-              <div class="storage-breakdown-item">
-                <span class="storage-dot dot-cache"></span>
-                <span class="storage-breakdown-label">Кэш PWA / Медиа:</span>
-                <span class="storage-breakdown-val" id="storageMediaCacheText">0.0 МБ</span>
-              </div>
-              <div class="storage-breakdown-item">
-                <span class="storage-dot dot-server"></span>
-                <span class="storage-breakdown-label">Серверный кэш:</span>
-                <span class="storage-breakdown-val" id="storageServerCacheText">0.0 МБ</span>
-              </div>
-            </div>
+        </div>
 
-            <div class="storage-actions-row">
-              <button type="button" class="btn-clean-cache" id="btnClearStorageBtn">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                  <line x1="10" y1="11" x2="10" y2="17"/>
-                  <line x1="14" y1="11" x2="14" y2="17"/>
+        <!-- 2. ВКЛАДКА: ФИЛЬТРЫ И ИИ -->
+        <div class="settings-tab-pane" id="tabPane-filters" style="display: none;">
+          <!-- Черный список тегов -->
+          <div class="settings-group">
+            <label class="settings-label" for="blacklistInput">Черный список тегов (Blacklist):</label>
+            <p class="settings-hint">Посты с этими тегами будут скрыты из всех результатов поиска.</p>
+            <div class="tags-input-box" id="blacklistWrapper">
+              <input type="text" id="blacklistInput" placeholder="Введите тег и нажмите Enter..." spellcheck="false">
+            </div>
+          </div>
+
+          <!-- Список тегов распознавания ИИ -->
+          <div class="settings-group">
+            <label class="settings-label" for="aiTagsInput">Список тегов ИИ (AI Detector):</label>
+            <p class="settings-hint">Теги, по которым система определяет искусственно сгенерированные работы.</p>
+            <div class="tags-input-box" id="aiTagsWrapper">
+              <input type="text" id="aiTagsInput" placeholder="Добавить AI тег..." spellcheck="false">
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. ВКЛАДКА: СЛОВА ТИПАЖЕЙ (МАМОЧКИ / ЛОЛИ) -->
+        <div class="settings-tab-pane" id="tabPane-archetypes" style="display: none;">
+          <div class="settings-group">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="curvyTagsInput">👠 Слова для «Мамочки / Пышные» (Curvy / Mature):</label>
+              <button type="button" class="btn-text" id="btnResetCurvyTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+            </div>
+            <p class="settings-hint">Теги, используемые при активации фильтра «👠 Мамочки» для отбора зрелых и пышных персонажей.</p>
+            <div class="tags-input-box" id="curvyTagsWrapper">
+              <input type="text" id="curvyTagsInput" placeholder="Добавить тег (например: milf, mature)..." spellcheck="false">
+            </div>
+          </div>
+
+          <div class="settings-group" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="petiteTagsInput">🌸 Слова для «Лоли / Миниатюрные» (Petite / Loli):</label>
+              <button type="button" class="btn-text" id="btnResetPetiteTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+            </div>
+            <p class="settings-hint">Теги, используемые при активации фильтра «🌸 Лоли» для отбора миниатюрных персонажей.</p>
+            <div class="tags-input-box" id="petiteTagsWrapper">
+              <input type="text" id="petiteTagsInput" placeholder="Добавить тег (например: loli, petite)..." spellcheck="false">
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. ВКЛАДКА: API КЛЮЧИ -->
+        <div class="settings-tab-pane" id="tabPane-apikeys" style="display: none;">
+          <div class="settings-group">
+            <label class="settings-label">🔑 Персональные API Ключи (Booru):</label>
+            <p class="settings-hint">Необязательно. Бесплатные ключи снимают ограничения поиска, повышают лимиты и ускоряют выдачу.</p>
+            
+            <div class="api-keys-container">
+              <!-- 1. Rule34.xxx -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-r34">Rule34.xxx</span>
+                  <a href="https://rule34.xxx/index.php?page=account&s=home" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в профиле Rule34">Где взять? ↗</a>
+                </div>
+                <div class="api-keys-grid">
+                  <input type="text" id="inputRule34ApiKey" class="input-setting" placeholder="Rule34 API Key" autocomplete="off" spellcheck="false">
+                  <input type="text" id="inputRule34UserId" class="input-setting" placeholder="Rule34 User ID" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 2. Gelbooru -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-gelbooru">Gelbooru.com</span>
+                  <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в настройках Gelbooru">Где взять? ↗</a>
+                </div>
+                <div class="api-keys-grid">
+                  <input type="text" id="inputGelbooruApiKey" class="input-setting" placeholder="Gelbooru API Key" autocomplete="off" spellcheck="false">
+                  <input type="text" id="inputGelbooruUserId" class="input-setting" placeholder="Gelbooru User ID" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 3. Danbooru -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-danbooru">Danbooru</span>
+                  <a href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener" class="api-key-link" title="Получить API Key в профиле Danbooru">Где взять? ↗</a>
+                </div>
+                <div class="api-keys-grid">
+                  <input type="text" id="inputDanbooruApiKey" class="input-setting" placeholder="Danbooru API Key" autocomplete="off" spellcheck="false">
+                  <input type="text" id="inputDanbooruLogin" class="input-setting" placeholder="Danbooru Username (Логин)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. ВКЛАДКА: ПРОКСИ & СЕТЬ -->
+        <div class="settings-tab-pane" id="tabPane-proxy" style="display: none;">
+          <div class="settings-group">
+            <label class="settings-label">🛡️ Проксирование и экономия трафика сервера:</label>
+            <p class="settings-hint">Отключайте проксирование для прямой загрузки с CDN. Если CDN борды блокирует доступ, приложение автоматически подключит прокси (Fallback).</p>
+            <div class="toggles-list" style="margin-top: 6px;">
+              <label class="toggle-row" id="rowProxyThumbnails" title="Загружать превью и миниатюры через серверный прокси с сохранением в локальный дисковый кэш">
+                <input type="checkbox" id="checkProxyThumbnails" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">🖼️ Проксировать превью в ленте (кэширование на сервере)</span>
+              </label>
+              <div id="proxyThumbnailsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
+                ⚠️ Прокси превью недоступен на Live Demo (для экономии Fast Origin Transfer)
+              </div>
+              <label class="toggle-row" id="rowProxyFullImages" title="Загружать полноразмерные оригиналы артов через серверный прокси в просмотрщике">
+                <input type="checkbox" id="checkProxyFullImages" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">🎨 Проксировать полноразмерные изображения (просмотрщик)</span>
+              </label>
+              <div id="proxyFullImagesVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
+                ⚠️ Прокси изображений недоступен на Live Demo (для экономии Fast Origin Transfer)
+              </div>
+              <label class="toggle-row" id="rowProxyVideos" title="Загружать видеопотоки через локальный прокси для мгновенного запуска и обхода CDN-ограничений">
+                <input type="checkbox" id="checkProxyVideos" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">🎬 Проксировать видеопотоки (лента и полноэкранный плеер)</span>
+              </label>
+              <div id="proxyVideosVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
+                ⚠️ Прокси видео недоступен на Live Demo (для экономии Fast Origin Transfer)
+              </div>
+              <label class="toggle-row" id="rowProxyDownloads" title="Скачивать файлы через серверный прокси для гарантированного сохранения с оригинальным именем">
+                <input type="checkbox" id="checkProxyDownloads" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">📥 Проксировать скачивание файлов на устройство</span>
+              </label>
+              <div id="proxyDownloadsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
+                ⚠️ Прокси скачивания недоступен на Live Demo (для экономии Fast Origin Transfer)
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
+            <label class="settings-label" for="selectDeepFetchPages">Глубина поиска Danbooru (страниц):</label>
+            <p class="settings-hint">Сколько скрытых страниц скачивать для локальной фильтрации (чем больше, тем больше результатов, но дольше загрузка).</p>
+            <select id="selectDeepFetchPages" class="input-setting">
+              <option value="1">1 страница</option>
+              <option value="2" selected>2 страницы</option>
+              <option value="3">3 страницы</option>
+              <option value="4">4 страницы</option>
+              <option value="5">5 страниц (Максимум)</option>
+            </select>
+          </div>
+
+          <div class="settings-group">
+            <label class="settings-label">Специфичные настройки поиска:</label>
+            <div class="toggles-list" style="margin-top: 6px;">
+              <label class="toggle-row" title="Ручные теги (например 'petite') будут иметь приоритет над сортировкой 'Популярное' и 'Видео' при поиске на Danbooru">
+                <input type="checkbox" id="checkPrioritizeUserTags">
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">🎯 Отдавать приоритет ручным тегам перед системными фильтрами (Danbooru)</span>
+              </label>
+              <label class="toggle-row" title="Использовать открытую базу Rule34 Paheal (rule34.paheal.net) при отсутствии или сбое API ключа Rule34.xxx">
+                <input type="checkbox" id="checkEnablePaheal" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">🌐 Использовать Rule34 через Paheal (открытый источник без API ключа)</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. ВКЛАДКА: ПАМЯТЬ & БЭКАП -->
+        <div class="settings-tab-pane" id="tabPane-storage" style="display: none;">
+          <!-- Управление локальным хранилищем и кэшем устройства -->
+          <div class="settings-group storage-settings-group">
+            <div class="storage-header-row">
+              <div>
+                <label class="settings-label">💾 Кэш и память устройства:</label>
+                <p class="settings-hint">Закэшированные медиа-файлы и запросы для мгновенной работы офлайн/онлайн.</p>
+              </div>
+              <button type="button" class="btn-refresh-storage" id="btnRefreshStorage" title="Обновить расчет памяти">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
                 </svg>
-                <span>Очистить кэш медиа</span>
               </button>
-              <span id="storageClearStatus" class="storage-clear-status"></span>
+            </div>
+            
+            <div class="storage-card">
+              <div class="storage-info-row">
+                <div class="storage-stat">
+                  <span class="storage-stat-label">Занято на устройстве:</span>
+                  <span class="storage-stat-value" id="storageUsageText">0.0 МБ</span>
+                </div>
+                <div class="storage-stat text-right">
+                  <span class="storage-stat-label">Доступная квота:</span>
+                  <span class="storage-stat-quota" id="storageQuotaText">-- ГБ</span>
+                </div>
+              </div>
+              
+              <div class="storage-progress-track">
+                <div class="storage-progress-bar" id="storageProgressBar" style="width: 0%;"></div>
+              </div>
+              
+              <div class="storage-breakdown" id="storageBreakdown">
+                <div class="storage-breakdown-item">
+                  <span class="storage-dot dot-cache"></span>
+                  <span class="storage-breakdown-label">Кэш PWA / Медиа:</span>
+                  <span class="storage-breakdown-val" id="storageMediaCacheText">0.0 МБ</span>
+                </div>
+                <div class="storage-breakdown-item">
+                  <span class="storage-dot dot-server"></span>
+                  <span class="storage-breakdown-label">Серверный кэш:</span>
+                  <span class="storage-breakdown-val" id="storageServerCacheText">0.0 МБ</span>
+                </div>
+              </div>
+
+              <div class="storage-actions-row">
+                <button type="button" class="btn-clean-cache" id="btnClearStorageBtn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    <line x1="10" y1="11" x2="10" y2="17"/>
+                    <line x1="14" y1="11" x2="14" y2="17"/>
+                  </svg>
+                  <span>Очистить кэш медиа</span>
+                </button>
+                <span id="storageClearStatus" class="storage-clear-status"></span>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Резервное копирование и перенос данных (Экспорт / Импорт) -->
-        <div class="settings-group backup-settings-group">
-          <label class="settings-label">📦 Резервное копирование и перенос данных:</label>
-          <p class="settings-hint">Выгрузите все свои настройки, API-ключи, закладки, лайки и список любимых авторов в файл или загрузите их на новом устройстве / хостинге.</p>
-          
-          <div class="backup-actions-grid">
-            <button type="button" class="btn-backup btn-export" id="btnExportData">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              <span>Экспорт в файл (JSON)</span>
-            </button>
+          <!-- Резервное копирование и перенос данных -->
+          <div class="settings-group backup-settings-group">
+            <label class="settings-label">📦 Резервное копирование и перенос данных:</label>
+            <p class="settings-hint">Выгрузите свои настройки, слова типажей, API-ключи, закладки, лайки и список любимых авторов в файл или перенесите на другое устройство.</p>
+            
+            <div class="backup-actions-grid">
+              <button type="button" class="btn-backup btn-export" id="btnExportData">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>Экспорт в файл (JSON)</span>
+              </button>
 
-            <button type="button" class="btn-backup btn-import" id="btnImportData">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="17 8 12 3 7 8"/>
-                <line x1="12" y1="3" x2="12" y2="15"/>
-              </svg>
-              <span>Импорт из файла</span>
-            </button>
-            <input type="file" id="inputImportFile" accept=".json" style="display: none;">
+              <button type="button" class="btn-backup btn-import" id="btnImportData">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>Импорт из файла</span>
+              </button>
+              <input type="file" id="inputImportFile" accept=".json" style="display: none;">
+            </div>
           </div>
         </div>
       </div>

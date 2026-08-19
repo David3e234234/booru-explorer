@@ -85,12 +85,15 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       const r = (item.rating || '').toLowerCase();
       if (r !== 's' && r !== 'g' && r !== 'general') return false;
     }
+    const activeCurvy = (Array.isArray(settings?.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS;
+    const activePetite = (Array.isArray(settings?.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS;
+
     if (params.ageFilter === 'adult') {
       if (CURVY_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
-      if (!userTagList.length && !CURVY_INCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+      if (!userTagList.length && !activeCurvy.some(t => rawTags.includes(t))) return false;
     } else if (params.ageFilter === 'young') {
       if (PETITE_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
-      if (!PETITE_INCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
+      if (!userTagList.length && !activePetite.some(t => rawTags.includes(t))) return false;
     }
     return true;
   };

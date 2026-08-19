@@ -164,6 +164,8 @@ export const DEFAULT_SETTINGS = {
   showVideoStatusBanner: true,
   aiTags: DEFAULT_AI_TAGS,
   blacklist: ['guro', 'scat', 'snuff', 'vomit', 'fart'],
+  curvyTags: CURVY_INCLUDE_TAGS,
+  petiteTags: PETITE_INCLUDE_TAGS,
   videoAutoplayHover: true,
   videoAutoplayMobile: true,
   videoAutoplayViewer: true,

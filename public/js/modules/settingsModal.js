@@ -15,8 +15,58 @@ import {
 import { showToast, formatBytes } from './uiUtils.js';
 import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI } from './filtersUI.js';
 
+export const DEFAULT_CURVY_TAGS = [
+  'milf',
+  'mature_female',
+  'mature',
+  'tall_female',
+  'tall',
+  'curvy',
+  'curvy_female',
+  'wide_hips',
+  'thick_thighs',
+  'huge_breasts',
+  'gigantic_breasts',
+  'large_breasts',
+  'big_breasts',
+  'voluptuous',
+  'plump',
+  'chubby',
+  'bbw',
+  'mother',
+  'housewife',
+  'office_lady',
+  'teacher',
+  'cow_girl'
+];
+
+export const DEFAULT_PETITE_TAGS = [
+  'loli',
+  'shota',
+  'petite',
+  'flat_chest',
+  'small_breasts',
+  'short_female',
+  'short_stature',
+  'smol',
+  'chibi',
+  'schoolgirl',
+  'young',
+  'teenager',
+  'underage',
+  'middle_school_student',
+  'elementary_school_student',
+  'junior_high_school_student',
+  'high_school_student',
+  'preschooler',
+  'kindergarten',
+  'toddler'
+];
+
 let tempBlacklist = [];
 let tempAiTags = [];
+let tempCurvyTags = [];
+let tempPetiteTags = [];
 
 export function applySettingsToUIAndState(s) {
   if (!s) return;
@@ -119,7 +169,12 @@ export function renderSettingsChips() {
   const blacklistInput = document.getElementById('blacklistInput');
   const aiTagsWrapper = document.getElementById('aiTagsWrapper');
   const aiTagsInput = document.getElementById('aiTagsInput');
+  const curvyTagsWrapper = document.getElementById('curvyTagsWrapper');
+  const curvyTagsInput = document.getElementById('curvyTagsInput');
+  const petiteTagsWrapper = document.getElementById('petiteTagsWrapper');
+  const petiteTagsInput = document.getElementById('petiteTagsInput');
 
+  // Черный список
   if (blacklistWrapper && blacklistInput) {
     blacklistWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove());
     tempBlacklist.forEach(tag => {
@@ -137,6 +192,7 @@ export function renderSettingsChips() {
     });
   }
 
+  // AI теги
   if (aiTagsWrapper && aiTagsInput) {
     aiTagsWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove());
     tempAiTags.forEach(tag => {
@@ -153,37 +209,110 @@ export function renderSettingsChips() {
       aiTagsWrapper.insertBefore(chip, aiTagsInput);
     });
   }
+
+  // Слова для «Мамочки» (Curvy)
+  if (curvyTagsWrapper && curvyTagsInput) {
+    curvyTagsWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove());
+    tempCurvyTags.forEach(tag => {
+      const chip = document.createElement('div');
+      chip.className = 'tag-chip';
+      chip.innerHTML = `
+        <span>${tag}</span>
+        <span class="tag-chip-remove" data-curvy-tag="${tag}">×</span>
+      `;
+      chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
+        tempCurvyTags = tempCurvyTags.filter(t => t !== tag);
+        renderSettingsChips();
+      });
+      curvyTagsWrapper.insertBefore(chip, curvyTagsInput);
+    });
+  }
+
+  // Слова для «Лоли» (Petite)
+  if (petiteTagsWrapper && petiteTagsInput) {
+    petiteTagsWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove());
+    tempPetiteTags.forEach(tag => {
+      const chip = document.createElement('div');
+      chip.className = 'tag-chip';
+      chip.innerHTML = `
+        <span>${tag}</span>
+        <span class="tag-chip-remove" data-petite-tag="${tag}">×</span>
+      `;
+      chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
+        tempPetiteTags = tempPetiteTags.filter(t => t !== tag);
+        renderSettingsChips();
+      });
+      petiteTagsWrapper.insertBefore(chip, petiteTagsInput);
+    });
+  }
 }
 
 export async function updateStorageUsageInfo() {
-  const storageTotalText = document.getElementById('storageTotalText');
-  const storageClientCacheText = document.getElementById('storageClientCacheText');
+  const storageUsageText = document.getElementById('storageUsageText');
+  const storageQuotaText = document.getElementById('storageQuotaText');
+  const storageProgressBar = document.getElementById('storageProgressBar');
+  const storageMediaCacheText = document.getElementById('storageMediaCacheText');
   const storageServerCacheText = document.getElementById('storageServerCacheText');
 
-  let totalBytes = 0;
+  let localBytes = 0;
   try {
     for (const key in localStorage) {
       if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
-        totalBytes += (localStorage[key].length + key.length) * 2;
+        localBytes += (localStorage[key].length + key.length) * 2;
       }
     }
   } catch {}
 
+  let pwaCacheBytes = 0;
+  if ('caches' in window) {
+    try {
+      const keys = await caches.keys();
+      for (const k of keys) {
+        const cache = await caches.open(k);
+        const reqs = await cache.keys();
+        for (const req of reqs) {
+          const res = await cache.match(req);
+          if (res) {
+            const blob = await res.blob();
+            pwaCacheBytes += blob.size;
+          }
+        }
+      }
+    } catch {}
+  }
+
   let serverCacheBytes = 0;
   try {
     const data = await fetchCacheInfo();
-    if (data.success) {
+    if (data && data.success) {
       serverCacheBytes = data.diskCacheBytes || 0;
     }
   } catch {}
 
-  if (storageTotalText) storageTotalText.textContent = formatBytes(totalBytes + serverCacheBytes);
-  if (storageClientCacheText) storageClientTextFormat(storageClientCacheText, totalBytes);
-  if (storageServerCacheText) storageServerCacheText.textContent = formatBytes(serverCacheBytes);
-}
+  let quotaBytes = 0;
+  let usageBytes = 0;
+  if (navigator.storage && navigator.storage.estimate) {
+    try {
+      const est = await navigator.storage.estimate();
+      usageBytes = est.usage || 0;
+      quotaBytes = est.quota || 0;
+    } catch {}
+  }
 
-function storageClientTextFormat(el, bytes) {
-  el.textContent = formatBytes(bytes);
+  const clientTotalBytes = usageBytes || (localBytes + pwaCacheBytes);
+
+  if (storageUsageText) storageUsageText.textContent = formatBytes(clientTotalBytes);
+  if (storageQuotaText) {
+    storageQuotaText.textContent = quotaBytes > 0 ? formatBytes(quotaBytes) : '-- ГБ';
+  }
+
+  if (storageProgressBar && quotaBytes > 0) {
+    const pct = Math.min(100, Math.max(1, Math.round((clientTotalBytes / quotaBytes) * 100)));
+    storageProgressBar.style.width = `${pct}%`;
+  }
+
+  if (storageMediaCacheText) storageMediaCacheText.textContent = formatBytes(pwaCacheBytes || localBytes);
+  if (storageServerCacheText) storageServerCacheText.textContent = formatBytes(serverCacheBytes);
 }
 
 export async function handleClearStorageCache() {
@@ -203,21 +332,40 @@ export async function handleClearStorageCache() {
     }
     keysToRemove.forEach(k => localStorage.removeItem(k));
 
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      await Promise.all(
+        cacheNames
+          .filter(n => n.startsWith('booru-cache-') || n.includes('media'))
+          .map(n => caches.delete(n))
+      );
+    }
+
     try {
       await clearCache();
-    } catch {}
+    } catch (err) {}
 
-    if (statusEl) {
-      statusEl.textContent = 'Кэш очищен! ✅';
-      setTimeout(() => { statusEl.textContent = ''; }, 3000);
-    }
     await updateStorageUsageInfo();
-    showToast('Кэш медиа и миниатюр очищен 🧹');
+    if (statusEl) {
+      statusEl.textContent = 'Кэш очищен! ✨';
+      setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+    }
+    showToast('Кэш медиа успешно очищен 🧹');
   } catch (err) {
-    if (statusEl) statusEl.textContent = 'Ошибка';
+    if (statusEl) statusEl.textContent = 'Ошибка очистки';
+    showToast('Не удалось полностью очистить кэш');
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+export function switchSettingsTab(tabId) {
+  document.querySelectorAll('.settings-nav-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
+  });
+  document.querySelectorAll('.settings-tab-pane').forEach(pane => {
+    pane.style.display = (pane.id === `tabPane-${tabId}`) ? 'flex' : 'none';
+  });
 }
 
 export function openSettingsModal() {
@@ -229,19 +377,36 @@ export function openSettingsModal() {
   const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
   const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
-  const selectPreviewQuality = document.getElementById('selectPreviewQuality');
-  const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
-  const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
-  const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
   const checkProxyVideos = document.getElementById('checkProxyVideos');
   const checkProxyDownloads = document.getElementById('checkProxyDownloads');
-  const checkProxyVideoDefault = document.getElementById('checkProxyVideos') || document.getElementById('checkProxyVideoDefault');
+  const checkProxyVideoDefault = document.getElementById('checkProxyVideoDefault');
+  const selectPreviewQuality = document.getElementById('selectPreviewQuality');
+  const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
+  const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
+  const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
   const checkShowVideoStatusBanner = document.getElementById('checkShowVideoStatusBanner');
+  const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
+  const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
+  const checkEnablePaheal = document.getElementById('checkEnablePaheal');
 
-  tempBlacklist = [...(state.settings.blacklist || [])];
-  tempAiTags = [...(state.settings.aiTags || [])];
+  tempBlacklist = Array.isArray(state.settings.blacklist) && state.settings.blacklist.length > 0 
+    ? [...state.settings.blacklist] 
+    : ['guro', 'scat', 'snuff', 'vomit', 'fart'];
+
+  tempAiTags = Array.isArray(state.settings.aiTags) && state.settings.aiTags.length > 0 
+    ? [...state.settings.aiTags] 
+    : ['ai_generated', 'ai_art', 'novelai', 'stable_diffusion', 'midjourney', 'synthetic', 'ai_assisted'];
+
+  tempCurvyTags = Array.isArray(state.settings.curvyTags) && state.settings.curvyTags.length > 0 
+    ? [...state.settings.curvyTags] 
+    : [...DEFAULT_CURVY_TAGS];
+
+  tempPetiteTags = Array.isArray(state.settings.petiteTags) && state.settings.petiteTags.length > 0 
+    ? [...state.settings.petiteTags] 
+    : [...DEFAULT_PETITE_TAGS];
+
   renderSettingsChips();
   updateStorageUsageInfo();
 
@@ -251,57 +416,29 @@ export function openSettingsModal() {
   if (inputGelbooruUserId) inputGelbooruUserId.value = state.settings.gelbooruUserId || '';
   if (inputDanbooruApiKey) inputDanbooruApiKey.value = state.settings.danbooruApiKey || '';
   if (inputDanbooruLogin) inputDanbooruLogin.value = state.settings.danbooruLogin || '';
-
-  if (selectItemsPerPage) selectItemsPerPage.value = state.settings.itemsPerPage || 100;
+  if (selectItemsPerPage) selectItemsPerPage.value = String(state.limit || 100);
   if (selectPreviewQuality) selectPreviewQuality.value = state.settings.previewQuality || 'medium';
   if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = state.settings.videoAutoplayHover !== false;
   if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = state.settings.videoAutoplayMobile !== false;
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = state.settings.videoAutoplayViewer !== false;
-  
-  const rowProxyThumbnails = document.getElementById('rowProxyThumbnails');
-  const proxyThumbnailsVercelNotice = document.getElementById('proxyThumbnailsVercelNotice');
-  const rowProxyFullImages = document.getElementById('rowProxyFullImages');
-  const proxyFullImagesVercelNotice = document.getElementById('proxyFullImagesVercelNotice');
-  const rowProxyVideos = document.getElementById('rowProxyVideos');
-  const proxyVideosVercelNotice = document.getElementById('proxyVideosVercelNotice');
-  const rowProxyDownloads = document.getElementById('rowProxyDownloads');
-  const proxyDownloadsVercelNotice = document.getElementById('proxyDownloadsVercelNotice');
+  if (checkPrioritizeUserTags) checkPrioritizeUserTags.checked = state.settings.prioritizeUserTags === true;
+  if (checkEnablePaheal) checkEnablePaheal.checked = state.settings.enablePaheal !== false;
+  if (selectDeepFetchPages) selectDeepFetchPages.value = String(state.settings.deepFetchPages || 2);
 
-  const proxyToggles = [
-    { el: checkProxyThumbnails, row: rowProxyThumbnails, notice: proxyThumbnailsVercelNotice, setting: state.settings.proxyThumbnails !== false },
-    { el: checkProxyFullImages, row: rowProxyFullImages, notice: proxyFullImagesVercelNotice, setting: state.settings.proxyFullImages !== false },
-    { el: checkProxyVideos, row: rowProxyVideos, notice: proxyVideosVercelNotice, setting: (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false) },
-    { el: checkProxyDownloads, row: rowProxyDownloads, notice: proxyDownloadsVercelNotice, setting: state.settings.proxyDownloads !== false }
-  ];
-
-  proxyToggles.forEach(item => {
-    if (item.el) {
-      item.el.checked = item.setting;
-      item.el.disabled = false;
-    }
-    if (item.row) {
-      item.row.style.opacity = '1';
-      item.row.style.cursor = 'pointer';
-    }
-    if (item.notice) item.notice.style.display = 'none';
-  });
-
+  if (checkProxyThumbnails) checkProxyThumbnails.checked = state.settings.proxyThumbnails !== false;
+  if (checkProxyFullImages) checkProxyFullImages.checked = state.settings.proxyFullImages !== false;
+  if (checkProxyVideos) checkProxyVideos.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
+  if (checkProxyDownloads) checkProxyDownloads.checked = state.settings.proxyDownloads !== false;
   if (checkProxyVideoDefault) checkProxyVideoDefault.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
   if (checkShowVideoStatusBanner) checkShowVideoStatusBanner.checked = state.settings.showVideoStatusBanner !== false;
-
-  const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
-  if (selectDeepFetchPages) selectDeepFetchPages.value = state.settings.deepFetchPages || 2;
-
-  const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
-  if (checkPrioritizeUserTags) checkPrioritizeUserTags.checked = state.settings.prioritizeUserTags || false;
-
-  const checkEnablePaheal = document.getElementById('checkEnablePaheal');
-  if (checkEnablePaheal) checkEnablePaheal.checked = state.settings.enablePaheal !== false;
 
   const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
   document.querySelectorAll('.btn-theme').forEach(b => {
     b.classList.toggle('active', b.dataset.themeVal === currentTheme);
   });
+
+  // По умолчанию открываем вкладку Общие
+  switchSettingsTab('general');
 
   if (settingsModal) settingsModal.style.display = 'flex';
   document.querySelectorAll('.mobile-nav-item').forEach(item => {
@@ -323,16 +460,29 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   const btnResetSettings = document.getElementById('btnResetSettings');
   const blacklistInput = document.getElementById('blacklistInput');
   const aiTagsInput = document.getElementById('aiTagsInput');
+  const curvyTagsInput = document.getElementById('curvyTagsInput');
+  const petiteTagsInput = document.getElementById('petiteTagsInput');
+  const btnResetCurvyTags = document.getElementById('btnResetCurvyTags');
+  const btnResetPetiteTags = document.getElementById('btnResetPetiteTags');
   const btnRefreshStorage = document.getElementById('btnRefreshStorage');
   const btnClearStorageBtn = document.getElementById('btnClearStorageBtn');
   const btnExportData = document.getElementById('btnExportData');
   const btnImportData = document.getElementById('btnImportData');
   const inputImportFile = document.getElementById('inputImportFile');
 
+  // Переключение вкладок
+  document.querySelectorAll('.settings-nav-tab').forEach(tabBtn => {
+    tabBtn.addEventListener('click', () => {
+      const tabId = tabBtn.dataset.tab;
+      if (tabId) switchSettingsTab(tabId);
+    });
+  });
+
   if (btnSettings) btnSettings.addEventListener('click', openSettingsModal);
   if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
   if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
 
+  // Добавление тега в Черный список
   if (blacklistInput) {
     blacklistInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && blacklistInput.value.trim()) {
@@ -347,6 +497,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     });
   }
 
+  // Добавление тега в AI Detector
   if (aiTagsInput) {
     aiTagsInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && aiTagsInput.value.trim()) {
@@ -358,6 +509,54 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         }
         aiTagsInput.value = '';
       }
+    });
+  }
+
+  // Добавление тега в Мамочки (Curvy)
+  if (curvyTagsInput) {
+    curvyTagsInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && curvyTagsInput.value.trim()) {
+        e.preventDefault();
+        const val = curvyTagsInput.value.trim().toLowerCase().replace(/\s+/g, '_');
+        if (!tempCurvyTags.includes(val)) {
+          tempCurvyTags.push(val);
+          renderSettingsChips();
+        }
+        curvyTagsInput.value = '';
+      }
+    });
+  }
+
+  // Добавление тега в Лоли (Petite)
+  if (petiteTagsInput) {
+    petiteTagsInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && petiteTagsInput.value.trim()) {
+        e.preventDefault();
+        const val = petiteTagsInput.value.trim().toLowerCase().replace(/\s+/g, '_');
+        if (!tempPetiteTags.includes(val)) {
+          tempPetiteTags.push(val);
+          renderSettingsChips();
+        }
+        petiteTagsInput.value = '';
+      }
+    });
+  }
+
+  // Сброс слов Мамочек к дефолту
+  if (btnResetCurvyTags) {
+    btnResetCurvyTags.addEventListener('click', () => {
+      tempCurvyTags = [...DEFAULT_CURVY_TAGS];
+      renderSettingsChips();
+      showToast('Слова для фильтра «Мамочки» сброшены к стандартным');
+    });
+  }
+
+  // Сброс слов Лоли к дефолту
+  if (btnResetPetiteTags) {
+    btnResetPetiteTags.addEventListener('click', () => {
+      tempPetiteTags = [...DEFAULT_PETITE_TAGS];
+      renderSettingsChips();
+      showToast('Слова для фильтра «Лоли» сброшены к стандартным');
     });
   }
 
@@ -433,6 +632,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         if (inputDanbooruLogin) inputDanbooruLogin.value = state.settings.danbooruLogin || '';
         tempBlacklist = state.settings.blacklist || [];
         tempAiTags = state.settings.aiTags || [];
+        tempCurvyTags = state.settings.curvyTags || [...DEFAULT_CURVY_TAGS];
+        tempPetiteTags = state.settings.petiteTags || [...DEFAULT_PETITE_TAGS];
         renderSettingsChips();
 
         showToast(`Данные загружены! Настройки, ${counts.favorites} закладок, ${counts.favoriteAuthors} авторов ✅`);
@@ -514,6 +715,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         showVideoStatusBanner: showVideoStatusBannerVal,
         blacklist: tempBlacklist,
         aiTags: tempAiTags,
+        curvyTags: tempCurvyTags,
+        petiteTags: tempPetiteTags,
         rule34ApiKey: inputRule34ApiKey ? inputRule34ApiKey.value.trim() : '',
         rule34UserId: inputRule34UserId ? inputRule34UserId.value.trim() : '',
         gelbooruApiKey: inputGelbooruApiKey ? inputGelbooruApiKey.value.trim() : '',
@@ -529,7 +732,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
 
       try {
         const res = await saveSettings(updated);
-        if (res.success) {
+        if (res && res.success) {
           state.settings = { ...updated, ...res.settings };
           state.limit = itemsPerPageVal;
           saveLocalSettings(state.settings);
@@ -550,7 +753,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (btnResetSettings) {
     btnResetSettings.addEventListener('click', async () => {
       tempBlacklist = ['guro', 'scat', 'snuff', 'vomit', 'fart'];
-      tempAiTags = ['ai_generated', 'novelai', 'stable_diffusion', 'midjourney', 'synthetic', 'ai_assisted'];
+      tempAiTags = ['ai_generated', 'ai_art', 'novelai', 'stable_diffusion', 'midjourney', 'synthetic', 'ai_assisted'];
+      tempCurvyTags = [...DEFAULT_CURVY_TAGS];
+      tempPetiteTags = [...DEFAULT_PETITE_TAGS];
       
       const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
       const inputRule34UserId = document.getElementById('inputRule34UserId');
@@ -579,6 +784,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       saveLocalSettings({
         blacklist: tempBlacklist,
         aiTags: tempAiTags,
+        curvyTags: tempCurvyTags,
+        petiteTags: tempPetiteTags,
         rule34ApiKey: '',
         rule34UserId: '',
         gelbooruApiKey: '',

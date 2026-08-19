@@ -45,6 +45,8 @@ export const state = {
     proxyVideoDefault: true,
     aiTags: [],
     blacklist: [],
+    curvyTags: [],
+    petiteTags: [],
     ratingFilter: 'all',
     typeFilter: 'all',
     ageFilter: 'all',

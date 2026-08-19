@@ -553,17 +553,27 @@
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 540px;
+  max-width: 660px;
+  max-height: 88vh;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 14px 20px;
   border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--bg-surface);
+}
+
+.settings-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .settings-title {
@@ -572,15 +582,82 @@
   color: var(--text-primary);
 }
 
+/* Вкладки категорий настроек */
+.settings-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: var(--bg-surface-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-nav-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.settings-nav-tab:hover {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.settings-nav-tab.active {
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+}
+
+.settings-nav-tab .tab-icon {
+  font-size: 13px;
+}
+
 .settings-content {
-  padding: 20px;
+  padding: 18px 20px;
+  flex: 1 1 auto;
+  max-height: 56vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-medium) transparent;
+}
+
+.settings-tab-pane {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-height: 72vh;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  gap: 16px;
+  animation: settingsPaneFadeIn 0.18s ease-out;
+}
+
+@keyframes settingsPaneFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .settings-content::-webkit-scrollbar {

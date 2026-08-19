@@ -70,18 +70,22 @@ router.get('/posts', async (req, res) => {
     }
 
     // Фильтр телосложения и типажей (Мамочки/Пышные vs Лоли/Мини)
+    const userSettings = getSettings();
+    const activeCurvyTags = (Array.isArray(userSettings.curvyTags) && userSettings.curvyTags.length > 0) ? userSettings.curvyTags : CURVY_INCLUDE_TAGS;
+    const activePetiteTags = (Array.isArray(userSettings.petiteTags) && userSettings.petiteTags.length > 0) ? userSettings.petiteTags : PETITE_INCLUDE_TAGS;
+
     if (ageFilter === 'adult') {
       posts = posts.filter(post => {
         const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
         if (CURVY_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
-        if (!tags && !CURVY_INCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
+        if (!tags && !activeCurvyTags.some(tag => postTags.includes(tag))) return false;
         return true;
       });
     } else if (ageFilter === 'young') {
       posts = posts.filter(post => {
         const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
         if (PETITE_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
-        if (!tags && !PETITE_INCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
+        if (!tags && !activePetiteTags.some(tag => postTags.includes(tag))) return false;
         return true;
       });
     }
