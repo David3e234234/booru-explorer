@@ -71,10 +71,10 @@ let tempPetiteTags = [];
 export function applySettingsToUIAndState(s) {
   if (!s) return;
   let theme = s.theme;
-  if (theme === 'dark' || theme === 'oled') theme = 'midnight';
+  if (theme === 'dark' || theme === 'oled' || theme === 'midnight' || theme === 'emerald' || theme === 'nordic-frost') theme = 'kotobox';
   else if (theme === 'light') theme = 'warm-paper';
-  else if (!['midnight', 'emerald', 'tokyo-night', 'nordic-frost', 'warm-paper'].includes(theme)) {
-    theme = 'midnight';
+  else if (!['kotobox', 'tokyo-night', 'warm-paper'].includes(theme)) {
+    theme = 'kotobox';
   }
   s.theme = theme;
   state.settings = { ...state.settings, ...s, theme };
@@ -452,7 +452,7 @@ export function openSettingsModal() {
   if (checkProxyVideoDefault) checkProxyVideoDefault.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
   if (checkShowVideoStatusBanner) checkShowVideoStatusBanner.checked = state.settings.showVideoStatusBanner !== false;
 
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'midnight';
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'kotobox';
   document.querySelectorAll('.btn-theme').forEach(b => {
     b.classList.toggle('active', b.dataset.themeVal === currentTheme);
   });
@@ -670,7 +670,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     btn.addEventListener('click', () => {
       document.querySelectorAll('.btn-theme').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      const themeVal = btn.dataset.themeVal || 'midnight';
+      const themeVal = btn.dataset.themeVal || 'kotobox';
       document.documentElement.setAttribute('data-theme', themeVal);
       state.settings.theme = themeVal;
       saveLocalSettings(state.settings);
@@ -680,7 +680,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (btnSaveSettings) {
     btnSaveSettings.addEventListener('click', async () => {
       const activeThemeBtn = document.querySelector('.btn-theme.active');
-      const theme = activeThemeBtn ? activeThemeBtn.dataset.themeVal : 'midnight';
+      const theme = activeThemeBtn ? activeThemeBtn.dataset.themeVal : 'kotobox';
 
       const selectItemsPerPage = document.getElementById('selectItemsPerPage');
       const selectPreviewQuality = document.getElementById('selectPreviewQuality');

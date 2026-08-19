@@ -186,7 +186,7 @@ export const LGBT_TAGS = [
 ];
 
 export const DEFAULT_SETTINGS = {
-  theme: 'midnight',
+  theme: 'kotobox',
   gridColumns: 'auto',
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
   ratingFilter: 'all', // 'all', 'nsfw', 'sfw'

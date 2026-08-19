@@ -41,7 +41,7 @@ export const state = {
   favoriteAuthors: [],
   favoriteAuthorNames: new Set(),
   settings: {
-    theme: 'midnight',
+    theme: 'kotobox',
     itemsPerPage: 100,
     proxyThumbnails: true,
     proxyFullImages: true,
