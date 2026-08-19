@@ -553,7 +553,7 @@
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 660px;
+  max-width: 720px;
   max-height: 88vh;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
@@ -585,18 +585,12 @@
 /* Вкладки категорий настроек */
 .settings-nav-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   padding: 10px 16px;
   background-color: var(--bg-surface-elevated);
   border-bottom: 1px solid var(--border-subtle);
   box-sizing: border-box;
-}
-
-@media (min-width: 660px) {
-  .settings-nav-tabs {
-    grid-template-columns: repeat(6, 1fr);
-  }
 }
 
 .settings-nav-tab {
