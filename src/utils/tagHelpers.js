@@ -7,20 +7,56 @@ export function checkIsAi(tagsArray, aiTagsList) {
   return lowerTags.some(tag => checkList.includes(tag) || tag.includes('ai_gen') || tag.includes('novelai') || tag.includes('stable_diffusion') || tag.includes('midjourney'));
 }
 
-export function checkMediaTypes(url, fileExt = '', rawTags = []) {
+export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
   const lowerTags = Array.isArray(rawTags) ? rawTags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')) : [];
   const tagsStr = lowerTags.join(' ');
-  const combined = ((url || '') + ' ' + (fileExt || '') + ' ' + tagsStr).toLowerCase();
-  const isVideo = combined.includes('.mp4') || combined.includes('.webm') || combined.includes('.mkv') || combined.includes('.mov') || combined.includes('.m4v') || tagsStr.includes('video') || tagsStr.includes('animated') || tagsStr.includes('ugoira');
-  const isGif = combined.includes('.gif') && !isVideo;
-  const hasSound = isVideo && (lowerTags.some(t => SOUND_KEYWORDS.includes(t)) || combined.includes('has_audio') || combined.includes('with_sound') || combined.includes('sound_warning'));
-  let ext = fileExt ? fileExt.toLowerCase().replace('.', '') : '';
-  if (!ext && url) {
-    const cleanUrl = url.split('?')[0];
-    const match = cleanUrl.match(/\.([a-z0-9]+)$/i);
-    if (match) ext = match[1].toLowerCase();
+  
+  // 1. Извлекаем чистое расширение (без пути, параметров и лишних точек)
+  let ext = '';
+  if (fileExt && typeof fileExt === 'string') {
+    const cleanExt = fileExt.trim().split('?')[0];
+    const dotIdx = cleanExt.lastIndexOf('.');
+    if (dotIdx !== -1) {
+      ext = cleanExt.slice(dotIdx + 1).toLowerCase();
+    } else if (cleanExt.length <= 5 && !cleanExt.includes('/') && !cleanExt.includes('\\')) {
+      ext = cleanExt.toLowerCase();
+    }
   }
-  return { isVideo, isGif, hasSound, fileExt: ext || (isVideo ? 'mp4' : isGif ? 'gif' : 'jpg') };
+  if (!ext && url && typeof url === 'string') {
+    const cleanUrl = url.trim().split('?')[0];
+    const match = cleanUrl.match(/\.([a-z0-9]+)$/i);
+    if (match) {
+      ext = match[1].toLowerCase();
+    }
+  }
+
+  // 2. Детекция GIF (GIF - это анимированное изображение (img), а не контейнер HTML5 video)
+  const isGif = ext === 'gif' || lowerTags.includes('gif') || (!ext && ((url && url.toLowerCase().includes('.gif')) || (fileExt && fileExt.toLowerCase().includes('.gif'))));
+
+  // 3. Детекция Видео (MP4, WebM, MKV, MOV, M4V, FLV, AVI)
+  // ВАЖНО: тег 'animated' ставится как на GIF, так и на видео, поэтому animated сам по себе не делает файл видео если это GIF или статический формат.
+  const videoExts = ['mp4', 'webm', 'mkv', 'mov', 'm4v', 'flv', 'avi'];
+  const hasVideoExt = videoExts.includes(ext) || videoExts.some(vExt => (url && url.toLowerCase().includes(`.${vExt}`)) || (fileExt && fileExt.toLowerCase().includes(`.${vExt}`)));
+  const hasVideoTag = lowerTags.includes('video') || lowerTags.includes('webm') || lowerTags.includes('mp4') || lowerTags.includes('ugoira');
+  
+  const isVideo = !isGif && (hasVideoExt || (hasVideoTag && ext !== 'jpg' && ext !== 'jpeg' && ext !== 'png' && ext !== 'webp' && ext !== 'bmp' && ext !== 'gif'));
+
+  // 4. Окончательное определение расширения
+  if (!ext) {
+    if (isVideo) ext = 'mp4';
+    else if (isGif) ext = 'gif';
+    else ext = 'jpg';
+  }
+
+  // 5. Проверка звука
+  const hasSound = isVideo && (
+    lowerTags.some(t => SOUND_KEYWORDS.includes(t)) || 
+    tagsStr.includes('has_audio') || 
+    tagsStr.includes('with_sound') || 
+    tagsStr.includes('sound_warning')
+  );
+
+  return { isVideo, isGif, hasSound, fileExt: ext };
 }
 
 export function normalizeDate(rawDate) {

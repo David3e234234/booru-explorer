@@ -124,9 +124,10 @@ export async function fetchRule34(params, aiTagsList, settings) {
         const cleanTitleTags = titleAttr.replace(/score:-?\d+/gi, '').replace(/rating:\w+/gi, '').trim();
         const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
 
+        const isGif = rawTags.includes('gif');
         const isVideoClass = classAttr.includes('webm-thumb') || classAttr.includes('video-thumb');
-        const isVideoTag = rawTags.includes('video') || rawTags.includes('animated') || rawTags.includes('webm') || rawTags.includes('mp4');
-        const isVideo = isVideoClass || isVideoTag;
+        const isVideoTag = (rawTags.includes('video') || rawTags.includes('webm') || rawTags.includes('mp4')) && !isGif;
+        const isVideo = (isVideoClass || isVideoTag) && !isGif;
 
         const cleanThumb = thumbUrl.split('?')[0];
         const thumbMatch = cleanThumb.match(/\/thumbnails\/+(\d+)\/thumbnail_([a-f0-9]+)\./i);
@@ -134,7 +135,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         let fileUrl = '';
         let sampleUrl = '';
         const previewUrl = thumbUrl;
-        let fileExt = isVideo ? 'mp4' : 'jpg';
+        let fileExt = isVideo ? 'mp4' : (isGif ? 'gif' : 'jpg');
 
         if (thumbMatch) {
           const dir = thumbMatch[1];
@@ -144,6 +145,10 @@ export async function fetchRule34(params, aiTagsList, settings) {
             fileUrl = `${host}/images/${dir}/${hash}.mp4`;
             sampleUrl = fileUrl;
             fileExt = 'mp4';
+          } else if (isGif) {
+            fileUrl = `${host}/images/${dir}/${hash}.gif`;
+            sampleUrl = fileUrl;
+            fileExt = 'gif';
           } else {
             fileUrl = `${host}/images/${dir}/${hash}.jpg`;
             sampleUrl = `${host}/samples/${dir}/sample_${hash}.jpg`;
@@ -167,7 +172,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           fileUrl,
           fileExt,
           isVideo,
-          isGif: rawTags.includes('gif'),
+          isGif,
           hasSound: isVideo && (rawTags.includes('sound') || rawTags.includes('audio')),
           author,
           tags: rawTags,
@@ -203,20 +208,29 @@ export async function fetchRule34(params, aiTagsList, settings) {
           const cleanTitleTags = titleAttr.replace(/score:-?\d+/gi, '').replace(/rating:\w+/gi, '').trim();
           const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
 
-          const isVideo = rawTags.includes('video') || rawTags.includes('animated') || rawTags.includes('webm') || rawTags.includes('mp4');
+          const isGif = rawTags.includes('gif');
+          const isVideo = (rawTags.includes('video') || rawTags.includes('webm') || rawTags.includes('mp4')) && !isGif;
           const cleanThumb = thumbUrl.split('?')[0];
           const thumbMatch = cleanThumb.match(/\/thumbnails\/+(\d+)\/thumbnail_([a-f0-9]+)\./i);
 
           let fileUrl = thumbUrl;
           let sampleUrl = thumbUrl;
-          let fileExt = isVideo ? 'mp4' : 'jpg';
+          let fileExt = isVideo ? 'mp4' : (isGif ? 'gif' : 'jpg');
 
           if (thumbMatch) {
             const dir = thumbMatch[1];
             const hash = thumbMatch[2];
             const host = cleanThumb.includes('wimg.rule34.xxx') ? 'https://wimg.rule34.xxx' : (cleanThumb.includes('us.rule34.xxx') ? 'https://us.rule34.xxx' : 'https://rule34.xxx');
-            fileUrl = isVideo ? `${host}/images/${dir}/${hash}.mp4` : `${host}/images/${dir}/${hash}.jpg`;
-            sampleUrl = isVideo ? fileUrl : `${host}/samples/${dir}/sample_${hash}.jpg`;
+            if (isVideo) {
+              fileUrl = `${host}/images/${dir}/${hash}.mp4`;
+              sampleUrl = fileUrl;
+            } else if (isGif) {
+              fileUrl = `${host}/images/${dir}/${hash}.gif`;
+              sampleUrl = fileUrl;
+            } else {
+              fileUrl = `${host}/images/${dir}/${hash}.jpg`;
+              sampleUrl = `${host}/samples/${dir}/sample_${hash}.jpg`;
+            }
           }
 
           const source = `https://rule34.xxx/index.php?page=post&s=view&id=${id}`;
@@ -233,7 +247,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
             fileUrl,
             fileExt,
             isVideo,
-            isGif: rawTags.includes('gif'),
+            isGif,
             hasSound: isVideo && (rawTags.includes('sound') || rawTags.includes('audio')),
             author,
             tags: rawTags,
