@@ -150,25 +150,33 @@ function renderCoverPickerPosts(posts, author, site) {
 
 async function handleSelectAuthorCover(author, chosenUrl, site) {
   if (!author || !chosenUrl) return;
+
+  // 1. Оптимистично обновляем в локальном состоянии state.favoriteAuthors
+  const cleanName = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+  const target = state.favoriteAuthors.find(a => 
+    (a.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_') === cleanName ||
+    (a.displayName || '').toLowerCase() === (author.displayName || '').toLowerCase()
+  );
+
+  if (target) {
+    target.previewUrl = chosenUrl;
+    if (site) target.site = site;
+  } else {
+    author.previewUrl = chosenUrl;
+    if (site) author.site = site;
+    state.favoriteAuthors.unshift(author);
+  }
+
+  setFavoriteAuthors([...state.favoriteAuthors]);
+  closeCoverPickerModal();
+  showToast(`Обложка автора ${author.displayName || author.name} обновлена!`);
+  if (onCoverUpdatedCallback) onCoverUpdatedCallback();
+
+  // 2. Отправляем обновление на сервер
   try {
-    const res = await updateFavoriteAuthorPreview(author.name, chosenUrl);
-    if (res.success) {
-      // Обновляем в локальном состоянии
-      const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === (author.name || '').toLowerCase());
-      if (target) {
-        target.previewUrl = chosenUrl;
-        if (site) target.site = site;
-      }
-      setFavoriteAuthors([...state.favoriteAuthors]);
-      closeCoverPickerModal();
-      showToast(`Обложка автора ${author.displayName || author.name} обновлена!`);
-      if (onCoverUpdatedCallback) onCoverUpdatedCallback();
-    } else {
-      showToast(res.message || 'Ошибка обновления обложки');
-    }
+    await updateFavoriteAuthorPreview(author.name, chosenUrl, site);
   } catch (err) {
-    console.error('Ошибка сохранения обложки автора:', err);
-    showToast('Не удалось обновить обложку');
+    console.warn('Сервер не ответил, сохранено локально:', err);
   }
 }
 

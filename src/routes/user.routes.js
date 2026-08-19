@@ -188,21 +188,38 @@ router.delete('/favorite-authors/:name', (req, res) => {
 
 // POST /api/favorite-authors/preview
 router.post('/favorite-authors/preview', (req, res) => {
-  const { name, previewUrl } = req.body || {};
+  const { name, previewUrl, site } = req.body || {};
   if (!name || !previewUrl) {
     return res.status(400).json({ success: false, message: 'Не указано имя автора или ссылка на превью' });
   }
 
-  const cleanName = name.trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').toLowerCase();
+  const rawName = String(name).trim();
+  const cleanName = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').toLowerCase();
   const userId = req.user?.id || null;
   const authors = getFavoriteAuthors(userId);
-  const target = authors.find(a => (a.name || '').toLowerCase() === cleanName);
 
-  if (!target) {
-    return res.status(404).json({ success: false, message: 'Автор не найден в избранном' });
+  // Ищем по name, id или displayName
+  let target = authors.find(a => 
+    (a.name || '').toLowerCase() === cleanName ||
+    (a.id || '').toLowerCase() === cleanName ||
+    (a.displayName || '').toLowerCase() === rawName.toLowerCase()
+  );
+
+  if (target) {
+    target.previewUrl = previewUrl;
+    if (site) target.site = site;
+  } else {
+    target = {
+      id: cleanName,
+      name: cleanName,
+      displayName: rawName,
+      previewUrl: previewUrl,
+      site: site || 'danbooru',
+      createdAt: new Date().toISOString()
+    };
+    authors.unshift(target);
   }
 
-  target.previewUrl = previewUrl;
   saveFavoriteAuthors(authors, userId);
   res.json({ success: true, author: target, authors });
 });

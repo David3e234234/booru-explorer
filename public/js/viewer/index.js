@@ -163,23 +163,22 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           haptic(15);
           const chosenUrl = currentPost.previewUrl || currentPost.sampleUrl || currentPost.fileUrl;
           if (!chosenUrl) return;
+
+          // 1. Оптимистичное локальное обновление
+          const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === cleanAuthorTag.toLowerCase());
+          if (target) {
+            target.previewUrl = chosenUrl;
+            if (currentPost.site) target.site = currentPost.site;
+          }
+          setFavoriteAuthors([...state.favoriteAuthors]);
+          showToast(`Этот арт установлен обложкой автора ${authorName}!`);
+          if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
+
+          // 2. Отправка на бэкенд
           try {
-            const res = await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl);
-            if (res.success) {
-              const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === cleanAuthorTag.toLowerCase());
-              if (target) {
-                target.previewUrl = chosenUrl;
-                if (currentPost.site) target.site = currentPost.site;
-              }
-              setFavoriteAuthors([...state.favoriteAuthors]);
-              showToast(`Этот арт установлен обложкой автора ${authorName}!`);
-              if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
-            } else {
-              showToast(res.message || 'Ошибка установки обложкой');
-            }
+            await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl, currentPost.site || 'danbooru');
           } catch (err) {
-            console.error('Ошибка смены обложки автора:', err);
-            showToast('Не удалось установить обложку');
+            console.warn('Сервер не ответил, сохранено локально:', err);
           }
         };
       }

@@ -199,13 +199,22 @@ export async function deleteFavoriteAuthor(name) {
   return await res.json();
 }
 
-export async function updateFavoriteAuthorPreview(name, previewUrl) {
-  const res = await fetch('/api/favorite-authors/preview', {
-    method: 'POST',
-    headers: getAuthHeaders(true),
-    body: JSON.stringify({ name, previewUrl })
-  });
-  return await res.json();
+export async function updateFavoriteAuthorPreview(name, previewUrl, site = 'danbooru') {
+  try {
+    const res = await fetch('/api/favorite-authors/preview', {
+      method: 'POST',
+      headers: getAuthHeaders(true),
+      body: JSON.stringify({ name, previewUrl, site })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    console.warn(`Сервер вернул статус ${res.status} при обновлении превью, сохраняем локально`);
+    return { success: true, fallback: true };
+  } catch (err) {
+    console.warn('Сервер недоступен при обновлении превью, сохраняем локально:', err);
+    return { success: true, fallback: true };
+  }
 }
 
 export async function syncFavoriteAuthors(authors) {
