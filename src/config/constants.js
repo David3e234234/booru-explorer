@@ -177,6 +177,7 @@ export const DEFAULT_SETTINGS = {
   proxyVideos: true,
   proxyDownloads: true,
   proxyVideoDefault: true,
+  enableJsDemuxing: true,
   enablePaheal: true,
   defaultSite: 'danbooru',
   rule34ApiKey: '',

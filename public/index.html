@@ -507,6 +507,10 @@
                   </button>
                 </div>
               </div>
+              <div class="info-item" id="infoDurationRow" style="display: none;">
+                <span class="info-label">Длительность:</span>
+                <span class="info-val" id="infoDuration">0:00</span>
+              </div>
               <div class="info-item">
                 <span class="info-label">Рейтинг:</span>
                 <span class="info-val" id="infoRating">Explicit</span>
@@ -801,6 +805,11 @@
           <div class="settings-group">
             <label class="settings-label">Специфичные настройки поиска:</label>
             <div class="toggles-list" style="margin-top: 6px;">
+              <label class="toggle-row" title="Мгновенное воспроизведение проблемных видео прямо в браузере через MediaSource. При отключении плеер сразу использует серверный FFmpeg транскодер.">
+                <input type="checkbox" id="checkEnableJsDemuxing" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name">🚀 Клиентский MP4Box демуксинг (выключите для прямого перехода на FFmpeg)</span>
+              </label>
               <label class="toggle-row" title="Ручные теги (например 'petite') будут иметь приоритет над сортировкой 'Популярное' и 'Видео' при поиске на Danbooru">
                 <input type="checkbox" id="checkPrioritizeUserTags">
                 <span class="toggle-slider"></span>

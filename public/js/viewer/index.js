@@ -173,6 +173,16 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       btnLikeModal.querySelector('svg')?.setAttribute('fill', isLiked ? 'currentColor' : 'none');
     }
 
+    const infoDurationRow = document.getElementById('infoDurationRow');
+    const infoDuration = document.getElementById('infoDuration');
+    if (currentPost.isVideo && (currentPost.durationText || currentPost.duration > 0)) {
+      const durText = currentPost.durationText || `${Math.floor(currentPost.duration / 60)}:${Math.floor(currentPost.duration % 60) < 10 ? '0' : ''}${Math.floor(currentPost.duration % 60)}`;
+      if (infoDuration) infoDuration.textContent = durText;
+      if (infoDurationRow) infoDurationRow.style.display = 'flex';
+    } else {
+      if (infoDurationRow) infoDurationRow.style.display = 'none';
+    }
+
     if (infoSite) infoSite.textContent = currentPost.siteName || currentPost.site;
     if (infoRating) infoRating.textContent = formatRating(currentPost.rating);
     if (infoScore) infoScore.textContent = `★ ${currentPost.score || 0}`;

@@ -408,7 +408,18 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       video.src = proxyMedia;
       video.play().catch(() => {});
     } else if (currentSource === 'proxy') {
-      startClientRemux(proxyMedia);
+      if (state.settings?.enableJsDemuxing !== false) {
+        startClientRemux(proxyMedia);
+      } else {
+        currentSource = 'transcode';
+        if (btnTranscode) {
+          btnTranscode.classList.add('active');
+          btnTranscode.textContent = '🔄 FFmpeg фикс';
+        }
+        setProgress(0, '🔄 Перекодирование через серверный FFmpeg (H.264)...', true);
+        video.src = transcodeMedia;
+        video.play().catch(() => {});
+      }
     } else if (currentSource === 'remux') {
       currentSource = 'transcode';
       if (btnTranscode) {
@@ -432,7 +443,16 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         btnCache.classList.remove('active');
         btnCache.textContent = '⚡ Кэш в память';
       }
-      startClientRemux(proxyMedia);
+      if (state.settings?.enableJsDemuxing !== false) {
+        startClientRemux(proxyMedia);
+      } else {
+        currentSource = 'transcode';
+        btnTranscode.classList.add('active');
+        btnTranscode.textContent = '🔄 FFmpeg фикс';
+        setProgress(0, '🔄 Перекодирование через серверный FFmpeg...', true);
+        video.src = transcodeMedia;
+        video.play().catch(() => {});
+      }
     });
   }
 
@@ -496,6 +516,45 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       setProgress(null, 'Буферизация видео...', true);
     }
   });
+
+  video.addEventListener('loadedmetadata', () => {
+    if (video.duration && !isNaN(video.duration)) {
+      currentPost.duration = video.duration;
+      const mins = Math.floor(video.duration / 60);
+      const secs = Math.floor(video.duration % 60);
+      currentPost.durationText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+      const infoDuration = document.getElementById('infoDuration');
+      const infoDurationRow = document.getElementById('infoDurationRow');
+      if (infoDuration) infoDuration.textContent = currentPost.durationText;
+      if (infoDurationRow) infoDurationRow.style.display = 'flex';
+    }
+  });
+
+  // Автоматическое разрешение полного HD видео со звуком для Rule34Video
+  if (currentPost.site === 'rule34video') {
+    fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
+      .then(r => r.json())
+      .then(data => {
+        if (data && data.fullVideoUrl) {
+          currentPost.fileUrl = data.fullVideoUrl;
+          currentPost.hasSound = true;
+          const fullDirect = data.fullVideoUrl;
+          const fullProxy = getProxiedUrl(fullDirect);
+          const targetUrl = (currentSource === 'proxy' || needsProxy) ? fullProxy : fullDirect;
+          if (video.src !== targetUrl && !isPreCaching) {
+            const curTime = video.currentTime || 0;
+            const isPlaying = !video.paused;
+            video.src = targetUrl;
+            if (curTime > 0) video.currentTime = curTime;
+            if (isPlaying) video.play().catch(() => {});
+            setProgress(100, `🎬 HD Видео (${data.quality || '1080p'}) подключено`, false);
+            setTimeout(hideStatus, 1500);
+          }
+        }
+      })
+      .catch(() => {});
+  }
 
   video.addEventListener('canplay', () => {
     clearTimeout(loadTimeout);

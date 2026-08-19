@@ -157,3 +157,76 @@ export async function fetchRule34Video(params, aiTagsList) {
 
   return allPosts;
 }
+
+const resolvedVideoCache = new Map();
+
+export async function resolveRule34VideoFullMedia(sourceUrl, id) {
+  const cacheKey = String(id || sourceUrl);
+  if (resolvedVideoCache.has(cacheKey)) {
+    return resolvedVideoCache.get(cacheKey);
+  }
+
+  const targetUrl = sourceUrl 
+    ? (sourceUrl.startsWith('http') ? sourceUrl : `https://rule34video.com${sourceUrl.startsWith('/') ? '' : '/'}${sourceUrl}`) 
+    : `https://rule34video.com/video/${id}/`;
+
+  try {
+    const res = await fetchSafe(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://rule34video.com/'
+      },
+      timeout: 10000
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    let fullVideoUrl = '';
+    let quality = '720p';
+
+    // 1. Ищем ссылки в flashvars и KVS плеере
+    const altMatch = html.match(/video_alt_url:\s*['"]([^'"]+)['"]/i) || 
+                     html.match(/video_alt_url2:\s*['"]([^'"]+)['"]/i) ||
+                     html.match(/video_alt_url3:\s*['"]([^'"]+)['"]/i) ||
+                     html.match(/flashvars\.video_alt_url\s*=\s*['"]([^'"]+)['"]/i);
+    const mainMatch = html.match(/video_url:\s*['"]([^'"]+)['"]/i) ||
+                      html.match(/flashvars\.video_url\s*=\s*['"]([^'"]+)['"]/i);
+    const sourceMatch = html.match(/<source[^>]+src=['"]([^'"]+\.mp4[^'"]*)['"]/i);
+    const getFileMatch = html.match(/href=['"]([^'"]*\/get_file\/[^'"]+)['"]/i);
+
+    if (altMatch && altMatch[1] && !altMatch[1].includes('preview')) {
+      fullVideoUrl = altMatch[1];
+      quality = '1080p';
+    } else if (mainMatch && mainMatch[1] && !mainMatch[1].includes('preview')) {
+      fullVideoUrl = mainMatch[1];
+      quality = '720p';
+    } else if (getFileMatch && getFileMatch[1] && !getFileMatch[1].includes('preview')) {
+      fullVideoUrl = getFileMatch[1];
+      quality = 'HD';
+    } else if (sourceMatch && sourceMatch[1] && !sourceMatch[1].includes('preview')) {
+      fullVideoUrl = sourceMatch[1];
+    }
+
+    if (fullVideoUrl) {
+      if (fullVideoUrl.startsWith('//')) {
+        fullVideoUrl = 'https:' + fullVideoUrl;
+      } else if (fullVideoUrl.startsWith('/')) {
+        fullVideoUrl = 'https://rule34video.com' + fullVideoUrl;
+      }
+
+      const result = {
+        success: true,
+        fullVideoUrl,
+        quality,
+        hasSound: true
+      };
+      resolvedVideoCache.set(cacheKey, result);
+      return result;
+    }
+    return null;
+  } catch (err) {
+    logError('Rule34Video Resolve', 'Ошибка получения полного видео с Rule34Video', err);
+    return null;
+  }
+}
+

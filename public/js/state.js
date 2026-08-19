@@ -63,7 +63,8 @@ export const state = {
     danbooruApiKey: '',
     danbooruLogin: '',
     deepFetchPages: 2,
-    prioritizeUserTags: false
+    prioritizeUserTags: false,
+    enableJsDemuxing: true
   },
   currentViewerIndex: -1,
   isLoading: false,

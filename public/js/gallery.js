@@ -142,6 +142,31 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       rootMargin: '-15% 0px -15% 0px',
       threshold: 0.5
     });
+
+    // Наблюдатель для определения длительности видео без автоплея
+    videoMetadataObserver = new IntersectionObserver((entries, obs) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const card = entry.target;
+          const videoEl = card.querySelector('.hover-video-preview');
+          const postIdx = parseInt(card.dataset.index, 10);
+          const post = state.posts[postIdx];
+          if (videoEl && post && post.isVideo && !post.duration) {
+            const videoTarget = post.fileUrl || post.sampleUrl;
+            if (videoTarget && !videoEl.src) {
+              const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+              videoEl.preload = 'metadata';
+              videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
+            }
+          }
+          obs.unobserve(card);
+        }
+      });
+    }, {
+      root: null,
+      rootMargin: '300px 0px',
+      threshold: 0.01
+    });
   } else {
     window.addEventListener('scroll', () => {
       if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 600) {
@@ -514,6 +539,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
       if (mobileVideoObserver && state.settings?.videoAutoplayMobile !== false) {
         mobileVideoObserver.observe(card);
+      }
+
+      if (videoMetadataObserver && !post.duration) {
+        videoMetadataObserver.observe(card);
       }
 
       card.addEventListener('mouseenter', () => {

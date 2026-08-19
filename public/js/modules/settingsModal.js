@@ -141,6 +141,10 @@ export function applySettingsToUIAndState(s) {
   } else if (typeof s.proxyVideoDefault === 'boolean' && checkProxyVideos) {
     checkProxyVideos.checked = s.proxyVideoDefault;
   }
+  const checkEnableJsDemuxing = document.getElementById('checkEnableJsDemuxing');
+  if (typeof s.enableJsDemuxing === 'boolean' && checkEnableJsDemuxing) {
+    checkEnableJsDemuxing.checked = s.enableJsDemuxing;
+  }
   if (typeof s.proxyDownloads === 'boolean' && checkProxyDownloads) {
     checkProxyDownloads.checked = s.proxyDownloads;
   }
@@ -427,6 +431,8 @@ export function openSettingsModal() {
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = state.settings.videoAutoplayViewer !== false;
   if (checkPrioritizeUserTags) checkPrioritizeUserTags.checked = state.settings.prioritizeUserTags === true;
   if (checkEnablePaheal) checkEnablePaheal.checked = state.settings.enablePaheal !== false;
+  const checkEnableJsDemuxingModal = document.getElementById('checkEnableJsDemuxing');
+  if (checkEnableJsDemuxingModal) checkEnableJsDemuxingModal.checked = state.settings.enableJsDemuxing !== false;
   if (selectDeepFetchPages) selectDeepFetchPages.value = String(state.settings.deepFetchPages || 2);
 
   if (checkProxyThumbnails) checkProxyThumbnails.checked = state.settings.proxyThumbnails !== false;
@@ -696,6 +702,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkEnablePaheal = document.getElementById('checkEnablePaheal');
       const enablePahealVal = checkEnablePaheal ? checkEnablePaheal.checked : true;
 
+      const checkEnableJsDemuxing = document.getElementById('checkEnableJsDemuxing');
+      const enableJsDemuxingVal = checkEnableJsDemuxing ? checkEnableJsDemuxing.checked : true;
+
       const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
       const inputRule34UserId = document.getElementById('inputRule34UserId');
       const inputGelbooruApiKey = document.getElementById('inputGelbooruApiKey');
@@ -729,7 +738,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         danbooruLogin: inputDanbooruLogin ? inputDanbooruLogin.value.trim() : '',
         deepFetchPages: deepFetchPagesVal,
         prioritizeUserTags: prioritizeUserTagsVal,
-        enablePaheal: enablePahealVal
+        enablePaheal: enablePahealVal,
+        enableJsDemuxing: enableJsDemuxingVal
       };
 
       saveLocalSettings(updated);
@@ -772,6 +782,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
       const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
       const checkEnablePaheal = document.getElementById('checkEnablePaheal');
+      const checkEnableJsDemuxing = document.getElementById('checkEnableJsDemuxing');
 
       if (inputRule34ApiKey) inputRule34ApiKey.value = '';
       if (inputRule34UserId) inputRule34UserId.value = '';
@@ -784,6 +795,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = true;
       if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = true;
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
+      if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       renderSettingsChips();
       saveLocalSettings({
         blacklist: tempBlacklist,
@@ -795,9 +807,11 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         gelbooruApiKey: '',
         gelbooruUserId: '',
         danbooruApiKey: '',
-        danbooruLogin: ''
+        danbooruLogin: '',
+        enableJsDemuxing: true
       });
       showToast('Значения сброшены к стандартным');
     });
   }
 }
+
