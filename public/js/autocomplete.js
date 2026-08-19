@@ -57,25 +57,30 @@ export function initAutocomplete({ onSearch }) {
 
     const cacheKey = `${state.currentSite}:${val.toLowerCase()}`;
     if (suggestionsCache.has(cacheKey)) {
-      currentSuggestions = suggestionsCache.get(cacheKey);
-      renderDropdown(currentSuggestions);
-      return;
+      const cached = suggestionsCache.get(cacheKey);
+      if (Array.isArray(cached) && cached.length > 0) {
+        currentSuggestions = cached;
+        renderDropdown(currentSuggestions);
+        return;
+      }
     }
 
     debounceTimer = setTimeout(async () => {
       try {
         const data = await fetchTagAutocomplete(val, state.currentSite);
         currentSuggestions = data.tags || [];
-        if (suggestionsCache.size > 200) {
-          const firstKey = suggestionsCache.keys().next().value;
-          suggestionsCache.delete(firstKey);
+        if (currentSuggestions.length > 0) {
+          if (suggestionsCache.size > 200) {
+            const firstKey = suggestionsCache.keys().next().value;
+            suggestionsCache.delete(firstKey);
+          }
+          suggestionsCache.set(cacheKey, currentSuggestions);
         }
-        suggestionsCache.set(cacheKey, currentSuggestions);
         renderDropdown(currentSuggestions);
       } catch (err) {
         hideDropdown();
       }
-    }, 120);
+    }, 100);
   });
 
   searchInput.addEventListener('keydown', (e) => {
