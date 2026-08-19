@@ -27,6 +27,15 @@ router.get('/sites', (req, res) => {
   res.json({ sites: Object.values(SITES) });
 });
 
+// GET /api/version
+router.get('/version', (req, res) => {
+  res.json({
+    version: '6.4.0',
+    buildTime: '2026-08-19 11:40',
+    features: ['source-accurate-autocomplete', 'paheal-xml-regex-fix', 'client-auth-forwarding', 'video-1080p-r34video']
+  });
+});
+
 // GET /api/posts
 router.get('/posts', async (req, res) => {
   try {
