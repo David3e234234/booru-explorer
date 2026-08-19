@@ -60,7 +60,8 @@ app.use((req, res, next) => {
 });
 
 // Статика фронтенда
-app.use(express.static(path.join(ROOT_DIR, 'public'), {
+const publicDir = path.join(ROOT_DIR, 'public');
+app.use(express.static(publicDir, {
   maxAge: 0,
   etag: false
 }));
@@ -69,6 +70,15 @@ app.use(express.static(path.join(ROOT_DIR, 'public'), {
 app.use('/api', postsRoutes);
 app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);
+
+// SPA Fallback: отдача index.html для всех не-API страниц
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api')) {
+    return res.status(404).json({ error: 'Endpoint not found' });
+  }
+  const indexPath = path.join(publicDir, 'index.html');
+  res.sendFile(indexPath);
+});
 
 // Запуск HTTP-сервера для локального запуска
 function startServer(port) {
