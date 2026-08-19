@@ -18,11 +18,13 @@ export async function fetchSafe(url, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeout || 25000);
   try {
+    const isDanbooru = typeof url === 'string' && url.includes('donmai.us');
+    const defaultUa = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
     const response = await fetch(url, {
       ...options,
       signal: controller.signal,
       headers: {
-        'User-Agent': BOORU_USER_AGENT,
+        'User-Agent': defaultUa,
         'Accept': 'application/json, text/xml, text/html, */*',
         ...(options.headers || {})
       }

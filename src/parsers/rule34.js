@@ -7,12 +7,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
   
   let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
 
-  if (category === 'top') {
-    searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
-  } else if (category === 'popular' || category === 'recommended') {
-    searchTags = searchTags ? `${searchTags} sort:updated:desc` : 'sort:updated:desc';
-  } else if (category === 'random') {
-    searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+  // Для Rule34 не используем sort:updated:desc (ломает поиск); для Топ используем score фильтр
+  if (category === 'top' && !searchTags) {
+    searchTags = 'score:>=50';
   }
 
   const pid = Math.max(0, page - 1);
