@@ -10,6 +10,8 @@ data/settings.json
 data/favorites.json
 data/favorite_authors.json
 data/likes.json
+data/users.json
+data/users/
 data/cache/
 data/*.json.bak
 

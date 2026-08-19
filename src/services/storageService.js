@@ -1,13 +1,16 @@
 import fs from 'fs';
+import path from 'path';
 import { 
   DEFAULT_SETTINGS, 
   SETTINGS_FILE, 
   FAVORITES_FILE, 
   FAVORITE_AUTHORS_FILE, 
   LIKES_FILE, 
-  BROWSER_USER_AGENT 
+  BROWSER_USER_AGENT,
+  DATA_DIR 
 } from '../config/constants.js';
 import { logError } from '../utils/logger.js';
+import { getUserDataDir } from './userService.js';
 
 export function readJsonFile(filePath, defaultData) {
   try {
@@ -23,6 +26,8 @@ export function readJsonFile(filePath, defaultData) {
 
 export function writeJsonFile(filePath, data) {
   try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
     return true;
   } catch (err) {
@@ -39,6 +44,8 @@ export function writeJsonFileAsync(filePath, data, debounceMs = 150) {
   const timer = setTimeout(async () => {
     pendingWrites.delete(filePath);
     try {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) await fs.promises.mkdir(dir, { recursive: true });
       await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
       logError('Storage', `Ошибка асинхронной записи ${filePath}`, err);
@@ -47,11 +54,23 @@ export function writeJsonFileAsync(filePath, data, debounceMs = 150) {
   pendingWrites.set(filePath, timer);
 }
 
+function getUserFilePath(userId, defaultFile, filename) {
+  if (!userId) return defaultFile;
+  const userDir = getUserDataDir(userId);
+  return path.join(userDir, filename);
+}
+
 let inMemorySettings = null;
-export function getSettings() {
-  if (!inMemorySettings) {
-    inMemorySettings = readJsonFile(SETTINGS_FILE, DEFAULT_SETTINGS);
+export function getSettings(userId = null) {
+  const filePath = getUserFilePath(userId, SETTINGS_FILE, 'settings.json');
+  let settings;
+  if (!userId && inMemorySettings) {
+    settings = inMemorySettings;
+  } else {
+    settings = readJsonFile(filePath, DEFAULT_SETTINGS);
+    if (!userId) inMemorySettings = settings;
   }
+  
   const envOverrides = {};
   if (process.env.RULE34_API_KEY) envOverrides.rule34ApiKey = process.env.RULE34_API_KEY;
   if (process.env.RULE34_USER_ID) envOverrides.rule34UserId = process.env.RULE34_USER_ID;
@@ -60,38 +79,46 @@ export function getSettings() {
   if (process.env.DANBOORU_API_KEY) envOverrides.danbooruApiKey = process.env.DANBOORU_API_KEY;
   if (process.env.DANBOORU_LOGIN) envOverrides.danbooruLogin = process.env.DANBOORU_LOGIN;
 
-  return { ...inMemorySettings, ...envOverrides };
+  return { ...settings, ...envOverrides };
 }
 
-export function updateSettings(partial) {
-  const current = getSettings();
-  inMemorySettings = { ...current, ...(partial || {}) };
-  writeJsonFileAsync(SETTINGS_FILE, inMemorySettings);
-  return inMemorySettings;
+export function updateSettings(partial, userId = null) {
+  const current = getSettings(userId);
+  const updated = { ...current, ...(partial || {}) };
+  const filePath = getUserFilePath(userId, SETTINGS_FILE, 'settings.json');
+  if (!userId) inMemorySettings = updated;
+  writeJsonFileAsync(filePath, updated);
+  return updated;
 }
 
-export function getFavorites() {
-  return readJsonFile(FAVORITES_FILE, []);
+export function getFavorites(userId = null) {
+  const filePath = getUserFilePath(userId, FAVORITES_FILE, 'favorites.json');
+  return readJsonFile(filePath, []);
 }
 
-export function saveFavorites(favorites) {
-  writeJsonFileAsync(FAVORITES_FILE, favorites);
+export function saveFavorites(favorites, userId = null) {
+  const filePath = getUserFilePath(userId, FAVORITES_FILE, 'favorites.json');
+  writeJsonFileAsync(filePath, favorites);
 }
 
-export function getFavoriteAuthors() {
-  return readJsonFile(FAVORITE_AUTHORS_FILE, []);
+export function getFavoriteAuthors(userId = null) {
+  const filePath = getUserFilePath(userId, FAVORITE_AUTHORS_FILE, 'favorite_authors.json');
+  return readJsonFile(filePath, []);
 }
 
-export function saveFavoriteAuthors(authors) {
-  writeJsonFileAsync(FAVORITE_AUTHORS_FILE, authors);
+export function saveFavoriteAuthors(authors, userId = null) {
+  const filePath = getUserFilePath(userId, FAVORITE_AUTHORS_FILE, 'favorite_authors.json');
+  writeJsonFileAsync(filePath, authors);
 }
 
-export function getLikes() {
-  return readJsonFile(LIKES_FILE, []);
+export function getLikes(userId = null) {
+  const filePath = getUserFilePath(userId, LIKES_FILE, 'likes.json');
+  return readJsonFile(filePath, []);
 }
 
-export function saveLikes(likes) {
-  writeJsonFileAsync(LIKES_FILE, likes);
+export function saveLikes(likes, userId = null) {
+  const filePath = getUserFilePath(userId, LIKES_FILE, 'likes.json');
+  writeJsonFileAsync(filePath, likes);
 }
 
 export async function sendBooruLike(site, postId, isLike, settings) {

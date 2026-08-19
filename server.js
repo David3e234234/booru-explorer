@@ -18,6 +18,7 @@ import {
 import postsRoutes from './src/routes/posts.routes.js';
 import mediaRoutes from './src/routes/media.routes.js';
 import userRoutes from './src/routes/user.routes.js';
+import authRoutes from './src/routes/auth.routes.js';
 
 // Принудительный выбор IPv4 в первую очередь для надежных сетевых запросов к зарубежным Booru
 if (dns.setDefaultResultOrder) {
@@ -68,6 +69,7 @@ app.use(express.static(publicDir, {
 }));
 
 // Подключение модульных роутеров API
+app.use('/api/auth', authRoutes);
 app.use('/api', postsRoutes);
 app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);

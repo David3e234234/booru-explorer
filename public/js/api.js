@@ -2,8 +2,14 @@ import { state } from './state.js';
 
 export const isMyLiveDemoHost = false;
 
-function getAuthHeaders() {
+function getAuthHeaders(includeJson = false) {
   const headers = {};
+  if (includeJson) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (state && state.authToken) {
+    headers['Authorization'] = `Bearer ${state.authToken}`;
+  }
   if (state && state.settings) {
     const authData = {
       rule34ApiKey: state.settings.rule34ApiKey || '',
@@ -18,6 +24,38 @@ function getAuthHeaders() {
     headers['x-booru-auth'] = encodeURIComponent(JSON.stringify(authData));
   }
   return headers;
+}
+
+export async function apiRegister(username, password, initialData = {}) {
+  const res = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password, initialData })
+  });
+  return await res.json();
+}
+
+export async function apiLogin(username, password) {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password })
+  });
+  return await res.json();
+}
+
+export async function apiGetMe() {
+  const res = await fetch('/api/auth/me', {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) return null;
+  return await res.json();
+}
+
+export async function apiLogout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST', headers: getAuthHeaders() });
+  } catch (e) {}
 }
 
 export async function fetchSites() {
@@ -75,7 +113,9 @@ export async function fetchTagAutocomplete(query, site = 'danbooru') {
 }
 
 export async function fetchFavorites() {
-  const res = await fetch('/api/favorites');
+  const res = await fetch('/api/favorites', {
+    headers: getAuthHeaders()
+  });
   if (!res.ok) return { favorites: [] };
   return await res.json();
 }
@@ -83,7 +123,7 @@ export async function fetchFavorites() {
 export async function toggleFavoritePost(post) {
   const res = await fetch('/api/favorites', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify(post)
   });
   return await res.json();
@@ -91,7 +131,8 @@ export async function toggleFavoritePost(post) {
 
 export async function deleteFavoritePost(id) {
   const res = await fetch(`/api/favorites/${encodeURIComponent(id)}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getAuthHeaders()
   });
   return await res.json();
 }
@@ -99,14 +140,16 @@ export async function deleteFavoritePost(id) {
 export async function syncFavorites(favorites) {
   const res = await fetch('/api/favorites/sync', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ favorites })
   });
   return await res.json();
 }
 
 export async function fetchLikes() {
-  const res = await fetch('/api/likes');
+  const res = await fetch('/api/likes', {
+    headers: getAuthHeaders()
+  });
   if (!res.ok) return { likes: [] };
   return await res.json();
 }
@@ -114,7 +157,7 @@ export async function fetchLikes() {
 export async function toggleLikePost(post) {
   const res = await fetch('/api/like', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify(post)
   });
   return await res.json();
@@ -123,14 +166,16 @@ export async function toggleLikePost(post) {
 export async function syncLikes(likes) {
   const res = await fetch('/api/likes/sync', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ likes })
   });
   return await res.json();
 }
 
 export async function fetchFavoriteAuthors() {
-  const res = await fetch('/api/favorite-authors');
+  const res = await fetch('/api/favorite-authors', {
+    headers: getAuthHeaders()
+  });
   if (!res.ok) return { authors: [] };
   return await res.json();
 }
@@ -138,7 +183,7 @@ export async function fetchFavoriteAuthors() {
 export async function toggleFavoriteAuthor(authorData) {
   const res = await fetch('/api/favorite-authors', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify(authorData)
   });
   return await res.json();
@@ -146,7 +191,8 @@ export async function toggleFavoriteAuthor(authorData) {
 
 export async function deleteFavoriteAuthor(name) {
   const res = await fetch(`/api/favorite-authors/${encodeURIComponent(name)}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getAuthHeaders()
   });
   return await res.json();
 }
@@ -154,14 +200,16 @@ export async function deleteFavoriteAuthor(name) {
 export async function syncFavoriteAuthors(authors) {
   const res = await fetch('/api/favorite-authors/sync', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ authors })
   });
   return await res.json();
 }
 
 export async function fetchSettings() {
-  const res = await fetch('/api/settings');
+  const res = await fetch('/api/settings', {
+    headers: getAuthHeaders()
+  });
   if (!res.ok) return { settings: {} };
   return await res.json();
 }
@@ -169,7 +217,7 @@ export async function fetchSettings() {
 export async function saveSettings(settings) {
   const res = await fetch('/api/settings', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify(settings)
   });
   return await res.json();

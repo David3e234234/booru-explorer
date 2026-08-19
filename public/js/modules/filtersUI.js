@@ -46,6 +46,7 @@ export function updateCategoryTabsUI() {
   const btnFavSubPosts = document.getElementById('btnFavSubPosts');
   const btnFavSubAuthors = document.getElementById('btnFavSubAuthors');
   const favAuthorsActions = document.getElementById('favAuthorsActions');
+  const userProfileSection = document.getElementById('userProfileSection');
 
   document.querySelectorAll('.nav-tab').forEach(tab => {
     tab.classList.toggle('active', tab.dataset.category === state.currentCategory);
@@ -56,10 +57,16 @@ export function updateCategoryTabsUI() {
   document.querySelectorAll('.mobile-nav-item').forEach(item => {
     if (state.currentCategory === 'favorites') {
       item.classList.toggle('active', item.dataset.nav === 'favorites');
+    } else if (state.currentCategory === 'profile') {
+      item.classList.toggle('active', item.dataset.nav === 'profile');
     } else {
       item.classList.toggle('active', item.dataset.nav === 'feed');
     }
   });
+
+  if (userProfileSection) {
+    userProfileSection.style.display = state.currentCategory === 'profile' ? 'block' : 'none';
+  }
 
   if (favoritesHeaderBar) {
     favoritesHeaderBar.style.display = state.currentCategory === 'favorites' ? 'flex' : 'none';
@@ -78,7 +85,8 @@ export function updateCategoryTabsUI() {
       'popular': 'Популярное',
       'top': 'Топ',
       'random': 'Случайно',
-      'favorites': 'Избранное'
+      'favorites': 'Избранное',
+      'profile': 'Профиль'
     };
     mobileNavFeedLabel.textContent = catMap[state.currentCategory] || 'Лента';
   }

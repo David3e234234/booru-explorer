@@ -64,11 +64,22 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
           <span>Избранное</span> <span class="badge-fav-count" id="badgeFavCount">0</span>
         </button>
+        <button class="nav-tab" data-category="profile" id="navTabProfile" title="Мой профиль, лайки, подписки и статистика">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          <span>Профиль</span>
+        </button>
       </nav>
     </div>
 
     <!-- Правая часть: опции и настройки -->
     <div class="header-right">
+      <button class="btn-user-profile" id="btnHeaderAuth" title="Личный кабинет">
+        <div class="user-avatar-mini" id="headerUserAvatar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <span class="user-name-label desktop-only" id="headerUserName">Войти</span>
+      </button>
+
       <div class="header-status-info" id="headerStatusBox" title="Нажмите для смены источника">
         <span class="active-site-badge" id="currentSiteLabel">Danbooru</span>
         <span class="results-count desktop-only" id="resultsCount">0 постов</span>
@@ -252,6 +263,92 @@
 
     <!-- Основная рабочая область с галереей -->
     <main class="main-content">
+      <!-- Полноэкранный блок профиля пользователя (TikTok style) -->
+      <section class="user-profile-section" id="userProfileSection" style="display: none;">
+        <!-- Карточка шапки профиля -->
+        <div class="profile-card">
+          <div class="profile-banner"></div>
+          <div class="profile-header-content">
+            <div class="profile-avatar-wrapper">
+              <div class="profile-avatar" id="profileAvatar">
+                <span id="profileAvatarText">👤</span>
+              </div>
+            </div>
+            
+            <div class="profile-user-info">
+              <div class="profile-name-row">
+                <h2 class="profile-username" id="profileUsername">Гость</h2>
+                <span class="profile-badge-status" id="profileBadgeStatus">Гостевой режим</span>
+              </div>
+              <p class="profile-joined-date" id="profileJoinedDate">Локальные данные устройства</p>
+            </div>
+
+            <div class="profile-header-actions" id="profileHeaderActions">
+              <!-- Заполняется JS (кнопки Войти / Регистрация или Настройки / Выйти) -->
+            </div>
+          </div>
+
+          <!-- Счетчики статистики как в TikTok -->
+          <div class="profile-stats-bar">
+            <div class="profile-stat-item" id="statLikesItem" title="Понравившиеся посты">
+              <span class="profile-stat-value" id="statLikesCount">0</span>
+              <span class="profile-stat-label">❤️ Лайки</span>
+            </div>
+            <div class="profile-stat-divider"></div>
+            <div class="profile-stat-item" id="statFavsItem" title="Сохраненное в закладки">
+              <span class="profile-stat-value" id="statFavsCount">0</span>
+              <span class="profile-stat-label">🔖 Избранное</span>
+            </div>
+            <div class="profile-stat-divider"></div>
+            <div class="profile-stat-item" id="statAuthorsItem" title="Отслеживаемые авторы">
+              <span class="profile-stat-value" id="statAuthorsCount">0</span>
+              <span class="profile-stat-label">🎨 Подписки</span>
+            </div>
+            <div class="profile-stat-divider"></div>
+            <div class="profile-stat-item" id="statViewsItem" title="Изучено постов">
+              <span class="profile-stat-value" id="statViewsCount">0</span>
+              <span class="profile-stat-label">👁️ Просмотры</span>
+            </div>
+          </div>
+
+          <!-- Под-вкладки профиля (TikTok-style Tabs) -->
+          <div class="profile-tabs-nav">
+            <button class="profile-tab-btn active" data-profile-tab="likes" id="btnProfileTabLikes">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+              <span>Лайки</span>
+              <span class="profile-tab-count" id="profileTabLikesCount">0</span>
+            </button>
+            <button class="profile-tab-btn" data-profile-tab="favorites" id="btnProfileTabFavs">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+              <span>Закладки</span>
+              <span class="profile-tab-count" id="profileTabFavsCount">0</span>
+            </button>
+            <button class="profile-tab-btn" data-profile-tab="authors" id="btnProfileTabAuthors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+              <span>Подписки</span>
+              <span class="profile-tab-count" id="profileTabAuthorsCount">0</span>
+            </button>
+            <button class="profile-tab-btn" data-profile-tab="analytics" id="btnProfileTabAnalytics">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
+              <span>Интересы («Для вас»)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Контейнер для вкладки аналитики интересов -->
+        <div class="profile-analytics-pane" id="profileAnalyticsPane" style="display: none;">
+          <div class="analytics-card">
+            <div class="analytics-header">
+              <h3 class="analytics-title">✨ Карта ваших вкусов и интересов</h3>
+              <p class="analytics-desc">На основе этих тегов обучается и формируется ваша персональная лента «Для вас».</p>
+            </div>
+            <div class="interests-cloud" id="profileInterestsCloud">
+              <!-- Теги и веса генерируются через JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Сетка галереи (Masonry) -->
       <div class="gallery-container">
         <!-- Панель переключения под-вкладок Избранного (Посты / Авторы) -->
@@ -358,6 +455,13 @@
       <span class="nav-label">Избранное</span>
     </button>
 
+    <button class="mobile-nav-item" id="btnNavProfile" data-nav="profile" title="Профиль">
+      <div class="nav-icon-box">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </div>
+      <span class="nav-label" id="mobileNavProfileLabel">Профиль</span>
+    </button>
+
     <button class="mobile-nav-item" id="btnNavSettings" data-nav="settings" title="Настройки">
       <div class="nav-icon-box">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -410,6 +514,13 @@
           <div class="category-info">
             <span class="category-name">Случайно</span>
             <span class="category-desc">Случайная подборка</span>
+          </div>
+        </button>
+        <button class="category-card" data-category="profile">
+          <div class="category-icon">👤</div>
+          <div class="category-info">
+            <span class="category-name">Профиль</span>
+            <span class="category-desc">Лайки, подписки, аккаунт</span>
           </div>
         </button>
       </div>
@@ -959,6 +1070,66 @@
         <div class="modal-footer">
           <button type="button" class="btn-secondary" id="btnCancelAddAuthor">Отмена</button>
           <button type="submit" class="btn-primary" id="btnSaveAddAuthor">Сохранить</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно Авторизации и Регистрации аккаунтов -->
+  <div class="modal-backdrop" id="modalAuthBackdrop" style="display: none;">
+    <div class="modal-dialog modal-dialog-auth">
+      <div class="modal-header">
+        <div class="auth-modal-header-tabs">
+          <button type="button" class="auth-header-tab active" id="btnAuthTabLogin">Вход</button>
+          <button type="button" class="auth-header-tab" id="btnAuthTabRegister">Регистрация</button>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btnCloseAuthModal" title="Закрыть">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Форма Входа -->
+      <form id="formLogin" class="modal-body modal-form">
+        <div class="form-group">
+          <label for="inputLoginUsername" class="form-label">Логин / Имя пользователя:</label>
+          <input type="text" id="inputLoginUsername" class="form-input" placeholder="Введите имя..." required autocomplete="username" spellcheck="false">
+        </div>
+        <div class="form-group">
+          <label for="inputLoginPassword" class="form-label">Пароль:</label>
+          <input type="password" id="inputLoginPassword" class="form-input" placeholder="Введите пароль..." required autocomplete="current-password">
+        </div>
+        <div class="auth-error-msg" id="loginErrorMsg" style="display: none;"></div>
+        <div class="modal-footer auth-footer">
+          <button type="submit" class="btn-primary btn-auth-submit" id="btnSubmitLogin">Войти в аккаунт</button>
+        </div>
+      </form>
+
+      <!-- Форма Регистрации -->
+      <form id="formRegister" class="modal-body modal-form" style="display: none;">
+        <div class="form-group">
+          <label for="inputRegUsername" class="form-label">Придумайте логин:</label>
+          <input type="text" id="inputRegUsername" class="form-input" placeholder="От 3 до 30 символов..." required autocomplete="username" spellcheck="false">
+        </div>
+        <div class="form-group">
+          <label for="inputRegPassword" class="form-label">Придумайте пароль:</label>
+          <input type="password" id="inputRegPassword" class="form-input" placeholder="Не менее 4 символов..." required autocomplete="new-password">
+        </div>
+        <div class="form-group">
+          <label for="inputRegPasswordConfirm" class="form-label">Повторите пароль:</label>
+          <input type="password" id="inputRegPasswordConfirm" class="form-input" placeholder="Повторите пароль..." required autocomplete="new-password">
+        </div>
+
+        <div class="form-group-checkbox">
+          <label class="toggle-switch">
+            <input type="checkbox" id="checkMigrateLocalData" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-name">✨ Перенести текущие закладки, лайки и настройки в новый аккаунт</span>
+          </label>
+        </div>
+
+        <div class="auth-error-msg" id="regErrorMsg" style="display: none;"></div>
+        <div class="modal-footer auth-footer">
+          <button type="submit" class="btn-primary btn-auth-submit" id="btnSubmitRegister">Создать аккаунт</button>
         </div>
       </form>
     </div>

@@ -10,6 +10,7 @@ import {
   setLikes,
   loadLocalLikes,
   loadLocalViewed,
+  loadLocalAuth,
   getUserInterestTags,
   calculatePostMatchPercent
 } from './state.js';
@@ -22,7 +23,8 @@ import {
   fetchFavoriteAuthors, 
   syncFavoriteAuthors,
   fetchSettings, 
-  saveSettings
+  saveSettings,
+  apiGetMe
 } from './api.js';
 import { initAutocomplete } from './autocomplete.js';
 import { initGallery } from './gallery.js';
@@ -54,12 +56,16 @@ import {
   closeSettingsModal 
 } from './modules/settingsModal.js';
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
+import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
+import { initProfileUI } from './modules/profileUI.js';
 
 export { isMyLiveDemoHost, isVercelHost, showToast, openDrawer, closeAllDrawers };
 
 let autocompleteInstance = null;
 let galleryInstance = null;
 let viewerInstance = null;
+let authModalInstance = null;
+let profileUIInstance = null;
 let deferredInstallPrompt = null;
 
 async function init() {
@@ -69,6 +75,46 @@ async function init() {
   });
 
   // 1. Инициализация подсистем
+  loadLocalAuth();
+  updateHeaderAuthUI();
+
+  authModalInstance = initAuthModal({
+    onAuthSuccess: async (user) => {
+      updateHeaderAuthUI();
+      if (profileUIInstance) profileUIInstance.renderProfile();
+      await refreshAllUserData();
+      selectCategory('profile');
+    },
+    onLogout: () => {
+      updateHeaderAuthUI();
+      if (profileUIInstance) profileUIInstance.renderProfile();
+      selectCategory('new');
+    }
+  });
+
+  profileUIInstance = initProfileUI({
+    onOpenAuth: (mode) => authModalInstance?.openAuthModal(mode),
+    onTabChange: (type, val) => {
+      if (type === 'search-tag') {
+        state.searchTags = [];
+        addSearchTag(val);
+        autocompleteInstance?.renderTagsChips();
+        selectCategory('new');
+      } else if (type === 'profile-subtab') {
+        if (val === 'authors') {
+          renderFavoriteAuthors();
+        } else {
+          performSearch(true);
+        }
+      }
+    },
+    onReloadState: async () => {
+      updateHeaderAuthUI();
+      await refreshAllUserData();
+      selectCategory('new');
+    }
+  });
+
   autocompleteInstance = initAutocomplete({
     onSearch: () => performSearch(true)
   });
@@ -313,6 +359,17 @@ async function loadLikes() {
   }
 }
 
+async function refreshAllUserData() {
+  await Promise.allSettled([
+    loadUserSettings(),
+    loadFavorites(),
+    loadFavoriteAuthors(),
+    loadLikes()
+  ]);
+  updateFavoritesBadge();
+  if (profileUIInstance) profileUIInstance.renderProfile();
+}
+
 async function performSearch(reset = false, options = {}) {
   const favoritesHeaderBar = document.getElementById('favoritesHeaderBar');
   if (favoritesHeaderBar) {
@@ -324,6 +381,36 @@ async function performSearch(reset = false, options = {}) {
     state.posts = [];
     state.hasMore = true;
     galleryInstance.showLoading();
+  }
+
+  // 👤 Раздел «Профиль» (TikTok style)
+  if (state.currentCategory === 'profile') {
+    if (profileUIInstance) profileUIInstance.renderProfile();
+    
+    if (state.profileSubTab === 'authors') {
+      renderFavoriteAuthors();
+      return;
+    }
+
+    if (state.profileSubTab === 'favorites') {
+      state.posts = [...state.favorites];
+    } else if (state.profileSubTab === 'likes') {
+      state.posts = [...state.likes];
+    } else if (state.profileSubTab === 'analytics') {
+      state.posts = [];
+    }
+
+    if (state.searchTags.length > 0 && state.posts.length > 0) {
+      state.posts = state.posts.filter(p => {
+        const postTags = Array.isArray(p.tags) ? p.tags.map(t => t.toLowerCase()) : [];
+        return state.searchTags.every(st => postTags.some(pt => pt.includes(st)));
+      });
+    }
+    
+    state.hasMore = false;
+    galleryInstance.renderGallery(false);
+    renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+    return;
   }
 
   if (state.currentCategory === 'favorites') {
@@ -843,6 +930,7 @@ function setupEventListeners() {
   const btnNavFilters = document.getElementById('btnNavFilters');
   const btnNavSources = document.getElementById('btnNavSources');
   const btnNavFavorites = document.getElementById('btnNavFavorites');
+  const btnNavProfile = document.getElementById('btnNavProfile');
   const btnNavSettings = document.getElementById('btnNavSettings');
 
   if (btnNavFeed) {
@@ -871,6 +959,14 @@ function setupEventListeners() {
       haptic(15);
       closeAllDrawers();
       selectCategory('favorites');
+    });
+  }
+
+  if (btnNavProfile) {
+    btnNavProfile.addEventListener('click', () => {
+      haptic(15);
+      closeAllDrawers();
+      selectCategory('profile');
     });
   }
 

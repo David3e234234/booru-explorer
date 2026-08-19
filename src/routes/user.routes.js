@@ -21,8 +21,12 @@ import {
 } from '../services/cacheService.js';
 import { getLocalIpAddress } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
+import { authMiddleware } from '../services/userService.js';
 
 const router = express.Router();
+
+// Middleware аутентификации для всех маршрутов пользователя
+router.use(authMiddleware);
 
 // GET & POST /api/git-pull (Deploy hook для Alwaysdata / серверов)
 router.all('/git-pull', (req, res) => {
@@ -46,18 +50,21 @@ router.all('/git-pull', (req, res) => {
 
 // GET /api/settings
 router.get('/settings', (req, res) => {
-  res.json({ success: true, settings: getSettings() });
+  const userId = req.user?.id || null;
+  res.json({ success: true, settings: getSettings(userId) });
 });
 
 // POST /api/settings
 router.post('/settings', (req, res) => {
-  const updated = updateSettings(req.body || {});
+  const userId = req.user?.id || null;
+  const updated = updateSettings(req.body || {}, userId);
   res.json({ success: true, settings: updated });
 });
 
 // GET /api/favorites
 router.get('/favorites', (req, res) => {
-  const favorites = getFavorites();
+  const userId = req.user?.id || null;
+  const favorites = getFavorites(userId);
   res.json({ success: true, favorites });
 });
 
@@ -66,16 +73,17 @@ router.post('/favorites', (req, res) => {
   const post = req.body;
   if (!post || !post.id) return res.status(400).json({ success: false, message: 'Некорректные данные' });
 
-  const favorites = getFavorites();
+  const userId = req.user?.id || null;
+  const favorites = getFavorites(userId);
   const existsIndex = favorites.findIndex(f => f.id === post.id);
 
   if (existsIndex >= 0) {
     favorites.splice(existsIndex, 1);
-    saveFavorites(favorites);
+    saveFavorites(favorites, userId);
     return res.json({ success: true, isFavorite: false, count: favorites.length });
   } else {
     favorites.unshift({ ...post, savedAt: new Date().toISOString() });
-    saveFavorites(favorites);
+    saveFavorites(favorites, userId);
     return res.json({ success: true, isFavorite: true, count: favorites.length });
   }
 });
@@ -86,28 +94,31 @@ router.post('/favorites/sync', (req, res) => {
   if (!Array.isArray(favorites)) {
     return res.status(400).json({ success: false, message: 'Ожидается массив избранного' });
   }
-  const current = getFavorites();
+  const userId = req.user?.id || null;
+  const current = getFavorites(userId);
   const map = new Map();
   current.forEach(f => { if (f && f.id) map.set(f.id, f); });
   favorites.forEach(f => { if (f && f.id) map.set(f.id, f); });
   const merged = Array.from(map.values());
 
-  saveFavorites(merged);
+  saveFavorites(merged, userId);
   res.json({ success: true, count: merged.length, favorites: merged });
 });
 
 // DELETE /api/favorites/:id
 router.delete('/favorites/:id', (req, res) => {
   const id = req.params.id;
-  const favorites = getFavorites();
+  const userId = req.user?.id || null;
+  const favorites = getFavorites(userId);
   const filtered = favorites.filter(f => f.id !== id);
-  saveFavorites(filtered);
+  saveFavorites(filtered, userId);
   res.json({ success: true, count: filtered.length });
 });
 
 // GET /api/favorite-authors
 router.get('/favorite-authors', (req, res) => {
-  const authors = getFavoriteAuthors();
+  const userId = req.user?.id || null;
+  const authors = getFavoriteAuthors(userId);
   res.json({ success: true, authors });
 });
 
@@ -124,12 +135,13 @@ router.post('/favorite-authors', (req, res) => {
   const previewUrl = body.previewUrl || '';
   const site = body.site || 'danbooru';
 
-  const authors = getFavoriteAuthors();
+  const userId = req.user?.id || null;
+  const authors = getFavoriteAuthors(userId);
   const existsIndex = authors.findIndex(a => (a.name || '').toLowerCase() === cleanName);
 
   if (existsIndex >= 0) {
     authors.splice(existsIndex, 1);
-    saveFavoriteAuthors(authors);
+    saveFavoriteAuthors(authors, userId);
     return res.json({ success: true, isFavorite: false, count: authors.length, authors });
   } else {
     const newAuthor = {
@@ -141,7 +153,7 @@ router.post('/favorite-authors', (req, res) => {
       createdAt: new Date().toISOString()
     };
     authors.unshift(newAuthor);
-    saveFavoriteAuthors(authors);
+    saveFavoriteAuthors(authors, userId);
     return res.json({ success: true, isFavorite: true, count: authors.length, authors, author: newAuthor });
   }
 });
@@ -152,28 +164,31 @@ router.post('/favorite-authors/sync', (req, res) => {
   if (!Array.isArray(authors)) {
     return res.status(400).json({ success: false, message: 'Ожидается массив авторов' });
   }
-  const current = getFavoriteAuthors();
+  const userId = req.user?.id || null;
+  const current = getFavoriteAuthors(userId);
   const map = new Map();
   current.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
   authors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
   const merged = Array.from(map.values());
 
-  saveFavoriteAuthors(merged);
+  saveFavoriteAuthors(merged, userId);
   res.json({ success: true, count: merged.length, authors: merged });
 });
 
 // DELETE /api/favorite-authors/:name
 router.delete('/favorite-authors/:name', (req, res) => {
   const rawName = (req.params.name || '').trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').toLowerCase();
-  const authors = getFavoriteAuthors();
+  const userId = req.user?.id || null;
+  const authors = getFavoriteAuthors(userId);
   const filtered = authors.filter(a => (a.name || '').toLowerCase() !== rawName);
-  saveFavoriteAuthors(filtered);
+  saveFavoriteAuthors(filtered, userId);
   res.json({ success: true, count: filtered.length, authors: filtered });
 });
 
 // GET /api/likes
 router.get('/likes', (req, res) => {
-  const likes = getLikes();
+  const userId = req.user?.id || null;
+  const likes = getLikes(userId);
   res.json({ success: true, likes });
 });
 
@@ -182,18 +197,19 @@ router.post('/like', async (req, res) => {
   const post = req.body;
   if (!post || !post.id) return res.status(400).json({ success: false, message: 'Некорректные данные' });
 
-  const likes = getLikes();
+  const userId = req.user?.id || null;
+  const likes = getLikes(userId);
   const existsIndex = likes.findIndex(l => l.id === post.id);
-  const settings = getSettings();
+  const settings = getSettings(userId);
   let isLiked = false;
 
   if (existsIndex >= 0) {
     likes.splice(existsIndex, 1);
-    saveLikes(likes);
+    saveLikes(likes, userId);
     isLiked = false;
   } else {
     likes.unshift({ ...post, likedAt: new Date().toISOString() });
-    saveLikes(likes);
+    saveLikes(likes, userId);
     isLiked = true;
   }
 
@@ -209,13 +225,14 @@ router.post('/likes/sync', (req, res) => {
   if (!Array.isArray(likes)) {
     return res.status(400).json({ success: false, message: 'Ожидается массив лайков' });
   }
-  const current = getLikes();
+  const userId = req.user?.id || null;
+  const current = getLikes(userId);
   const map = new Map();
   current.forEach(l => { if (l && l.id) map.set(l.id, l); });
   likes.forEach(l => { if (l && l.id) map.set(l.id, l); });
   const merged = Array.from(map.values());
 
-  saveLikes(merged);
+  saveLikes(merged, userId);
   res.json({ success: true, count: merged.length, likes: merged });
 });
 

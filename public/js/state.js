@@ -34,6 +34,9 @@ export const state = {
   likedIds: new Set(),
   viewedIds: new Set(),
   favoritesSubTab: 'posts', // 'posts' | 'authors'
+  profileSubTab: 'likes', // 'likes' | 'favorites' | 'authors' | 'analytics'
+  currentUser: null, // { id, username, createdAt, ... }
+  authToken: null,
   favoriteAuthors: [],
   favoriteAuthorNames: new Set(),
   settings: {
@@ -95,8 +98,42 @@ const STORAGE_KEYS = {
   FAVORITES: 'booru_favorites_v1',
   FAVORITE_AUTHORS: 'booru_favorite_authors_v1',
   LIKES: 'booru_likes_v1',
-  VIEWED: 'booru_viewed_v1'
+  VIEWED: 'booru_viewed_v1',
+  AUTH_TOKEN: 'booru_auth_token_v1',
+  CURRENT_USER: 'booru_current_user_v1'
 };
+
+export function loadLocalAuth() {
+  try {
+    const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+    const userRaw = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    const user = userRaw ? JSON.parse(userRaw) : null;
+    if (token && user) {
+      state.authToken = token;
+      state.currentUser = user;
+    }
+  } catch (e) {}
+}
+
+export function saveLocalAuth(token, user) {
+  try {
+    if (token && user) {
+      state.authToken = token;
+      state.currentUser = user;
+      localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token);
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(user));
+    } else {
+      state.authToken = null;
+      state.currentUser = null;
+      localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    }
+  } catch (e) {}
+}
+
+export function clearLocalAuth() {
+  saveLocalAuth(null, null);
+}
 
 export function loadLocalViewed() {
   try {
