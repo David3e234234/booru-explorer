@@ -99,7 +99,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   };
 
   if (shouldDeepFetch) {
-    const minDesiredPosts = 50;
+    const minDesiredPosts = Math.min(limit || 100, 200);
     const maxIterations = Math.max(deepFetchPagesSetting * 2, 12);
     let currentCursor = '';
     let matchedCount = 0;

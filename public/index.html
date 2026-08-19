@@ -791,14 +791,14 @@
           </div>
 
           <div class="settings-group">
-            <label class="settings-label" for="selectDeepFetchPages">Глубина поиска Danbooru (страниц):</label>
-            <p class="settings-hint">Сколько скрытых страниц скачивать для локальной фильтрации (чем больше, тем больше результатов, но дольше загрузка).</p>
+            <label class="settings-label" for="selectDeepFetchPages">Глубина глубокого поиска (страниц на запрос):</label>
+            <p class="settings-hint">Сколько скрытых страниц опрашивать вглубь на всех сайтах (Danbooru, Rule34, Gelbooru и др.) для заполнения ленты при строгой фильтрации (лоли/мамочки, ИИ, черные списки).</p>
             <select id="selectDeepFetchPages" class="input-setting">
-              <option value="1">1 страница</option>
-              <option value="2" selected>2 страницы</option>
-              <option value="3">3 страницы</option>
-              <option value="4">4 страницы</option>
-              <option value="5">5 страниц (Максимум)</option>
+              <option value="1">1 страница (быстро)</option>
+              <option value="2" selected>2 страницы (по умолчанию)</option>
+              <option value="3">3 страницы (глубокий)</option>
+              <option value="4">4 страницы (очень глубокий)</option>
+              <option value="5">5 страниц (максимальный)</option>
             </select>
           </div>
 

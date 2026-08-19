@@ -1,4 +1,91 @@
-import { DEFAULT_AI_TAGS, SOUND_KEYWORDS } from '../config/constants.js';
+import { 
+  DEFAULT_AI_TAGS, 
+  SOUND_KEYWORDS,
+  CURVY_INCLUDE_TAGS, 
+  CURVY_EXCLUDE_TAGS, 
+  PETITE_INCLUDE_TAGS, 
+  PETITE_EXCLUDE_TAGS,
+  FURRY_TAGS,
+  PREGNANT_TAGS
+} from '../config/constants.js';
+
+export function isPostMatchingFilters(post, criteria = {}) {
+  if (!post || (!post.previewUrl && !post.fileUrl && !post.sampleUrl)) return false;
+
+  const {
+    typeFilter = 'all',
+    ageFilter = 'all',
+    aiFilter = 'no-ai',
+    ratingFilter = 'all',
+    hideFurry = false,
+    hidePregnant = false,
+    blacklist = [],
+    negativeTokens = [],
+    activeCurvyTags = CURVY_INCLUDE_TAGS,
+    activePetiteTags = PETITE_INCLUDE_TAGS,
+    hasUserPositiveTags = false
+  } = criteria;
+
+  // 1. Фильтр типа контента
+  if (typeFilter === 'audio' || typeFilter === 'sound') {
+    if (!post.isVideo || !post.hasSound) return false;
+  } else if (typeFilter === 'video') {
+    if (!post.isVideo && !post.isGif) return false;
+  } else if (typeFilter === 'image') {
+    if (post.isVideo || post.isGif) return false;
+  }
+
+  const postTags = Array.isArray(post.tags) ? post.tags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean) : [];
+  const postTagsFlat = postTags.join(' ').replace(/_/g, ' ');
+
+  // 2. Локальная фильтрация по исключающим (-tag) тегам
+  if (negativeTokens && negativeTokens.length > 0) {
+    if (negativeTokens.some(neg => postTagsFlat.includes(neg) || postTags.includes(neg))) return false;
+  }
+
+  // 3. Фильтр телосложения и типажей (Мамочки vs Лоли)
+  if (ageFilter === 'adult') {
+    if (CURVY_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
+    if (!hasUserPositiveTags && !activeCurvyTags.some(tag => postTags.includes(tag))) return false;
+  } else if (ageFilter === 'young') {
+    if (PETITE_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
+    if (!hasUserPositiveTags && !activePetiteTags.some(tag => postTags.includes(tag))) return false;
+  }
+
+  // 4. AI Фильтр
+  if (aiFilter === 'no-ai') {
+    if (post.isAi) return false;
+  } else if (aiFilter === 'only-ai') {
+    if (!post.isAi) return false;
+  }
+
+  // 5. Возрастной рейтинг
+  if (ratingFilter === 'nsfw') {
+    const r = (post.rating || '').toLowerCase();
+    if (r !== 'e' && r !== 'q' && r !== 'explicit' && r !== 'questionable' && r !== 'sensitive' && r !== '?') return false;
+  } else if (ratingFilter === 'sfw') {
+    const r = (post.rating || '').toLowerCase();
+    if (r !== 's' && r !== 'g' && r !== 'safe' && r !== 'general') return false;
+  }
+
+  // 6. Фильтр фурри
+  if (hideFurry) {
+    if (FURRY_TAGS.some(fTag => postTags.some(t => t === fTag || t.startsWith(fTag + '_') || t.endsWith('_' + fTag)))) return false;
+  }
+
+  // 7. Фильтр беременности
+  if (hidePregnant) {
+    if (PREGNANT_TAGS.some(pTag => postTags.some(t => t === pTag || t.includes(pTag)))) return false;
+  }
+
+  // 8. Черный список
+  if (blacklist && blacklist.length > 0) {
+    const lowerBlacklist = blacklist.map(b => (typeof b === 'string' ? b.toLowerCase().trim() : '')).filter(Boolean);
+    if (lowerBlacklist.some(blackTag => postTags.includes(blackTag))) return false;
+  }
+
+  return true;
+}
 
 export function checkIsAi(tagsArray, aiTagsList) {
   if (!Array.isArray(tagsArray)) return false;

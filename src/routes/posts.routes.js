@@ -17,6 +17,7 @@ import {
 import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js';
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
+import { isPostMatchingFilters } from '../utils/tagHelpers.js';
 import { fetchSafe } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
 
@@ -81,104 +82,44 @@ router.get('/posts', async (req, res) => {
 
     logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}, exclude=${excludeSites}`);
 
-    let posts = await fetchPosts(site, { tags, page, limit, category, ratingFilter, typeFilter, ageFilter, excludeSites }, aiTagsList, settings);
+    let posts = await fetchPosts(site, { 
+      tags, 
+      page, 
+      limit, 
+      category, 
+      ratingFilter, 
+      typeFilter, 
+      ageFilter, 
+      excludeSites,
+      hideFurry,
+      hidePregnant
+    }, aiTagsList, settings);
 
-    // Фильтр типа контента (Видео / Со звуком / Фото)
-    if (typeFilter === 'audio' || typeFilter === 'sound') {
-      posts = posts.filter(p => p.isVideo && p.hasSound);
-    } else if (typeFilter === 'video') {
-      posts = posts.filter(p => p.isVideo || p.isGif);
-    } else if (typeFilter === 'image') {
-      posts = posts.filter(p => !p.isVideo && !p.isGif);
-    }
-
-    // Фильтр телосложения и типажей (Мамочки/Пышные vs Лоли/Мини)
+    // Дополнительная валидация и сортировка
     const activeCurvyTags = (Array.isArray(settings.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS;
     const activePetiteTags = (Array.isArray(settings.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS;
+    const negativeTokens = tags
+      ? tags.split(/\s+/).filter(t => t.startsWith('-') && t.length > 1).map(t => t.substring(1).toLowerCase().replace(/_/g, ' '))
+      : [];
+    const hasUserPositiveTags = Boolean(tags && tags.split(/\s+/).some(t => t && !t.startsWith('-') && !t.includes(':')));
 
-    if (ageFilter === 'adult') {
-      posts = posts.filter(post => {
-        const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
-        if (CURVY_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
-        if (!tags && !activeCurvyTags.some(tag => postTags.includes(tag))) return false;
-        return true;
-      });
-    } else if (ageFilter === 'young') {
-      posts = posts.filter(post => {
-        const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
-        if (PETITE_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
-        if (!tags && !activePetiteTags.some(tag => postTags.includes(tag))) return false;
-        return true;
-      });
-    }
+    posts = posts.filter(post => isPostMatchingFilters(post, {
+      typeFilter,
+      ageFilter,
+      aiFilter,
+      ratingFilter,
+      hideFurry: hideFurry || settings.hideFurry,
+      hidePregnant: hidePregnant || settings.hidePregnant,
+      blacklist,
+      negativeTokens,
+      activeCurvyTags,
+      activePetiteTags,
+      hasUserPositiveTags
+    }));
 
-    // Локальная фильтрация по исключающим (-tag) тегам
-    if (tags) {
-      const negativeTokens = tags
-        .split(/\s+/)
-        .filter(t => t.startsWith('-') && t.length > 1)
-        .map(t => t.substring(1).toLowerCase().replace(/_/g, ' '));
-
-      if (negativeTokens.length > 0) {
-        posts = posts.filter(post => {
-          const postTagsFlat = (Array.isArray(post.tags) ? post.tags.join(' ') : '').toLowerCase().replace(/_/g, ' ');
-          return !negativeTokens.some(neg => postTagsFlat.includes(neg));
-        });
-      }
-    }
-
-    // AI Фильтр
-    if (aiFilter === 'no-ai') {
-      posts = posts.filter(p => !p.isAi);
-    } else if (aiFilter === 'only-ai') {
-      posts = posts.filter(p => p.isAi);
-    }
-
-    // Возрастной рейтинг
-    if (ratingFilter === 'nsfw') {
-      posts = posts.filter(p => {
-        const r = (p.rating || '').toLowerCase();
-        return r === 'e' || r === 'q' || r === 'explicit' || r === 'questionable' || r === 'sensitive' || r === '?';
-      });
-    } else if (ratingFilter === 'sfw') {
-      posts = posts.filter(p => {
-        const r = (p.rating || '').toLowerCase();
-        return r === 's' || r === 'g' || r === 'safe' || r === 'general';
-      });
-    }
-
-    // Фильтр фурри
-    if (hideFurry || settings.hideFurry) {
-      posts = posts.filter(post => {
-        const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
-        return !FURRY_TAGS.some(fTag => postTags.some(t => t === fTag || t.startsWith(fTag + '_') || t.endsWith('_' + fTag)));
-      });
-    }
-
-    // Фильтр беременности
-    if (hidePregnant || settings.hidePregnant) {
-      posts = posts.filter(post => {
-        const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
-        return !PREGNANT_TAGS.some(pTag => postTags.some(t => t === pTag || t.includes(pTag)));
-      });
-    }
-
-    // Черный список
-    if (blacklist.length > 0) {
-      const lowerBlacklist = blacklist.map(b => b.toLowerCase().trim()).filter(Boolean);
-      posts = posts.filter(post => {
-        const postTags = Array.isArray(post.tags) ? post.tags.map(t => t.toLowerCase()) : [];
-        return !lowerBlacklist.some(blackTag => postTags.includes(blackTag));
-      });
-    }
-
-    // Локальная сортировка
     if (category === 'top' && site !== 'all') {
       posts.sort((a, b) => (b.score || 0) - (a.score || 0));
     }
-
-    // Фильтрация невалидных/пустых постов
-    posts = posts.filter(post => post && (post.fileUrl || post.sampleUrl || post.previewUrl));
 
     logInfo('Search', `Успешно: найдено ${posts.length} постов для выдачи`);
 
