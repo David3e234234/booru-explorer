@@ -126,9 +126,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
     const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
     if (authorName && authorName.trim()) {
-      const cleanAuthorTag = currentPost.site === 'rule34video'
-        ? `channel:${authorName.split(',')[0].trim()}`
-        : authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
       const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
 
       if (viewerAuthorBadge && viewerAuthorText) {

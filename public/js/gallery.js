@@ -511,12 +511,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       if (authorBadgeEl) {
         e.stopPropagation();
         const rawA = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
-        let cleanTag = rawA.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
-        if (post.site === 'rule34video') {
-          cleanTag = `channel:${cleanTag}`;
-        } else {
-          cleanTag = cleanTag.replace(/\s+/g, '_');
-        }
+        let cleanTag = rawA.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/\s+/g, '_');
         if (cleanTag && onTagSelect) {
           onTagSelect(cleanTag);
           return;

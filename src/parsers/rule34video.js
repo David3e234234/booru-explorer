@@ -15,13 +15,12 @@ export async function fetchRule34Video(params, aiTagsList) {
     rawTags = 'big tits';
   }
 
-  let accountQuery = '';
-  const accountMatch = rawTags.match(/^(?:channel|user|account|artist|author):\s*([a-zA-Z0-9_\-]+)/i);
-  if (accountMatch) {
-    accountQuery = accountMatch[1].replace(/[_+\s]+/g, '-').replace(/-+/g, '-').toLowerCase();
-  }
-
-  const cleanQuery = rawTags.replace(/^(?:channel|user|account|artist|author):\s*/i, '').replace(/[_+\s]+/g, '-').replace(/-+/g, '-').toLowerCase();
+  const cleanQuery = rawTags
+    .replace(/^(?:channel|user|account|artist|author|uploader):\s*/i, '')
+    .trim()
+    .replace(/[_+\s]+/g, '-')
+    .replace(/-+/g, '-')
+    .toLowerCase();
   
   const pagesPerBatch = 4;
   const startFrom = (page - 1) * pagesPerBatch + 1;
@@ -32,10 +31,7 @@ export async function fetchRule34Video(params, aiTagsList) {
 
   const fetchPromises = pageNumbers.map(async (p) => {
     let url = '';
-    if (accountQuery) {
-      // Поиск напрямую по каналу/аккаунту на Rule34Video
-      url = `https://rule34video.com/channels/${encodeURIComponent(accountQuery)}/?mode=async&function=get_block&block_id=custom_list_videos_videos_list&from=${p}`;
-    } else if (cleanQuery) {
+    if (cleanQuery) {
       let sortByParam = '';
       if (category === 'top') {
         sortByParam = '&sort_by=rating';
