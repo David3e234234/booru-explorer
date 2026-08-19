@@ -361,7 +361,11 @@ export async function handleClearStorageCache() {
 
 export function switchSettingsTab(tabId) {
   document.querySelectorAll('.settings-nav-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabId);
+    const isActive = btn.dataset.tab === tabId;
+    btn.classList.toggle('active', isActive);
+    if (isActive) {
+      btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
   });
   document.querySelectorAll('.settings-tab-pane').forEach(pane => {
     pane.style.display = (pane.id === `tabPane-${tabId}`) ? 'flex' : 'none';
