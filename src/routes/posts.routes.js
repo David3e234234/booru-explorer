@@ -312,28 +312,30 @@ router.get('/tags/autocomplete', async (req, res) => {
       }
     } else if (site === 'rule34video') {
       try {
-        const channelUrl = `https://rule34video.com/channels/?mode=async&function=get_block&block_id=custom_list_channels_common_channels_list&q=${encodeURIComponent(query)}&from=1`;
-        const resChannel = await fetchSafe(channelUrl, {
+        const modelJsonUrl = `https://rule34video.com/models_json.php?advanced_search=true&q=${encodeURIComponent(query)}`;
+        const resModels = await fetchSafe(modelJsonUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'X-Requested-With': 'XMLHttpRequest'
           },
-          timeout: 3000
+          timeout: 4000
         });
-        if (resChannel.ok) {
-          const html = await resChannel.text();
-          const channelMatches = html.matchAll(/href="[^"]*\/channels\/(\d+)(?:\/([^"/?#]+))?\/?(?:\?|")[^>]*>([^<]+)<\/a>/gi);
-          const seen = new Set();
-          for (const m of channelMatches) {
-            const name = (m[3] || m[2] || '').replace(/&#34;/g, '"').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
-            if (name && !seen.has(name.toLowerCase())) {
-              seen.add(name.toLowerCase());
-              tagsResult.push({
-                value: `artist:${name}`,
-                label: `🎨 ${name} (Канал / Автор)`,
-                count: 0,
-                category: 'artist'
-              });
+        if (resModels.ok) {
+          const data = await resModels.json();
+          if (data && Array.isArray(data.items) && data.items.length > 0) {
+            const seen = new Set();
+            for (const item of data.items) {
+              const name = (item.title || '').trim();
+              if (name && !seen.has(name.toLowerCase())) {
+                seen.add(name.toLowerCase());
+                const totalCount = parseInt(item.total, 10) || 0;
+                tagsResult.push({
+                  value: `artist:${name.toLowerCase().replace(/\s+/g, '_')}`,
+                  label: `🎨 ${name} (${totalCount} видео)`,
+                  count: totalCount,
+                  category: 'artist'
+                });
+              }
             }
           }
         }
