@@ -2,7 +2,7 @@ import { state, saveLocalAuth, clearLocalAuth, loadLocalFavorites, loadLocalLike
 import { apiLogin, apiRegister, apiLogout } from '../api.js';
 import { showToast } from './uiUtils.js';
 
-export function initAuthModal({ onAuthSuccess, onLogout }) {
+export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
   const modalBackdrop = document.getElementById('modalAuthBackdrop');
   const btnClose = document.getElementById('btnCloseAuthModal');
   const btnTabLogin = document.getElementById('btnAuthTabLogin');
@@ -80,9 +80,8 @@ export function initAuthModal({ onAuthSuccess, onLogout }) {
   btnHeaderAuth?.addEventListener('click', () => {
     if (state.currentUser) {
       // Если уже залогинен, переходим во вкладку Профиль
-      const navTabProfile = document.getElementById('navTabProfile');
-      if (navTabProfile) {
-        navTabProfile.click();
+      if (typeof onOpenProfile === 'function') {
+        onOpenProfile();
       }
     } else {
       openAuthModal('login');

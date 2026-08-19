@@ -11,6 +11,8 @@ import {
   loadLocalLikes,
   loadLocalViewed,
   loadLocalAuth,
+  saveLocalAuth,
+  clearLocalAuth,
   getUserInterestTags,
   calculatePostMatchPercent
 } from './state.js';
@@ -103,6 +105,9 @@ async function init() {
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
       selectCategory('new');
+    },
+    onOpenProfile: () => {
+      selectCategory('profile');
     }
   });
 

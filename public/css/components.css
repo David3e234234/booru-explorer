@@ -1970,6 +1970,18 @@
   transform: translateY(-1px);
 }
 
+.btn-user-profile.active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.35);
+}
+
+.btn-user-profile.active .user-avatar-mini {
+  background: #fff;
+  color: var(--accent-primary);
+}
+
 .btn-user-profile:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 2px;

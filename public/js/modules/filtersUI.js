@@ -65,6 +65,11 @@ export function updateCategoryTabsUI() {
     }
   });
 
+  const btnHeaderAuth = document.getElementById('btnHeaderAuth');
+  if (btnHeaderAuth) {
+    btnHeaderAuth.classList.toggle('active', state.currentCategory === 'profile');
+  }
+
   if (userProfileSection) {
     userProfileSection.style.display = state.currentCategory === 'profile' ? 'block' : 'none';
   }
