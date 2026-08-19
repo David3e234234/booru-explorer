@@ -311,7 +311,35 @@ router.get('/tags/autocomplete', async (req, res) => {
         tagsResult = await fetchDanbooruTags(query);
       }
     } else if (site === 'rule34video') {
-      tagsResult = await fetchDanbooruTags(query);
+      try {
+        const channelUrl = `https://rule34video.com/channels/?mode=async&function=get_block&block_id=custom_list_channels_common_channels_list&q=${encodeURIComponent(query)}&from=1`;
+        const resChannel = await fetchSafe(channelUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'X-Requested-With': 'XMLHttpRequest'
+          },
+          timeout: 3000
+        });
+        if (resChannel.ok) {
+          const html = await resChannel.text();
+          const channelMatches = html.matchAll(/href="[^"]*\/channels\/(\d+)(?:\/([^"/?#]+))?\/?(?:\?|")[^>]*>([^<]+)<\/a>/gi);
+          const seen = new Set();
+          for (const m of channelMatches) {
+            const name = (m[3] || m[2] || '').replace(/&#34;/g, '"').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
+            if (name && !seen.has(name.toLowerCase())) {
+              seen.add(name.toLowerCase());
+              tagsResult.push({
+                value: `artist:${name}`,
+                label: `🎨 ${name} (Канал / Автор)`,
+                count: 0,
+                category: 'artist'
+              });
+            }
+          }
+        }
+      } catch {}
+      const danbooruTags = await fetchDanbooruTags(query);
+      tagsResult = [...tagsResult, ...danbooruTags];
     } else if (site === 'safebooru') {
       try {
         const url = `https://safebooru.org/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
