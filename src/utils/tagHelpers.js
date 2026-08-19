@@ -202,9 +202,31 @@ export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilt
     tags = tags.replace(/\bpetite\b/gi, 'small_breasts');
   }
 
+  // 3. Адаптация директив сортировки (order:* <-> sort:*) между движками
+  if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+    tags = tags
+      .replace(/\border:score_desc\b/gi, 'sort:score:desc')
+      .replace(/\border:score\b/gi, 'sort:score:desc')
+      .replace(/\border:rank\b/gi, site === 'gelbooru' ? 'sort:updated:desc' : 'sort:score:desc')
+      .replace(/\border:vote\b/gi, 'sort:score:desc')
+      .replace(/\border:random\b/gi, 'sort:random')
+      .replace(/\border:id_desc\b/gi, 'sort:id:desc')
+      .replace(/\border:id_asc\b/gi, 'sort:id:asc')
+      .replace(/\border:score_asc\b/gi, 'sort:score:asc');
+  } else if (site === 'danbooru' || site === 'yandere' || site === 'konachan') {
+    tags = tags
+      .replace(/\bsort:score:desc\b/gi, 'order:score')
+      .replace(/\bsort:score:asc\b/gi, 'order:score_asc')
+      .replace(/\bsort:score\b/gi, 'order:score')
+      .replace(/\bsort:random\b/gi, 'order:random')
+      .replace(/\bsort:id:desc\b/gi, 'order:id_desc')
+      .replace(/\bsort:id:asc\b/gi, 'order:id_asc')
+      .replace(/\bsort:updated:desc\b/gi, site === 'danbooru' ? 'order:rank' : 'order:vote');
+  }
+
   const tagList = tags.split(/\s+/).filter(Boolean);
 
-  // 3. Подмешивание тегов телосложения / типажей
+  // 4. Подмешивание тегов телосложения / типажей
   if (ageFilter === 'adult') {
     if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
       if (!tagList.some(t => t.startsWith('-loli'))) tagList.push('-loli');

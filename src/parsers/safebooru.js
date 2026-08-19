@@ -1,6 +1,15 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 
+function getRecentDateFilter(days = 30) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `date:>=${year}-${month}-${day}`;
+}
+
 export async function fetchSafebooru(params, aiTagsList) {
   const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ratingFilter = 'all', ageFilter = 'all' } = params;
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound' || ratingFilter === 'nsfw') {
@@ -8,9 +17,24 @@ export async function fetchSafebooru(params, aiTagsList) {
   }
 
   let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter);
-  if (category === 'top') finalTags += ' sort:score:desc';
-  else if (category === 'popular' || category === 'recommended') finalTags += ' sort:updated:desc';
-  else if (category === 'random') finalTags += ' sort:random';
+  if (category === 'top') {
+    if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
+      finalTags = finalTags ? `${finalTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'popular') {
+    if (!finalTags.includes('sort:') && !finalTags.includes('order:') && !finalTags.includes('date:')) {
+      const recentDate = getRecentDateFilter(30);
+      finalTags = finalTags ? `${finalTags} ${recentDate} sort:score:desc` : `${recentDate} sort:score:desc`;
+    }
+  } else if (category === 'recommended') {
+    if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
+      finalTags = finalTags ? `${finalTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'random') {
+    if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
+      finalTags = finalTags ? `${finalTags} sort:random` : 'sort:random';
+    }
+  }
 
   const pid = Math.max(0, page - 1);
   const url = `https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(finalTags)}&pid=${pid}&limit=${limit}`;

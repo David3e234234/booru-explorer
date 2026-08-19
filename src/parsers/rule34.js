@@ -3,22 +3,54 @@ import { BROWSER_USER_AGENT } from '../config/constants.js';
 import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { logError } from '../utils/logger.js';
 
+function getRecentDateFilter(days = 30) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `date:>=${year}-${month}-${day}`;
+}
+
 export async function fetchRule34(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ageFilter = 'all' } = params;
   
   let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
 
-  // Для Rule34 не используем sort:updated:desc (ломает поиск); для Топ используем score фильтр
-  if (category === 'top' && !searchTags) {
-    searchTags = 'score:>=50';
+  // Сортировка по категориям для Rule34:
+  if (category === 'top') {
+    // Топ за всё время
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'popular') {
+    // Тренды: горячее и залайканное за последние 30 дней
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('date:')) {
+      const recentDate = getRecentDateFilter(30);
+      searchTags = searchTags ? `${searchTags} ${recentDate} sort:score:desc` : `${recentDate} sort:score:desc`;
+    }
+  } else if (category === 'recommended') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'random') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+    }
   }
 
   const pid = Math.max(0, page - 1);
 
   // 1. Попытка через официальный DAPI если есть API ключ
   if (settings?.rule34ApiKey && settings?.rule34UserId) {
-    let dapiTags = searchTags;
-    if (category === 'top') dapiTags = dapiTags ? `${dapiTags} order:score` : 'order:score';
+    let dapiTags = searchTags
+      .replace(/\bsort:score:desc\b/gi, 'order:score')
+      .replace(/\bsort:score:asc\b/gi, 'order:score_asc')
+      .replace(/\bsort:score\b/gi, 'order:score')
+      .replace(/\bsort:random\b/gi, 'order:random')
+      .replace(/\bsort:id:desc\b/gi, 'order:id_desc')
+      .replace(/\bsort:id:asc\b/gi, 'order:id_asc');
+
     const url = `https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(dapiTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`;
     try {
       const res = await fetchSafe(url, {
@@ -82,7 +114,17 @@ export async function fetchRule34(params, aiTagsList, settings) {
   }
 
   // 2. Универсальный веб-парсер Rule34.xxx (открытая выдача без API ключа)
-  const htmlUrl = `https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(searchTags)}&pid=${pid * 42}`;
+  const htmlFormattedTags = searchTags
+    .replace(/\border:score_desc\b/gi, 'sort:score:desc')
+    .replace(/\border:score\b/gi, 'sort:score:desc')
+    .replace(/\border:rank\b/gi, 'sort:score:desc')
+    .replace(/\border:vote\b/gi, 'sort:score:desc')
+    .replace(/\border:random\b/gi, 'sort:random')
+    .replace(/\border:id_desc\b/gi, 'sort:id:desc')
+    .replace(/\border:id_asc\b/gi, 'sort:id:asc')
+    .replace(/\border:score_asc\b/gi, 'sort:score:asc');
+
+  const htmlUrl = `https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(htmlFormattedTags)}&pid=${pid * 42}`;
   try {
     const res = await fetchSafe(htmlUrl, {
       headers: {
@@ -279,11 +321,23 @@ export async function fetchRule34(params, aiTagsList, settings) {
     .replace(/([a-zA-Z0-9_-]+)_\([^)]+\)/g, '$1')
     .replace(/([a-zA-Z0-9_-]+)\s*\([^)]+\)/g, '$1')
     .replace(/[()]/g, '')
+    .replace(/\bsort:score:desc\b/gi, 'order:score')
+    .replace(/\bsort:score:asc\b/gi, 'order:score_asc')
+    .replace(/\bsort:score\b/gi, 'order:score')
+    .replace(/\bsort:random\b/gi, 'order:random')
+    .replace(/\bsort:id:desc\b/gi, 'order:id_desc')
+    .replace(/\bsort:updated:desc\b/gi, '')
     .trim();
 
-  const fetchPahealLimit = category === 'popular' ? Math.max(limit, 70) : limit;
-  if (category === 'top') {
-    pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
+  const fetchPahealLimit = (category === 'popular' || category === 'recommended') ? Math.max(limit, 70) : limit;
+  if (category === 'top' || category === 'popular' || category === 'recommended') {
+    if (!pahealSearchTags.includes('order:')) {
+      pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
+    }
+  } else if (category === 'random') {
+    if (!pahealSearchTags.includes('order:')) {
+      pahealSearchTags = pahealSearchTags ? `order:random ${pahealSearchTags}` : 'order:random';
+    }
   }
   const parsePahealXml = async (queryTags) => {
     const pahealUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=${encodeURIComponent(queryTags)}&limit=${fetchPahealLimit}&page=${page}`;

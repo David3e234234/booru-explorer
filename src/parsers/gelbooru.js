@@ -2,17 +2,37 @@ import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js
 import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { logError } from '../utils/logger.js';
 
+function getRecentDateFilter(days = 30) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `date:>=${year}-${month}-${day}`;
+}
+
 export async function fetchGelbooru(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ageFilter = 'all' } = params;
   
   let searchTags = adaptTagsForSite('gelbooru', tags, ageFilter, typeFilter);
 
   if (category === 'top') {
-    searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
-  } else if (category === 'popular' || category === 'recommended') {
-    searchTags = searchTags ? `${searchTags} sort:updated:desc` : 'sort:updated:desc';
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'popular') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('date:')) {
+      const recentDate = getRecentDateFilter(30);
+      searchTags = searchTags ? `${searchTags} ${recentDate} sort:score:desc` : `${recentDate} sort:score:desc`;
+    }
+  } else if (category === 'recommended') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    }
   } else if (category === 'random') {
-    searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+    }
   }
 
   const pid = Math.max(0, page - 1);
