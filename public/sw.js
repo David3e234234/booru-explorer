@@ -1,4 +1,4 @@
-const CACHE_NAME = 'booru-explorer-v5.5';
+const CACHE_NAME = 'booru-explorer-v7.0';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,6 +13,11 @@ const STATIC_ASSETS = [
   '/js/gallery.js',
   '/js/viewer.js',
   '/js/autocomplete.js',
+  '/icons/favicon.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/maskable-512.png',
+  '/icons/apple-touch-icon.png',
   '/icons/icon.svg'
 ];
 
@@ -20,7 +25,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Кэширование App Shell v5.0');
+      console.log('[ServiceWorker] Кэширование App Shell v7.0');
       return cache.addAll(STATIC_ASSETS).catch(err => {
         console.warn('[ServiceWorker] Не удалось закэшировать часть ресурсов:', err);
       });
