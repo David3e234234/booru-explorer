@@ -3,6 +3,7 @@ import cors from 'cors';
 import compression from 'compression';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import dns from 'dns';
 import open from 'open';
 import { 
@@ -72,12 +73,42 @@ app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);
 
 // SPA Fallback: отдача index.html для всех не-API страниц
+app.get('/api/debug-fs', (req, res) => {
+  try {
+    const cwd = process.cwd();
+    const dirname = path.dirname(fileURLToPath(import.meta.url));
+    const cwdFiles = fs.readdirSync(cwd);
+    const publicInCwd = fs.existsSync(path.join(cwd, 'public')) ? fs.readdirSync(path.join(cwd, 'public')) : [];
+    const publicInDirname = fs.existsSync(path.join(dirname, 'public')) ? fs.readdirSync(path.join(dirname, 'public')) : [];
+    res.json({
+      cwd,
+      dirname,
+      cwdFiles,
+      publicInCwd,
+      publicInDirname,
+      ROOT_DIR
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'Endpoint not found' });
   }
-  const indexPath = path.join(publicDir, 'index.html');
-  res.sendFile(indexPath);
+  const possiblePaths = [
+    path.join(process.cwd(), 'public', 'index.html'),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'public', 'index.html'),
+    path.resolve('public', 'index.html'),
+    path.resolve('./public/index.html')
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      return res.sendFile(p);
+    }
+  }
+  res.status(404).send(`index.html not found. CWD: ${process.cwd()}`);
 });
 
 // Запуск HTTP-сервера для локального запуска
