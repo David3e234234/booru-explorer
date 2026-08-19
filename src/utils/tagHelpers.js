@@ -154,8 +154,8 @@ export function classifyTags(rawTags = [], author = '') {
 export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'all') {
   let tags = (rawTags || '').trim();
 
-  // 1. Адаптация тегов со скобками
-  if (site !== 'danbooru' && tags) {
+  // 1. Адаптация тегов: для Rule34Video преобразуем скобки в поисковые фразы
+  if (site === 'rule34video' && tags) {
     tags = tags.replace(/([a-zA-Z0-9_-]+)_\(([^)]+)\)/g, '$1 $2');
     tags = tags.replace(/([a-zA-Z0-9_-]+)\s*\(([^)]+)\)/g, '$1 $2');
     tags = tags.replace(/[()]/g, '');

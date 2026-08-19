@@ -249,7 +249,12 @@ export async function fetchRule34(params, aiTagsList, settings) {
   if (settings && settings.enablePaheal === false) {
     return [];
   }
-  let pahealSearchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
+  let pahealSearchTags = tags
+    .replace(/([a-zA-Z0-9_-]+)_\([^)]+\)/g, '$1')
+    .replace(/([a-zA-Z0-9_-]+)\s*\([^)]+\)/g, '$1')
+    .replace(/[()]/g, '')
+    .trim();
+
   const fetchPahealLimit = category === 'popular' ? Math.max(limit, 70) : limit;
   if (category === 'top') {
     pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
