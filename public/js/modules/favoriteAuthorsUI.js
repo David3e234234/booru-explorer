@@ -112,6 +112,12 @@ async function loadAuthorPostsForCover(author, site) {
   }
 }
 
+function isVideoUrl(url) {
+  if (!url) return false;
+  const clean = url.split('?')[0].toLowerCase();
+  return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.mkv') || clean.endsWith('.avi');
+}
+
 function renderCoverPickerPosts(posts, author, site) {
   const grid = document.getElementById('coverPickerGrid');
   if (!grid) return;
@@ -121,19 +127,32 @@ function renderCoverPickerPosts(posts, author, site) {
   const shouldUseThumbProxy = state.settings?.proxyThumbnails !== false;
 
   posts.forEach(post => {
-    const rawPreview = post.previewUrl || post.sampleUrl || post.fileUrl || '';
-    if (!rawPreview) return;
+    let displayThumb = '';
+    const hasStaticPreview = post.previewUrl && !isVideoUrl(post.previewUrl);
+    const videoTarget = post.sampleUrl || post.fileUrl || (isVideoUrl(post.previewUrl) ? post.previewUrl : '');
 
-    const displayThumb = rawPreview.startsWith('/api/') ? rawPreview : (shouldUseThumbProxy ? getProxiedUrl(rawPreview) : rawPreview);
-    const isCurrent = author.previewUrl && (author.previewUrl === post.previewUrl || author.previewUrl === post.sampleUrl || author.previewUrl === rawPreview);
+    if (hasStaticPreview) {
+      displayThumb = post.previewUrl;
+    } else if (videoTarget) {
+      displayThumb = `/api/video-thumbnail?url=${encodeURIComponent(videoTarget)}&quality=medium`;
+    } else {
+      displayThumb = post.previewUrl || post.sampleUrl || post.fileUrl || '';
+    }
+
+    if (!displayThumb) return;
+
+    const shouldUseProxy = (post.site === 'danbooru' || displayThumb.includes('donmai.us')) ? true : shouldUseThumbProxy;
+    const finalThumbUrl = displayThumb.startsWith('/api/') ? displayThumb : (shouldUseProxy ? getProxiedUrl(displayThumb) : displayThumb);
+
+    const isCurrent = author.previewUrl && (author.previewUrl === post.previewUrl || author.previewUrl === post.sampleUrl || author.previewUrl === finalThumbUrl);
 
     const item = document.createElement('div');
     item.className = `cover-picker-item ${isCurrent ? 'active' : ''}`;
-    item.title = 'Сделать этот арт обложкой автора';
+    item.title = post.isVideo ? 'Сделать видеопревью обложкой автора' : 'Сделать этот арт обложкой автора';
 
     item.innerHTML = `
-      <img class="cover-picker-thumb" src="${displayThumb}" alt="${post.id}" loading="lazy" decoding="async">
-      <div class="cover-picker-overlay">Сделать обложкой</div>
+      <img class="cover-picker-thumb" src="${finalThumbUrl}" alt="" loading="lazy" decoding="async">
+      <div class="cover-picker-overlay">${post.isVideo ? 'Видеообложка' : 'Сделать обложкой'}</div>
       ${isCurrent ? `<span class="cover-picker-badge-current">Текущая</span>` : ''}
     `;
 
@@ -151,7 +170,11 @@ function renderCoverPickerPosts(posts, author, site) {
 async function handleSelectAuthorCover(author, post, site) {
   if (!author || !post) return;
 
-  const chosenUrl = post.previewUrl || post.sampleUrl || post.fileUrl || '';
+  const isVideo = post.isVideo || isVideoUrl(post.fileUrl) || isVideoUrl(post.sampleUrl) || isVideoUrl(post.previewUrl);
+  const staticPreview = (!isVideoUrl(post.previewUrl) && post.previewUrl) || '';
+  const videoTarget = post.sampleUrl || post.fileUrl || post.previewUrl || '';
+  
+  const chosenUrl = staticPreview || (isVideo ? `/api/video-thumbnail?url=${encodeURIComponent(videoTarget)}&quality=medium` : (post.sampleUrl || post.fileUrl || ''));
   const sampleUrl = post.sampleUrl || '';
   const fileUrl = post.fileUrl || '';
   const thumb180 = post.thumb180 || '';

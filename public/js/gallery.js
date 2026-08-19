@@ -729,57 +729,66 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     galleryGrid.appendChild(fragment);
   }
 
+  function isVideoUrl(url) {
+    if (!url) return false;
+    const clean = url.split('?')[0].toLowerCase();
+    return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.mkv') || clean.endsWith('.avi');
+  }
+
   function getAuthorPreviewByQuality(author) {
     if (!author) return '';
     const quality = state.settings?.previewQuality || 'medium';
 
-    // 1. Прямые поля разрешений, если сохранены
+    // 1. Ищем подходящую статичную ссылку в соответствии с выбранным качеством
+    let candidate = '';
+
     if (quality === 'low') {
-      if (author.thumb180) return author.thumb180;
-      if (author.previewUrl) return author.previewUrl;
+      candidate = (!isVideoUrl(author.thumb180) && author.thumb180) ||
+                  (!isVideoUrl(author.previewUrl) && author.previewUrl) ||
+                  (!isVideoUrl(author.sampleUrl) && author.sampleUrl) ||
+                  (!isVideoUrl(author.fileUrl) && author.fileUrl) || '';
     } else if (quality === 'medium') {
-      if (author.thumb360) return author.thumb360;
-      if (author.sampleUrl) return author.sampleUrl;
-      if (author.previewUrl) return author.previewUrl;
+      candidate = (!isVideoUrl(author.thumb360) && author.thumb360) ||
+                  (!isVideoUrl(author.sampleUrl) && author.sampleUrl) ||
+                  (!isVideoUrl(author.previewUrl) && author.previewUrl) ||
+                  (!isVideoUrl(author.fileUrl) && author.fileUrl) || '';
     } else if (quality === 'high') {
-      if (author.thumb720) return author.thumb720;
-      if (author.sampleUrl) return author.sampleUrl;
-      if (author.fileUrl) return author.fileUrl;
-      if (author.previewUrl) return author.previewUrl;
+      candidate = (!isVideoUrl(author.thumb720) && author.thumb720) ||
+                  (!isVideoUrl(author.sampleUrl) && author.sampleUrl) ||
+                  (!isVideoUrl(author.fileUrl) && author.fileUrl) ||
+                  (!isVideoUrl(author.previewUrl) && author.previewUrl) || '';
     } else if (quality === 'original') {
-      if (author.fileUrl) return author.fileUrl;
-      if (author.sampleUrl) return author.sampleUrl;
-      if (author.thumbOriginal) return author.thumbOriginal;
-      if (author.previewUrl) return author.previewUrl;
+      candidate = (!isVideoUrl(author.fileUrl) && author.fileUrl) ||
+                  (!isVideoUrl(author.sampleUrl) && author.sampleUrl) ||
+                  (!isVideoUrl(author.thumbOriginal) && author.thumbOriginal) ||
+                  (!isVideoUrl(author.previewUrl) && author.previewUrl) || '';
     }
 
-    const raw = author.previewUrl || author.sampleUrl || author.fileUrl || '';
-    if (!raw) return '';
+    // 2. Если все прямые ссылки пустые или видео, проверяем raw previewUrl
+    if (!candidate) {
+      const raw = author.previewUrl || author.sampleUrl || author.fileUrl || '';
+      if (!raw) return '';
 
-    // 2. Адаптивное преобразование для Danbooru CDN
-    if (raw.includes('donmai.us') || (raw.includes('danbooru') && raw.includes('/180x180/'))) {
-      if (quality === 'low') return raw.replace(/\/(360x360|720x720|original|sample)\//g, '/180x180/');
-      if (quality === 'medium') return raw.replace(/\/(180x180|720x720|original)\//g, '/360x360/');
-      if (quality === 'high') return raw.replace(/\/(180x180|360x360)\//g, '/720x720/');
-      if (quality === 'original') return raw.replace(/\/(180x180|360x360|720x720)\//g, '/original/');
-    }
-
-    // Moebooru / Yande.re / Konachan
-    if (raw.includes('yande.re') || raw.includes('konachan')) {
-      if (quality === 'low') return raw;
-      if (quality === 'medium' || quality === 'high' || quality === 'original') {
-        if (author.sampleUrl) return author.sampleUrl;
-        if (author.fileUrl) return author.fileUrl;
+      if (isVideoUrl(raw) || raw.includes('/api/transcode') || raw.includes('.mp4') || raw.includes('.webm')) {
+        return `/api/video-thumbnail?url=${encodeURIComponent(raw)}&quality=${quality}`;
       }
+      candidate = raw;
     }
 
-    // Gelbooru / Safebooru / Rule34
-    if (quality === 'high' || quality === 'original') {
-      if (author.sampleUrl) return author.sampleUrl;
-      if (author.fileUrl) return author.fileUrl;
+    // Если candidate это видео ссылка, транскодируем в /api/video-thumbnail
+    if (isVideoUrl(candidate)) {
+      return `/api/video-thumbnail?url=${encodeURIComponent(candidate)}&quality=${quality}`;
     }
 
-    return raw;
+    // 3. Адаптивное преобразование для Danbooru CDN
+    if (candidate.includes('donmai.us') || (candidate.includes('danbooru') && candidate.includes('/180x180/'))) {
+      if (quality === 'low') return candidate.replace(/\/(360x360|720x720|original|sample)\//g, '/180x180/');
+      if (quality === 'medium') return candidate.replace(/\/(180x180|720x720|original)\//g, '/360x360/');
+      if (quality === 'high') return candidate.replace(/\/(180x180|360x360)\//g, '/720x720/');
+      if (quality === 'original') return candidate.replace(/\/(180x180|360x360|720x720)\//g, '/original/');
+    }
+
+    return candidate;
   }
 
   function createAuthorCard(author, { onExplore, onDelete, onChangePreview } = {}) {
@@ -803,7 +812,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     card.innerHTML = `
       <div class="author-card-cover">
-        ${preview ? `<img class="author-cover-img" src="${preview}" alt="${author.displayName || author.name}" loading="lazy" decoding="async">` : `<div class="author-cover-placeholder"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>`}
+        ${preview ? `<img class="author-cover-img" src="${preview}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'; this.parentElement.querySelector('.author-cover-placeholder')?.removeAttribute('style');">` : ''}
+        <div class="author-cover-placeholder" style="${preview ? 'display: none;' : ''}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>
         <div class="author-card-gradient"></div>
         <span class="author-card-site-badge">${siteName}</span>
         <button type="button" class="btn-author-change-cover" title="Сменить обложку автора">

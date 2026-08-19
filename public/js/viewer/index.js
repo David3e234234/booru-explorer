@@ -5,6 +5,12 @@ import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
 import { renderSidebarTags, formatRating } from './viewerSidebar.js';
 
+function isVideoUrl(url) {
+  if (!url) return false;
+  const clean = url.split('?')[0].toLowerCase();
+  return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.mkv') || clean.endsWith('.avi');
+}
+
 export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect }) {
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
@@ -161,7 +167,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         btnSetAuthorCoverSidebar.onclick = async (e) => {
           e.stopPropagation();
           haptic(15);
-          const chosenUrl = currentPost.previewUrl || currentPost.sampleUrl || currentPost.fileUrl;
+          const isVideo = currentPost.isVideo || isVideoUrl(currentPost.fileUrl) || isVideoUrl(currentPost.sampleUrl) || isVideoUrl(currentPost.previewUrl);
+          const staticPreview = (!isVideoUrl(currentPost.previewUrl) && currentPost.previewUrl) || '';
+          const videoTarget = currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl || '';
+          const chosenUrl = staticPreview || (isVideo ? `/api/video-thumbnail?url=${encodeURIComponent(videoTarget)}&quality=medium` : (currentPost.sampleUrl || currentPost.fileUrl || ''));
           if (!chosenUrl) return;
 
           const sampleUrl = currentPost.sampleUrl || '';
