@@ -15,7 +15,13 @@ export async function fetchRule34Video(params, aiTagsList) {
     rawTags = 'big tits';
   }
 
-  const cleanQuery = rawTags.replace(/[_+\s]+/g, '-').replace(/-+/g, '-').toLowerCase();
+  let accountQuery = '';
+  const accountMatch = rawTags.match(/^(?:channel|user|account|artist|author):\s*([a-zA-Z0-9_\-]+)/i);
+  if (accountMatch) {
+    accountQuery = accountMatch[1].replace(/[_+\s]+/g, '-').replace(/-+/g, '-').toLowerCase();
+  }
+
+  const cleanQuery = rawTags.replace(/^(?:channel|user|account|artist|author):\s*/i, '').replace(/[_+\s]+/g, '-').replace(/-+/g, '-').toLowerCase();
   
   const pagesPerBatch = 4;
   const startFrom = (page - 1) * pagesPerBatch + 1;
@@ -26,7 +32,10 @@ export async function fetchRule34Video(params, aiTagsList) {
 
   const fetchPromises = pageNumbers.map(async (p) => {
     let url = '';
-    if (cleanQuery) {
+    if (accountQuery) {
+      // Поиск напрямую по каналу/аккаунту на Rule34Video
+      url = `https://rule34video.com/channels/${encodeURIComponent(accountQuery)}/?mode=async&function=get_block&block_id=custom_list_videos_videos_list&from=${p}`;
+    } else if (cleanQuery) {
       let sortByParam = '';
       if (category === 'top') {
         sortByParam = '&sort_by=rating';
@@ -76,19 +85,41 @@ export async function fetchRule34Video(params, aiTagsList) {
         const thumb = thumbMatch ? thumbMatch[1] : '';
         const previewMp4 = previewMatch ? previewMatch[1] : '';
 
+        // 1. Извлечение автора из аккаунта / канала / загрузчика в HTML блока
         let author = '';
-        const authorBracketMatch = title.match(/^\[([^\]]+)\]/);
-        const authorPipeMatch = title.match(/\|\s*([a-zA-Z0-9_\- ]+)$/);
-        const authorByMatch = title.match(/by\s+([a-zA-Z0-9_\- ]+)/i);
+        const channelMatch = block.match(/href="[^"]*\/channels\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
+        const memberMatch = block.match(/href="[^"]*\/members\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
+        const uploaderMatch = block.match(/class="[^"]*(?:uploader|author|user|channel-name|item-user)[^"]*"[^>]*>([^<]+)<\/[^>]+>/i);
 
-        if (authorPipeMatch) {
-          author = authorPipeMatch[1].trim();
-        } else if (authorByMatch) {
-          author = authorByMatch[1].trim();
-        } else if (authorBracketMatch) {
-          const bracketTag = authorBracketMatch[1].trim();
-          if (!['pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd'].includes(bracketTag.toLowerCase())) {
-            author = bracketTag;
+        if (channelMatch && channelMatch[2]) {
+          author = channelMatch[2].trim();
+        } else if (memberMatch && memberMatch[2]) {
+          author = memberMatch[2].trim();
+        } else if (uploaderMatch && uploaderMatch[1]) {
+          author = uploaderMatch[1].trim();
+        }
+
+        // 2. Если в блоке нет ссылки на аккаунт, fallback на паттерны из названия
+        if (!author) {
+          const authorPipeMatch = title.match(/\|\s*([a-zA-Z0-9_\- ]+)$/);
+          const authorByMatch = title.match(/by\s+([a-zA-Z0-9_\- ]+)/i);
+          const authorParenMatch = title.match(/\(([a-zA-Z0-9_][a-zA-Z0-9_\- ]{1,40})\)\s*$/);
+          const authorBracketMatch = title.match(/^\[([^\]]+)\]/);
+
+          if (authorPipeMatch) {
+            author = authorPipeMatch[1].trim();
+          } else if (authorByMatch) {
+            author = authorByMatch[1].trim();
+          } else if (authorParenMatch) {
+            const parenTag = authorParenMatch[1].trim();
+            if (!['pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd', 'animated', 'loop', 'audio', 'voiced', 'preview', 'commission', 'no ai'].includes(parenTag.toLowerCase())) {
+              author = parenTag;
+            }
+          } else if (authorBracketMatch) {
+            const bracketTag = authorBracketMatch[1].trim();
+            if (!['pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd'].includes(bracketTag.toLowerCase())) {
+              author = bracketTag;
+            }
           }
         }
 
@@ -179,6 +210,10 @@ export async function fetchRule34Video(params, aiTagsList) {
           post.fileUrl = resolved.fullVideoUrl;
           post.hasSound = true;
         }
+        // Всегда обновляем автора из аккаунта загрузчика, если получили его со страницы видео
+        if (resolved && resolved.uploaderName) {
+          post.author = resolved.uploaderName;
+        }
       } catch {}
     }));
   }
@@ -250,6 +285,16 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
       }
     }
 
+    // Парсим аккаунт загрузчика (ссылка вида /members/ID/ или /channels/SLUG/)
+    let uploaderName = '';
+    const memberMatch = html.match(/href="\/members\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
+    const channelMatch = html.match(/href="\/channels\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
+    if (memberMatch) {
+      uploaderName = memberMatch[2].trim();
+    } else if (channelMatch) {
+      uploaderName = channelMatch[2].trim();
+    }
+
     if (fullVideoUrl) {
       if (fullVideoUrl.startsWith('//')) {
         fullVideoUrl = 'https:' + fullVideoUrl;
@@ -261,8 +306,15 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
         success: true,
         fullVideoUrl,
         quality,
-        hasSound: true
+        hasSound: true,
+        uploaderName
       };
+      resolvedVideoCache.set(cacheKey, result);
+      return result;
+    }
+    // Если видео не нашли, но есть аккаунт — вернуть хотя бы его
+    if (uploaderName) {
+      const result = { success: false, uploaderName };
       resolvedVideoCache.set(cacheKey, result);
       return result;
     }

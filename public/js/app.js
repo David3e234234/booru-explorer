@@ -182,7 +182,10 @@ function handleExploreAuthor(author) {
     renderSitesBar({ onSelectSite: selectSite });
   }
   state.searchTags = [];
-  addSearchTag(author.name);
+  const authorTagName = (author.site === 'rule34video' && !author.name.startsWith('channel:') && !author.name.startsWith('user:'))
+    ? `channel:${author.name}`
+    : author.name;
+  addSearchTag(authorTagName);
   if (autocompleteInstance) {
     autocompleteInstance.renderTagsChips();
   }

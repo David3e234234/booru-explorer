@@ -254,8 +254,8 @@ export function classifyTags(rawTags = [], author = '') {
 
   for (const tag of tags) {
     const t = tag.toLowerCase();
-    if (t.startsWith('artist:') || t.endsWith('_(artist)') || t.endsWith('_(creator)') || t.startsWith('by_') || t.endsWith('_(circle)') || t.endsWith('_(studio)')) {
-      const clean = tag.replace(/^(artist|creator|author|draw):/, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, '');
+    if (t.startsWith('artist:') || t.startsWith('channel:') || t.startsWith('uploader:') || t.endsWith('_(artist)') || t.endsWith('_(creator)') || t.startsWith('by_') || t.endsWith('_(circle)') || t.endsWith('_(studio)')) {
+      const clean = tag.replace(/^(artist|channel|uploader|creator|author|draw):/, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, '');
       if (!artist.includes(clean)) artist.push(clean);
     } else if (t.startsWith('character:') || t.endsWith('_(character)') || t.endsWith('_(cosplay)')) {
       const clean = tag.replace(/^character:/, '').replace(/_?\((character|cosplay)\)$/i, '');

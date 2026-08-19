@@ -27,6 +27,7 @@ export const state = {
   page: 1,
   limit: 100,
   posts: [],
+  displayedPosts: [],
   favorites: [],
   favoriteIds: new Set(),
   likes: [],

@@ -55,9 +55,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let lastTapTime = 0;
 
   function openViewer(index) {
-    if (index < 0 || index >= state.posts.length) return;
+    const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+    if (index < 0 || index >= list.length) return;
     state.currentViewerIndex = index;
-    currentPost = state.posts[index];
+    currentPost = list[index];
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) viewerContent.classList.remove('ui-hidden');
     renderViewerPost();
@@ -125,7 +126,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
     const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
     if (authorName && authorName.trim()) {
-      const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      const cleanAuthorTag = currentPost.site === 'rule34video'
+        ? `channel:${authorName.split(',')[0].trim()}`
+        : authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
       const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
 
       if (viewerAuthorBadge && viewerAuthorText) {
@@ -465,6 +468,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   if (btnPrev) {
     btnPrev.addEventListener('click', () => {
+      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
       if (state.currentViewerIndex > 0) {
         haptic(15);
         openViewer(state.currentViewerIndex - 1);
@@ -474,7 +478,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   if (btnNext) {
     btnNext.addEventListener('click', () => {
-      if (state.currentViewerIndex < state.posts.length - 1) {
+      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+      if (state.currentViewerIndex < list.length - 1) {
         haptic(15);
         openViewer(state.currentViewerIndex + 1);
       }

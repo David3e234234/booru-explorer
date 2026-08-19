@@ -24,10 +24,10 @@ export async function fetchRule34(params, aiTagsList, settings) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
   } else if (category === 'popular') {
-    // Тренды: горячее и залайканное за последние 30 дней
-    if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('date:')) {
-      const recentDate = getRecentDateFilter(30);
-      searchTags = searchTags ? `${searchTags} ${recentDate} sort:score:desc` : `${recentDate} sort:score:desc`;
+    // Тренды / Популярное за последнее время:
+    // Запрашиваем свежие посты с высоким скором (score:>=5), а затем локально сортируем их по популярности
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('score:')) {
+      searchTags = searchTags ? `${searchTags} score:>=5` : 'score:>=5';
     }
   } else if (category === 'recommended') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
@@ -65,7 +65,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         if (!text.includes('Missing authentication')) {
           const data = safeJsonParse(text, null);
           if (Array.isArray(data) && data.length > 0) {
-            return data.map(item => {
+            const mappedPosts = data.map(item => {
               const rawTags = (item.tags || '').split(' ').filter(Boolean);
               let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
               const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
@@ -105,6 +105,10 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 isAi: checkIsAi(rawTags, aiTagsList)
               };
             });
+            if (category === 'popular' && mappedPosts.length > 0) {
+              mappedPosts.sort((a, b) => (b.score || 0) - (a.score || 0));
+            }
+            return mappedPosts;
           }
         }
       }
@@ -306,6 +310,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
       }
 
       if (posts.length > 0) {
+        if (category === 'popular') {
+          posts.sort((a, b) => (b.score || 0) - (a.score || 0));
+        }
         return posts.slice(0, limit);
       }
     }
@@ -327,12 +334,18 @@ export async function fetchRule34(params, aiTagsList, settings) {
     .replace(/\bsort:random\b/gi, 'order:random')
     .replace(/\bsort:id:desc\b/gi, 'order:id_desc')
     .replace(/\bsort:updated:desc\b/gi, '')
+    .replace(/\bscore:>=?\d+\b/gi, '')
     .trim();
 
   const fetchPahealLimit = (category === 'popular' || category === 'recommended') ? Math.max(limit, 70) : limit;
-  if (category === 'top' || category === 'popular' || category === 'recommended') {
+  if (category === 'top' || category === 'recommended') {
     if (!pahealSearchTags.includes('order:')) {
       pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
+    }
+  } else if (category === 'popular') {
+    // Paheal: запрашиваем свежие посты и сортируем локально по score
+    if (!pahealSearchTags.includes('order:')) {
+      pahealSearchTags = pahealSearchTags ? `order:id_desc ${pahealSearchTags}` : 'order:id_desc';
     }
   } else if (category === 'random') {
     if (!pahealSearchTags.includes('order:')) {

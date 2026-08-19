@@ -112,8 +112,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         const card = entry.target;
         const videoEl = card.querySelector('.hover-video-preview');
         if (!videoEl) return;
-        const postIdx = parseInt(card.dataset.index, 10);
-        const post = state.posts[postIdx];
+        const post = card._post || state.posts.find(p => p.id === card.dataset.postId) || (state.displayedPosts || state.posts)[parseInt(card.dataset.index, 10)];
         if (!post || !post.isVideo) return;
 
         if (entry.isIntersecting) {
@@ -150,8 +149,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         if (entry.isIntersecting) {
           const card = entry.target;
           const videoEl = card.querySelector('.hover-video-preview');
-          const postIdx = parseInt(card.dataset.index, 10);
-          const post = state.posts[postIdx];
+          const post = card._post || state.posts.find(p => p.id === card.dataset.postId) || (state.displayedPosts || state.posts)[parseInt(card.dataset.index, 10)];
           if (videoEl && post && post.isVideo && !post.duration) {
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget && !videoEl.src) {
@@ -212,6 +210,13 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       btnLoadMore.classList.remove('loading');
     }
 
+    // При активной сортировке и дозагрузке (append=true) необходимо полностью
+    // перерендерить список: новые посты вставляются в середину отсортированного
+    // массива, поэтому нельзя просто добавить их в конец DOM
+    if (append && state.videoDurationSort && state.videoDurationSort !== 'none') {
+      append = false;
+    }
+
     if (!append) {
       galleryGrid.innerHTML = '';
     }
@@ -227,6 +232,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
 
     const postsToDisplay = getProcessedPosts();
+    state.displayedPosts = postsToDisplay;
 
     if (postsToDisplay.length === 0) {
       emptyState.style.display = 'flex';
@@ -275,6 +281,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const card = document.createElement('div');
     card.className = 'media-card';
     card.dataset.index = index;
+    card.dataset.postId = post.id;
+    card._post = post;
 
     const isVideoExt = (url) => {
       if (!url) return false;
@@ -503,7 +511,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       if (authorBadgeEl) {
         e.stopPropagation();
         const rawA = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
-        const cleanTag = rawA.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/\s+/g, '_');
+        let cleanTag = rawA.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
+        if (post.site === 'rule34video') {
+          cleanTag = `channel:${cleanTag}`;
+        } else {
+          cleanTag = cleanTag.replace(/\s+/g, '_');
+        }
         if (cleanTag && onTagSelect) {
           onTagSelect(cleanTag);
           return;
