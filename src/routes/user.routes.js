@@ -1,7 +1,8 @@
 import express from 'express';
 import fs from 'fs';
-import { spawn } from 'child_process';
-import { THUMBS_DIR, VIDEOS_DIR, PORT } from '../config/constants.js';
+import path from 'path';
+import { spawn, exec } from 'child_process';
+import { THUMBS_DIR, VIDEOS_DIR, PORT, ROOT_DIR } from '../config/constants.js';
 import { 
   getSettings, 
   updateSettings, 
@@ -22,6 +23,21 @@ import { getLocalIpAddress } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 const router = express.Router();
+
+// GET & POST /api/git-pull (Deploy hook для Alwaysdata / серверов)
+router.all('/git-pull', (req, res) => {
+  exec('git pull origin main', { cwd: ROOT_DIR }, (err, stdout, stderr) => {
+    if (err) {
+      return res.status(500).json({ success: false, error: err.message, stderr });
+    }
+    try {
+      const restartFile = path.join(ROOT_DIR, 'tmp', 'restart.txt');
+      if (!fs.existsSync(path.dirname(restartFile))) fs.mkdirSync(path.dirname(restartFile), { recursive: true });
+      fs.writeFileSync(restartFile, 'reloaded at ' + new Date().toISOString());
+    } catch {}
+    res.json({ success: true, stdout, stderr, time: new Date().toISOString() });
+  });
+});
 
 // GET /api/settings
 router.get('/settings', (req, res) => {
