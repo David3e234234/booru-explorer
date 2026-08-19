@@ -697,6 +697,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     card.dataset.authorName = author.name;
 
     const siteObj = state.sites.find(s => s.id === author.site);
+    const siteName = siteObj ? siteObj.name : (author.site ? author.site.toUpperCase() : 'Danbooru');
     const shouldUseThumbProxy = state.settings?.proxyThumbnails !== false;
     const preview = author.previewUrl ? (author.previewUrl.startsWith('/api/') ? author.previewUrl : (shouldUseThumbProxy ? getProxiedUrl(author.previewUrl) : author.previewUrl)) : '';
 
