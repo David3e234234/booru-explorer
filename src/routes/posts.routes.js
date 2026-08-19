@@ -54,9 +54,9 @@ router.get('/posts', async (req, res) => {
 
     // Проверка кэша в оперативной памяти (для всего кроме random)
     const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${excludeSites}`;
-    if (category !== 'random') {
+    if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
-      if (cached) {
+      if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
         return res.json(cached);
       }
     }

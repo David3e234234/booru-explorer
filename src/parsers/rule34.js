@@ -266,7 +266,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': 'https://rule34.paheal.net/'
       },
-      timeout: 6000
+      timeout: 15000
     });
     if (!pahealRes.ok) return [];
     const text = await pahealRes.text();
