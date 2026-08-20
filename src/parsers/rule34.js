@@ -186,22 +186,34 @@ export async function fetchRule34(params, aiTagsList, settings) {
         if (thumbMatch) {
           const dir = thumbMatch[1];
           const hash = thumbMatch[2];
-          const host = cleanThumb.includes('wimg.rule34.xxx') ? 'https://wimg.rule34.xxx' : (cleanThumb.includes('us.rule34.xxx') ? 'https://us.rule34.xxx' : 'https://rule34.xxx');
+          let imgHost = 'https://api-cdn.rule34.xxx';
+          let videoHost = 'https://api-cdn-mp4.rule34.xxx';
+          if (cleanThumb.includes('wimg.rule34.xxx')) {
+            imgHost = 'https://wimg.rule34.xxx';
+            videoHost = 'https://wimg.rule34.xxx';
+          } else if (cleanThumb.includes('us.rule34.xxx')) {
+            imgHost = 'https://us.rule34.xxx';
+            videoHost = 'https://us.rule34.xxx';
+          }
           if (isVideo) {
-            fileUrl = `${host}/images/${dir}/${hash}.mp4`;
+            fileUrl = `${videoHost}/images/${dir}/${hash}.mp4`;
             sampleUrl = fileUrl;
             fileExt = 'mp4';
           } else if (isGif) {
-            fileUrl = `${host}/images/${dir}/${hash}.gif`;
+            fileUrl = `${imgHost}/images/${dir}/${hash}.gif`;
             sampleUrl = fileUrl;
             fileExt = 'gif';
           } else {
-            fileUrl = `${host}/images/${dir}/${hash}.jpg`;
-            sampleUrl = `${host}/samples/${dir}/sample_${hash}.jpg`;
+            fileUrl = `${imgHost}/images/${dir}/${hash}.jpg`;
+            sampleUrl = `${imgHost}/samples/${dir}/sample_${hash}.jpg`;
           }
         } else {
           fileUrl = thumbUrl.replace('/thumbnails/', '/images/').replace('thumbnail_', '').split('?')[0];
           sampleUrl = thumbUrl.replace('/thumbnails/', '/samples/').replace('thumbnail_', 'sample_').split('?')[0];
+          if (isVideo && fileUrl.includes('api-cdn.rule34.xxx')) {
+            fileUrl = fileUrl.replace('api-cdn.rule34.xxx', 'api-cdn-mp4.rule34.xxx');
+            sampleUrl = fileUrl;
+          }
         }
 
         const source = `https://rule34.xxx/index.php?page=post&s=view&id=${id}`;
@@ -266,16 +278,24 @@ export async function fetchRule34(params, aiTagsList, settings) {
           if (thumbMatch) {
             const dir = thumbMatch[1];
             const hash = thumbMatch[2];
-            const host = cleanThumb.includes('wimg.rule34.xxx') ? 'https://wimg.rule34.xxx' : (cleanThumb.includes('us.rule34.xxx') ? 'https://us.rule34.xxx' : 'https://rule34.xxx');
+            let imgHost = 'https://api-cdn.rule34.xxx';
+            let videoHost = 'https://api-cdn-mp4.rule34.xxx';
+            if (cleanThumb.includes('wimg.rule34.xxx')) {
+              imgHost = 'https://wimg.rule34.xxx';
+              videoHost = 'https://wimg.rule34.xxx';
+            } else if (cleanThumb.includes('us.rule34.xxx')) {
+              imgHost = 'https://us.rule34.xxx';
+              videoHost = 'https://us.rule34.xxx';
+            }
             if (isVideo) {
-              fileUrl = `${host}/images/${dir}/${hash}.mp4`;
+              fileUrl = `${videoHost}/images/${dir}/${hash}.mp4`;
               sampleUrl = fileUrl;
             } else if (isGif) {
-              fileUrl = `${host}/images/${dir}/${hash}.gif`;
+              fileUrl = `${imgHost}/images/${dir}/${hash}.gif`;
               sampleUrl = fileUrl;
             } else {
-              fileUrl = `${host}/images/${dir}/${hash}.jpg`;
-              sampleUrl = `${host}/samples/${dir}/sample_${hash}.jpg`;
+              fileUrl = `${imgHost}/images/${dir}/${hash}.jpg`;
+              sampleUrl = `${imgHost}/samples/${dir}/sample_${hash}.jpg`;
             }
           }
 

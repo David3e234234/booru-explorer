@@ -326,4 +326,4 @@ export const SITES = {
 export const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 BooruExplorer/3.0';
 export const BROWSER_USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 export const BOORU_USER_AGENT = 'BooruExplorer/3.0 (by booruexplorer)';
-export const SOUND_KEYWORDS = ['sound', 'audio', 'has_audio', 'with_sound', 'has_sound', 'music', 'voiced', 'voice', 'sound_warning', 'audible'];
+export const SOUND_KEYWORDS = ['sound', 'audio', 'has_audio', 'with_sound', 'has_sound', 'music', 'voiced', 'voice', 'sound_warning', 'audible', 'sound_effects', 'voice_acting', 'dialogue', 'asmr', 'dubbed', 'soundtrack', 'sound_only'];

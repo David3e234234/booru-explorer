@@ -90,20 +90,36 @@ export async function handleProxyRequest(req, res) {
       signal: controller.signal
     });
 
-    // Умный fallback для расширений файлов (mp4 <-> webm, jpg <-> png) при 404
+    // Умный fallback для альтернативных CDN-хостов и расширений файлов (mp4 <-> webm, jpg <-> png) при 404
     if (response.status === 404 && (targetUrl.includes('rule34.xxx') || targetUrl.includes('gelbooru.com') || targetUrl.includes('paheal.net'))) {
-      let alternateUrl = null;
-      if (targetUrl.endsWith('.mp4')) alternateUrl = targetUrl.replace(/\.mp4$/, '.webm');
-      else if (targetUrl.endsWith('.webm')) alternateUrl = targetUrl.replace(/\.webm$/, '.mp4');
-      else if (targetUrl.endsWith('.jpg')) alternateUrl = targetUrl.replace(/\.jpg$/, '.png');
-      else if (targetUrl.endsWith('.png')) alternateUrl = targetUrl.replace(/\.png$/, '.jpg');
+      const candidates = [];
+      
+      // 1. Проверка альтернативных расширений
+      if (targetUrl.endsWith('.mp4')) candidates.push(targetUrl.replace(/\.mp4$/, '.webm'));
+      else if (targetUrl.endsWith('.webm')) candidates.push(targetUrl.replace(/\.webm$/, '.mp4'));
+      else if (targetUrl.endsWith('.jpg')) candidates.push(targetUrl.replace(/\.jpg$/, '.png'));
+      else if (targetUrl.endsWith('.png')) candidates.push(targetUrl.replace(/\.png$/, '.jpg'));
 
-      if (alternateUrl) {
+      // 2. Для Rule34.xxx - перебор альтернативных CDN доменов
+      if (targetUrl.includes('rule34.xxx')) {
+        const cdnHosts = ['https://api-cdn-mp4.rule34.xxx', 'https://wimg.rule34.xxx', 'https://us.rule34.xxx', 'https://api-cdn.rule34.xxx'];
+        for (const host of cdnHosts) {
+          const replaced = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+\.rule34\.xxx/i, host);
+          if (replaced !== targetUrl && !candidates.includes(replaced)) {
+            candidates.push(replaced);
+            if (replaced.endsWith('.mp4')) candidates.push(replaced.replace(/\.mp4$/, '.webm'));
+            else if (replaced.endsWith('.webm')) candidates.push(replaced.replace(/\.webm$/, '.mp4'));
+          }
+        }
+      }
+
+      for (const altUrl of candidates) {
         try {
-          const altResp = await fetch(alternateUrl, { headers, redirect: 'follow', signal: controller.signal });
+          const altResp = await fetch(altUrl, { headers, redirect: 'follow', signal: controller.signal });
           if (altResp.ok || altResp.status === 206) {
             response = altResp;
-            targetUrl = alternateUrl;
+            targetUrl = altUrl;
+            break;
           }
         } catch {}
       }

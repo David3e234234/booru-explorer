@@ -1,5 +1,3 @@
-
-
 export function makeBannerDraggable(bannerEl) {
   if (!bannerEl) return;
   let isDraggingBanner = false;
@@ -193,6 +191,14 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   video.playsInline = true;
   video.preload = shouldAutoplay ? 'auto' : 'metadata';
 
+  // Восстановление сохраненного уровня громкости и mute-состояния
+  try {
+    const savedVolume = parseFloat(localStorage.getItem('booru_video_volume') ?? '1');
+    const savedMuted = localStorage.getItem('booru_video_muted') === 'true';
+    video.volume = isNaN(savedVolume) ? 1 : Math.max(0, Math.min(1, savedVolume));
+    video.muted = savedMuted;
+  } catch {}
+
   const posterQuality = state.settings?.previewQuality || 'high';
   const videoTarget = currentPost.fileUrl || currentPost.sampleUrl || '';
   if (posterQuality === 'high' || posterQuality === 'original') {
@@ -204,6 +210,52 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   if (currentPost.width && currentPost.height) {
     video.style.aspectRatio = `${currentPost.width} / ${currentPost.height}`;
   }
+
+  // Кнопка включения звука при ограничении браузерной Autoplay Policy
+  const unmuteBtn = document.createElement('button');
+  unmuteBtn.className = 'btn-video-unmute';
+  unmuteBtn.style.display = 'none';
+  unmuteBtn.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+    <span>Включить звук</span>
+  `;
+  unmuteBtn.title = 'Включить звук (кликните для снятия ограничения браузера)';
+
+  unmuteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    video.muted = false;
+    if (video.volume === 0) video.volume = 1;
+    video.play().catch(() => {});
+    unmuteBtn.style.display = 'none';
+  });
+
+  video.addEventListener('volumechange', () => {
+    try {
+      localStorage.setItem('booru_video_volume', String(video.volume));
+      localStorage.setItem('booru_video_muted', String(video.muted));
+      if (!video.muted && video.volume > 0) {
+        unmuteBtn.style.display = 'none';
+      }
+    } catch {}
+  });
+
+  const safePlay = () => {
+    if (!shouldAutoplay) return;
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        // Если браузер ограничил автоплей из-за звука (NotAllowedError)
+        if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+          console.warn('[Video Autoplay] Автоплей со звуком ограничен браузером, переход на muted fallback');
+          video.muted = true;
+          video.play().catch(() => {});
+          if (currentPost.hasSound !== false) {
+            unmuteBtn.style.display = 'inline-flex';
+          }
+        }
+      });
+    }
+  };
 
   const textEl = statusBanner.querySelector('.video-status-text');
   const spinEl = statusBanner.querySelector('.video-status-spinner');
@@ -264,12 +316,14 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         setProgress(pct, `Кэширование: ${mbText}${totalMbText}`, true);
       }
 
-      const blob = new Blob(chunks, { type: 'video/mp4' });
+      const contentType = res.headers.get('content-type') || (targetUrl.includes('.webm') ? 'video/webm' : 'video/mp4');
+      const cleanMime = contentType.split(';')[0].trim();
+      const blob = new Blob(chunks, { type: cleanMime });
       if (blobRef.current) URL.revokeObjectURL(blobRef.current);
       blobRef.current = URL.createObjectURL(blob);
 
       video.src = blobRef.current;
-      video.play().catch(() => {});
+      safePlay();
       setProgress(100, 'Закэшировано в память! ⚡', false);
       btnCache.textContent = '⚡ В памяти (OK)';
       setTimeout(hideStatus, 1200);
@@ -318,26 +372,56 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       video.src = blobRef.current;
 
       const mp4boxfile = window.MP4Box.createFile();
-      let sourceBuffer = null;
+      let videoSourceBuffer = null;
+      let audioSourceBuffer = null;
+      let videoTrackId = null;
+      let audioTrackId = null;
 
       await new Promise((resolve, reject) => {
         ms.addEventListener('sourceopen', () => resolve(), { once: true });
-        setTimeout(() => reject(new Error('MediaSource timeout')), 3000);
+        setTimeout(() => reject(new Error('MediaSource timeout')), 3500);
       });
 
       mp4boxfile.onReady = (info) => {
         try {
-          mp4boxfile.setSegmentOptions(info.tracks[0].id, null, { nbSamples: 100 });
-          const mime = `video/mp4; codecs="${info.mime.split('codecs="')[1]?.replace('"', '') || 'avc1.42E01E, mp4a.40.2'}"`;
-          if (MediaSource.isTypeSupported(mime)) {
-            sourceBuffer = ms.addSourceBuffer(mime);
-          } else {
-            sourceBuffer = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+          const videoTrack = info.tracks.find(t => t.video || t.type === 'video') || info.tracks[0];
+          const audioTrack = info.tracks.find(t => t.audio || t.type === 'audio');
+
+          if (videoTrack) {
+            videoTrackId = videoTrack.id;
+            mp4boxfile.setSegmentOptions(videoTrack.id, null, { nbSamples: 100 });
+            const codec = videoTrack.codec || 'avc1.42E01E';
+            const vMime = `video/mp4; codecs="${codec}"`;
+            if (MediaSource.isTypeSupported(vMime)) {
+              videoSourceBuffer = ms.addSourceBuffer(vMime);
+            } else {
+              videoSourceBuffer = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+            }
+            videoSourceBuffer.mode = 'segments';
           }
-          sourceBuffer.mode = 'segments';
+
+          if (audioTrack) {
+            audioTrackId = audioTrack.id;
+            mp4boxfile.setSegmentOptions(audioTrack.id, null, { nbSamples: 100 });
+            const aCodec = audioTrack.codec || 'mp4a.40.2';
+            const aMime = `audio/mp4; codecs="${aCodec}"`;
+            if (MediaSource.isTypeSupported(aMime)) {
+              audioSourceBuffer = ms.addSourceBuffer(aMime);
+            } else if (MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.2"')) {
+              audioSourceBuffer = ms.addSourceBuffer('audio/mp4; codecs="mp4a.40.2"');
+            }
+            if (audioSourceBuffer) audioSourceBuffer.mode = 'segments';
+          }
+
           const initSegs = mp4boxfile.initializeSegmentation();
-          if (initSegs && initSegs.length > 0 && initSegs[0].buffer) {
-            sourceBuffer.appendBuffer(initSegs[0].buffer);
+          if (Array.isArray(initSegs)) {
+            initSegs.forEach(seg => {
+              if (seg.id === videoTrackId && videoSourceBuffer && seg.buffer) {
+                try { videoSourceBuffer.appendBuffer(seg.buffer); } catch {}
+              } else if (seg.id === audioTrackId && audioSourceBuffer && seg.buffer) {
+                try { audioSourceBuffer.appendBuffer(seg.buffer); } catch {}
+              }
+            });
           }
         } catch (e) {
           console.warn('[MSE Init Warning]', e);
@@ -345,12 +429,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       };
 
       mp4boxfile.onSegment = (id, user, buffer) => {
-        if (sourceBuffer && !sourceBuffer.updating && ms.readyState === 'open') {
-          try {
-            sourceBuffer.appendBuffer(buffer);
-          } catch (e) {
-            console.warn('[MSE Append Warning]', e);
-          }
+        if (id === videoTrackId && videoSourceBuffer && !videoSourceBuffer.updating && ms.readyState === 'open') {
+          try { videoSourceBuffer.appendBuffer(buffer); } catch {}
+        } else if (id === audioTrackId && audioSourceBuffer && !audioSourceBuffer.updating && ms.readyState === 'open') {
+          try { audioSourceBuffer.appendBuffer(buffer); } catch {}
         }
       };
 
@@ -382,7 +464,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         btnTranscode.textContent = '🚀 JS Ремукс (OK)';
       }
       setProgress(100, '🚀 JS Ремукс готов!', false);
-      video.play().catch(() => {});
+      safePlay();
       setTimeout(hideStatus, 1200);
     } catch (err) {
       if (err.name === 'AbortError') return;
@@ -393,9 +475,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         btnTranscode.classList.add('active');
         btnTranscode.textContent = '🔄 FFmpeg фикс';
       }
-      setProgress(0, '🔄 Аппаратный кодек не подошел. Переход на FFmpeg (H.264)...', true);
+      setProgress(0, '🔄 Аппаратный кодек не подошел. Переход на FFmpeg (H.264/AAC)...', true);
       video.src = transcodeMedia;
-      video.play().catch(() => {});
+      safePlay();
     }
   };
 
@@ -406,7 +488,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       if (switchBtn) switchBtn.textContent = '⚡ Прямой CDN';
       setProgress(0, 'Подключение через прокси...', true);
       video.src = proxyMedia;
-      video.play().catch(() => {});
+      safePlay();
     } else if (currentSource === 'proxy') {
       if (state.settings?.enableJsDemuxing !== false) {
         startClientRemux(proxyMedia);
@@ -416,9 +498,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
           btnTranscode.classList.add('active');
           btnTranscode.textContent = '🔄 FFmpeg фикс';
         }
-        setProgress(0, '🔄 Перекодирование через серверный FFmpeg (H.264)...', true);
+        setProgress(0, '🔄 Перекодирование через серверный FFmpeg (H.264/AAC)...', true);
         video.src = transcodeMedia;
-        video.play().catch(() => {});
+        safePlay();
       }
     } else if (currentSource === 'remux') {
       currentSource = 'transcode';
@@ -426,9 +508,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         btnTranscode.classList.add('active');
         btnTranscode.textContent = '🔄 FFmpeg фикс';
       }
-      setProgress(0, '🔄 Авто-исправление кодека через FFmpeg (H.264)...', true);
+      setProgress(0, '🔄 Авто-исправление кодека через FFmpeg (H.264/AAC)...', true);
       video.src = transcodeMedia;
-      video.play().catch(() => {});
+      safePlay();
     } else {
       setProgress(0, 'Не удалось воспроизвести видео (ошибка исходного файла)', false, true);
     }
@@ -449,9 +531,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         currentSource = 'transcode';
         btnTranscode.classList.add('active');
         btnTranscode.textContent = '🔄 FFmpeg фикс';
-        setProgress(0, '🔄 Перекодирование через серверный FFmpeg...', true);
+        setProgress(0, '🔄 Перекодирование через серверный FFmpeg (H.264/AAC)...', true);
         video.src = transcodeMedia;
-        video.play().catch(() => {});
+        safePlay();
       }
     });
   }
@@ -479,14 +561,14 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         setProgress(0, 'Загрузка напрямую с CDN...', true);
         video.src = directMedia;
       }
-      video.play().catch(() => {});
+      safePlay();
     });
   }
 
   video.addEventListener('loadstart', () => {
     if (!isPreCaching) {
       const statusText = currentSource === 'transcode' 
-        ? '🔄 Подготовка FFmpeg H.264 видео...' 
+        ? '🔄 Подготовка FFmpeg H.264/AAC видео...' 
         : (currentSource === 'proxy' ? 'Подключение через локальный прокси...' : 'Инициализация видеопотока CDN...');
       setProgress(0, statusText, true);
     }
@@ -542,13 +624,30 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
           const fullDirect = data.fullVideoUrl;
           const fullProxy = getProxiedUrl(fullDirect);
           const targetUrl = (currentSource === 'proxy' || needsProxy) ? fullProxy : fullDirect;
-          if (video.src !== targetUrl && !isPreCaching) {
+
+          let currentTarget = '';
+          try {
+            const parsed = new URL(video.src, window.location.href);
+            currentTarget = parsed.pathname + parsed.search;
+          } catch {}
+          let nextTarget = '';
+          try {
+            const parsed = new URL(targetUrl, window.location.href);
+            nextTarget = parsed.pathname + parsed.search;
+          } catch {}
+
+          if (currentTarget !== nextTarget && !isPreCaching) {
             const curTime = video.currentTime || 0;
-            const isPlaying = !video.paused;
+            const isPaused = video.paused;
             video.src = targetUrl;
-            if (curTime > 0) video.currentTime = curTime;
-            if (isPlaying) video.play().catch(() => {});
-            setProgress(100, `🎬 HD Видео (${data.quality || '1080p'}) подключено`, false);
+            video.addEventListener('loadedmetadata', () => {
+              if (curTime > 0 && curTime < video.duration) {
+                try { video.currentTime = curTime; } catch {}
+              }
+              if (!isPaused) safePlay();
+            }, { once: true });
+            safePlay();
+            setProgress(100, `🎬 HD Видео (${data.quality || '1080p'}) со звуком подключено`, false);
             setTimeout(hideStatus, 1500);
           }
         }
@@ -576,6 +675,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   video.src = currentSource === 'proxy' ? proxyMedia : directMedia;
   videoContainer.appendChild(video);
+  videoContainer.appendChild(unmuteBtn);
+
+  // Запуск автоплея с безопасным перехватом Autoplay Policy
+  safePlay();
 
   return {
     videoContainer,

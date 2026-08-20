@@ -307,6 +307,54 @@
   box-sizing: border-box;
 }
 
+/* Кнопка включения звука при блокировке автоплея браузером */
+.btn-video-unmute {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 55;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 18px;
+  background-color: var(--bg-surface-elevated);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-lg);
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  animation: fadeIn 0.2s ease-out;
+  touch-action: manipulation;
+}
+
+.btn-video-unmute:hover {
+  background-color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.btn-video-unmute:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.btn-video-unmute svg {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+  transition: color 0.15s ease;
+}
+
+.btn-video-unmute:hover svg {
+  color: #ffffff;
+}
+
 /* Плавающий статус загрузки, буферизации и кэширования видео (перетаскиваемый) */
 .video-status-banner {
   position: absolute;
@@ -800,6 +848,13 @@
     height: 100%;
     padding: 2px;
     box-sizing: border-box;
+  }
+
+  .btn-video-unmute {
+    top: 12px;
+    left: 12px;
+    padding: 6px 14px;
+    font-size: 12px;
   }
 
   .viewer-video {

@@ -117,6 +117,8 @@ export async function handleTranscodeVideoRequest(req, res) {
       const args = [
         '-headers', headers,
         '-i', targetUrl,
+        '-map', '0:v:0',
+        '-map', '0:a?',
         '-c:v', 'libx264',
         '-pix_fmt', 'yuv420p',
         '-preset', 'ultrafast',
