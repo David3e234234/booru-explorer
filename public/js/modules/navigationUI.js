@@ -51,7 +51,7 @@ export function renderSitesBar({ onSelectSite }) {
   customItem.innerHTML = `
     <div class="source-item-left">
       <span class="source-dot" style="background: linear-gradient(135deg, #f59e0b, #ec4899)"></span>
-      <span class="source-item-title">🎯 Свой выбор</span>
+      <span class="source-item-title">Свой выбор</span>
       <span class="source-custom-badge">${customList.length}</span>
     </div>
     <button type="button" class="btn-source-gear" title="Настроить выбранные сайты">
@@ -113,14 +113,13 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
   customCard.innerHTML = `
     <div class="source-mobile-title-wrap">
       <span class="source-dot" style="background: linear-gradient(135deg, #f59e0b, #ec4899)"></span>
-      <span class="source-mobile-name">🎯 Свой выбор</span>
-      <span class="source-custom-badge">${customList.length}</span>
+      <span class="source-mobile-name">Свой выбор</span>
     </div>
     <div class="source-mobile-actions">
+      <span class="source-custom-badge">${customList.length}</span>
       <button type="button" class="btn-source-gear-mobile" title="Настроить список">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
-      <span class="source-mobile-badge">CUSTOM</span>
     </div>
   `;
 

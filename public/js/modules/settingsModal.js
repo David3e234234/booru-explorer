@@ -362,16 +362,22 @@ export async function updateStorageUsageInfo() {
   }
 
   let serverCacheBytes = 0;
-  let maxServerCacheMb = 1500;
+  let maxServerCacheMb = (state.settings.maxServerCacheMb !== undefined) ? Number(state.settings.maxServerCacheMb) : 1500;
   try {
     const data = await fetchCacheInfo();
     if (data && data.success) {
       serverCacheBytes = data.diskCacheBytes || 0;
       if (data.maxServerCacheMb !== undefined) {
         maxServerCacheMb = Number(data.maxServerCacheMb);
+        state.settings.maxServerCacheMb = maxServerCacheMb;
       }
     }
   } catch {}
+
+  const selectMaxServerCache = document.getElementById('selectMaxServerCache');
+  if (selectMaxServerCache && maxServerCacheMb !== undefined) {
+    selectMaxServerCache.value = String(maxServerCacheMb);
+  }
 
   let quotaBytes = 0;
   let usageBytes = 0;
@@ -397,15 +403,16 @@ export async function updateStorageUsageInfo() {
 
   if (storageMediaCacheText) storageMediaCacheText.textContent = formatBytes(pwaCacheBytes || localBytes);
   if (storageServerCacheText) {
-    const limitLabel = maxServerCacheMb > 0 
-      ? ` / ${maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1) + ' ГБ' : maxServerCacheMb + ' МБ'}`
-      : ' (Без лимита)';
+    const formattedLimit = maxServerCacheMb > 0 
+      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ГБ' : maxServerCacheMb + ' МБ')
+      : null;
+    const limitLabel = formattedLimit ? ` / ${formattedLimit}` : ' (Без лимита)';
     storageServerCacheText.textContent = `${formatBytes(serverCacheBytes)}${limitLabel}`;
   }
   const storageLimitBadge = document.getElementById('storageLimitBadge');
   if (storageLimitBadge) {
     storageLimitBadge.textContent = maxServerCacheMb > 0 
-      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1) + ' ГБ' : maxServerCacheMb + ' МБ')
+      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ГБ' : maxServerCacheMb + ' МБ')
       : 'Без лимита';
   }
 }
@@ -939,6 +946,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputTgToken = document.getElementById('inputTelegramBotToken');
       const inputTgChat = document.getElementById('inputTelegramChatId');
       const selectTgInterval = document.getElementById('selectTelegramBackupInterval');
+      const selectMaxServerCache = document.getElementById('selectMaxServerCache');
+      const maxServerCacheMbVal = selectMaxServerCache ? (parseInt(selectMaxServerCache.value, 10)) : (state.settings.maxServerCacheMb !== undefined ? state.settings.maxServerCacheMb : 1500);
 
       const updated = {
         ...state.settings,
@@ -958,6 +967,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         aiTags: tempAiTags,
         curvyTags: tempCurvyTags,
         petiteTags: tempPetiteTags,
+        maxServerCacheMb: maxServerCacheMbVal,
         rule34ApiKey: inputRule34ApiKey ? inputRule34ApiKey.value.trim() : '',
         rule34UserId: inputRule34UserId ? inputRule34UserId.value.trim() : '',
         gelbooruApiKey: inputGelbooruApiKey ? inputGelbooruApiKey.value.trim() : '',
@@ -1015,6 +1025,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
       const checkEnablePaheal = document.getElementById('checkEnablePaheal');
       const checkEnableJsDemuxing = document.getElementById('checkEnableJsDemuxing');
+      const selectMaxServerCache = document.getElementById('selectMaxServerCache');
 
       const checkTgEnabled = document.getElementById('checkTelegramBackupEnabled');
       const inputTgToken = document.getElementById('inputTelegramBotToken');
@@ -1038,6 +1049,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = true;
       if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = true;
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
+      if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
+      if (selectMaxServerCache) selectMaxServerCache.value = '1500';
       if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       renderSettingsChips();
       updateTelegramBackupStatusUI({
