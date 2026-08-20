@@ -12,6 +12,7 @@ import {
   CURVY_EXCLUDE_TAGS, 
   PETITE_INCLUDE_TAGS, 
   PETITE_EXCLUDE_TAGS,
+  LGBT_TAGS,
   ROOT_DIR
 } from '../config/constants.js';
 import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js';
@@ -102,6 +103,9 @@ router.get('/posts', async (req, res) => {
     // Дополнительная валидация и сортировка
     const activeCurvyTags = (Array.isArray(settings.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS;
     const activePetiteTags = (Array.isArray(settings.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS;
+    const activeFurryTags = (Array.isArray(settings.furryTags) && settings.furryTags.length > 0) ? settings.furryTags : FURRY_TAGS;
+    const activePregnantTags = (Array.isArray(settings.pregnantTags) && settings.pregnantTags.length > 0) ? settings.pregnantTags : PREGNANT_TAGS;
+    const activeLgbtTags = (Array.isArray(settings.lgbtTags) && settings.lgbtTags.length > 0) ? settings.lgbtTags : LGBT_TAGS;
     const negativeTokens = tags
       ? tags.split(/\s+/).filter(t => t.startsWith('-') && t.length > 1).map(t => t.substring(1).toLowerCase().replace(/_/g, ' '))
       : [];
@@ -119,6 +123,9 @@ router.get('/posts', async (req, res) => {
       negativeTokens,
       activeCurvyTags,
       activePetiteTags,
+      activeFurryTags,
+      activePregnantTags,
+      activeLgbtTags,
       hasUserPositiveTags
     }));
 

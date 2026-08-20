@@ -25,6 +25,9 @@ export function isPostMatchingFilters(post, criteria = {}) {
     negativeTokens = [],
     activeCurvyTags = CURVY_INCLUDE_TAGS,
     activePetiteTags = PETITE_INCLUDE_TAGS,
+    activeFurryTags = FURRY_TAGS,
+    activePregnantTags = PREGNANT_TAGS,
+    activeLgbtTags = LGBT_TAGS,
     hasUserPositiveTags = false
   } = criteria;
 
@@ -72,17 +75,20 @@ export function isPostMatchingFilters(post, criteria = {}) {
 
   // 6. Фильтр фурри
   if (hideFurry) {
-    if (FURRY_TAGS.some(fTag => postTags.some(t => t === fTag || t.startsWith(fTag + '_') || t.endsWith('_' + fTag)))) return false;
+    const furryList = Array.isArray(activeFurryTags) && activeFurryTags.length > 0 ? activeFurryTags : FURRY_TAGS;
+    if (furryList.some(fTag => postTags.some(t => t === fTag || t.startsWith(fTag + '_') || t.endsWith('_' + fTag)))) return false;
   }
 
   // 7. Фильтр беременности
   if (hidePregnant) {
-    if (PREGNANT_TAGS.some(pTag => postTags.some(t => t === pTag || t.includes(pTag)))) return false;
+    const pregnantList = Array.isArray(activePregnantTags) && activePregnantTags.length > 0 ? activePregnantTags : PREGNANT_TAGS;
+    if (pregnantList.some(pTag => postTags.some(t => t === pTag || t.includes(pTag)))) return false;
   }
 
   // 8. Фильтр ЛГБТ
   if (hideLgbt) {
-    if (LGBT_TAGS.some(lTag => postTags.some(t => t === lTag || t.startsWith(lTag + '_') || t.endsWith('_' + lTag) || t.includes('_' + lTag + '_')))) return false;
+    const lgbtList = Array.isArray(activeLgbtTags) && activeLgbtTags.length > 0 ? activeLgbtTags : LGBT_TAGS;
+    if (lgbtList.some(lTag => postTags.some(t => t === lTag || t.startsWith(lTag + '_') || t.endsWith('_' + lTag) || t.includes('_' + lTag + '_')))) return false;
   }
 
   // 8. Черный список

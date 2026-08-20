@@ -6,7 +6,13 @@ import { fetchGelbooru } from './gelbooru.js';
 import { fetchRule34Video } from './rule34video.js';
 import { fetchXbooru, fetchHypnohub } from './dapi.js';
 import { isPostMatchingFilters } from '../utils/tagHelpers.js';
-import { CURVY_INCLUDE_TAGS, PETITE_INCLUDE_TAGS } from '../config/constants.js';
+import { 
+  CURVY_INCLUDE_TAGS, 
+  PETITE_INCLUDE_TAGS,
+  FURRY_TAGS,
+  PREGNANT_TAGS,
+  LGBT_TAGS
+} from '../config/constants.js';
 import { logInfo } from '../utils/logger.js';
 
 export {
@@ -128,6 +134,9 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     negativeTokens,
     activeCurvyTags: (Array.isArray(settings?.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS,
     activePetiteTags: (Array.isArray(settings?.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS,
+    activeFurryTags: (Array.isArray(settings?.furryTags) && settings.furryTags.length > 0) ? settings.furryTags : FURRY_TAGS,
+    activePregnantTags: (Array.isArray(settings?.pregnantTags) && settings.pregnantTags.length > 0) ? settings.pregnantTags : PREGNANT_TAGS,
+    activeLgbtTags: (Array.isArray(settings?.lgbtTags) && settings.lgbtTags.length > 0) ? settings.lgbtTags : LGBT_TAGS,
     hasUserPositiveTags
   };
 

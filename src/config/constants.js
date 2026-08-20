@@ -185,6 +185,13 @@ export const LGBT_TAGS = [
   'lgbtq'
 ];
 
+export const DEFAULT_FURRY_TAGS = FURRY_TAGS;
+export const DEFAULT_PREGNANT_TAGS = PREGNANT_TAGS;
+export const DEFAULT_LGBT_TAGS = LGBT_TAGS;
+export const DEFAULT_BLACKLIST = ['guro', 'scat', 'snuff', 'vomit', 'fart'];
+export const DEFAULT_CURVY_TAGS = CURVY_INCLUDE_TAGS;
+export const DEFAULT_PETITE_TAGS = PETITE_INCLUDE_TAGS;
+
 export const DEFAULT_SETTINGS = {
   theme: 'kotobox',
   gridColumns: 'auto',
@@ -201,6 +208,9 @@ export const DEFAULT_SETTINGS = {
   blacklist: ['guro', 'scat', 'snuff', 'vomit', 'fart'],
   curvyTags: CURVY_INCLUDE_TAGS,
   petiteTags: PETITE_INCLUDE_TAGS,
+  furryTags: FURRY_TAGS,
+  pregnantTags: PREGNANT_TAGS,
+  lgbtTags: LGBT_TAGS,
   videoAutoplayHover: true,
   videoAutoplayMobile: true,
   videoAutoplayViewer: true,

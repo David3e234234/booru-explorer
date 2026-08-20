@@ -19,7 +19,12 @@ function getAuthHeaders(includeJson = false) {
       danbooruApiKey: state.settings.danbooruApiKey || '',
       danbooruLogin: state.settings.danbooruLogin || '',
       curvyTags: state.settings.curvyTags || [],
-      petiteTags: state.settings.petiteTags || []
+      petiteTags: state.settings.petiteTags || [],
+      furryTags: state.settings.furryTags || [],
+      pregnantTags: state.settings.pregnantTags || [],
+      lgbtTags: state.settings.lgbtTags || [],
+      aiTags: state.settings.aiTags || [],
+      blacklist: state.settings.blacklist || []
     };
     headers['x-booru-auth'] = encodeURIComponent(JSON.stringify(authData));
   }

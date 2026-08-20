@@ -6,21 +6,31 @@ export function makeBannerDraggable(bannerEl) {
   let startLeft = 0;
   let startTop = 0;
 
+  const getParentInfo = () => {
+    const parent = bannerEl.offsetParent || bannerEl.parentElement || document.body;
+    const pRect = parent.getBoundingClientRect();
+    return { parent, pRect };
+  };
+
   const applySavedPosition = () => {
     try {
       const saved = localStorage.getItem('booru_video_banner_pos');
       if (saved) {
         const pos = JSON.parse(saved);
         if (pos && typeof pos.xRatio === 'number' && typeof pos.yRatio === 'number') {
+          const { parent } = getParentInfo();
+          const parentWidth = parent.clientWidth || window.innerWidth;
+          const parentHeight = parent.clientHeight || window.innerHeight;
           const bannerWidth = bannerEl.offsetWidth || 280;
           const bannerHeight = bannerEl.offsetHeight || 90;
-          let left = pos.xRatio * window.innerWidth;
-          let top = pos.yRatio * window.innerHeight;
 
-          const maxX = window.innerWidth - bannerWidth - 8;
-          const maxY = window.innerHeight - bannerHeight - 16;
+          let left = pos.xRatio * parentWidth;
+          let top = pos.yRatio * parentHeight;
+
+          const maxX = Math.max(0, parentWidth - bannerWidth - 8);
+          const maxY = Math.max(0, parentHeight - bannerHeight - 8);
           left = Math.max(8, Math.min(left, maxX));
-          top = Math.max(48, Math.min(top, maxY));
+          top = Math.max(8, Math.min(top, maxY));
 
           bannerEl.style.bottom = 'auto';
           bannerEl.style.right = 'auto';
@@ -39,12 +49,18 @@ export function makeBannerDraggable(bannerEl) {
 
   const savePosition = () => {
     try {
+      const { parent, pRect } = getParentInfo();
       const rect = bannerEl.getBoundingClientRect();
+      const currentLeft = rect.left - pRect.left;
+      const currentTop = rect.top - pRect.top;
+      const parentWidth = parent.clientWidth || window.innerWidth;
+      const parentHeight = parent.clientHeight || window.innerHeight;
+
       const pos = {
-        xRatio: rect.left / window.innerWidth,
-        yRatio: rect.top / window.innerHeight,
-        left: rect.left,
-        top: rect.top
+        xRatio: parentWidth > 0 ? currentLeft / parentWidth : 0,
+        yRatio: parentHeight > 0 ? currentTop / parentHeight : 0,
+        left: currentLeft,
+        top: currentTop
       };
       localStorage.setItem('booru_video_banner_pos', JSON.stringify(pos));
     } catch (e) {
@@ -53,12 +69,20 @@ export function makeBannerDraggable(bannerEl) {
   };
 
   const startDrag = (clientX, clientY, target) => {
-    if (target && (target.tagName === 'BUTTON' || target.closest('button'))) {
+    if (target && (
+      target.tagName === 'BUTTON' || 
+      target.closest('button') || 
+      target.tagName === 'INPUT' || 
+      target.closest('input') || 
+      target.tagName === 'A' || 
+      target.closest('a')
+    )) {
       return false;
     }
+    const { pRect } = getParentInfo();
     const rect = bannerEl.getBoundingClientRect();
-    startLeft = rect.left;
-    startTop = rect.top;
+    startLeft = rect.left - pRect.left;
+    startTop = rect.top - pRect.top;
     startX = clientX;
     startY = clientY;
     isDraggingBanner = true;
@@ -77,20 +101,23 @@ export function makeBannerDraggable(bannerEl) {
     const dx = clientX - startX;
     const dy = clientY - startY;
 
-    if ((Math.abs(dx) > 2 || Math.abs(dy) > 2) && e && e.cancelable) {
+    if (e && e.cancelable) {
       e.preventDefault();
     }
 
     let newLeft = startLeft + dx;
     let newTop = startTop + dy;
 
+    const { parent } = getParentInfo();
+    const parentWidth = parent.clientWidth || window.innerWidth;
+    const parentHeight = parent.clientHeight || window.innerHeight;
     const bannerWidth = bannerEl.offsetWidth || 280;
     const bannerHeight = bannerEl.offsetHeight || 90;
-    const maxX = window.innerWidth - bannerWidth - 8;
-    const maxY = window.innerHeight - bannerHeight - 16;
+    const maxX = Math.max(0, parentWidth - bannerWidth - 8);
+    const maxY = Math.max(0, parentHeight - bannerHeight - 8);
 
     newLeft = Math.max(8, Math.min(newLeft, maxX));
-    newTop = Math.max(48, Math.min(newTop, maxY));
+    newTop = Math.max(8, Math.min(newTop, maxY));
 
     bannerEl.style.left = `${newLeft}px`;
     bannerEl.style.top = `${newTop}px`;
@@ -112,17 +139,22 @@ export function makeBannerDraggable(bannerEl) {
     }
   }, { passive: false });
 
-  bannerEl.addEventListener('touchmove', (e) => {
+  window.addEventListener('touchmove', (e) => {
     if (isDraggingBanner && e.touches.length === 1) {
       moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
       e.stopPropagation();
     }
   }, { passive: false });
 
-  bannerEl.addEventListener('touchend', (e) => {
+  window.addEventListener('touchend', () => {
     if (isDraggingBanner) {
       endDrag();
-      e.stopPropagation();
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchcancel', () => {
+    if (isDraggingBanner) {
+      endDrag();
     }
   }, { passive: true });
 

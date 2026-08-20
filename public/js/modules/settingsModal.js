@@ -18,6 +18,36 @@ import {
 import { showToast, formatBytes } from './uiUtils.js';
 import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI } from './filtersUI.js';
 
+export const DEFAULT_AI_TAGS = [
+  'ai_generated',
+  'ai_art',
+  'novelai',
+  'stable_diffusion',
+  'midjourney',
+  'dall-e',
+  'dall-e_3',
+  'synthetic',
+  'ai_assisted',
+  'source_ai',
+  'ai-generated',
+  'generated_by_ai',
+  'nai',
+  'sd_xl',
+  'comfyui',
+  'pony_diffusion',
+  'flux.1',
+  'created_by_ai',
+  'image_generation_model'
+];
+
+export const DEFAULT_BLACKLIST = [
+  'guro',
+  'scat',
+  'snuff',
+  'vomit',
+  'fart'
+];
+
 export const DEFAULT_CURVY_TAGS = [
   'milf',
   'mature_female',
@@ -66,10 +96,78 @@ export const DEFAULT_PETITE_TAGS = [
   'toddler'
 ];
 
+export const DEFAULT_FURRY_TAGS = [
+  'furry',
+  'anthro',
+  'feral',
+  'scalie',
+  'animal_humanoid',
+  'beast',
+  'kemono',
+  'furry_male',
+  'furry_female',
+  'anthro_female',
+  'anthro_male',
+  'furred',
+  'canine',
+  'feline',
+  'e621'
+];
+
+export const DEFAULT_PREGNANT_TAGS = [
+  'pregnant',
+  'pregnancy',
+  'hyper_pregnancy',
+  'impregnation',
+  'inflation',
+  'belly_expansion',
+  'maternity',
+  'pregnant_belly',
+  'birthing',
+  'unbirth',
+  'oviposition'
+];
+
+export const DEFAULT_LGBT_TAGS = [
+  'yaoi',
+  'gay',
+  'bara',
+  'males_only',
+  'male_only',
+  'male_on_male',
+  'multiple_males',
+  'shounen_ai',
+  'boys_love',
+  'dansei_shounen_ai',
+  'otoko_no_ko',
+  'femboy',
+  'crossdressing',
+  'trap',
+  'futanari',
+  'dickgirl',
+  'futa',
+  'shemale',
+  'newhalf',
+  'transgender',
+  'trans_woman',
+  'trans_man',
+  'gender_bender',
+  'genderswap',
+  'yuri',
+  'lesbian',
+  'shoujo_ai',
+  'girls_love',
+  'lgbt',
+  'lgbtq'
+];
+
 let tempBlacklist = [];
 let tempAiTags = [];
 let tempCurvyTags = [];
 let tempPetiteTags = [];
+let tempFurryTags = [];
+let tempPregnantTags = [];
+let tempLgbtTags = [];
 
 export function applySettingsToUIAndState(s) {
   if (!s) return;
@@ -244,87 +342,73 @@ export function persistSettings(partial) {
   saveSettings(state.settings).catch(() => {});
 }
 
+function renderChipsForGroup(wrapperEl, inputEl, tagList, onRemove) {
+  if (!wrapperEl || !inputEl) return;
+  wrapperEl.querySelectorAll('.tag-chip').forEach(c => c.remove());
+  tagList.forEach(tag => {
+    const chip = document.createElement('div');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `
+      <span>${tag}</span>
+      <span class="tag-chip-remove">×</span>
+    `;
+    chip.querySelector('.tag-chip-remove').addEventListener('click', (e) => {
+      e.stopPropagation();
+      onRemove(tag);
+    });
+    wrapperEl.insertBefore(chip, inputEl);
+  });
+}
+
 export function renderSettingsChips() {
-  const blacklistWrapper = document.getElementById('blacklistWrapper');
-  const blacklistInput = document.getElementById('blacklistInput');
-  const aiTagsWrapper = document.getElementById('aiTagsWrapper');
-  const aiTagsInput = document.getElementById('aiTagsInput');
-  const curvyTagsWrapper = document.getElementById('curvyTagsWrapper');
-  const curvyTagsInput = document.getElementById('curvyTagsInput');
-  const petiteTagsWrapper = document.getElementById('petiteTagsWrapper');
-  const petiteTagsInput = document.getElementById('petiteTagsInput');
+  renderChipsForGroup(
+    document.getElementById('blacklistWrapper'),
+    document.getElementById('blacklistInput'),
+    tempBlacklist,
+    (tag) => { tempBlacklist = tempBlacklist.filter(t => t !== tag); renderSettingsChips(); }
+  );
 
-  // Черный список
-  if (blacklistWrapper && blacklistInput) {
-    blacklistWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove());
-    tempBlacklist.forEach(tag => {
-      const chip = document.createElement('div');
-      chip.className = 'tag-chip';
-      chip.innerHTML = `
-        <span>${tag}</span>
-        <span class="tag-chip-remove" data-bl-tag="${tag}">×</span>
-      `;
-      chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
-        tempBlacklist = tempBlacklist.filter(t => t !== tag);
-        renderSettingsChips();
-      });
-      blacklistWrapper.insertBefore(chip, blacklistInput);
-    });
-  }
+  renderChipsForGroup(
+    document.getElementById('aiTagsWrapper'),
+    document.getElementById('aiTagsInput'),
+    tempAiTags,
+    (tag) => { tempAiTags = tempAiTags.filter(t => t !== tag); renderSettingsChips(); }
+  );
 
-  // AI теги
-  if (aiTagsWrapper && aiTagsInput) {
-    aiTagsWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove());
-    tempAiTags.forEach(tag => {
-      const chip = document.createElement('div');
-      chip.className = 'tag-chip';
-      chip.innerHTML = `
-        <span>${tag}</span>
-        <span class="tag-chip-remove" data-ai-tag="${tag}">×</span>
-      `;
-      chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
-        tempAiTags = tempAiTags.filter(t => t !== tag);
-        renderSettingsChips();
-      });
-      aiTagsWrapper.insertBefore(chip, aiTagsInput);
-    });
-  }
+  renderChipsForGroup(
+    document.getElementById('curvyTagsWrapper'),
+    document.getElementById('curvyTagsInput'),
+    tempCurvyTags,
+    (tag) => { tempCurvyTags = tempCurvyTags.filter(t => t !== tag); renderSettingsChips(); }
+  );
 
-  // Слова для «Мамочки» (Curvy)
-  if (curvyTagsWrapper && curvyTagsInput) {
-    curvyTagsWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove());
-    tempCurvyTags.forEach(tag => {
-      const chip = document.createElement('div');
-      chip.className = 'tag-chip';
-      chip.innerHTML = `
-        <span>${tag}</span>
-        <span class="tag-chip-remove" data-curvy-tag="${tag}">×</span>
-      `;
-      chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
-        tempCurvyTags = tempCurvyTags.filter(t => t !== tag);
-        renderSettingsChips();
-      });
-      curvyTagsWrapper.insertBefore(chip, curvyTagsInput);
-    });
-  }
+  renderChipsForGroup(
+    document.getElementById('petiteTagsWrapper'),
+    document.getElementById('petiteTagsInput'),
+    tempPetiteTags,
+    (tag) => { tempPetiteTags = tempPetiteTags.filter(t => t !== tag); renderSettingsChips(); }
+  );
 
-  // Слова для «Лоли» (Petite)
-  if (petiteTagsWrapper && petiteTagsInput) {
-    petiteTagsWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove());
-    tempPetiteTags.forEach(tag => {
-      const chip = document.createElement('div');
-      chip.className = 'tag-chip';
-      chip.innerHTML = `
-        <span>${tag}</span>
-        <span class="tag-chip-remove" data-petite-tag="${tag}">×</span>
-      `;
-      chip.querySelector('.tag-chip-remove').addEventListener('click', () => {
-        tempPetiteTags = tempPetiteTags.filter(t => t !== tag);
-        renderSettingsChips();
-      });
-      petiteTagsWrapper.insertBefore(chip, petiteTagsInput);
-    });
-  }
+  renderChipsForGroup(
+    document.getElementById('furryTagsWrapper'),
+    document.getElementById('furryTagsInput'),
+    tempFurryTags,
+    (tag) => { tempFurryTags = tempFurryTags.filter(t => t !== tag); renderSettingsChips(); }
+  );
+
+  renderChipsForGroup(
+    document.getElementById('pregnantTagsWrapper'),
+    document.getElementById('pregnantTagsInput'),
+    tempPregnantTags,
+    (tag) => { tempPregnantTags = tempPregnantTags.filter(t => t !== tag); renderSettingsChips(); }
+  );
+
+  renderChipsForGroup(
+    document.getElementById('lgbtTagsWrapper'),
+    document.getElementById('lgbtTagsInput'),
+    tempLgbtTags,
+    (tag) => { tempLgbtTags = tempLgbtTags.filter(t => t !== tag); renderSettingsChips(); }
+  );
 }
 
 export async function updateStorageUsageInfo() {
@@ -495,11 +579,11 @@ export function openSettingsModal() {
 
   tempBlacklist = Array.isArray(state.settings.blacklist) && state.settings.blacklist.length > 0 
     ? [...state.settings.blacklist] 
-    : ['guro', 'scat', 'snuff', 'vomit', 'fart'];
+    : [...DEFAULT_BLACKLIST];
 
   tempAiTags = Array.isArray(state.settings.aiTags) && state.settings.aiTags.length > 0 
     ? [...state.settings.aiTags] 
-    : ['ai_generated', 'ai_art', 'novelai', 'stable_diffusion', 'midjourney', 'synthetic', 'ai_assisted'];
+    : [...DEFAULT_AI_TAGS];
 
   tempCurvyTags = Array.isArray(state.settings.curvyTags) && state.settings.curvyTags.length > 0 
     ? [...state.settings.curvyTags] 
@@ -508,6 +592,18 @@ export function openSettingsModal() {
   tempPetiteTags = Array.isArray(state.settings.petiteTags) && state.settings.petiteTags.length > 0 
     ? [...state.settings.petiteTags] 
     : [...DEFAULT_PETITE_TAGS];
+
+  tempFurryTags = Array.isArray(state.settings.furryTags) && state.settings.furryTags.length > 0 
+    ? [...state.settings.furryTags] 
+    : [...DEFAULT_FURRY_TAGS];
+
+  tempPregnantTags = Array.isArray(state.settings.pregnantTags) && state.settings.pregnantTags.length > 0 
+    ? [...state.settings.pregnantTags] 
+    : [...DEFAULT_PREGNANT_TAGS];
+
+  tempLgbtTags = Array.isArray(state.settings.lgbtTags) && state.settings.lgbtTags.length > 0 
+    ? [...state.settings.lgbtTags] 
+    : [...DEFAULT_LGBT_TAGS];
 
   renderSettingsChips();
   updateStorageUsageInfo();
@@ -593,81 +689,118 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
   if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
 
-  // Добавление тега в Черный список
-  if (blacklistInput) {
-    blacklistInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && blacklistInput.value.trim()) {
+  // Универсальный обработчик ввода тегов для групп
+  const setupTagInput = (inputId, wrapperId, getList, setList) => {
+    const input = document.getElementById(inputId);
+    const wrapper = document.getElementById(wrapperId);
+    if (!input) return;
+
+    if (wrapper) {
+      wrapper.addEventListener('click', (e) => {
+        if (e.target === wrapper) {
+          input.focus();
+        }
+      });
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) {
         e.preventDefault();
-        const val = blacklistInput.value.trim().toLowerCase().replace(/\s+/g, '_');
-        if (!tempBlacklist.includes(val)) {
-          tempBlacklist.push(val);
+        const raw = input.value.trim().toLowerCase();
+        const tokens = raw.split(/[, ]+/).map(t => t.trim().replace(/\s+/g, '_')).filter(Boolean);
+        let list = getList();
+        let changed = false;
+        tokens.forEach(val => {
+          if (val && !list.includes(val)) {
+            list.push(val);
+            changed = true;
+          }
+        });
+        if (changed) {
+          setList(list);
           renderSettingsChips();
         }
-        blacklistInput.value = '';
+        input.value = '';
+      } else if (e.key === 'Backspace' && !input.value) {
+        let list = getList();
+        if (list.length > 0) {
+          list.pop();
+          setList(list);
+          renderSettingsChips();
+        }
       }
+    });
+  };
+
+  setupTagInput('blacklistInput', 'blacklistWrapper', () => tempBlacklist, (l) => { tempBlacklist = l; });
+  setupTagInput('aiTagsInput', 'aiTagsWrapper', () => tempAiTags, (l) => { tempAiTags = l; });
+  setupTagInput('curvyTagsInput', 'curvyTagsWrapper', () => tempCurvyTags, (l) => { tempCurvyTags = l; });
+  setupTagInput('petiteTagsInput', 'petiteTagsWrapper', () => tempPetiteTags, (l) => { tempPetiteTags = l; });
+  setupTagInput('furryTagsInput', 'furryTagsWrapper', () => tempFurryTags, (l) => { tempFurryTags = l; });
+  setupTagInput('pregnantTagsInput', 'pregnantTagsWrapper', () => tempPregnantTags, (l) => { tempPregnantTags = l; });
+  setupTagInput('lgbtTagsInput', 'lgbtTagsWrapper', () => tempLgbtTags, (l) => { tempLgbtTags = l; });
+
+  // Кнопки сброса к значениям по умолчанию
+  const btnResetBlacklist = document.getElementById('btnResetBlacklist');
+  if (btnResetBlacklist) {
+    btnResetBlacklist.addEventListener('click', () => {
+      tempBlacklist = [...DEFAULT_BLACKLIST];
+      renderSettingsChips();
+      showToast('Черный список сброшен к стандартному');
     });
   }
 
-  // Добавление тега в AI Detector
-  if (aiTagsInput) {
-    aiTagsInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && aiTagsInput.value.trim()) {
-        e.preventDefault();
-        const val = aiTagsInput.value.trim().toLowerCase().replace(/\s+/g, '_');
-        if (!tempAiTags.includes(val)) {
-          tempAiTags.push(val);
-          renderSettingsChips();
-        }
-        aiTagsInput.value = '';
-      }
+  const btnResetAiTags = document.getElementById('btnResetAiTags');
+  if (btnResetAiTags) {
+    btnResetAiTags.addEventListener('click', () => {
+      tempAiTags = [...DEFAULT_AI_TAGS];
+      renderSettingsChips();
+      showToast('Теги ИИ сброшены к стандартным');
     });
   }
 
-  // Добавление тега в Мамочки (Curvy)
-  if (curvyTagsInput) {
-    curvyTagsInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && curvyTagsInput.value.trim()) {
-        e.preventDefault();
-        const val = curvyTagsInput.value.trim().toLowerCase().replace(/\s+/g, '_');
-        if (!tempCurvyTags.includes(val)) {
-          tempCurvyTags.push(val);
-          renderSettingsChips();
-        }
-        curvyTagsInput.value = '';
-      }
-    });
-  }
-
-  // Добавление тега в Лоли (Petite)
-  if (petiteTagsInput) {
-    petiteTagsInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && petiteTagsInput.value.trim()) {
-        e.preventDefault();
-        const val = petiteTagsInput.value.trim().toLowerCase().replace(/\s+/g, '_');
-        if (!tempPetiteTags.includes(val)) {
-          tempPetiteTags.push(val);
-          renderSettingsChips();
-        }
-        petiteTagsInput.value = '';
-      }
-    });
-  }
-
-  // Сброс слов Мамочек к дефолту
+  const btnResetCurvyTags = document.getElementById('btnResetCurvyTags');
   if (btnResetCurvyTags) {
     btnResetCurvyTags.addEventListener('click', () => {
       tempCurvyTags = [...DEFAULT_CURVY_TAGS];
       renderSettingsChips();
-      showToast('Слова для фильтра «Мамочки» сброшены к стандартным');
+      showToast('Слова для «Пышные» сброшены к стандартным');
     });
   }
 
-  // Сброс слов Лоли к дефолту
+  const btnResetPetiteTags = document.getElementById('btnResetPetiteTags');
   if (btnResetPetiteTags) {
     btnResetPetiteTags.addEventListener('click', () => {
       tempPetiteTags = [...DEFAULT_PETITE_TAGS];
       renderSettingsChips();
-      showToast('Слова для фильтра «Лоли» сброшены к стандартным');
+      showToast('Слова для «Миниатюрные» сброшены к стандартным');
+    });
+  }
+
+  const btnResetFurryTags = document.getElementById('btnResetFurryTags');
+  if (btnResetFurryTags) {
+    btnResetFurryTags.addEventListener('click', () => {
+      tempFurryTags = [...DEFAULT_FURRY_TAGS];
+      renderSettingsChips();
+      showToast('Слова для «Фурри» сброшены к стандартным');
+    });
+  }
+
+  const btnResetPregnantTags = document.getElementById('btnResetPregnantTags');
+  if (btnResetPregnantTags) {
+    btnResetPregnantTags.addEventListener('click', () => {
+      tempPregnantTags = [...DEFAULT_PREGNANT_TAGS];
+      renderSettingsChips();
+      showToast('Слова для «Беременность» сброшены к стандартным');
+    });
+  }
+
+  const btnResetLgbtTags = document.getElementById('btnResetLgbtTags');
+  if (btnResetLgbtTags) {
+    btnResetLgbtTags.addEventListener('click', () => {
+      tempLgbtTags = [...DEFAULT_LGBT_TAGS];
+      renderSettingsChips();
+      showToast('Слова для «ЛГБТ» сброшены к стандартным');
     });
   }
 
@@ -963,6 +1096,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         aiTags: tempAiTags,
         curvyTags: tempCurvyTags,
         petiteTags: tempPetiteTags,
+        furryTags: tempFurryTags,
+        pregnantTags: tempPregnantTags,
+        lgbtTags: tempLgbtTags,
         maxServerCacheMb: maxServerCacheMbVal,
         rule34ApiKey: inputRule34ApiKey ? inputRule34ApiKey.value.trim() : '',
         rule34UserId: inputRule34UserId ? inputRule34UserId.value.trim() : '',
@@ -1004,10 +1140,14 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
 
   if (btnResetSettings) {
     btnResetSettings.addEventListener('click', async () => {
-      tempBlacklist = ['guro', 'scat', 'snuff', 'vomit', 'fart'];
-      tempAiTags = ['ai_generated', 'ai_art', 'novelai', 'stable_diffusion', 'midjourney', 'synthetic', 'ai_assisted'];
+      tempBlacklist = [...DEFAULT_BLACKLIST];
+      tempAiTags = [...DEFAULT_AI_TAGS];
       tempCurvyTags = [...DEFAULT_CURVY_TAGS];
       tempPetiteTags = [...DEFAULT_PETITE_TAGS];
+      tempFurryTags = [...DEFAULT_FURRY_TAGS];
+      tempPregnantTags = [...DEFAULT_PREGNANT_TAGS];
+      tempLgbtTags = [...DEFAULT_LGBT_TAGS];
+      renderSettingsChips();
       
       const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
       const inputRule34UserId = document.getElementById('inputRule34UserId');

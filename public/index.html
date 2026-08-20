@@ -692,8 +692,8 @@
         <button type="button" class="settings-nav-tab" data-tab="filters" title="Черный список и фильтрация ИИ">
           <span class="tab-label">Фильтры</span>
         </button>
-        <button type="button" class="settings-nav-tab" data-tab="archetypes" title="Слова для фильтров Мамочки и Лоли">
-          <span class="tab-label">Типажи</span>
+        <button type="button" class="settings-nav-tab" data-tab="archetypes" title="Слова-триггеры для переключателей и фильтров">
+          <span class="tab-label">Триггеры</span>
         </button>
         <button type="button" class="settings-nav-tab" data-tab="apikeys" title="API ключи для Booru">
           <span class="tab-label">API Ключи</span>
@@ -797,7 +797,10 @@
         <div class="settings-tab-pane" id="tabPane-filters" style="display: none;">
           <!-- Черный список тегов -->
           <div class="settings-group">
-            <label class="settings-label" for="blacklistInput">Черный список тегов (Blacklist):</label>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="blacklistInput">Черный список тегов (Blacklist):</label>
+              <button type="button" class="btn-text" id="btnResetBlacklist" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+            </div>
             <p class="settings-hint">Посты с этими тегами будут скрыты из всех результатов поиска.</p>
             <div class="tags-input-box" id="blacklistWrapper">
               <input type="text" id="blacklistInput" placeholder="Введите тег и нажмите Enter..." spellcheck="false">
@@ -806,7 +809,10 @@
 
           <!-- Список тегов распознавания ИИ -->
           <div class="settings-group">
-            <label class="settings-label" for="aiTagsInput">Список тегов ИИ (AI Detector):</label>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="aiTagsInput">Список тегов ИИ (AI Detector):</label>
+              <button type="button" class="btn-text" id="btnResetAiTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+            </div>
             <p class="settings-hint">Теги, по которым система определяет искусственно сгенерированные работы.</p>
             <div class="tags-input-box" id="aiTagsWrapper">
               <input type="text" id="aiTagsInput" placeholder="Добавить AI тег..." spellcheck="false">
@@ -814,27 +820,65 @@
           </div>
         </div>
 
-        <!-- 3. ВКЛАДКА: СЛОВА ТИПАЖЕЙ (МАМОЧКИ / ЛОЛИ) -->
+        <!-- 3. ВКЛАДКА: СЛОВА ТРИГГЕРОВ И ФИЛЬТРОВ -->
         <div class="settings-tab-pane" id="tabPane-archetypes" style="display: none;">
+          <!-- 1. Пышные / Мамочки -->
           <div class="settings-group">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
               <label class="settings-label" for="curvyTagsInput">Слова для «Пышные / Мамочки» (Curvy / Mature):</label>
               <button type="button" class="btn-text" id="btnResetCurvyTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, используемые при активации фильтра для отбора зрелых и пышных персонажей.</p>
+            <p class="settings-hint">Теги, используемые фильтром для отбора зрелых и пышных персонажей.</p>
             <div class="tags-input-box" id="curvyTagsWrapper">
               <input type="text" id="curvyTagsInput" placeholder="Добавить тег (например: milf, mature)..." spellcheck="false">
             </div>
           </div>
 
+          <!-- 2. Миниатюрные / Лоли -->
           <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
               <label class="settings-label" for="petiteTagsInput">Слова для «Миниатюрные / Лоли» (Petite / Loli):</label>
               <button type="button" class="btn-text" id="btnResetPetiteTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, используемые при активации фильтра для отбора миниатюрных персонажей.</p>
+            <p class="settings-hint">Теги, используемые фильтром для отбора миниатюрных персонажей.</p>
             <div class="tags-input-box" id="petiteTagsWrapper">
               <input type="text" id="petiteTagsInput" placeholder="Добавить тег (например: loli, petite)..." spellcheck="false">
+            </div>
+          </div>
+
+          <!-- 3. Фурри и антро -->
+          <div class="settings-group" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="furryTagsInput">Слова для «Скрыть фурри и антро» (Furry / Anthro):</label>
+              <button type="button" class="btn-text" id="btnResetFurryTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+            </div>
+            <p class="settings-hint">Теги, отсекаемые при включении переключателя «Скрыть фурри и антро».</p>
+            <div class="tags-input-box" id="furryTagsWrapper">
+              <input type="text" id="furryTagsInput" placeholder="Добавить тег (например: furry, anthro)..." spellcheck="false">
+            </div>
+          </div>
+
+          <!-- 4. Беременность -->
+          <div class="settings-group" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="pregnantTagsInput">Слова для «Скрыть беременность» (Pregnant / Inflation):</label>
+              <button type="button" class="btn-text" id="btnResetPregnantTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+            </div>
+            <p class="settings-hint">Теги, отсекаемые при включении переключателя «Скрыть беременность».</p>
+            <div class="tags-input-box" id="pregnantTagsWrapper">
+              <input type="text" id="pregnantTagsInput" placeholder="Добавить тег (например: pregnant, pregnancy)..." spellcheck="false">
+            </div>
+          </div>
+
+          <!-- 5. ЛГБТ -->
+          <div class="settings-group" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="lgbtTagsInput">Слова для «Скрыть ЛГБТ» (LGBT / Yaoi / Futanari):</label>
+              <button type="button" class="btn-text" id="btnResetLgbtTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+            </div>
+            <p class="settings-hint">Теги, отсекаемые при включении переключателя «Скрыть ЛГБТ».</p>
+            <div class="tags-input-box" id="lgbtTagsWrapper">
+              <input type="text" id="lgbtTagsInput" placeholder="Добавить тег (например: yaoi, gay, futanari)..." spellcheck="false">
             </div>
           </div>
         </div>
