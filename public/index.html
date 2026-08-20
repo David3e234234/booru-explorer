@@ -689,11 +689,8 @@
         <button type="button" class="settings-nav-tab active" data-tab="general" title="Общие параметры интерфейса и тем">
           <span class="tab-label">Общие</span>
         </button>
-        <button type="button" class="settings-nav-tab" data-tab="filters" title="Черный список и фильтрация ИИ">
+        <button type="button" class="settings-nav-tab" data-tab="filters" title="Черный список, ИИ и слова-триггеры для фильтров">
           <span class="tab-label">Фильтры</span>
-        </button>
-        <button type="button" class="settings-nav-tab" data-tab="archetypes" title="Слова-триггеры для переключателей и фильтров">
-          <span class="tab-label">Триггеры</span>
         </button>
         <button type="button" class="settings-nav-tab" data-tab="apikeys" title="API ключи для Booru">
           <span class="tab-label">API Ключи</span>
@@ -793,7 +790,7 @@
           </div>
         </div>
 
-        <!-- 2. ВКЛАДКА: ФИЛЬТРЫ И ИИ -->
+        <!-- 2. ВКЛАДКА: ФИЛЬТРЫ И ТЕГИ -->
         <div class="settings-tab-pane" id="tabPane-filters" style="display: none;">
           <!-- Черный список тегов -->
           <div class="settings-group">
@@ -808,7 +805,7 @@
           </div>
 
           <!-- Список тегов распознавания ИИ -->
-          <div class="settings-group">
+          <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
               <label class="settings-label" for="aiTagsInput">Список тегов ИИ (AI Detector):</label>
               <button type="button" class="btn-text" id="btnResetAiTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
@@ -818,10 +815,12 @@
               <input type="text" id="aiTagsInput" placeholder="Добавить AI тег..." spellcheck="false">
             </div>
           </div>
-        </div>
 
-        <!-- 3. ВКЛАДКА: СЛОВА ТРИГГЕРОВ И ФИЛЬТРОВ -->
-        <div class="settings-tab-pane" id="tabPane-archetypes" style="display: none;">
+          <!-- Разделитель: Слова-триггеры переключателей -->
+          <div class="settings-section-header" style="margin-top: 18px; margin-bottom: 6px; padding-top: 14px; border-top: 1px solid var(--border-subtle);">
+            <span class="settings-section-title" style="font-weight: 600; font-size: 13px; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.5px;">Слова-триггеры для переключателей</span>
+          </div>
+
           <!-- 1. Пышные / Мамочки -->
           <div class="settings-group">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
