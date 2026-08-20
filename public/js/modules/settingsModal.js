@@ -367,10 +367,6 @@ export async function updateStorageUsageInfo() {
     const data = await fetchCacheInfo();
     if (data && data.success) {
       serverCacheBytes = data.diskCacheBytes || 0;
-      if (data.maxServerCacheMb !== undefined) {
-        maxServerCacheMb = Number(data.maxServerCacheMb);
-        state.settings.maxServerCacheMb = maxServerCacheMb;
-      }
     }
   } catch {}
 
