@@ -759,7 +759,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     });
   }
 
-  const btnResetCurvyTags = document.getElementById('btnResetCurvyTags');
   if (btnResetCurvyTags) {
     btnResetCurvyTags.addEventListener('click', () => {
       tempCurvyTags = [...DEFAULT_CURVY_TAGS];
@@ -768,7 +767,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     });
   }
 
-  const btnResetPetiteTags = document.getElementById('btnResetPetiteTags');
   if (btnResetPetiteTags) {
     btnResetPetiteTags.addEventListener('click', () => {
       tempPetiteTags = [...DEFAULT_PETITE_TAGS];
