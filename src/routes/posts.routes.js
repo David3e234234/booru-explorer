@@ -53,9 +53,10 @@ router.get('/posts', async (req, res) => {
     const hidePregnant = req.query.hidePregnant === 'true' || req.query.hidePregnant === '1';
     const hideLgbt = req.query.hideLgbt === 'true' || req.query.hideLgbt === '1';
     const excludeSites = req.query.excludeSites || '';
+    const customSites = req.query.customSites || '';
 
     // Проверка кэша в оперативной памяти (для всего кроме random)
-    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}`;
+    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
@@ -81,7 +82,7 @@ router.get('/posts', async (req, res) => {
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
     const blacklist = settings.blacklist || [];
 
-    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}, exclude=${excludeSites}`);
+    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}, exclude=${excludeSites}, customSites=${customSites}`);
 
     let posts = await fetchPosts(site, { 
       tags, 
@@ -92,6 +93,7 @@ router.get('/posts', async (req, res) => {
       typeFilter, 
       ageFilter, 
       excludeSites,
+      customSites,
       hideFurry,
       hidePregnant,
       hideLgbt

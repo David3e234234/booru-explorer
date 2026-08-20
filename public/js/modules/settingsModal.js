@@ -174,6 +174,11 @@ export function applySettingsToUIAndState(s) {
     checkVideoAutoplayViewer.checked = s.videoAutoplayViewer;
   }
 
+  const selectMaxServerCache = document.getElementById('selectMaxServerCache');
+  if (selectMaxServerCache && s.maxServerCacheMb !== undefined) {
+    selectMaxServerCache.value = String(s.maxServerCacheMb);
+  }
+
   // Telegram автобэкап
   const checkTelegramBackupEnabled = document.getElementById('checkTelegramBackupEnabled');
   const inputTelegramBotToken = document.getElementById('inputTelegramBotToken');
@@ -357,10 +362,14 @@ export async function updateStorageUsageInfo() {
   }
 
   let serverCacheBytes = 0;
+  let maxServerCacheMb = 1500;
   try {
     const data = await fetchCacheInfo();
     if (data && data.success) {
       serverCacheBytes = data.diskCacheBytes || 0;
+      if (data.maxServerCacheMb !== undefined) {
+        maxServerCacheMb = Number(data.maxServerCacheMb);
+      }
     }
   } catch {}
 
@@ -387,7 +396,18 @@ export async function updateStorageUsageInfo() {
   }
 
   if (storageMediaCacheText) storageMediaCacheText.textContent = formatBytes(pwaCacheBytes || localBytes);
-  if (storageServerCacheText) storageServerCacheText.textContent = formatBytes(serverCacheBytes);
+  if (storageServerCacheText) {
+    const limitLabel = maxServerCacheMb > 0 
+      ? ` / ${maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1) + ' ГБ' : maxServerCacheMb + ' МБ'}`
+      : ' (Без лимита)';
+    storageServerCacheText.textContent = `${formatBytes(serverCacheBytes)}${limitLabel}`;
+  }
+  const storageLimitBadge = document.getElementById('storageLimitBadge');
+  if (storageLimitBadge) {
+    storageLimitBadge.textContent = maxServerCacheMb > 0 
+      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1) + ' ГБ' : maxServerCacheMb + ' МБ')
+      : 'Без лимита';
+  }
 }
 
 export async function handleClearStorageCache() {
@@ -512,6 +532,11 @@ export function openSettingsModal() {
   if (checkProxyDownloads) checkProxyDownloads.checked = state.settings.proxyDownloads !== false;
   if (checkProxyVideoDefault) checkProxyVideoDefault.checked = (state.settings.proxyVideos !== false && state.settings.proxyVideoDefault !== false);
   if (checkShowVideoStatusBanner) checkShowVideoStatusBanner.checked = state.settings.showVideoStatusBanner !== false;
+
+  const selectMaxServerCacheModal = document.getElementById('selectMaxServerCache');
+  if (selectMaxServerCacheModal && state.settings.maxServerCacheMb !== undefined) {
+    selectMaxServerCacheModal.value = String(state.settings.maxServerCacheMb);
+  }
 
   const currentTheme = document.documentElement.getAttribute('data-theme') || 'kotobox';
   document.querySelectorAll('.btn-theme').forEach(b => {
@@ -645,6 +670,17 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
 
   if (btnRefreshStorage) btnRefreshStorage.addEventListener('click', updateStorageUsageInfo);
   if (btnClearStorageBtn) btnClearStorageBtn.addEventListener('click', handleClearStorageCache);
+
+  const selectMaxServerCache = document.getElementById('selectMaxServerCache');
+  if (selectMaxServerCache) {
+    selectMaxServerCache.addEventListener('change', () => {
+      const val = parseInt(selectMaxServerCache.value, 10);
+      state.settings.maxServerCacheMb = val;
+      persistSettings({ maxServerCacheMb: val });
+      updateStorageUsageInfo();
+      showToast(`Лимит серверного кэша: ${val > 0 ? (val >= 1000 ? (val / 1000).toFixed(1) + ' ГБ' : val + ' МБ') : 'Без ограничений'}`);
+    });
+  }
 
   if (btnExportData) {
     btnExportData.addEventListener('click', () => {

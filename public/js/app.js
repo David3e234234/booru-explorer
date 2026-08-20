@@ -43,7 +43,9 @@ import {
 import { 
   loadBooruSites, 
   renderSitesBar, 
-  renderMobileSourcesSheet 
+  renderMobileSourcesSheet,
+  initCustomSourcesModal,
+  updateCurrentSiteLabel
 } from './modules/navigationUI.js';
 import { 
   switchFavoritesSubTab, 
@@ -215,6 +217,12 @@ async function init() {
     onUpdateFavoritesBadge: updateFavoritesBadge
   });
 
+  initCustomSourcesModal({
+    onApply: () => {
+      selectSite('custom');
+    }
+  });
+
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
 
@@ -275,22 +283,19 @@ function handleExploreAuthor(author) {
 }
 
 function selectSite(siteId) {
-  if (state.currentSite === siteId && state.currentCategory !== 'favorites') return;
+  if (state.currentSite === siteId && state.currentCategory !== 'favorites') {
+    if (siteId === 'custom') {
+      performSearch(true);
+    }
+    return;
+  }
   state.currentSite = siteId;
   persistSettings({ defaultSite: siteId });
   if (state.currentCategory === 'favorites') {
     state.currentCategory = 'new';
     updateCategoryTabsUI();
   }
-  const currentSiteLabel = document.getElementById('currentSiteLabel');
-  if (currentSiteLabel) {
-    if (siteId === 'all') {
-      currentSiteLabel.textContent = 'Все сразу';
-    } else {
-      const siteObj = state.sites.find(s => s.id === siteId);
-      currentSiteLabel.textContent = siteObj ? siteObj.name : siteId;
-    }
-  }
+  updateCurrentSiteLabel();
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
   performSearch(true);
@@ -778,6 +783,7 @@ async function performSearch(reset = false, options = {}) {
       hideFurry: state.hideFurry,
       hidePregnant: state.hidePregnant,
       hideLgbt: state.hideLgbt,
+      customSites: state.currentSite === 'custom' ? state.settings.customSources : '',
       bustCache: options.bustCache || false
     });
 

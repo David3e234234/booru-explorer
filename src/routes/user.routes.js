@@ -17,7 +17,8 @@ import {
 import { 
   apiPostsCache, 
   tagAutocompleteCache, 
-  getDirectoryStats 
+  getDirectoryStats,
+  cleanDiskCacheIfNeeded
 } from '../services/cacheService.js';
 import { getLocalIpAddress } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
@@ -59,6 +60,9 @@ router.get('/settings', (req, res) => {
 router.post('/settings', (req, res) => {
   const userId = req.user?.id || null;
   const updated = updateSettings(req.body || {}, userId);
+  if (req.body && req.body.maxServerCacheMb !== undefined) {
+    cleanDiskCacheIfNeeded();
+  }
   res.json({ success: true, settings: updated });
 });
 
@@ -287,6 +291,8 @@ router.post('/likes/sync', (req, res) => {
 
 // GET /api/cache-info
 router.get('/cache-info', (req, res) => {
+  const userId = req.user?.id || null;
+  const settings = getSettings(userId);
   const thumbs = getDirectoryStats(THUMBS_DIR);
   const videos = getDirectoryStats(VIDEOS_DIR);
   const totalDiskBytes = thumbs.totalBytes + videos.totalBytes;
@@ -295,6 +301,7 @@ router.get('/cache-info', (req, res) => {
     success: true,
     diskCacheBytes: totalDiskBytes,
     diskCacheMB: (totalDiskBytes / (1024 * 1024)).toFixed(1),
+    maxServerCacheMb: settings?.maxServerCacheMb !== undefined ? Number(settings.maxServerCacheMb) : 1500,
     thumbsCount: thumbs.fileList.length,
     videosCount: videos.fileList.length,
     ramCacheEntries: apiPostsCache.size() + tagAutocompleteCache.size()

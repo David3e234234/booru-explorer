@@ -48,18 +48,41 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     return await fetchDanbooru(params, aiTagsList, settings);
   }
 
-  if (site === 'all') {
+  if (site === 'all' || site === 'custom' || site.includes(',')) {
     let mainSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub'];
-    if (params.typeFilter === 'video' || params.typeFilter === 'audio' || params.typeFilter === 'sound') {
-      mainSites = ['rule34video', 'danbooru', 'rule34', 'gelbooru', 'xbooru', 'hypnohub'];
-    } else if (params.ratingFilter === 'nsfw') {
-      mainSites = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub'];
+
+    if (site === 'custom' || site.includes(',')) {
+      let customList = [];
+      if (params.customSites) {
+        customList = params.customSites.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      } else if (site.includes(',')) {
+        customList = site.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+      } else if (Array.isArray(settings?.customSources) && settings.customSources.length > 0) {
+        customList = settings.customSources;
+      } else {
+        customList = ['danbooru', 'gelbooru', 'rule34', 'yandere'];
+      }
+      const availableSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub'];
+      mainSites = customList.filter(s => availableSites.includes(s));
+      if (mainSites.length === 0) mainSites = ['danbooru', 'gelbooru'];
     }
+
+    if (params.typeFilter === 'video' || params.typeFilter === 'audio' || params.typeFilter === 'sound') {
+      const videoSupported = ['rule34video', 'danbooru', 'rule34', 'gelbooru', 'xbooru', 'hypnohub'];
+      mainSites = mainSites.filter(s => videoSupported.includes(s));
+      if (mainSites.length === 0) mainSites = ['rule34video', 'danbooru'];
+    } else if (params.ratingFilter === 'nsfw') {
+      const nsfwAllowed = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan'];
+      mainSites = mainSites.filter(s => nsfwAllowed.includes(s));
+      if (mainSites.length === 0) mainSites = ['danbooru', 'rule34'];
+    }
+
     if (params.excludeSites) {
       const excluded = params.excludeSites.split(',').map(s => s.trim().toLowerCase());
       mainSites = mainSites.filter(s => !excluded.includes(s));
     }
-    const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / mainSites.length));
+
+    const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / Math.max(1, mainSites.length)));
     const results = await Promise.allSettled(
       mainSites.map(s => fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, settings))
     );

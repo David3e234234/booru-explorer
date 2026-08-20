@@ -75,8 +75,30 @@ export function getDirectoryStats(dirPath) {
   return { totalBytes, fileList };
 }
 
-export function cleanDiskCacheIfNeeded(maxBytes = 1.5 * 1024 * 1024 * 1024) {
+import { getSettings } from './storageService.js';
+
+export function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
   try {
+    let maxBytes = explicitMaxBytes;
+    if (maxBytes === null || maxBytes === undefined) {
+      try {
+        const settings = getSettings();
+        const mb = Number(settings?.maxServerCacheMb);
+        if (mb === 0) {
+          return; // 0 = без ограничений
+        }
+        if (mb > 0) {
+          maxBytes = mb * 1024 * 1024;
+        } else {
+          maxBytes = 1.5 * 1024 * 1024 * 1024;
+        }
+      } catch {
+        maxBytes = 1.5 * 1024 * 1024 * 1024;
+      }
+    }
+
+    if (!maxBytes || maxBytes <= 0) return;
+
     const thumbs = getDirectoryStats(THUMBS_DIR);
     const videos = getDirectoryStats(VIDEOS_DIR);
     let totalBytes = thumbs.totalBytes + videos.totalBytes;

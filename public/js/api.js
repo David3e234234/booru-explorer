@@ -77,6 +77,7 @@ export async function fetchPosts({
   hideFurry = true,
   hidePregnant = true,
   hideLgbt = false,
+  customSites = '',
   bustCache = false
 }) {
   const params = {
@@ -93,6 +94,10 @@ export async function fetchPosts({
     hidePregnant: hidePregnant ? 'true' : 'false',
     hideLgbt: hideLgbt ? 'true' : 'false'
   };
+
+  if (customSites) {
+    params.customSites = Array.isArray(customSites) ? customSites.join(',') : customSites;
+  }
 
   if (bustCache) {
     params._t = String(Date.now());

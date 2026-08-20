@@ -471,14 +471,6 @@
       <span class="nav-label">Сайты</span>
     </button>
 
-    <button class="mobile-nav-item" id="btnNavFavorites" data-nav="favorites" title="Избранное">
-      <div class="nav-icon-box">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
-        <span class="badge-fav-count" id="badgeFavCountMobile">0</span>
-      </div>
-      <span class="nav-label">Избранное</span>
-    </button>
-
     <button class="mobile-nav-item" id="btnNavProfile" data-nav="profile" title="Профиль">
       <div class="nav-icon-box">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -1013,6 +1005,25 @@
                 </div>
               </div>
 
+              <!-- Настройка лимита дискового кэша сервера -->
+              <div class="storage-limit-control" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color);">
+                <div class="settings-sublabel-row" style="margin-bottom: 6px;">
+                  <label class="settings-sublabel" for="selectMaxServerCache" style="font-weight: 600;">Лимит дискового кэша на сервере:</label>
+                  <span class="storage-limit-badge" id="storageLimitBadge" style="font-size: 11px; color: var(--accent-primary);">1.5 ГБ</span>
+                </div>
+                <select id="selectMaxServerCache" class="settings-select" style="width: 100%;">
+                  <option value="250">250 МБ (Минимальный)</option>
+                  <option value="500">500 МБ</option>
+                  <option value="1000">1 ГБ</option>
+                  <option value="1500" selected>1.5 ГБ (Рекомендуется)</option>
+                  <option value="2000">2 ГБ</option>
+                  <option value="5000">5 ГБ (Просторный)</option>
+                  <option value="10000">10 ГБ</option>
+                  <option value="0">Без ограничений</option>
+                </select>
+                <p class="settings-hint" style="margin-top: 6px; font-size: 11.5px; opacity: 0.8;">При превышении лимита сервер автоматически очищает старые превью и видео (LRU автоочистка).</p>
+              </div>
+
               <div class="storage-actions-row">
                 <button type="button" class="btn-clean-cache" id="btnClearStorageBtn">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1278,6 +1289,35 @@
           <button type="submit" class="btn-primary btn-auth-submit" id="btnSubmitRegister">Создать аккаунт</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Модальное окно Настройки своей подборки Booru -->
+  <div class="modal-backdrop" id="modalCustomSourcesBackdrop" style="display: none;">
+    <div class="modal-dialog modal-dialog-custom-sources">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
+          <h3 class="modal-title">Своя подборка источников</h3>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btnCloseCustomSourcesModal" title="Закрыть">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body custom-sources-modal-body">
+        <p class="modal-desc-hint">Отметьте нужные Booru-сайты, посты из которых будут параллельно собираться и перемешиваться в ленте.</p>
+        <div class="custom-sources-checkbox-grid" id="customSourcesCheckboxGrid">
+          <!-- Генерируется через JS -->
+        </div>
+      </div>
+      <div class="modal-footer custom-sources-modal-footer">
+        <div class="custom-sources-footer-left">
+          <button type="button" class="btn-secondary btn-sm" id="btnCustomSourcesToggleAll">Выбрать все</button>
+        </div>
+        <div class="custom-sources-footer-right">
+          <button type="button" class="btn-primary" id="btnApplyCustomSources">Применить и искать</button>
+        </div>
+      </div>
     </div>
   </div>
 

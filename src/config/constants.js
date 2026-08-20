@@ -215,6 +215,8 @@ export const DEFAULT_SETTINGS = {
   enableJsDemuxing: true,
   enablePaheal: true,
   defaultSite: 'danbooru',
+  customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
+  maxServerCacheMb: 1500,
   rule34ApiKey: '',
   rule34UserId: '',
   gelbooruApiKey: '',

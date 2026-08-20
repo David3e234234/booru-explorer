@@ -71,7 +71,9 @@ export const state = {
     danbooruLogin: '',
     deepFetchPages: 2,
     prioritizeUserTags: false,
-    enableJsDemuxing: true
+    enableJsDemuxing: true,
+    customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
+    maxServerCacheMb: 1500
   },
   currentViewerIndex: -1,
   isLoading: false,
