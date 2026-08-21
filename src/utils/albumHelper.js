@@ -165,24 +165,31 @@ export function groupPostsIntoAlbums(posts, options = {}) {
       const sortedItems = sortAlbumItems(items);
       const rootPost = sortedItems[0];
 
+      // Очищаем вложенные элементы от циклических ссылок
+      const cleanItems = sortedItems.map(item => {
+        const copy = { ...item };
+        delete copy.albumItems;
+        return copy;
+      });
+
       // Собираем объединенные теги
       const allTagsSet = new Set();
-      sortedItems.forEach(item => {
+      cleanItems.forEach(item => {
         if (Array.isArray(item.tags)) {
           item.tags.forEach(t => allTagsSet.add(t));
         }
       });
 
       // Максимальный score, просмотры и закладки
-      const maxScore = Math.max(...sortedItems.map(i => i.score || 0));
-      const maxFavs = Math.max(...sortedItems.map(i => i.favCount || 0));
-      const maxViews = Math.max(...sortedItems.map(i => i.views || 0));
+      const maxScore = Math.max(...cleanItems.map(i => i.score || 0));
+      const maxFavs = Math.max(...cleanItems.map(i => i.favCount || 0));
+      const maxViews = Math.max(...cleanItems.map(i => i.views || 0));
 
       const albumPost = {
         ...rootPost,
         isAlbum: true,
-        albumCount: sortedItems.length,
-        albumItems: sortedItems,
+        albumCount: cleanItems.length,
+        albumItems: cleanItems,
         seriesKey: key,
         canFetchAlbum: true,
         tags: Array.from(allTagsSet),
@@ -194,7 +201,9 @@ export function groupPostsIntoAlbums(posts, options = {}) {
       resultMap.set(firstIndex, albumPost);
     } else {
       // Одиночный пост с потенциальным сетом (hasChildren или pixiv source)
-      const singlePost = items[0];
+      const singlePost = { ...items[0] };
+      delete singlePost.albumItems;
+
       const hasChildren = Boolean(singlePost.hasChildren || singlePost.has_children || singlePost.has_active_children);
       const hasParent = Boolean(singlePost.parentId && String(singlePost.parentId) !== '0');
       const isExternalSet = key.startsWith('pixiv:') || key.startsWith('twitter:') || key.startsWith('fanbox:');
@@ -203,7 +212,6 @@ export function groupPostsIntoAlbums(posts, options = {}) {
       singlePost.albumCount = 1;
       singlePost.seriesKey = key;
       singlePost.canFetchAlbum = Boolean(hasChildren || hasParent || isExternalSet);
-      singlePost.albumItems = [singlePost];
 
       resultMap.set(firstIndex, singlePost);
     }
