@@ -1146,16 +1146,20 @@ input.search-input:focus,
 .category-cards-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   box-sizing: border-box;
+}
+
+.category-cards-grid .category-card:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .category-card {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 10px;
+  gap: 8px;
+  padding: 10px 9px;
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -1186,6 +1190,8 @@ input.search-input:focus,
 .category-icon {
   width: 32px;
   height: 32px;
+  min-width: 32px;
+  min-height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1207,15 +1213,17 @@ input.search-input:focus,
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  flex: 1;
 }
 
 .category-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
+  white-space: normal;
+  word-break: break-word;
+  letter-spacing: -0.1px;
 }
 
 .category-card.active .category-name {
@@ -1223,8 +1231,10 @@ input.search-input:focus,
 }
 
 .category-desc {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-muted);
+  line-height: 1.25;
+  margin-top: 1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1420,7 +1430,7 @@ input.search-input:focus,
     box-shadow: 10px 0 30px rgba(0, 0, 0, 0.7);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding: max(50px, calc(env(safe-area-inset-top, 0px) + 16px)) 14px calc(var(--safe-area-bottom) + 30px) 14px;
+    padding: max(14px, env(safe-area-inset-top, 14px)) 14px calc(var(--safe-area-bottom) + 24px) 14px;
     background: var(--bg-surface);
   }
 
@@ -1432,9 +1442,15 @@ input.search-input:focus,
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-bottom: 12px;
-    padding-bottom: 10px;
+    margin-top: 0;
+    padding-top: 2px;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
     border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .sidebar-mobile-header .sheet-handle {
+    margin-bottom: 8px;
   }
 
   .sidebar-mobile-title-row {
