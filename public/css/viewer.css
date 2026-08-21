@@ -398,6 +398,12 @@
   justify-content: center;
   overflow: hidden;
   user-select: none;
+  transition: padding-bottom 0.25s ease;
+}
+
+/* Резервирование места под ленту миниатюр альбома, чтобы она не перекрывала большие фото */
+.viewer-content.has-album:not(.ui-hidden) .viewer-media-wrapper {
+  padding-bottom: 92px;
 }
 
 .viewer-image {
@@ -411,12 +417,17 @@
   border-radius: var(--radius-sm);
   cursor: grab;
   transform-origin: center center;
-  transition: transform 0.05s ease-out;
+  transition: transform 0.22s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.viewer-image.zoomed {
+  cursor: grab;
+  touch-action: none;
 }
 
 .viewer-image.dragging {
-  cursor: grabbing;
-  transition: none;
+  cursor: grabbing !important;
+  transition: none !important;
 }
 
 /* Видеоплеер */
@@ -1152,6 +1163,27 @@
     touch-action: pan-y pinch-zoom;
     box-sizing: border-box;
     overflow: hidden;
+    transition: padding-bottom 0.25s ease;
+  }
+
+  .viewer-content.has-album:not(.ui-hidden) .viewer-media-wrapper {
+    padding-bottom: calc(64px + max(14px, env(safe-area-inset-bottom, 14px)));
+  }
+
+  .viewer-album-filmstrip {
+    bottom: max(10px, env(safe-area-inset-bottom, 10px));
+    padding: 4px 6px;
+    border-radius: var(--radius-md);
+    max-width: calc(100vw - 20px);
+  }
+
+  .album-filmstrip-inner {
+    gap: 6px;
+  }
+
+  .album-filmstrip-item {
+    width: 44px;
+    height: 44px;
   }
 
   .viewer-image {

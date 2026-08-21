@@ -92,7 +92,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (modal) modal.style.display = 'none';
     document.body.style.overflow = '';
     if (viewerSidebar) viewerSidebar.classList.remove('open');
-    if (viewerContent) viewerContent.classList.remove('ui-hidden');
+    if (viewerContent) {
+      viewerContent.classList.remove('ui-hidden');
+      viewerContent.classList.remove('has-album');
+    }
     
     if (activeAbortController) {
       activeAbortController.abort();
@@ -130,6 +133,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const isAlbum = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 1);
 
       if (isAlbum) {
+        if (viewerContent) viewerContent.classList.add('has-album');
         viewerAlbumFilmstrip.style.display = 'block';
         if (viewerAlbumBadge && viewerAlbumPageText) {
           viewerAlbumBadge.style.display = 'inline-flex';
@@ -172,6 +176,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }
       } else {
+        if (viewerContent) viewerContent.classList.remove('has-album');
         viewerAlbumFilmstrip.style.display = 'none';
         if (viewerAlbumBadge) viewerAlbumBadge.style.display = 'none';
         if (btnDownloadAlbum) btnDownloadAlbum.style.display = 'none';
@@ -892,6 +897,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         return;
       }
 
+      if (currentZoomInstance && currentZoomInstance.getZoomLevel() > 1.05) {
+        isPinching = false;
+        isDraggingDown = false;
+        touchStartX = 0;
+        touchStartY = 0;
+        touchStartTime = 0;
+        return;
+      }
+
       if (e.touches.length === 2) {
         isPinching = true;
         isDraggingDown = false;
@@ -911,6 +925,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     mediaWrapper.addEventListener('touchmove', (e) => {
       if (isInteractiveTouchTarget(e.target) || !touchStartY) {
+        return;
+      }
+
+      if (currentZoomInstance && currentZoomInstance.getZoomLevel() > 1.05) {
         return;
       }
 
@@ -941,6 +959,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     mediaWrapper.addEventListener('touchend', (e) => {
       if (isInteractiveTouchTarget(e.target) && !isDraggingDown) {
+        touchStartX = 0;
+        touchStartY = 0;
+        touchStartTime = 0;
+        return;
+      }
+
+      if (currentZoomInstance && currentZoomInstance.getZoomLevel() > 1.05 && !isDraggingDown) {
         touchStartX = 0;
         touchStartY = 0;
         touchStartTime = 0;
@@ -1014,9 +1039,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
         if (absX < 12 && absY < 12 && deltaTime < 250) {
           const now = Date.now();
+          const tapX = e.changedTouches[0].clientX;
+          const tapY = e.changedTouches[0].clientY;
           if (now - lastTapTime < 300) {
             if (currentZoomInstance) {
-              currentZoomInstance.toggleDoubleTapZoom();
+              currentZoomInstance.toggleDoubleTapZoom(tapX, tapY);
             }
           } else {
             setTimeout(() => {
