@@ -199,33 +199,87 @@ router.get('/posts/album', async (req, res) => {
     };
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
 
-    let searchTags = '';
+    let foundPostsMap = new Map();
+
+    const fetchAndCollect = async (tagQuery) => {
+      if (!tagQuery) return;
+      try {
+        const list = await fetchPosts(site, { tags: tagQuery, page: 1, limit: 100, ratingFilter: 'all', typeFilter: 'all' }, aiTagsList, settings);
+        list.forEach(p => {
+          if (p && p.id && !foundPostsMap.has(p.id)) {
+            const clean = { ...p };
+            delete clean.albumItems;
+            foundPostsMap.set(p.id, clean);
+          }
+        });
+      } catch (err) {
+        logError('AlbumSearch', `Ошибка при запросе tags="${tagQuery}"`, err);
+      }
+    };
+
+    // 1. Поиск по parentId
     if (parentId && String(parentId) !== '0') {
-      searchTags = `parent:${parentId}`;
-    } else if (seriesKey.startsWith('pixiv:')) {
+      await fetchAndCollect(`parent:${parentId}`);
+    }
+
+    // 2. Поиск по originalId (если сам пост был родителем)
+    if (originalId && String(originalId) !== '0') {
+      await fetchAndCollect(`parent:${originalId}`);
+    }
+
+    // 3. Поиск по Pixiv ID
+    if (seriesKey.startsWith('pixiv:')) {
       const pixivId = seriesKey.replace('pixiv:', '');
-      searchTags = `pixiv:${pixivId}`;
-    } else if (originalId) {
-      searchTags = `parent:${originalId}`;
+      await fetchAndCollect(`pixiv:${pixivId}`);
+      if (foundPostsMap.size === 0) {
+        await fetchAndCollect(`pixiv_id:${pixivId}`);
+      }
     }
 
-    if (!searchTags) {
-      return res.json({ success: false, message: 'Не указан ключ серии или parentId', albumItems: [] });
+    // 4. Поиск по Twitter Status ID
+    if (seriesKey.startsWith('twitter:')) {
+      const twitterId = seriesKey.replace('twitter:', '');
+      await fetchAndCollect(`source:*${twitterId}*`);
     }
 
-    logInfo('AlbumSearch', `Поиск частей серии: site=${site}, tags="${searchTags}"`);
-    let items = await fetchPosts(site, { tags: searchTags, page: 1, limit: 100 }, aiTagsList, settings);
+    let items = Array.from(foundPostsMap.values());
 
-    // Если по pixiv:ID ничего не нашлось, пробуем source:*ID* или pixiv_id:ID
-    if (items.length === 0 && seriesKey.startsWith('pixiv:')) {
-      const pixivId = seriesKey.replace('pixiv:', '');
-      items = await fetchPosts(site, { tags: `pixiv_id:${pixivId}`, page: 1, limit: 100 }, aiTagsList, settings);
+    // Если пост родительский не вернулся в parent:ID (на некоторых Booru), запрашиваем сам parentId
+    if (parentId && !foundPostsMap.has(`${site}_${parentId}`) && !foundPostsMap.has(parentId)) {
+      try {
+        const rootPost = await fetchPosts(site, { tags: `id:${parentId}`, page: 1, limit: 1, ratingFilter: 'all', typeFilter: 'all' }, aiTagsList, settings);
+        if (rootPost && rootPost[0]) {
+          const cleanRoot = { ...rootPost[0] };
+          delete cleanRoot.albumItems;
+          items.unshift(cleanRoot);
+        }
+      } catch {}
     }
 
-    // Если всё равно пусто, но был parentId — пробуем без фильтров
-    if (items.length === 0 && parentId) {
-      items = await fetchPosts(site, { tags: `parent:${parentId}`, page: 1, limit: 100, ratingFilter: 'all', typeFilter: 'all' }, aiTagsList, settings);
-    }
+    // Сортируем страницы сета
+    items.sort((a, b) => {
+      const aIsParent = Boolean(a.hasChildren && !a.parentId);
+      const bIsParent = Boolean(b.hasChildren && !b.parentId);
+      if (aIsParent && !bIsParent) return -1;
+      if (!aIsParent && bIsParent) return 1;
+
+      const getPageNum = (item) => {
+        const target = item.fileUrl || item.sampleUrl || item.previewUrl || item.source || '';
+        const pMatch = target.match(/_p(\d+)\./i) || target.match(/page_?(\d+)/i);
+        if (pMatch) return parseInt(pMatch[1], 10);
+        return null;
+      };
+
+      const pageA = getPageNum(a);
+      const pageB = getPageNum(b);
+      if (pageA !== null && pageB !== null) return pageA - pageB;
+
+      const idA = parseInt(String(a.originalId || a.id).replace(/\D/g, ''), 10) || 0;
+      const idB = parseInt(String(b.originalId || b.id).replace(/\D/g, ''), 10) || 0;
+      return idA - idB;
+    });
+
+    logInfo('AlbumSearch', `Успешно найдено ${items.length} частей серии для site=${site}`);
 
     res.json({
       success: true,

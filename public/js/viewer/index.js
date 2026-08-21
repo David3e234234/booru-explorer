@@ -473,6 +473,34 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           currentPost.albumItems = res.albumItems;
           currentPost.albumCount = res.albumItems.length;
           currentAlbumIndex = 0;
+
+          // Синхронизируем обновленный альбом в глобальном состоянии галереи
+          const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+          if (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length) {
+            list[state.currentViewerIndex] = currentPost;
+          }
+          if (Array.isArray(state.posts)) {
+            const origIdx = state.posts.findIndex(p => p.id === currentPost.id);
+            if (origIdx !== -1) {
+              state.posts[origIdx] = currentPost;
+            }
+          }
+
+          // Обновляем бейдж карточки в DOM галереи
+          const cardEl = document.querySelector(`.post-card[data-id="${currentPost.id}"]`);
+          if (cardEl) {
+            cardEl.classList.add('is-album-card');
+            let badgeAlbum = cardEl.querySelector('.badge-album');
+            if (!badgeAlbum) {
+              badgeAlbum = document.createElement('span');
+              badgeAlbum.className = 'badge-format badge-album';
+              cardEl.querySelector('.post-badges')?.prepend(badgeAlbum);
+            }
+            if (badgeAlbum) {
+              badgeAlbum.innerHTML = `📑 ${res.albumItems.length}`;
+            }
+          }
+
           renderViewerPost();
           showToast(`Найдено ${res.albumItems.length} изображений серии!`);
         } else {
@@ -920,9 +948,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
         if (absX > 50 && absX > absY * 1.5 && deltaTime < 450) {
           if (deltaX < 0) {
-            btnNext?.click();
+            goToNext(false);
           } else {
-            btnPrev?.click();
+            goToPrev(false);
           }
           return;
         }
