@@ -834,15 +834,60 @@ input.search-input:focus,
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 280px;
+  max-height: 320px;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.sidebar-tags-grouped-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.sidebar-tag-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sidebar-tag-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 2px 3px 2px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.s-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.s-group-title.category-artist { color: var(--tag-artist); }
+.s-group-title.category-copyright { color: var(--tag-copyright); }
+.s-group-title.category-character { color: var(--tag-character); }
+.s-group-title.category-general { color: var(--tag-general); }
+.s-group-title.category-meta { color: var(--tag-meta); }
+
+.s-group-count {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.sidebar-tag-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .sidebar-tag-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   padding: 3px 6px;
   border-radius: var(--radius-sm);
   font-size: 12px;
@@ -855,9 +900,39 @@ input.search-input:focus,
   background-color: var(--bg-surface-elevated);
 }
 
+.s-tag-wiki {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-mono);
+}
+
+.s-tag-wiki.category-artist { color: var(--tag-artist); }
+.s-tag-wiki.category-copyright { color: var(--tag-copyright); }
+.s-tag-wiki.category-character { color: var(--tag-character); }
+.s-tag-wiki.category-general { color: var(--tag-general); }
+.s-tag-wiki.category-meta { color: var(--tag-meta); }
+
+.s-tag-wiki:hover {
+  transform: scale(1.1);
+  border-color: currentColor;
+}
+
 .s-tag-name {
   color: var(--tag-general);
   word-break: break-all;
+  flex: 1;
+  min-width: 0;
 }
 
 .s-tag-name.category-artist { color: var(--tag-artist); }
@@ -869,7 +944,8 @@ input.search-input:focus,
   font-family: var(--font-mono);
   font-size: 10px;
   color: var(--text-muted);
-  margin-left: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .empty-tags-hint {

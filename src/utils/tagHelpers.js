@@ -292,26 +292,39 @@ export function classifyTags(rawTags = [], author = '') {
     });
   }
 
+  const metaKeywords = [
+    'highres', 'absurdres', 'superabsurdres', '4k', 'sound', 'audio', 'video', 'animated', 
+    'ugoira', 'translated', 'translation_request', 'commentary', 'commentary_request', 
+    'tagme', 'bad_id', 'bad_link', 'duplicate', 'source_request', 'check_my_note', 
+    'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail', 'patreon_reward', 
+    'fantia', 'fanbox', 'skeb', 'lowres', 'downscaled'
+  ];
+
   for (const tag of tags) {
-    const t = tag.toLowerCase();
+    if (!tag) continue;
+    const t = String(tag).toLowerCase().trim();
     if (t.startsWith('artist:') || t.startsWith('channel:') || t.startsWith('uploader:') || t.endsWith('_(artist)') || t.endsWith('_(creator)') || t.startsWith('by_') || t.endsWith('_(circle)') || t.endsWith('_(studio)')) {
-      const clean = tag.replace(/^(artist|channel|uploader|creator|author|draw):/, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, '');
+      const clean = tag.replace(/^(artist|channel|uploader|creator|author|draw):/i, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/i, '');
       if (!artist.includes(clean)) artist.push(clean);
-    } else if (t.startsWith('character:') || t.endsWith('_(character)') || t.endsWith('_(cosplay)')) {
-      const clean = tag.replace(/^character:/, '').replace(/_?\((character|cosplay)\)$/i, '');
+      if (!artist.includes(tag)) artist.push(tag);
+    } else if (t.startsWith('character:') || t.endsWith('_(character)') || t.endsWith('_(cosplay)') || t.endsWith('_(person)')) {
+      const clean = tag.replace(/^character:/i, '').replace(/_?\((character|cosplay|person)\)$/i, '');
       if (!character.includes(clean)) character.push(clean);
-    } else if (t.startsWith('copyright:') || t.endsWith('_(series)') || t.endsWith('_(game)') || t.endsWith('_(anime)') || t.endsWith('_(manga)') || t.endsWith('_(vtuber)') || t.endsWith('_(novel)')) {
-      const clean = tag.replace(/^copyright:/, '').replace(/_?\((series|game|anime|manga|vtuber|novel)\)$/i, '');
+      if (!character.includes(tag)) character.push(tag);
+    } else if (t.startsWith('copyright:') || t.endsWith('_(series)') || t.endsWith('_(game)') || t.endsWith('_(anime)') || t.endsWith('_(manga)') || t.endsWith('_(vtuber)') || t.endsWith('_(novel)') || t.endsWith('_(comic)') || t.endsWith('_(franchise)') || t.endsWith('_(project)')) {
+      const clean = tag.replace(/^copyright:/i, '').replace(/_?\((series|game|anime|manga|vtuber|novel|comic|franchise|project)\)$/i, '');
       if (!copyright.includes(clean)) copyright.push(clean);
-    } else if (t.startsWith('meta:') || ['highres', 'absurdres', '4k', 'sound', 'audio', 'video', 'animated', 'ugoira', 'translated', 'commentary', 'tagme'].includes(t)) {
-      const clean = tag.replace(/^meta:/, '');
+      if (!copyright.includes(tag)) copyright.push(tag);
+    } else if (t.startsWith('meta:') || metaKeywords.includes(t) || t.endsWith('_(medium)') || t.endsWith('_(style)')) {
+      const clean = tag.replace(/^meta:/i, '');
       if (!meta.includes(clean)) meta.push(clean);
+      if (!meta.includes(tag)) meta.push(tag);
     } else {
       general.push(tag);
     }
   }
 
-  return { artist, character, copyright, general, meta };
+  return { artist, copyright, character, general, meta };
 }
 
 export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'all') {

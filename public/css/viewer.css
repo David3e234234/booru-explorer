@@ -793,8 +793,171 @@
 /* Облако тегов с категоризацией */
 .tags-cloud {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+/* Контейнер структурированных тегов по 5 категориям (Artist, Copyright, Character, General, Meta) */
+.viewer-tags-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.viewer-tag-group {
+  display: flex;
+  flex-direction: column;
   gap: 6px;
+}
+
+.viewer-tag-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.viewer-tag-group-title {
+  font-size: 13px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.3px;
+}
+
+.viewer-tag-group-title.category-artist { color: var(--tag-artist); }
+.viewer-tag-group-title.category-copyright { color: var(--tag-copyright); }
+.viewer-tag-group-title.category-character { color: var(--tag-character); }
+.viewer-tag-group-title.category-general { color: var(--tag-general); }
+.viewer-tag-group-title.category-meta { color: var(--tag-meta); }
+
+.viewer-tag-group-count {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-surface-elevated);
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+}
+
+.viewer-tag-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viewer-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  transition: background-color var(--transition-fast);
+  min-height: 34px;
+  box-sizing: border-box;
+}
+
+.viewer-tag-row:hover {
+  background-color: var(--bg-surface-hover);
+}
+
+.viewer-tag-wiki {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  user-select: none;
+  font-family: var(--font-mono);
+}
+
+.viewer-tag-wiki.category-artist { color: var(--tag-artist); }
+.viewer-tag-wiki.category-copyright { color: var(--tag-copyright); }
+.viewer-tag-wiki.category-character { color: var(--tag-character); }
+.viewer-tag-wiki.category-general { color: var(--tag-general); }
+.viewer-tag-wiki.category-meta { color: var(--tag-meta); }
+
+.viewer-tag-wiki:hover {
+  transform: scale(1.08);
+  filter: brightness(1.2);
+  border-color: currentColor;
+}
+
+.viewer-tag-wiki:active {
+  transform: scale(0.92);
+}
+
+.viewer-tag-link {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  line-height: 1.35;
+  word-break: break-word;
+  transition: filter var(--transition-fast);
+}
+
+.viewer-tag-link.category-artist { color: var(--tag-artist); }
+.viewer-tag-link.category-copyright { color: var(--tag-copyright); }
+.viewer-tag-link.category-character { color: var(--tag-character); }
+.viewer-tag-link.category-general { color: var(--tag-general); }
+.viewer-tag-link.category-meta { color: var(--tag-meta); }
+
+.viewer-tag-link:hover {
+  text-decoration: underline;
+  filter: brightness(1.2);
+}
+
+.viewer-tag-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: all var(--transition-fast);
+}
+
+.viewer-tag-row:hover .viewer-tag-copy {
+  opacity: 1;
+}
+
+.viewer-tag-copy:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-elevated);
+}
+
+.viewer-tag-copy:active {
+  transform: scale(0.9);
 }
 
 .post-tag {
@@ -1068,6 +1231,43 @@
     font-size: 15px;
     font-weight: 700;
     color: var(--text-primary);
+  }
+
+  .viewer-tag-group {
+    gap: 8px;
+  }
+
+  .viewer-tag-group-header {
+    padding-bottom: 6px;
+  }
+
+  .viewer-tag-group-title {
+    font-size: 14px;
+  }
+
+  .viewer-tag-row {
+    min-height: 42px;
+    padding: 6px 10px;
+    gap: 10px;
+    border-radius: var(--radius-md);
+  }
+
+  .viewer-tag-wiki {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+    border-radius: var(--radius-sm);
+  }
+
+  .viewer-tag-link {
+    font-size: 14px;
+    min-height: 38px;
+  }
+
+  .viewer-tag-copy {
+    width: 32px;
+    height: 32px;
+    opacity: 0.85;
   }
 
   /* Скрытие интерфейса при чистом просмотре */
