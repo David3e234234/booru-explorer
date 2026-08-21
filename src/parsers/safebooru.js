@@ -120,6 +120,7 @@ export async function fetchSafebooru(params, aiTagsList) {
       width: parseInt(item.width, 10) || 0,
       height: parseInt(item.height, 10) || 0,
       source: item.source || '',
+      postUrl: `https://safebooru.org/index.php?page=post&s=view&id=${item.id}`,
       parentId,
       hasChildren,
       seriesKey,

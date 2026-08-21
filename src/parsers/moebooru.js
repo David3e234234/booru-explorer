@@ -91,6 +91,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
       width: parseInt(item.width, 10) || 0,
       height: parseInt(item.height, 10) || 0,
       source: item.source || '',
+      postUrl: `${siteUrl}/post/show/${item.id}`,
       parentId,
       hasChildren,
       seriesKey,

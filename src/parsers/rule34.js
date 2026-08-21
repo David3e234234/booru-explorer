@@ -136,6 +136,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 width: parseInt(item.width, 10) || 0,
                 height: parseInt(item.height, 10) || 0,
                 source: item.source || '',
+                postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${item.id}`,
                 parentId,
                 hasChildren,
                 seriesKey,
@@ -373,6 +374,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
             width: 0,
             height: 0,
             source,
+            postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${id}`,
             createdAt: '',
             isAi: checkIsAi(rawTags, aiTagsList)
           });
@@ -477,6 +479,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           width: parseInt(attrs.width, 10) || 0,
           height: parseInt(attrs.height, 10) || 0,
           source: attrs.source || '',
+          postUrl: `https://rule34.paheal.net/post/view/${attrs.id}`,
           createdAt,
           isAi: checkIsAi(rawTags, aiTagsList)
         });

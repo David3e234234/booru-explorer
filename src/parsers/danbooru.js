@@ -363,6 +363,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       width: item.image_width || 0,
       height: item.image_height || 0,
       source: item.source || '',
+      postUrl: `https://danbooru.donmai.us/posts/${item.id}`,
       parentId: item.parent_id || null,
       hasChildren: Boolean(item.has_children || item.has_active_children),
       seriesKey,

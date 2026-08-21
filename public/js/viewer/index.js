@@ -1,6 +1,6 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
 import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts } from '../api.js';
-import { showToast, haptic } from '../modules/uiUtils.js';
+import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
 import { renderSidebarTags, formatRating } from './viewerSidebar.js';
@@ -407,7 +407,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (infoDurationRow) infoDurationRow.style.display = 'none';
     }
 
-    if (infoSite) infoSite.textContent = currentPost.siteName || currentPost.site;
+    if (infoSite) {
+      const siteName = currentPost.siteName || currentPost.site;
+      const postPageUrl = getPostSiteUrl(currentPost);
+      if (postPageUrl) {
+        infoSite.innerHTML = `<a href="${postPageUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Открыть страницу на сайте ${siteName}">${siteName} <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
+      } else {
+        infoSite.textContent = siteName;
+      }
+    }
     if (infoRating) infoRating.textContent = formatRating(currentPost.rating);
     let scoreText = `★ ${currentPost.score || 0}`;
     if (currentPost.views > 0 || currentPost.viewsText) {
@@ -610,13 +618,24 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   if (btnCopyLink) {
-    btnCopyLink.addEventListener('click', () => {
+    btnCopyLink.addEventListener('click', async () => {
       if (!currentPost) return;
       const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
-      const url = activeItem.fileUrl || activeItem.sampleUrl || currentPost.fileUrl || currentPost.sampleUrl;
-      navigator.clipboard.writeText(url).then(() => {
-        showToast('Прямая ссылка скопирована');
-      });
+      const siteUrl = getPostSiteUrl(activeItem) || getPostSiteUrl(currentPost);
+      const urlToCopy = siteUrl || activeItem.fileUrl || activeItem.sampleUrl || currentPost.fileUrl || currentPost.sampleUrl;
+      
+      if (!urlToCopy) {
+        showToast('Ссылка недоступна');
+        return;
+      }
+      
+      haptic(15);
+      const success = await copyToClipboard(urlToCopy);
+      if (success) {
+        showToast('Ссылка на пост скопирована');
+      } else {
+        showToast('Не удалось скопировать ссылку');
+      }
     });
   }
 
@@ -731,11 +750,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   if (btnCopyAllTags) {
-    btnCopyAllTags.addEventListener('click', () => {
+    btnCopyAllTags.addEventListener('click', async () => {
       if (!currentPost || !Array.isArray(currentPost.tags)) return;
-      navigator.clipboard.writeText(currentPost.tags.join(' ')).then(() => {
+      haptic(15);
+      const success = await copyToClipboard(currentPost.tags.join(' '));
+      if (success) {
         showToast('Все теги поста скопированы');
-      });
+      } else {
+        showToast('Не удалось скопировать теги');
+      }
     });
   }
 

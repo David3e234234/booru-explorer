@@ -465,6 +465,7 @@ export async function fetchRule34Video(params, aiTagsList) {
           width: 1280,
           height: 720,
           source: pageUrl,
+          postUrl: pageUrl,
           createdAt,
           isAi
         });
