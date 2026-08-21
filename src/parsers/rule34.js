@@ -1,6 +1,7 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { BROWSER_USER_AGENT } from '../config/constants.js';
 import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
 function getRecentDateFilter(days = 30) {
@@ -105,6 +106,16 @@ export async function fetchRule34(params, aiTagsList, settings) {
               const author = extractAuthor(rawTags, item.source, item.owner || item.creator_id || item.author);
               const tagDetails = classifyTags(rawTags, author);
               const createdAt = normalizeDate(item.created_at || item.change);
+              const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
+              const hasChildren = item.has_children === 'true' || item.has_children === true;
+              const seriesKey = extractSeriesKey({
+                source: item.source || '',
+                parentId,
+                hasChildren,
+                originalId: String(item.id),
+                tags: rawTags
+              }, 'rule34');
+
               return {
                 id: `rule34_${item.id}`,
                 originalId: String(item.id),
@@ -125,6 +136,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 width: parseInt(item.width, 10) || 0,
                 height: parseInt(item.height, 10) || 0,
                 source: item.source || '',
+                parentId,
+                hasChildren,
+                seriesKey,
                 createdAt,
                 isAi: checkIsAi(rawTags, aiTagsList)
               };
@@ -243,6 +257,13 @@ export async function fetchRule34(params, aiTagsList, settings) {
         const source = `https://rule34.xxx/index.php?page=post&s=view&id=${id}`;
         const author = extractAuthor(rawTags, source, '');
         const tagDetails = classifyTags(rawTags, author);
+        const seriesKey = extractSeriesKey({
+          source,
+          parentId: null,
+          hasChildren: false,
+          originalId: id,
+          tags: rawTags
+        }, 'rule34');
 
         posts.push({
           id: `rule34_${id}`,
@@ -264,6 +285,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
           width: 0,
           height: 0,
           source,
+          parentId: null,
+          hasChildren: false,
+          seriesKey,
           createdAt: '',
           isAi: checkIsAi(rawTags, aiTagsList)
         });

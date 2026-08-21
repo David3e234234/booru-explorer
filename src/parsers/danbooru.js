@@ -6,6 +6,7 @@ import {
 } from '../config/constants.js';
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes } from '../utils/tagHelpers.js';
+import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 export async function fetchDanbooru(params, aiTagsList, settings) {
@@ -320,6 +321,14 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       durationText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
+    const seriesKey = extractSeriesKey({
+      source: item.source || '',
+      parentId: item.parent_id,
+      hasChildren: Boolean(item.has_children || item.has_active_children),
+      originalId: String(item.id),
+      tags: rawTags
+    }, 'danbooru');
+
     return {
       id: `danbooru_${item.id}`,
       originalId: String(item.id),
@@ -354,6 +363,9 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       width: item.image_width || 0,
       height: item.image_height || 0,
       source: item.source || '',
+      parentId: item.parent_id || null,
+      hasChildren: Boolean(item.has_children || item.has_active_children),
+      seriesKey,
       createdAt: item.created_at || '',
       isAi
     };

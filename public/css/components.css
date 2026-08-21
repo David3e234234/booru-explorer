@@ -199,6 +199,70 @@
   background-color: rgba(236, 72, 153, 0.85);
 }
 
+.badge-format.badge-album {
+  background-color: rgba(14, 165, 233, 0.9);
+  color: #ffffff;
+  font-weight: 700;
+  border-color: rgba(56, 189, 248, 0.5);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.35);
+}
+
+.is-album-card {
+  position: relative;
+}
+
+.is-album-card::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 90%;
+  height: 90%;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  z-index: -1;
+  opacity: 0.7;
+  transition: transform var(--transition-normal), opacity var(--transition-normal);
+}
+
+.is-album-card:hover::before {
+  transform: translate(2px, -2px) rotate(0.8deg);
+  opacity: 1;
+  border-color: var(--border-medium);
+}
+
+.album-dots-container {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  z-index: 3;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  border-radius: 10px;
+  pointer-events: none;
+  opacity: 0.85;
+  transition: opacity var(--transition-fast);
+}
+
+.album-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.album-dot.active {
+  background: var(--accent-primary);
+  transform: scale(1.25);
+}
+
 .badge-site {
   display: inline-flex;
   align-items: center;

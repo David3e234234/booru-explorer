@@ -1,5 +1,5 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors } from '../api.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts } from '../api.js';
 import { showToast, haptic } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -21,12 +21,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const viewerContent = document.querySelector('.viewer-content');
   const mediaWrapper = document.getElementById('viewerMediaWrapper');
   const siteBadge = document.getElementById('viewerSiteBadge');
+  const viewerAlbumBadge = document.getElementById('viewerAlbumBadge');
+  const viewerAlbumPageText = document.getElementById('viewerAlbumPageText');
   const resBadge = document.getElementById('viewerResolution');
   const extBadge = document.getElementById('viewerExtBadge');
   const btnDislikeModal = document.getElementById('btnDislikeModal');
   const btnLikeModal = document.getElementById('btnLikeModal');
   const btnFavModal = document.getElementById('btnFavModal');
   const btnDownload = document.getElementById('btnDownload');
+  const btnDownloadAlbum = document.getElementById('btnDownloadAlbum');
   const btnCopyLink = document.getElementById('btnCopyLink');
   const btnViewerTagsToggle = document.getElementById('btnViewerTagsToggle');
   const btnCloseViewerTags = document.getElementById('btnCloseViewerTags');
@@ -38,14 +41,22 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const infoAuthor = document.getElementById('infoAuthor');
   const btnFavAuthorSidebar = document.getElementById('btnFavAuthorSidebar');
   const btnFavAuthorSidebarText = document.getElementById('btnFavAuthorSidebarText');
+  const btnSetAuthorCoverSidebar = document.getElementById('btnSetAuthorCoverSidebar');
 
   const infoSite = document.getElementById('infoSite');
+  const infoAlbumRow = document.getElementById('infoAlbumRow');
+  const btnFetchFullAlbum = document.getElementById('btnFetchFullAlbum');
+  const btnFetchFullAlbumText = document.getElementById('btnFetchFullAlbumText');
   const infoRating = document.getElementById('infoRating');
   const infoScore = document.getElementById('infoScore');
   const infoAi = document.getElementById('infoAi');
   const btnCopyAllTags = document.getElementById('btnCopyAllTags');
 
+  const viewerAlbumFilmstrip = document.getElementById('viewerAlbumFilmstrip');
+  const albumFilmstripInner = document.getElementById('albumFilmstripInner');
+
   let currentPost = null;
+  let currentAlbumIndex = 0;
   let activeAbortController = null;
   let activeBlobUrl = null;
   let currentZoomInstance = null;
@@ -66,6 +77,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (index < 0 || index >= list.length) return;
     state.currentViewerIndex = index;
     currentPost = list[index];
+    currentAlbumIndex = 0;
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) viewerContent.classList.remove('ui-hidden');
     renderViewerPost();
@@ -98,6 +110,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     if (mediaWrapper) mediaWrapper.innerHTML = '';
     currentPost = null;
+    currentAlbumIndex = 0;
     state.currentViewerIndex = -1;
   }
 
@@ -255,6 +268,176 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       infoAi.style.color = currentPost.isAi ? 'var(--accent-warning)' : 'var(--text-primary)';
     }
 
+    function getCurrentMediaItem() {
+      if (currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) {
+        return currentPost.albumItems[currentAlbumIndex] || currentPost;
+      }
+      return currentPost;
+    }
+
+    function renderAlbumFilmstrip() {
+      if (!viewerAlbumFilmstrip || !albumFilmstripInner) return;
+
+      const isAlbum = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 1);
+
+      if (isAlbum) {
+        viewerAlbumFilmstrip.style.display = 'block';
+        if (viewerAlbumBadge && viewerAlbumPageText) {
+          viewerAlbumBadge.style.display = 'inline-flex';
+          viewerAlbumPageText.textContent = `${currentAlbumIndex + 1} / ${currentPost.albumItems.length}`;
+        }
+        if (btnDownloadAlbum) {
+          btnDownloadAlbum.style.display = 'inline-flex';
+        }
+
+        albumFilmstripInner.innerHTML = '';
+        currentPost.albumItems.forEach((item, idx) => {
+          const itemDiv = document.createElement('div');
+          itemDiv.className = `album-filmstrip-item ${idx === currentAlbumIndex ? 'active' : ''}`;
+          itemDiv.title = `Изображение ${idx + 1} из ${currentPost.albumItems.length}`;
+
+          const thumbUrl = item.thumb180 || item.thumb360 || item.previewUrl || item.sampleUrl || item.fileUrl || '';
+          const needsThumbProxy = (item.site === 'danbooru' || thumbUrl.includes('donmai.us')) ? true : (state.settings?.proxyThumbnails !== false);
+          const thumbSrc = thumbUrl ? (thumbUrl.startsWith('/api/') ? thumbUrl : (needsThumbProxy ? getProxiedUrl(thumbUrl) : thumbUrl)) : '';
+
+          itemDiv.innerHTML = `
+            <img class="album-filmstrip-img" src="${thumbSrc}" alt="Слайд ${idx + 1}" loading="lazy" referrerpolicy="no-referrer">
+            <span class="album-filmstrip-page">${idx + 1}</span>
+          `;
+
+          itemDiv.addEventListener('click', (e) => {
+            e.stopPropagation();
+            haptic(10);
+            switchAlbumSlide(idx);
+          });
+
+          albumFilmstripInner.appendChild(itemDiv);
+        });
+
+        // Скроллим активный элемент в видимую область
+        const activeThumb = albumFilmstripInner.children[currentAlbumIndex];
+        if (activeThumb) {
+          activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      } else {
+        viewerAlbumFilmstrip.style.display = 'none';
+        if (viewerAlbumBadge) viewerAlbumBadge.style.display = 'none';
+        if (btnDownloadAlbum) btnDownloadAlbum.style.display = 'none';
+      }
+
+      // Наличие серии для дозагрузки в сайдбаре
+      if (infoAlbumRow) {
+        const canFetch = Boolean(currentPost?.canFetchAlbum || currentPost?.hasChildren || currentPost?.parentId || currentPost?.seriesKey);
+        infoAlbumRow.style.display = canFetch ? 'flex' : 'none';
+        if (btnFetchFullAlbumText) {
+          if (isAlbum) {
+            btnFetchFullAlbumText.textContent = `Обновить сет (${currentPost.albumItems.length} фото)`;
+          } else {
+            btnFetchFullAlbumText.textContent = 'Найти все части сета';
+          }
+        }
+      }
+    }
+
+    function switchAlbumSlide(idx) {
+      if (!currentPost?.albumItems || idx < 0 || idx >= currentPost.albumItems.length) return;
+      currentAlbumIndex = idx;
+
+      // Обновляем бейдж страницы
+      if (viewerAlbumPageText) {
+        viewerAlbumPageText.textContent = `${currentAlbumIndex + 1} / ${currentPost.albumItems.length}`;
+      }
+
+      // Обновляем активный класс в ленте миниатюр
+      if (albumFilmstripInner) {
+        Array.from(albumFilmstripInner.children).forEach((child, i) => {
+          child.classList.toggle('active', i === currentAlbumIndex);
+        });
+        const activeThumb = albumFilmstripInner.children[currentAlbumIndex];
+        if (activeThumb) {
+          activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+      }
+
+      const activeItem = currentPost.albumItems[currentAlbumIndex];
+      if (resBadge) resBadge.textContent = (activeItem.width && activeItem.height) ? `${activeItem.width} × ${activeItem.height}` : 'Оригинал';
+      if (extBadge) extBadge.textContent = (activeItem.fileExt || 'JPG').toUpperCase();
+
+      loadMediaItem(activeItem);
+    }
+
+    function loadMediaItem(item) {
+      if (activeAbortController) {
+        activeAbortController.abort();
+        activeAbortController = null;
+      }
+      if (activeBlobUrl) {
+        URL.revokeObjectURL(activeBlobUrl);
+        activeBlobUrl = null;
+      }
+      if (currentZoomInstance) {
+        currentZoomInstance.destroy();
+        currentZoomInstance = null;
+      }
+      if (currentVideoInstance) {
+        currentVideoInstance.destroy();
+        currentVideoInstance = null;
+      }
+
+      const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
+      if (!directMedia) {
+        showToast('Ссылка на медиа недоступна');
+        return;
+      }
+
+      mediaWrapper.innerHTML = '';
+      const abortRef = {
+        get current() { return activeAbortController; },
+        set current(val) { activeAbortController = val; }
+      };
+      const blobRef = {
+        get current() { return activeBlobUrl; },
+        set current(val) { activeBlobUrl = val; }
+      };
+
+      if (item.isVideo) {
+        currentVideoInstance = createVideoPlayer(item, {
+          state,
+          getProxiedUrl,
+          abortRef,
+          blobRef
+        });
+        mediaWrapper.appendChild(currentVideoInstance.videoContainer);
+        mediaWrapper.appendChild(currentVideoInstance.statusBanner);
+      } else {
+        const img = document.createElement('img');
+        img.className = 'viewer-image';
+        const needsImgProxy = item.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
+        const proxyMedia = getProxiedUrl(directMedia);
+        img.src = needsImgProxy ? proxyMedia : directMedia;
+        img.referrerPolicy = 'no-referrer';
+        img.alt = 'Full View';
+
+        img.addEventListener('error', function () {
+          if (this.src !== proxyMedia) {
+            console.warn('[Viewer Image Fallback] Переключение на прокси');
+            this.src = proxyMedia;
+          } else if (item.fileUrl && item.sampleUrl && this.src.includes(encodeURIComponent(item.sampleUrl))) {
+            console.warn('[Viewer Image Fallback] Переключение на fileUrl');
+            this.src = getProxiedUrl(item.fileUrl);
+          } else if (item.previewUrl && !this.src.includes(encodeURIComponent(item.previewUrl))) {
+            console.warn('[Viewer Image Fallback] Переключение на previewUrl');
+            this.src = getProxiedUrl(item.previewUrl);
+          } else {
+            showToast('Не удалось загрузить полноразмерное фото');
+          }
+        });
+
+        currentZoomInstance = setupImageZoom(img, { showToast });
+        mediaWrapper.appendChild(img);
+      }
+    }
+
     // Рендер тегов в сайдбаре
     renderSidebarTags(currentPost, {
       onTagSelect: (t) => {
@@ -263,59 +446,85 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       closeViewer
     });
 
-    // Загрузка медиа
-    const directMedia = currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl || '';
-    if (!directMedia) {
-      showToast('Ссылка на медиа недоступна');
-      return;
-    }
+    renderAlbumFilmstrip();
+    const activeMediaItem = getCurrentMediaItem();
+    loadMediaItem(activeMediaItem);
+  }
 
-    mediaWrapper.innerHTML = '';
-    const abortRef = {
-      get current() { return activeAbortController; },
-      set current(val) { activeAbortController = val; }
-    };
-    const blobRef = {
-      get current() { return activeBlobUrl; },
-      set current(val) { activeBlobUrl = val; }
-    };
+  // Загрузка всех частей серии по кнопке в сайдбаре
+  if (btnFetchFullAlbum) {
+    btnFetchFullAlbum.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (!currentPost) return;
+      haptic(15);
+      btnFetchFullAlbum.disabled = true;
+      if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = 'Поиск серии...';
 
-    if (currentPost.isVideo) {
-      currentVideoInstance = createVideoPlayer(currentPost, {
-        state,
-        getProxiedUrl,
-        abortRef,
-        blobRef
-      });
-      mediaWrapper.appendChild(currentVideoInstance.videoContainer);
-      mediaWrapper.appendChild(currentVideoInstance.statusBanner);
-    } else {
-      const img = document.createElement('img');
-      img.className = 'viewer-image';
-      const needsImgProxy = currentPost.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
-      const proxyMedia = getProxiedUrl(directMedia);
-      img.src = needsImgProxy ? proxyMedia : directMedia;
-      img.referrerPolicy = 'no-referrer';
-      img.alt = 'Full View';
+      try {
+        const res = await fetchAlbumPosts({
+          site: currentPost.site,
+          seriesKey: currentPost.seriesKey || '',
+          parentId: currentPost.parentId || '',
+          originalId: currentPost.originalId || ''
+        });
 
-      img.addEventListener('error', function () {
-        if (this.src !== proxyMedia) {
-          console.warn('[Viewer Image Fallback] Переключение на прокси');
-          this.src = proxyMedia;
-        } else if (currentPost.fileUrl && currentPost.sampleUrl && this.src.includes(encodeURIComponent(currentPost.sampleUrl))) {
-          console.warn('[Viewer Image Fallback] Переключение на fileUrl');
-          this.src = getProxiedUrl(currentPost.fileUrl);
-        } else if (currentPost.previewUrl && !this.src.includes(encodeURIComponent(currentPost.previewUrl))) {
-          console.warn('[Viewer Image Fallback] Переключение на previewUrl');
-          this.src = getProxiedUrl(currentPost.previewUrl);
+        if (res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
+          currentPost.isAlbum = true;
+          currentPost.albumItems = res.albumItems;
+          currentPost.albumCount = res.albumItems.length;
+          currentAlbumIndex = 0;
+          renderViewerPost();
+          showToast(`Найдено ${res.albumItems.length} изображений серии!`);
         } else {
-          showToast('Не удалось загрузить полноразмерное фото');
+          showToast('Дополнительные части серии не найдены');
+          if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = 'Части серии не найдены';
         }
-      });
+      } catch (err) {
+        console.error('Ошибка поиска альбома:', err);
+        showToast('Не удалось выполнить поиск частей серии');
+      } finally {
+        btnFetchFullAlbum.disabled = false;
+      }
+    });
+  }
 
-      currentZoomInstance = setupImageZoom(img, { showToast });
-      mediaWrapper.appendChild(img);
-    }
+  // Скачивание всех изображений альбома
+  if (btnDownloadAlbum) {
+    btnDownloadAlbum.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (!currentPost || !currentPost.isAlbum || !Array.isArray(currentPost.albumItems) || currentPost.albumItems.length === 0) return;
+      haptic(20);
+      showToast(`Начато скачивание альбома (${currentPost.albumItems.length} файлов)...`);
+
+      for (let i = 0; i < currentPost.albumItems.length; i++) {
+        const item = currentPost.albumItems[i];
+        const downloadTarget = item.fileUrl || item.sampleUrl || item.previewUrl;
+        if (!downloadTarget) continue;
+
+        try {
+          const proxyUrl = getProxiedUrl(downloadTarget);
+          const res = await fetch(proxyUrl);
+          if (res.ok) {
+            const blob = await res.blob();
+            const ext = item.fileExt || (item.isVideo ? 'mp4' : 'jpg');
+            const filename = `album_${currentPost.site || 'post'}_${currentPost.id}_p${i + 1}.${ext}`;
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+          }
+        } catch (err) {
+          console.warn(`[Album download err on page ${i + 1}]`, err);
+        }
+        // Небольшая задержка между скачиваниями
+        await new Promise(r => setTimeout(r, 350));
+      }
+      showToast('Все изображения альбома загружены');
+    });
   }
 
   // Переключение шторки тегов на мобильных
@@ -392,7 +601,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   if (btnCopyLink) {
     btnCopyLink.addEventListener('click', () => {
       if (!currentPost) return;
-      const url = currentPost.fileUrl || currentPost.sampleUrl;
+      const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
+      const url = activeItem.fileUrl || activeItem.sampleUrl || currentPost.fileUrl || currentPost.sampleUrl;
       navigator.clipboard.writeText(url).then(() => {
         showToast('Прямая ссылка скопирована');
       });
@@ -403,7 +613,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     btnDownload.addEventListener('click', async (e) => {
       e.preventDefault();
       if (!currentPost) return;
-      const downloadTarget = currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl;
+      const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
+      const downloadTarget = activeItem.fileUrl || activeItem.sampleUrl || activeItem.previewUrl;
       if (!downloadTarget) {
         showToast('Ссылка на файл недоступна');
         return;
@@ -423,15 +634,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         return fallbackExt || 'jpg';
       };
 
-      const shouldUseProxyDownload = currentPost.site === 'danbooru' || downloadTarget.includes('donmai.us') || state.settings?.proxyDownloads !== false;
+      const shouldUseProxyDownload = activeItem.site === 'danbooru' || downloadTarget.includes('donmai.us') || state.settings?.proxyDownloads !== false;
       
       if (!shouldUseProxyDownload) {
         try {
           const directRes = await fetch(downloadTarget, { mode: 'cors' });
           if (directRes.ok) {
             const blob = await directRes.blob();
-            const ext = getExtensionFromMime(blob.type, currentPost.fileExt || (currentPost.isVideo ? 'mp4' : 'jpg'));
-            const filename = `booru_${currentPost.site || 'post'}_${currentPost.id}.${ext}`;
+            const ext = getExtensionFromMime(blob.type, activeItem.fileExt || (activeItem.isVideo ? 'mp4' : 'jpg'));
+            const filename = `booru_${activeItem.site || 'post'}_${activeItem.id}.${ext}`;
             const blobUrl = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = blobUrl;
@@ -453,8 +664,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         const res = await fetch(proxyUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
-        const ext = getExtensionFromMime(blob.type, currentPost.fileExt || (currentPost.isVideo ? 'mp4' : 'jpg'));
-        const filename = `booru_${currentPost.site || 'post'}_${currentPost.id}.${ext}`;
+        const ext = getExtensionFromMime(blob.type, activeItem.fileExt || (activeItem.isVideo ? 'mp4' : 'jpg'));
+        const filename = `booru_${activeItem.site || 'post'}_${activeItem.id}.${ext}`;
         const blobUrl = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
@@ -470,6 +681,42 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         showToast('Не удалось загрузить файл для сохранения');
       }
     });
+  }
+
+  function goToNext(skipAlbum = false) {
+    if (!skipAlbum && currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1) {
+      haptic(10);
+      switchAlbumSlide(currentAlbumIndex + 1);
+      return;
+    }
+
+    const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+    if (state.currentViewerIndex < list.length - 1) {
+      haptic(15);
+      openViewer(state.currentViewerIndex + 1);
+    }
+  }
+
+  function goToPrev(skipAlbum = false) {
+    if (!skipAlbum && currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0) {
+      haptic(10);
+      switchAlbumSlide(currentAlbumIndex - 1);
+      return;
+    }
+
+    const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+    if (state.currentViewerIndex > 0) {
+      haptic(15);
+      openViewer(state.currentViewerIndex - 1);
+    }
+  }
+
+  if (btnPrev) {
+    btnPrev.addEventListener('click', () => goToPrev(false));
+  }
+
+  if (btnNext) {
+    btnNext.addEventListener('click', () => goToNext(false));
   }
 
   if (btnCopyAllTags) {
@@ -715,9 +962,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (e.key === 'Escape') {
       closeViewer();
     } else if (e.key === 'ArrowLeft') {
-      btnPrev?.click();
+      goToPrev(e.shiftKey);
     } else if (e.key === 'ArrowRight') {
-      btnNext?.click();
+      goToNext(e.shiftKey);
     } else if (e.key.toLowerCase() === 'f') {
       btnFavModal?.click();
     } else if (e.key.toLowerCase() === 'l') {

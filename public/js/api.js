@@ -117,6 +117,20 @@ export async function fetchPosts({
   return await res.json();
 }
 
+export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', parentId = '', originalId = '' }) {
+  const params = new URLSearchParams();
+  if (site) params.set('site', site);
+  if (seriesKey) params.set('seriesKey', seriesKey);
+  if (parentId) params.set('parentId', parentId);
+  if (originalId) params.set('originalId', originalId);
+
+  const res = await fetch(`/api/posts/album?${params.toString()}`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) return { success: false, albumItems: [], albumCount: 0 };
+  return await res.json();
+}
+
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
   const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`, {

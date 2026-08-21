@@ -1,5 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { extractSeriesKey } from '../utils/albumHelper.js';
 
 function getRecentDateFilter(days = 30) {
   const d = new Date();
@@ -89,6 +90,15 @@ export async function fetchSafebooru(params, aiTagsList) {
     const author = extractAuthor(rawTags, item.source, item.author || item.owner);
     const tagDetails = classifyTags(rawTags, author);
     const createdAt = normalizeDate(item.created_at || item.change);
+    const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
+    const hasChildren = Boolean(item.has_children);
+    const seriesKey = extractSeriesKey({
+      source: item.source || '',
+      parentId,
+      hasChildren,
+      originalId: String(item.id),
+      tags: rawTags
+    }, 'safebooru');
 
     return {
       id: `safebooru_${item.id}`,
@@ -110,6 +120,9 @@ export async function fetchSafebooru(params, aiTagsList) {
       width: parseInt(item.width, 10) || 0,
       height: parseInt(item.height, 10) || 0,
       source: item.source || '',
+      parentId,
+      hasChildren,
+      seriesKey,
       createdAt,
       isAi
     };

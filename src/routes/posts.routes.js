@@ -19,6 +19,7 @@ import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
 import { isPostMatchingFilters } from '../utils/tagHelpers.js';
+import { groupPostsIntoAlbums, extractSeriesKey } from '../utils/albumHelper.js';
 import { fetchSafe } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
 
@@ -138,11 +139,17 @@ router.get('/posts', async (req, res) => {
       posts.sort((a, b) => (b.views || b.score || 0) - (a.views || a.score || 0));
     }
 
+    // Автоматическая группировка связанных изображений в альбомы
+    const shouldGroupAlbums = req.query.groupAlbums !== 'false';
+    if (shouldGroupAlbums && posts.length > 0) {
+      posts = groupPostsIntoAlbums(posts, { enabled: true });
+    }
+
     if (posts.length > limit) {
       posts = posts.slice(0, limit);
     }
 
-    logInfo('Search', `Успешно: найдено ${posts.length} постов для выдачи (лимит: ${limit})`);
+    logInfo('Search', `Успешно: найдено ${posts.length} постов для выдачи (лимит: ${limit}, альбомы: ${shouldGroupAlbums ? 'вкл' : 'выкл'})`);
 
     const responsePayload = {
       success: true,
@@ -165,6 +172,75 @@ router.get('/posts', async (req, res) => {
       page: 1,
       count: 0,
       posts: []
+    });
+  }
+});
+
+// GET /api/posts/album — Поиск всех частей серии/альбома по parentId или Pixiv ID
+router.get('/posts/album', async (req, res) => {
+  try {
+    const site = req.query.site || 'danbooru';
+    const seriesKey = req.query.seriesKey || '';
+    const parentId = req.query.parentId || '';
+    const originalId = req.query.originalId || '';
+
+    let clientAuth = {};
+    if (req.headers['x-booru-auth']) {
+      try {
+        clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
+      } catch {
+        try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
+      }
+    }
+
+    const settings = {
+      ...getSettings(),
+      ...clientAuth
+    };
+    const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
+
+    let searchTags = '';
+    if (parentId && String(parentId) !== '0') {
+      searchTags = `parent:${parentId}`;
+    } else if (seriesKey.startsWith('pixiv:')) {
+      const pixivId = seriesKey.replace('pixiv:', '');
+      searchTags = `pixiv:${pixivId}`;
+    } else if (originalId) {
+      searchTags = `parent:${originalId}`;
+    }
+
+    if (!searchTags) {
+      return res.json({ success: false, message: 'Не указан ключ серии или parentId', albumItems: [] });
+    }
+
+    logInfo('AlbumSearch', `Поиск частей серии: site=${site}, tags="${searchTags}"`);
+    let items = await fetchPosts(site, { tags: searchTags, page: 1, limit: 100 }, aiTagsList, settings);
+
+    // Если по pixiv:ID ничего не нашлось, пробуем source:*ID* или pixiv_id:ID
+    if (items.length === 0 && seriesKey.startsWith('pixiv:')) {
+      const pixivId = seriesKey.replace('pixiv:', '');
+      items = await fetchPosts(site, { tags: `pixiv_id:${pixivId}`, page: 1, limit: 100 }, aiTagsList, settings);
+    }
+
+    // Если всё равно пусто, но был parentId — пробуем без фильтров
+    if (items.length === 0 && parentId) {
+      items = await fetchPosts(site, { tags: `parent:${parentId}`, page: 1, limit: 100, ratingFilter: 'all', typeFilter: 'all' }, aiTagsList, settings);
+    }
+
+    res.json({
+      success: true,
+      site,
+      seriesKey,
+      parentId,
+      albumCount: items.length,
+      albumItems: items
+    });
+  } catch (err) {
+    logError('AlbumSearch', `Ошибка при поиске альбома`, err);
+    res.json({
+      success: false,
+      albumItems: [],
+      albumCount: 0
     });
   }
 });

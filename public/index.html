@@ -586,6 +586,10 @@
       <div class="viewer-header">
         <div class="viewer-meta">
           <span class="viewer-site-badge" id="viewerSiteBadge">Danbooru</span>
+          <span class="viewer-album-badge" id="viewerAlbumBadge" style="display: none;" title="Страница альбома / сета">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></svg>
+            <span id="viewerAlbumPageText">1 / 1</span>
+          </span>
           <span class="viewer-res" id="viewerResolution">1920 × 1080</span>
           <span class="viewer-ext-badge" id="viewerExtBadge">MP4</span>
           <button class="viewer-author-badge" id="viewerAuthorBadge" style="display: none;" title="Автор / Создатель (нажмите для поиска всех работ)">
@@ -613,8 +617,13 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
             <span class="viewer-tags-badge" id="viewerTagsBadgeCount">0</span>
           </button>
-          <button class="viewer-btn" id="btnDownload" title="Скачать медиафайл прямо на устройство">
+          <!-- Скачать текущий медиафайл -->
+          <button class="viewer-btn" id="btnDownload" title="Скачать изображение прямо на устройство">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <!-- Скачать весь альбом (пак) -->
+          <button class="viewer-btn" id="btnDownloadAlbum" style="display: none;" title="Скачать все изображения сета (альбом)">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><line x1="4" y1="4" x2="20" y2="4"/></svg>
           </button>
           <button class="viewer-btn" id="btnCopyLink" title="Скопировать ссылку">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -636,6 +645,11 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
 
+        <!-- Лента миниатюр страниц альбома (Filmstrip) -->
+        <div class="viewer-album-filmstrip" id="viewerAlbumFilmstrip" style="display: none;">
+          <div class="album-filmstrip-inner" id="albumFilmstripInner"></div>
+        </div>
+
         <!-- Сайдбар / Шторка информации и тегов -->
         <aside class="viewer-sidebar" id="viewerSidebar">
           <div class="viewer-sheet-handle mobile-only"></div>
@@ -652,6 +666,15 @@
               <div class="info-item">
                 <span class="info-label">Источник:</span>
                 <span class="info-val" id="infoSite">Danbooru</span>
+              </div>
+              <div class="info-item" id="infoAlbumRow" style="display: none;">
+                <span class="info-label">Сет / Серия:</span>
+                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1;">
+                  <button class="btn-album-fetch" id="btnFetchFullAlbum" title="Найти все слайды и изображения серии">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><rect width="10" height="10" x="6" y="6" rx="1.5"/></svg>
+                    <span id="btnFetchFullAlbumText">Найти весь сет</span>
+                  </button>
+                </div>
               </div>
               <div class="info-item" id="infoAuthorRow" style="display: none;">
                 <span class="info-label">Автор:</span>

@@ -451,6 +451,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       matchBadge = `<span class="badge-format match-percent" title="Совпадение со вкусами: ${post.matchPercent}%${matchedInfo}">${post.matchPercent}%</span>`;
     }
 
+    let albumBadge = '';
+    if (post.isAlbum && post.albumCount > 1) {
+      card.classList.add('is-album-card');
+      albumBadge = `<span class="badge-format badge-album" title="Альбом: ${post.albumCount} изображений"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></svg> <span>${post.albumCount}</span></span>`;
+    }
+
     const formatCompactNumber = (num) => {
       if (!num) return '0';
       if (typeof num === 'string') {
@@ -472,6 +478,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         <div class="badge-group-top">
           <div style="display: flex; gap: 3px; align-items: center; flex-wrap: wrap; max-width: 65%;">
             ${siteBadge}
+            ${albumBadge}
             ${formatBadge}
             ${durationBadge}
             ${matchBadge}
