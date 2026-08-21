@@ -37,33 +37,41 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     }
   }
 
-  // Приоритет Сортировка
-  const isScoreSort = (category === 'top' || category === 'views');
+  // Приоритет Сортировка и фильтр по дате
+  const hasDateFilter = dateFilter && dateFilter !== 'all';
+  const ageMap = {
+    '24h': 'age:..1d',
+    '1d': 'age:..1d',
+    '2d': 'age:..2d',
+    '7d': 'age:..7d',
+    'week': 'age:..7d',
+    '30d': 'age:..30d',
+    'month': 'age:..30d',
+    '90d': 'age:..90d',
+    '3months': 'age:..90d',
+    '365d': 'age:..365d',
+    'year': 'age:..365d'
+  };
+
   if (queryTags.length < 2) {
-    if (isScoreSort) queryTags.push('order:score');
-    else if (category === 'popular' || category === 'recommended') queryTags.push('order:rank');
-    else if (category === 'random') queryTags.push('order:random');
+    if (category === 'top' || category === 'views') {
+      if (hasDateFilter) {
+        queryTags.push('order:score');
+      } else if (userTagList.length > 0) {
+        queryTags.push('order:score');
+      } else {
+        queryTags.push('order:rank');
+      }
+    } else if (category === 'popular' || category === 'recommended') {
+      queryTags.push('order:rank');
+    } else if (category === 'random') {
+      queryTags.push('order:random');
+    }
   }
 
   // Приоритет Фильтр по дате (age:..Nd)
-  if (queryTags.length < 2 && dateFilter && dateFilter !== 'all') {
-    const ageMap = {
-      '24h': 'age:..1d',
-      '1d': 'age:..1d',
-      '2d': 'age:..2d',
-      '7d': 'age:..7d',
-      'week': 'age:..7d',
-      '30d': 'age:..30d',
-      'month': 'age:..30d',
-      '90d': 'age:..90d',
-      '3months': 'age:..90d',
-      '365d': 'score:>=10',
-      'year': 'score:>=10'
-    };
-    if (ageMap[dateFilter]) queryTags.push(ageMap[dateFilter]);
-  } else if (isScoreSort && queryTags.length < 2 && userTagList.length === 0) {
-    // Для Danbooru: голый order:score без фильтра/тегов падает в 500 timeout. score:>=30 использует B-Tree индекс и отдает топ всех времен
-    queryTags.push('score:>=30');
+  if (queryTags.length < 2 && hasDateFilter && ageMap[dateFilter]) {
+    queryTags.push(ageMap[dateFilter]);
   }
 
   // Приоритет Рейтинг
@@ -220,6 +228,24 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
         : '';
       const fallbackUrl = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(sourceQuery)}&limit=${fetchLimit}${authParam}`;
+      const res = await fetchSafe(fallbackUrl);
+      if (res.ok) {
+        const text = await res.text();
+        const data = safeJsonParse(text, null);
+        if (Array.isArray(data) && data.length > 0) {
+          allData = data;
+        }
+      }
+    } catch (e) {}
+  }
+
+  // Общий надежный fallback для Danbooru при сбое API/таймауте
+  if (allData.length === 0 && userTagList.length === 0) {
+    try {
+      const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)
+        ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
+        : '';
+      const fallbackUrl = `https://danbooru.donmai.us/posts.json?tags=order:rank&limit=${fetchLimit}${authParam}`;
       const res = await fetchSafe(fallbackUrl);
       if (res.ok) {
         const text = await res.text();
