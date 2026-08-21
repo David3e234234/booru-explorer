@@ -138,7 +138,11 @@ router.get('/posts', async (req, res) => {
       posts.sort((a, b) => (b.views || b.score || 0) - (a.views || a.score || 0));
     }
 
-    logInfo('Search', `Успешно: найдено ${posts.length} постов для выдачи`);
+    if (posts.length > limit) {
+      posts = posts.slice(0, limit);
+    }
+
+    logInfo('Search', `Успешно: найдено ${posts.length} постов для выдачи (лимит: ${limit})`);
 
     const responsePayload = {
       success: true,
