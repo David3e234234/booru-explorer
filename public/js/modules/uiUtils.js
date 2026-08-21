@@ -108,3 +108,14 @@ export function getPostSiteUrl(post) {
   return post.fileUrl || post.sampleUrl || '';
 }
 
+export function formatBytes(bytes, decimals = 1) {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '0 Б';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  if (i >= sizes.length) return (bytes / Math.pow(k, sizes.length - 1)).toFixed(dm) + ' ' + sizes[sizes.length - 1];
+  const val = (bytes / Math.pow(k, i)).toFixed(dm);
+  return (val.endsWith('.0') ? val.slice(0, -2) : val) + ' ' + sizes[i];
+}
+
