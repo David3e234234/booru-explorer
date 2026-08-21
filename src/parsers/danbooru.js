@@ -54,13 +54,23 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   };
 
   if (queryTags.length < 2) {
-    if (category === 'top' || category === 'views') {
+    if (category === 'top') {
       if (hasDateFilter) {
         queryTags.push('order:score');
       } else if (userTagList.length > 0) {
         queryTags.push('order:score');
       } else {
-        queryTags.push('order:rank');
+        queryTags.push('order:score');
+        queryTags.push('score:>100');
+      }
+    } else if (category === 'views') {
+      if (hasDateFilter) {
+        queryTags.push('order:score');
+      } else if (userTagList.length > 0) {
+        queryTags.push('order:favcount');
+      } else {
+        queryTags.push('order:favcount');
+        queryTags.push('favcount:>100');
       }
     } else if (category === 'popular' || category === 'recommended') {
       queryTags.push('order:rank');
@@ -184,10 +194,14 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         if (isPostMatch(item)) matchedCount++;
       }
 
+      const isCustomOrder = finalTags.includes('order:score') || finalTags.includes('order:favcount') || finalTags.includes('order:rank');
       const ids = data.map(d => d.id).filter(id => typeof id === 'number');
-      if (ids.length > 0) {
+      if (ids.length > 0 && !isCustomOrder) {
         const minId = Math.min(...ids);
         currentCursor = `page=b${minId}`;
+      } else if (isCustomOrder) {
+        const nextPg = (page - 1) * deepFetchPagesSetting + 1 + (i + 1);
+        currentCursor = `page=${nextPg}`;
       } else {
         break;
       }
