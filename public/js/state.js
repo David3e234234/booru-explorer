@@ -15,11 +15,12 @@ export const DEFAULT_SITES = [
 export const state = {
   sites: [...DEFAULT_SITES],
   currentSite: 'danbooru',
-  currentCategory: 'new', // 'new', 'recommended', 'popular', 'top', 'random', 'favorites'
+  currentCategory: 'new', // 'new', 'views', 'top', 'recommended', 'random', 'favorites'
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
   ratingFilter: 'all', // 'all', 'nsfw', 'sfw'
   typeFilter: 'all', // 'all', 'video', 'image'
   ageFilter: 'all', // 'all', 'adult', 'young'
+  dateFilter: 'all', // 'all', '24h', '2d', '7d', '30d', '90d', '365d'
   videoDurationSort: 'none', // 'none' | 'longest' | 'shortest'
   hideFurry: true,
   hidePregnant: true,
@@ -58,6 +59,7 @@ export const state = {
     ratingFilter: 'all',
     typeFilter: 'all',
     ageFilter: 'all',
+    dateFilter: 'all',
     hideFurry: true,
     hidePregnant: true,
     hideLgbt: false,

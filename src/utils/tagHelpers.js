@@ -18,6 +18,7 @@ export function isPostMatchingFilters(post, criteria = {}) {
     ageFilter = 'all',
     aiFilter = 'no-ai',
     ratingFilter = 'all',
+    dateFilter = 'all',
     hideFurry = false,
     hidePregnant = false,
     hideLgbt = false,
@@ -95,6 +96,32 @@ export function isPostMatchingFilters(post, criteria = {}) {
   if (blacklist && blacklist.length > 0) {
     const lowerBlacklist = blacklist.map(b => (typeof b === 'string' ? b.toLowerCase().trim() : '')).filter(Boolean);
     if (lowerBlacklist.some(blackTag => postTags.includes(blackTag))) return false;
+  }
+
+  // 9. Фильтр по дате создания / добавления
+  if (dateFilter && dateFilter !== 'all' && post.createdAt) {
+    const postTime = new Date(post.createdAt).getTime();
+    if (!isNaN(postTime) && postTime > 0) {
+      const now = Date.now();
+      const diffMs = now - postTime;
+      const msMap = {
+        '24h': 24 * 60 * 60 * 1000,
+        '1d': 24 * 60 * 60 * 1000,
+        '2d': 2 * 24 * 60 * 60 * 1000,
+        '7d': 7 * 24 * 60 * 60 * 1000,
+        'week': 7 * 24 * 60 * 60 * 1000,
+        '30d': 30 * 24 * 60 * 60 * 1000,
+        'month': 30 * 24 * 60 * 60 * 1000,
+        '90d': 90 * 24 * 60 * 60 * 1000,
+        '3months': 90 * 24 * 60 * 60 * 1000,
+        '365d': 365 * 24 * 60 * 60 * 1000,
+        'year': 365 * 24 * 60 * 60 * 1000
+      };
+      const allowedMaxMs = msMap[dateFilter];
+      if (allowedMaxMs && diffMs > allowedMaxMs) {
+        return false;
+      }
+    }
   }
 
   return true;

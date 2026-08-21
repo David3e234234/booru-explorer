@@ -3,7 +3,7 @@ import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate,
 import { logError } from '../utils/logger.js';
 
 export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
     return [];
   }
@@ -11,21 +11,21 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
   let url = '';
 
-  if ((category === 'popular' || category === 'recommended') && !tags) {
-    url = `${siteUrl}/post/popular_by_week.json?page=${page}`;
-  } else {
-    if (category === 'top') finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
-    else if (category === 'popular' || category === 'recommended') finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
-    else if (category === 'random') finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
-
-    if (ratingFilter === 'nsfw') {
-      finalTags += ' rating:questionable,explicit';
-    } else if (ratingFilter === 'sfw') {
-      finalTags += ' rating:safe';
-    }
-
-    url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
+  if (category === 'top') {
+    finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
+  } else if (category === 'views' || category === 'popular' || category === 'recommended') {
+    finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
+  } else if (category === 'random') {
+    finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
   }
+
+  if (ratingFilter === 'nsfw') {
+    finalTags += ' rating:questionable,explicit';
+  } else if (ratingFilter === 'sfw') {
+    finalTags += ' rating:safe';
+  }
+
+  url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
   let res = null;
   try {
     res = await fetchSafe(url);

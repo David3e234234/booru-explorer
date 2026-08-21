@@ -28,6 +28,35 @@ export function updateAgeFilterUI() {
   updateFilterActiveDot();
 }
 
+export function updateDateFilterUI() {
+  const dateMap = {
+    'all': 'За всё время',
+    '24h': 'За 24 часа',
+    '1d': 'За 24 часа',
+    '2d': 'За 2 дня',
+    '7d': 'За неделю',
+    'week': 'За неделю',
+    '30d': 'За месяц',
+    'month': 'За месяц',
+    '90d': 'За 3 месяца',
+    '3months': 'За 3 месяца',
+    '365d': 'За год',
+    'year': 'За год'
+  };
+
+  const dateFilterLabel = document.getElementById('dateFilterLabel');
+  if (dateFilterLabel) {
+    dateFilterLabel.textContent = dateMap[state.dateFilter] || 'За всё время';
+  }
+
+  document.querySelectorAll('#dateFilterMenu .dropdown-item').forEach(item => {
+    const isCurrent = item.dataset.date === state.dateFilter || (state.dateFilter === 'all' && item.dataset.date === 'all');
+    item.classList.toggle('active', isCurrent);
+  });
+
+  updateFilterActiveDot();
+}
+
 export function updateFilterActiveDot() {
   const filterActiveDot = document.getElementById('filterActiveDot');
   if (!filterActiveDot) return;
@@ -35,6 +64,7 @@ export function updateFilterActiveDot() {
                    state.ratingFilter !== 'all' ||
                    state.typeFilter !== 'all' ||
                    state.ageFilter !== 'all' ||
+                   (state.dateFilter && state.dateFilter !== 'all') ||
                    !state.hideFurry ||
                    !state.hidePregnant ||
                    state.hideLgbt ||
@@ -86,10 +116,11 @@ export function updateCategoryTabsUI() {
   const mobileNavFeedLabel = document.getElementById('mobileNavFeedLabel');
   if (mobileNavFeedLabel) {
     const catMap = {
-      'new': 'Новое',
-      'recommended': 'Для вас',
+      'new': 'Свежие',
+      'views': 'Просматриваемые',
+      'top': 'По рейтингу',
       'popular': 'Популярное',
-      'top': 'Топ',
+      'recommended': 'Для вас',
       'random': 'Случайно',
       'favorites': 'Избранное'
     };

@@ -12,7 +12,7 @@ function getRecentDateFilter(days = 30) {
 }
 
 export async function fetchXbooru(params, aiTagsList) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
   if (ratingFilter === 'sfw') {
     return [];
   }
@@ -21,6 +21,10 @@ export async function fetchXbooru(params, aiTagsList) {
   if (category === 'top') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'views') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:views:desc` : 'sort:views:desc';
     }
   } else if (category === 'popular') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('date:')) {
@@ -34,6 +38,15 @@ export async function fetchXbooru(params, aiTagsList) {
   } else if (category === 'random') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+    }
+  }
+
+  if (dateFilter && dateFilter !== 'all' && !searchTags.includes('date:')) {
+    const daysMap = { '24h': 1, '1d': 1, '2d': 2, '7d': 7, 'week': 7, '30d': 30, 'month': 30, '90d': 90, '3months': 90, '365d': 365, 'year': 365 };
+    const days = daysMap[dateFilter];
+    if (days) {
+      const recentDate = getRecentDateFilter(days);
+      searchTags = searchTags ? `${searchTags} ${recentDate}` : recentDate;
     }
   }
 
@@ -107,12 +120,16 @@ export async function fetchXbooru(params, aiTagsList) {
 }
 
 export async function fetchHypnohub(params, aiTagsList) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('hypnohub', tags, ageFilter, typeFilter);
   if (category === 'top') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'views') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:views:desc` : 'sort:views:desc';
     }
   } else if (category === 'popular') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('date:')) {
@@ -126,6 +143,15 @@ export async function fetchHypnohub(params, aiTagsList) {
   } else if (category === 'random') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+    }
+  }
+
+  if (dateFilter && dateFilter !== 'all' && !searchTags.includes('date:')) {
+    const daysMap = { '24h': 1, '1d': 1, '2d': 2, '7d': 7, 'week': 7, '30d': 30, 'month': 30, '90d': 90, '3months': 90, '365d': 365, 'year': 365 };
+    const days = daysMap[dateFilter];
+    if (days) {
+      const recentDate = getRecentDateFilter(days);
+      searchTags = searchTags ? `${searchTags} ${recentDate}` : recentDate;
     }
   }
 

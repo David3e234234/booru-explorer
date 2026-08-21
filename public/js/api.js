@@ -79,6 +79,7 @@ export async function fetchPosts({
   ratingFilter = 'all',
   typeFilter = 'all',
   ageFilter = 'all',
+  dateFilter = 'all',
   hideFurry = true,
   hidePregnant = true,
   hideLgbt = false,
@@ -95,6 +96,7 @@ export async function fetchPosts({
     ratingFilter,
     typeFilter,
     ageFilter,
+    dateFilter,
     hideFurry: hideFurry ? 'true' : 'false',
     hidePregnant: hidePregnant ? 'true' : 'false',
     hideLgbt: hideLgbt ? 'true' : 'false'

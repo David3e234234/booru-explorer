@@ -16,7 +16,7 @@ import {
   fetchTelegramBackupStatus
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
-import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI } from './filtersUI.js';
+import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI } from './filtersUI.js';
 
 export const DEFAULT_AI_TAGS = [
   'ai_generated',
@@ -199,6 +199,10 @@ export function applySettingsToUIAndState(s) {
   if (s.ageFilter) {
     state.ageFilter = s.ageFilter;
     updateAgeFilterUI();
+  }
+  if (s.dateFilter) {
+    state.dateFilter = s.dateFilter;
+    updateDateFilterUI();
   }
   const checkHideFurry = document.getElementById('checkHideFurry');
   if (typeof s.hideFurry === 'boolean') {

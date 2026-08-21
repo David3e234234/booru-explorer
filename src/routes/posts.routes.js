@@ -50,6 +50,7 @@ router.get('/posts', async (req, res) => {
     const ratingFilter = req.query.ratingFilter || 'all';
     const typeFilter = req.query.typeFilter || 'all';
     const ageFilter = req.query.ageFilter || 'all';
+    const dateFilter = req.query.dateFilter || 'all';
     const hideFurry = req.query.hideFurry === 'true' || req.query.hideFurry === '1';
     const hidePregnant = req.query.hidePregnant === 'true' || req.query.hidePregnant === '1';
     const hideLgbt = req.query.hideLgbt === 'true' || req.query.hideLgbt === '1';
@@ -57,7 +58,7 @@ router.get('/posts', async (req, res) => {
     const customSites = req.query.customSites || '';
 
     // Проверка кэша в оперативной памяти (для всего кроме random)
-    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}`;
+    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
@@ -83,7 +84,7 @@ router.get('/posts', async (req, res) => {
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
     const blacklist = settings.blacklist || [];
 
-    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}, exclude=${excludeSites}, customSites=${customSites}`);
+    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, category=${category}, date=${dateFilter}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}`);
 
     let posts = await fetchPosts(site, { 
       tags, 
@@ -93,6 +94,7 @@ router.get('/posts', async (req, res) => {
       ratingFilter, 
       typeFilter, 
       ageFilter, 
+      dateFilter,
       excludeSites,
       customSites,
       hideFurry,
@@ -116,6 +118,7 @@ router.get('/posts', async (req, res) => {
       ageFilter,
       aiFilter,
       ratingFilter,
+      dateFilter,
       hideFurry: hideFurry || settings.hideFurry,
       hidePregnant: hidePregnant || settings.hidePregnant,
       hideLgbt: hideLgbt || settings.hideLgbt,
@@ -131,6 +134,8 @@ router.get('/posts', async (req, res) => {
 
     if (category === 'top' && site !== 'all') {
       posts.sort((a, b) => (b.score || 0) - (a.score || 0));
+    } else if (category === 'views' && site !== 'all') {
+      posts.sort((a, b) => (b.views || b.score || 0) - (a.views || a.score || 0));
     }
 
     logInfo('Search', `Успешно: найдено ${posts.length} постов для выдачи`);

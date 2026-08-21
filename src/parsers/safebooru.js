@@ -11,7 +11,7 @@ function getRecentDateFilter(days = 30) {
 }
 
 export async function fetchSafebooru(params, aiTagsList) {
-  const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ratingFilter = 'all', ageFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ratingFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound' || ratingFilter === 'nsfw') {
     return [];
   }
@@ -20,6 +20,10 @@ export async function fetchSafebooru(params, aiTagsList) {
   if (category === 'top') {
     if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
       finalTags = finalTags ? `${finalTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'views') {
+    if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
+      finalTags = finalTags ? `${finalTags} sort:views:desc` : 'sort:views:desc';
     }
   } else if (category === 'popular') {
     if (!finalTags.includes('sort:') && !finalTags.includes('order:') && !finalTags.includes('date:')) {
@@ -33,6 +37,27 @@ export async function fetchSafebooru(params, aiTagsList) {
   } else if (category === 'random') {
     if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
       finalTags = finalTags ? `${finalTags} sort:random` : 'sort:random';
+    }
+  }
+
+  if (dateFilter && dateFilter !== 'all' && !finalTags.includes('date:')) {
+    const daysMap = {
+      '24h': 1,
+      '1d': 1,
+      '2d': 2,
+      '7d': 7,
+      'week': 7,
+      '30d': 30,
+      'month': 30,
+      '90d': 90,
+      '3months': 90,
+      '365d': 365,
+      'year': 365
+    };
+    const days = daysMap[dateFilter];
+    if (days) {
+      const recentDate = getRecentDateFilter(days);
+      finalTags = finalTags ? `${finalTags} ${recentDate}` : recentDate;
     }
   }
 

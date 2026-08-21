@@ -9,7 +9,7 @@ import { checkIsAi, checkMediaTypes } from '../utils/tagHelpers.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 export async function fetchDanbooru(params, aiTagsList, settings) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', dateFilter = 'all' } = params;
   const userTagList = tags.trim().split(/\s+/).filter(Boolean);
   const queryTags = [];
   
@@ -40,8 +40,26 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   // Приоритет Сортировка
   if (queryTags.length < 2) {
     if (category === 'top') queryTags.push('order:score');
-    else if (category === 'popular' || category === 'recommended') queryTags.push('order:rank');
+    else if (category === 'views' || category === 'popular' || category === 'recommended') queryTags.push('order:rank');
     else if (category === 'random') queryTags.push('order:random');
+  }
+
+  // Приоритет Фильтр по дате (age:..Nd)
+  if (queryTags.length < 2 && dateFilter && dateFilter !== 'all') {
+    const ageMap = {
+      '24h': 'age:..1d',
+      '1d': 'age:..1d',
+      '2d': 'age:..2d',
+      '7d': 'age:..7d',
+      'week': 'age:..7d',
+      '30d': 'age:..30d',
+      'month': 'age:..30d',
+      '90d': 'age:..90d',
+      '3months': 'age:..90d',
+      '365d': 'age:..365d',
+      'year': 'age:..365d'
+    };
+    if (ageMap[dateFilter]) queryTags.push(ageMap[dateFilter]);
   }
 
   // Приоритет Рейтинг
