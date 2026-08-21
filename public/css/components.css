@@ -320,6 +320,12 @@
   outline-offset: 2px;
 }
 
+.btn-card-dislike:hover {
+  background-color: rgba(239, 68, 68, 0.85);
+  color: #ffffff;
+  transform: scale(1.1);
+}
+
 .btn-card-like:hover {
   background-color: var(--accent-danger);
   color: #ffffff;
@@ -342,13 +348,29 @@
   color: #ffffff;
 }
 
+/* Анимация плавного схлопывания при скрытии поста */
+.gallery-card.card-hiding {
+  opacity: 0 !important;
+  transform: scale(0.85) translateY(12px) !important;
+  pointer-events: none;
+  transition: opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1), transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* Бейдж процента совпадения в ленте рекомендаций */
 .badge-format.match-percent {
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.3), rgba(239, 68, 68, 0.3));
-  border: 1px solid rgba(245, 158, 11, 0.6);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.35), rgba(239, 68, 68, 0.35));
+  border: 1px solid rgba(245, 158, 11, 0.7);
   color: #fbbf24;
   font-weight: 700;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  cursor: help;
+  transition: all var(--transition-fast);
+}
+
+.badge-format.match-percent:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.5), rgba(239, 68, 68, 0.5));
+  border-color: #fbbf24;
+  transform: translateY(-1px);
 }
 
 /* Чипсы тегов в строке поиска */

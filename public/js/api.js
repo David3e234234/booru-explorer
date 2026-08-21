@@ -186,6 +186,40 @@ export async function syncLikes(likes) {
   return await res.json();
 }
 
+export async function fetchDislikes() {
+  const res = await fetch('/api/dislikes', {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) return { dislikes: [] };
+  return await res.json();
+}
+
+export async function toggleDislikeApi(post) {
+  const res = await fetch('/api/dislike', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(post)
+  });
+  return await res.json();
+}
+
+export async function clearDislikesApi() {
+  const res = await fetch('/api/dislikes/clear', {
+    method: 'POST',
+    headers: getAuthHeaders(true)
+  });
+  return await res.json();
+}
+
+export async function syncDislikes(dislikes) {
+  const res = await fetch('/api/dislikes/sync', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ dislikes })
+  });
+  return await res.json();
+}
+
 export async function fetchFavoriteAuthors() {
   const res = await fetch('/api/favorite-authors', {
     headers: getAuthHeaders()

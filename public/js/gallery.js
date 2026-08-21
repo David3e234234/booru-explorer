@@ -1,5 +1,6 @@
-import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally } from './state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleLikePost } from './api.js';
+import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, toggleDislikeLocally, isPostDisliked } from './state.js';
+import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
+import { showToast } from './modules/uiUtils.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh }) {
   const galleryGrid = document.getElementById('galleryGrid');
@@ -444,7 +445,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     let matchBadge = '';
     if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
-      matchBadge = `<span class="badge-format match-percent" title="Совпадение со вкусами: ${post.matchPercent}%">${post.matchPercent}%</span>`;
+      const matchedInfo = (Array.isArray(post.matchedTags) && post.matchedTags.length > 0)
+        ? `&#10;💡 Совпало: ${post.matchedTags.join(', ')}`
+        : '';
+      matchBadge = `<span class="badge-format match-percent" title="Совпадение со вкусами: ${post.matchPercent}%${matchedInfo}">${post.matchPercent}%</span>`;
     }
 
     const formatCompactNumber = (num) => {
@@ -512,6 +516,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             ` : '')}
           </div>
           <div class="card-action-btns">
+            <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="Не интересно (скрыть и меньше рекомендовать)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
             <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? 'Убрать лайк' : 'Нравится'}">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
             </button>
@@ -543,6 +550,13 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
 
     card.addEventListener('click', (e) => {
+      const dislikeBtn = e.target.closest('.btn-card-dislike');
+      if (dislikeBtn) {
+        e.stopPropagation();
+        if (navigator.vibrate) try { navigator.vibrate(20); } catch (err) {}
+        handleDislikeClick(post, card);
+        return;
+      }
       const likeBtn = e.target.closest('.btn-card-like');
       if (likeBtn) {
         e.stopPropagation();
@@ -660,6 +674,26 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
 
     return card;
+  }
+
+  async function handleDislikeClick(post, card) {
+    toggleDislikeLocally(post);
+    showToast('Пост скрыт из рекомендаций', 'info');
+
+    // Плавное схлопывание карточки
+    card.classList.add('card-hiding');
+    setTimeout(() => {
+      state.posts = state.posts.filter(p => p.id !== post.id);
+      card.remove();
+      const resultsCountEl = document.getElementById('resultsCount');
+      if (resultsCountEl) resultsCountEl.textContent = `${state.posts.length} постов`;
+    }, 280);
+
+    try {
+      await toggleDislikeApi(post);
+    } catch (err) {
+      console.error('Ошибка сохранения скрытого поста:', err);
+    }
   }
 
   async function handleLikeClick(post, btn) {

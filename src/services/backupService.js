@@ -3,6 +3,7 @@ import {
   updateSettings, 
   getFavorites, 
   getLikes, 
+  getDislikes, 
   getFavoriteAuthors 
 } from './storageService.js';
 import { getUsersList } from './userService.js';
@@ -131,6 +132,7 @@ export function buildBackupPayload(userId = null) {
   const settings = getSettings(userId);
   const favorites = getFavorites(userId);
   const likes = getLikes(userId);
+  const dislikes = getDislikes(userId);
   const favoriteAuthors = getFavoriteAuthors(userId);
 
   const now = new Date();
@@ -143,12 +145,14 @@ export function buildBackupPayload(userId = null) {
     stats: {
       favoritesCount: favorites.length,
       likesCount: likes.length,
+      dislikesCount: dislikes.length,
       favoriteAuthorsCount: favoriteAuthors.length
     },
     data: {
       settings,
       favorites,
       likes,
+      dislikes,
       favoriteAuthors
     }
   };
@@ -189,6 +193,7 @@ export async function performTelegramBackup(userId = null, isManual = false) {
     `📅 *Дата:* ${dateFormatted}\n` +
     `⭐ *Закладок:* ${payload.stats.favoritesCount}\n` +
     `❤️ *Лайков:* ${payload.stats.likesCount}\n` +
+    `🚫 *Скрыто постов:* ${payload.stats.dislikesCount || 0}\n` +
     `🎨 *Любимых авторов:* ${payload.stats.favoriteAuthorsCount}\n\n` +
     `_Файл можно импортировать в настройках сайта в разделе «Память»._`;
 

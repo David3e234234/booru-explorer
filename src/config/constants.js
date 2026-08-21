@@ -18,6 +18,7 @@ export const VIDEOS_DIR = path.join(CACHE_DIR, 'videos');
 export const FAVORITES_FILE = path.join(DATA_DIR, 'favorites.json');
 export const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json');
 export const LIKES_FILE = path.join(DATA_DIR, 'likes.json');
+export const DISLIKES_FILE = path.join(DATA_DIR, 'dislikes.json');
 export const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
 export const DEFAULT_AI_TAGS = [

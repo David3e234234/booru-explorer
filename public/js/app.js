@@ -9,11 +9,14 @@ import {
   loadLocalFavoriteAuthors,
   setLikes,
   loadLocalLikes,
+  loadLocalDislikes,
+  setDislikes,
   loadLocalViewed,
   loadLocalAuth,
   saveLocalAuth,
   clearLocalAuth,
   getUserInterestTags,
+  getUserInterestSeedPairs,
   calculatePostMatchPercent
 } from './state.js';
 import { 
@@ -22,6 +25,8 @@ import {
   syncFavorites,
   fetchLikes,
   syncLikes,
+  fetchDislikes,
+  syncDislikes,
   fetchFavoriteAuthors, 
   syncFavoriteAuthors,
   fetchSettings, 
@@ -436,12 +441,42 @@ async function loadLikes() {
   }
 }
 
+async function loadDislikes() {
+  try {
+    if (state.currentUser) {
+      const data = await fetchDislikes();
+      const serverDislikes = Array.isArray(data?.dislikes) ? data.dislikes : [];
+      setDislikes(serverDislikes);
+    } else {
+      const localDislikes = loadLocalDislikes() || [];
+      if (localDislikes.length > 0) {
+        setDislikes(localDislikes);
+      }
+      const data = await fetchDislikes();
+      const serverDislikes = data?.dislikes || [];
+      const map = new Map();
+      serverDislikes.forEach(d => { if (d && d.id) map.set(d.id, d); });
+      localDislikes.forEach(d => { if (d && d.id) map.set(d.id, d); });
+      const merged = Array.from(map.values());
+
+      setDislikes(merged);
+
+      if (localDislikes.length > serverDislikes.length) {
+        syncDislikes(merged).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error('Ошибка загрузки скрытых постов:', err);
+  }
+}
+
 async function refreshAllUserData() {
   await Promise.allSettled([
     loadUserSettings(),
     loadFavorites(),
     loadFavoriteAuthors(),
-    loadLikes()
+    loadLikes(),
+    loadDislikes()
   ]);
   updateFavoritesBadge();
   if (profileUIInstance) profileUIInstance.renderProfile();
@@ -543,31 +578,25 @@ async function performSearch(reset = false, options = {}) {
         const fetchTasks = [];
 
         if (userInterests.length > 0) {
-          const artists = userInterests.filter(i => i.category === 'artist');
-          const characters = userInterests.filter(i => i.category === 'character');
-          const copyrights = userInterests.filter(i => i.category === 'copyright');
-          const generals = userInterests.filter(i => i.category === 'general');
-
           const selectedSeeds = [];
 
-          // Функция для перемешивания массива (Fisher-Yates)
-          const shuffle = (array) => {
-            const arr = [...array];
-            for (let i = arr.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [arr[i], arr[j]] = [arr[j], arr[i]];
+          // 1. Сначала берем лучшие парные сид-связки (Автор + Персонаж / Персонаж + Франшиза)
+          const seedPairs = getUserInterestSeedPairs(8);
+          if (seedPairs.length > 0) {
+            // Перемешиваем топ-связки для свежести выдачи
+            const shuffledPairs = [...seedPairs].sort(() => Math.random() - 0.5);
+            for (const pair of shuffledPairs) {
+              if (selectedSeeds.length >= 2) break;
+              selectedSeeds.push(pair);
             }
-            return arr;
-          };
+          }
 
-          // Берем топ-20 интересов пользователя
-          const topInterests = userInterests.slice(0, 20);
-          
-          // Выбираем 3 случайных сида из топа для обеспечения разнообразия ленты
-          const shuffledTop = shuffle(topInterests);
+          // 2. Дополняем одиночными топ-интересами (топ-15)
+          const topInterests = userInterests.slice(0, 15);
+          const shuffledTop = [...topInterests].sort(() => Math.random() - 0.5);
           for (const item of shuffledTop) {
-            if (selectedSeeds.length >= 3) break;
-            if (!selectedSeeds.includes(item.tag)) {
+            if (selectedSeeds.length >= 4) break;
+            if (!selectedSeeds.includes(item.tag) && !selectedSeeds.some(s => s.includes(item.tag))) {
               selectedSeeds.push(item.tag);
             }
           }
@@ -679,7 +708,7 @@ async function performSearch(reset = false, options = {}) {
         if (seen.has(p.id)) return;
         seen.add(p.id);
 
-        if (state.likedIds.has(p.id) || state.favoriteIds.has(p.id)) {
+        if (state.likedIds.has(p.id) || state.favoriteIds.has(p.id) || state.dislikedIds.has(p.id)) {
           return;
         }
 
@@ -687,14 +716,17 @@ async function performSearch(reset = false, options = {}) {
       });
 
       const scoredCandidates = filteredCandidates.map(p => {
-        let baseMatch = calculatePostMatchPercent(p, interestMap);
+        const matchResult = calculatePostMatchPercent(p, interestMap);
+        let basePercent = typeof matchResult === 'object' ? matchResult.percent : matchResult;
+        const matchedTags = typeof matchResult === 'object' ? matchResult.matchedTags : [];
         const isViewed = state.viewedIds.has(p.id);
         if (isViewed) {
-          baseMatch = Math.round(baseMatch * 0.55);
+          basePercent = Math.round(basePercent * 0.55);
         }
         return {
           ...p,
-          matchPercent: baseMatch,
+          matchPercent: basePercent,
+          matchedTags,
           isViewed
         };
       });

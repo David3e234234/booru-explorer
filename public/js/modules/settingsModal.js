@@ -10,6 +10,7 @@ import {
   clearCache, 
   syncFavorites, 
   syncLikes, 
+  syncDislikes, 
   syncFavoriteAuthors,
   testTelegramConnection,
   sendTelegramBackupNow,
@@ -868,6 +869,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         }
         if (counts.likes > 0) {
           try { await syncLikes(state.likes); } catch (err) {}
+        }
+        if (counts.dislikes > 0) {
+          try { await syncDislikes(state.dislikes); } catch (err) {}
         }
         if (counts.favoriteAuthors > 0) {
           try { await syncFavoriteAuthors(state.favoriteAuthors); } catch (err) {}

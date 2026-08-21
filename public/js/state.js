@@ -34,6 +34,8 @@ export const state = {
   favoriteIds: new Set(),
   likes: [],
   likedIds: new Set(),
+  dislikes: [],
+  dislikedIds: new Set(),
   viewedIds: new Set(),
   favoritesSubTab: 'posts', // 'posts' | 'authors'
   profileSubTab: 'likes', // 'likes' | 'favorites' | 'authors' | 'analytics'
@@ -108,6 +110,7 @@ const STORAGE_KEYS = {
   FAVORITES: 'booru_favorites_v1',
   FAVORITE_AUTHORS: 'booru_favorite_authors_v1',
   LIKES: 'booru_likes_v1',
+  DISLIKES: 'booru_dislikes_v1',
   VIEWED: 'booru_viewed_v1',
   AUTH_TOKEN: 'booru_auth_token_v1',
   CURRENT_USER: 'booru_current_user_v1'
@@ -146,8 +149,65 @@ export function clearLocalAuth() {
   try {
     localStorage.removeItem(STORAGE_KEYS.FAVORITES);
     localStorage.removeItem(STORAGE_KEYS.LIKES);
+    localStorage.removeItem(STORAGE_KEYS.DISLIKES);
     localStorage.removeItem(STORAGE_KEYS.FAVORITE_AUTHORS);
   } catch (e) {}
+}
+
+export function loadLocalDislikes() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.DISLIKES);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function saveLocalDislikes(dislikesList) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.DISLIKES, JSON.stringify(dislikesList || []));
+  } catch (e) {}
+}
+
+export function setDislikes(dislikesList) {
+  state.dislikes = dislikesList || [];
+  state.dislikedIds = new Set(state.dislikes.map(d => d.id));
+  saveLocalDislikes(state.dislikes);
+}
+
+export function isPostDisliked(id) {
+  return state.dislikedIds.has(id);
+}
+
+export function toggleDislikeLocally(post) {
+  if (!post || !post.id) return false;
+  if (state.dislikedIds.has(post.id)) {
+    state.dislikedIds.delete(post.id);
+    state.dislikes = state.dislikes.filter(d => d.id !== post.id);
+    saveLocalDislikes(state.dislikes);
+    return false;
+  } else {
+    state.dislikedIds.add(post.id);
+    state.dislikes.unshift({
+      id: post.id,
+      site: post.site || 'danbooru',
+      author: post.author || '',
+      tags: post.tags || [],
+      tagDetails: post.tagDetails || {},
+      previewUrl: post.previewUrl || '',
+      fileUrl: post.fileUrl || '',
+      isVideo: post.isVideo || false,
+      dislikedAt: new Date().toISOString()
+    });
+    saveLocalDislikes(state.dislikes);
+    return true;
+  }
+}
+
+export function clearDislikesLocally() {
+  state.dislikes = [];
+  state.dislikedIds.clear();
+  saveLocalDislikes([]);
 }
 
 export function loadLocalViewed() {
@@ -238,7 +298,7 @@ export function saveLocalLikes(likesList) {
   } catch (e) {}
 }
 
-// 📦 Экспорт всех данных пользователя (Настройки, Закладки, Лайки, Авторы) в JSON объект
+// 📦 Экспорт всех данных пользователя (Настройки, Закладки, Лайки, Скрытые, Авторы) в JSON объект
 export function exportUserData() {
   const exportObject = {
     version: 1,
@@ -246,7 +306,8 @@ export function exportUserData() {
     settings: loadLocalSettings() || state.settings || {},
     favorites: loadLocalFavorites() || state.favorites || [],
     favoriteAuthors: loadLocalFavoriteAuthors() || state.favoriteAuthors || [],
-    likes: loadLocalLikes() || state.likes || []
+    likes: loadLocalLikes() || state.likes || [],
+    dislikes: loadLocalDislikes() || state.dislikes || []
   };
   return exportObject;
 }
@@ -257,7 +318,7 @@ export function importUserData(data) {
     throw new Error('Некорректный формат файла данных');
   }
 
-  let importedCounts = { settings: false, favorites: 0, favoriteAuthors: 0, likes: 0 };
+  let importedCounts = { settings: false, favorites: 0, favoriteAuthors: 0, likes: 0, dislikes: 0 };
 
   // 1. Настройки
   if (data.settings && typeof data.settings === 'object') {
@@ -299,6 +360,17 @@ export function importUserData(data) {
     const mergedList = Array.from(mergedMap.values());
     setLikes(mergedList);
     importedCounts.likes = mergedList.length;
+  }
+
+  // 5. Скрытые (Dislikes)
+  if (Array.isArray(data.dislikes)) {
+    const existing = loadLocalDislikes() || [];
+    const mergedMap = new Map();
+    existing.forEach(d => mergedMap.set(d.id, d));
+    data.dislikes.forEach(d => { if (d && d.id) mergedMap.set(d.id, d); });
+    const mergedList = Array.from(mergedMap.values());
+    setDislikes(mergedList);
+    importedCounts.dislikes = mergedList.length;
   }
 
   return importedCounts;
@@ -369,7 +441,8 @@ export function isAuthorFavorite(name) {
 
 // 🧠 Алгоритм извлечения карты интересов пользователя
 export function getUserInterestTags(limit = null) {
-  const counts = new Map(); // tag -> count
+  const counts = new Map(); // tag -> positive weight sum
+  const dislikeCounts = new Map(); // tag -> negative penalty sum
   const weights = new Map(); // tag -> baseWeight
   const catMap = new Map(); // tag -> category
 
@@ -383,16 +456,25 @@ export function getUserInterestTags(limit = null) {
     extractTagsFromPost(post, counts, weights, catMap, 1.5);
   }
 
+  // 3. Анализируем скрытые / задизлайканные посты (штраф × 1.8)
+  for (const post of (state.dislikes || [])) {
+    extractTagsFromPost(post, dislikeCounts, weights, catMap, 1.8);
+  }
+
   const scores = new Map();
 
-  // Применяем сублинейное сглаживание: базовая значимость * log2(1 + кол-во)
+  // Применяем сублинейное сглаживание с вычетом штрафов: baseWeight * log2(1 + netCount)
   for (const [tag, count] of counts.entries()) {
+    const penalty = dislikeCounts.get(tag) || 0;
+    const netCount = count - penalty;
+    if (netCount <= 0.1) continue; // Тег полностью подавлен дизлайками
+
     const baseWeight = weights.get(tag) || 1.0;
-    const score = baseWeight * Math.log2(1 + count);
+    const score = baseWeight * Math.log2(1 + netCount);
     scores.set(tag, score);
   }
 
-  // 3. Анализируем любимых авторов (вес × 5.0) -> фиксированный бонус
+  // 4. Анализируем любимых авторов (вес × 5.0) -> фиксированный бонус
   for (const author of state.favoriteAuthors) {
     const raw = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
     if (raw) {
@@ -411,6 +493,60 @@ export function getUserInterestTags(limit = null) {
 
   list.sort((a, b) => b.score - a.score);
   return (typeof limit === 'number' && limit > 0) ? list.slice(0, limit) : list;
+}
+
+// 🔗 Извлечение устойчивых парных комбинаций тегов (Автор + Персонаж, Персонаж + Франшиза) для сид-запросов
+export function getUserInterestSeedPairs(limit = 10) {
+  const userInterests = getUserInterestTags();
+  if (userInterests.length === 0) return [];
+
+  const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
+  const excludedSet = new Set((state.settings.excludedInterestTags || []).map(t => String(t).toLowerCase().trim()));
+  const pairScores = new Map(); // "tag1 tag2" -> score
+
+  const postsPool = [...state.likes, ...state.favorites];
+  for (const post of postsPool) {
+    if (!post) continue;
+    const td = post.tagDetails || {};
+    const artists = (td.artist || (post.author ? [post.author] : []))
+      .map(cleanTagString).filter(t => t && !excludedSet.has(t) && interestMap.has(t));
+    const characters = (td.character || [])
+      .map(cleanTagString).filter(t => t && !excludedSet.has(t) && interestMap.has(t));
+    const copyrights = (td.copyright || [])
+      .map(cleanTagString).filter(t => t && !excludedSet.has(t) && interestMap.has(t));
+    const generals = (td.general || (Array.isArray(post.tags) ? post.tags : []))
+      .map(cleanTagString).filter(t => t && !excludedSet.has(t) && interestMap.has(t));
+
+    const addPair = (t1, t2, boost = 1.0) => {
+      if (!t1 || !t2 || t1 === t2) return;
+      const sortedPair = [t1, t2].sort().join(' ');
+      const s1 = interestMap.get(t1) || 1;
+      const s2 = interestMap.get(t2) || 1;
+      const pairScore = (s1 + s2) * boost;
+      pairScores.set(sortedPair, (pairScores.get(sortedPair) || 0) + pairScore);
+    };
+
+    // Комбинации с наивысшим качеством сид-выдачи
+    for (const a of artists) {
+      for (const c of characters) addPair(a, c, 2.5);
+      for (const cp of copyrights) addPair(a, cp, 2.0);
+    }
+    for (const c of characters) {
+      for (const cp of copyrights) addPair(c, cp, 2.0);
+      for (const g of generals.slice(0, 3)) addPair(c, g, 1.2);
+    }
+  }
+
+  const sortedPairs = Array.from(pairScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(entry => entry[0]);
+
+  return sortedPairs.slice(0, limit);
+}
+
+function cleanTagString(str) {
+  if (!str) return '';
+  return String(str).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
 }
 
 export function excludeInterestTag(tag) {
@@ -440,7 +576,7 @@ function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {
 
   const addTag = (rawTag, category, baseWeight) => {
     if (!rawTag) return;
-    const clean = String(rawTag).toLowerCase().split(',')[0].replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+    const clean = cleanTagString(String(rawTag).split(',')[0]);
     if (!clean) return;
     
     counts.set(clean, (counts.get(clean) || 0) + multiplier);
@@ -474,26 +610,42 @@ function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {
   }
 }
 
-// 🎯 Вычисление процента релевантности поста
+// 🎯 Вычисление процента релевантности поста и списка совпавших тегов
 export function calculatePostMatchPercent(post, userInterestMap) {
   if (!post || !userInterestMap || userInterestMap.size === 0) {
-    return 0;
+    return {
+      percent: 0,
+      matchedTags: [],
+      valueOf() { return 0; },
+      toString() { return '0'; }
+    };
   }
 
   let matchPoints = 0;
+  const matchedTags = [];
+  const addedSet = new Set();
 
-  const checkTag = (tag, weightMultiplier = 1.0) => {
+  const checkTag = (tag, weightMultiplier = 1.0, displayPrefix = '') => {
     if (!tag) return;
-    const clean = String(tag).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+    const clean = cleanTagString(tag);
     if (!clean) return;
     if (userInterestMap.has(clean)) {
-      matchPoints += (userInterestMap.get(clean) || 1) * weightMultiplier;
+      const score = userInterestMap.get(clean) || 1;
+      matchPoints += score * weightMultiplier;
+      if (!addedSet.has(clean)) {
+        addedSet.add(clean);
+        matchedTags.push({
+          tag: clean,
+          display: displayPrefix ? `${displayPrefix}${clean}` : clean,
+          score
+        });
+      }
     }
   };
 
-  if (post.author) checkTag(post.author, 4.0);
+  if (post.author) checkTag(post.author, 4.0, '@');
   if (post.tagDetails) {
-    if (Array.isArray(post.tagDetails.artist)) post.tagDetails.artist.forEach(a => checkTag(a, 4.0));
+    if (Array.isArray(post.tagDetails.artist)) post.tagDetails.artist.forEach(a => checkTag(a, 4.0, '@'));
     if (Array.isArray(post.tagDetails.character)) post.tagDetails.character.forEach(c => checkTag(c, 3.0));
     if (Array.isArray(post.tagDetails.copyright)) post.tagDetails.copyright.forEach(cp => checkTag(cp, 2.5));
     if (Array.isArray(post.tagDetails.general)) post.tagDetails.general.forEach(g => checkTag(g, 1.0));
@@ -501,10 +653,27 @@ export function calculatePostMatchPercent(post, userInterestMap) {
     for (const t of post.tags) checkTag(t, 1.0);
   }
 
-  if (matchPoints === 0) return 0;
+  if (matchPoints === 0) {
+    return {
+      percent: 0,
+      matchedTags: [],
+      valueOf() { return 0; },
+      toString() { return '0'; }
+    };
+  }
+
+  // Сортируем совпавшие теги по значимости
+  matchedTags.sort((a, b) => b.score - a.score);
+
   const ratio = matchPoints / (matchPoints + 12);
   const percent = Math.min(99, Math.max(70, Math.round(62 + ratio * 37)));
-  return percent;
+
+  return {
+    percent,
+    matchedTags: matchedTags.map(m => m.display).slice(0, 4),
+    valueOf() { return this.percent; },
+    toString() { return String(this.percent); }
+  };
 }
 
 

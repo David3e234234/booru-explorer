@@ -216,6 +216,17 @@
   border-color: var(--accent-danger);
 }
 
+#btnDislikeModal.active {
+  background-color: var(--accent-danger) !important;
+  color: #ffffff !important;
+  border-color: var(--accent-danger) !important;
+}
+
+#btnDislikeModal:hover {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+}
+
 #btnLikeModal.active {
   background-color: var(--accent-danger) !important;
   color: #ffffff !important;

@@ -1,5 +1,5 @@
-import { state, clearLocalAuth, getUserInterestTags, excludeInterestTag, restoreInterestTag, resetExcludedInterestTags, saveLocalSettings } from '../state.js';
-import { apiLogout, saveSettings } from '../api.js';
+import { state, clearLocalAuth, getUserInterestTags, excludeInterestTag, restoreInterestTag, resetExcludedInterestTags, saveLocalSettings, clearDislikesLocally } from '../state.js';
+import { apiLogout, saveSettings, clearDislikesApi } from '../api.js';
 import { showToast } from './uiUtils.js';
 
 export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
@@ -161,11 +161,18 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
           `;
         }).join('')}
       </div>
-      ${(isEditingInterests && excludedCount > 0) ? `
-        <button type="button" class="btn-restore-interests" id="btnRestoreInterests" style="margin-top: 12px;">
-          Восстановить удаленные теги (${excludedCount})
-        </button>
-      ` : ''}
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;">
+        ${(isEditingInterests && excludedCount > 0) ? `
+          <button type="button" class="btn-restore-interests" id="btnRestoreInterests">
+            Восстановить удаленные теги (${excludedCount})
+          </button>
+        ` : ''}
+        ${(state.dislikes && state.dislikes.length > 0) ? `
+          <button type="button" class="btn-restore-interests" id="btnClearDislikesProfile" title="Сбросить список скрытых постов и вернуть их в рекомендации">
+            Сбросить скрытые посты (${state.dislikes.length})
+          </button>
+        ` : ''}
+      </div>
     `;
 
     cloud.querySelectorAll('.interest-tag-chip').forEach(chip => {
@@ -193,6 +200,15 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       saveSettings(state.settings).catch(() => {});
       saveLocalSettings(state.settings);
       showToast('Удаленные теги восстановлены', 'info');
+      renderInterestsCloud();
+    });
+
+    document.getElementById('btnClearDislikesProfile')?.addEventListener('click', async () => {
+      clearDislikesLocally();
+      try {
+        await clearDislikesApi();
+      } catch (err) {}
+      showToast('Список скрытых постов сброшен', 'info');
       renderInterestsCloud();
     });
   }

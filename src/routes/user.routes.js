@@ -12,6 +12,9 @@ import {
   saveFavoriteAuthors, 
   getLikes, 
   saveLikes, 
+  getDislikes, 
+  saveDislikes, 
+  clearDislikes, 
   sendBooruLike 
 } from '../services/storageService.js';
 import { 
@@ -287,6 +290,60 @@ router.post('/likes/sync', (req, res) => {
 
   saveLikes(merged, userId);
   res.json({ success: true, count: merged.length, likes: merged });
+});
+
+// GET /api/dislikes
+router.get('/dislikes', (req, res) => {
+  const userId = req.user?.id || null;
+  const dislikes = getDislikes(userId);
+  res.json({ success: true, dislikes });
+});
+
+// POST /api/dislike
+router.post('/dislike', async (req, res) => {
+  const post = req.body;
+  if (!post || !post.id) return res.status(400).json({ success: false, message: 'Некорректные данные' });
+
+  const userId = req.user?.id || null;
+  const dislikes = getDislikes(userId);
+  const existsIndex = dislikes.findIndex(d => d.id === post.id);
+  let isDisliked = false;
+
+  if (existsIndex >= 0) {
+    dislikes.splice(existsIndex, 1);
+    saveDislikes(dislikes, userId);
+    isDisliked = false;
+  } else {
+    dislikes.unshift({ ...post, dislikedAt: new Date().toISOString() });
+    saveDislikes(dislikes, userId);
+    isDisliked = true;
+  }
+
+  return res.json({ success: true, isDisliked, count: dislikes.length });
+});
+
+// POST /api/dislikes/clear
+router.post('/dislikes/clear', (req, res) => {
+  const userId = req.user?.id || null;
+  clearDislikes(userId);
+  res.json({ success: true, count: 0, dislikes: [] });
+});
+
+// POST /api/dislikes/sync
+router.post('/dislikes/sync', (req, res) => {
+  const { dislikes } = req.body || {};
+  if (!Array.isArray(dislikes)) {
+    return res.status(400).json({ success: false, message: 'Ожидается массив скрытых постов' });
+  }
+  const userId = req.user?.id || null;
+  const current = getDislikes(userId);
+  const map = new Map();
+  current.forEach(d => { if (d && d.id) map.set(d.id, d); });
+  dislikes.forEach(d => { if (d && d.id) map.set(d.id, d); });
+  const merged = Array.from(map.values());
+
+  saveDislikes(merged, userId);
+  res.json({ success: true, count: merged.length, dislikes: merged });
 });
 
 // GET /api/cache-info

@@ -1,5 +1,5 @@
-import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, updateFavoriteAuthorPreview, syncFavoriteAuthors } from '../api.js';
+import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors } from '../api.js';
 import { showToast, haptic } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -23,6 +23,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const siteBadge = document.getElementById('viewerSiteBadge');
   const resBadge = document.getElementById('viewerResolution');
   const extBadge = document.getElementById('viewerExtBadge');
+  const btnDislikeModal = document.getElementById('btnDislikeModal');
   const btnLikeModal = document.getElementById('btnLikeModal');
   const btnFavModal = document.getElementById('btnFavModal');
   const btnDownload = document.getElementById('btnDownload');
@@ -225,6 +226,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       btnLikeModal.querySelector('svg')?.setAttribute('fill', isLiked ? 'currentColor' : 'none');
     }
 
+    const isDisliked = isPostDisliked(currentPost.id);
+    if (btnDislikeModal) {
+      btnDislikeModal.classList.toggle('active', isDisliked);
+    }
+
     const infoDurationRow = document.getElementById('infoDurationRow');
     const infoDuration = document.getElementById('infoDuration');
     if (currentPost.isVideo && (currentPost.durationText || currentPost.duration > 0)) {
@@ -324,6 +330,19 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     btnCloseViewerTags.addEventListener('click', (e) => {
       e.stopPropagation();
       if (viewerSidebar) viewerSidebar.classList.remove('open');
+    });
+  }
+
+  if (btnDislikeModal) {
+    btnDislikeModal.addEventListener('click', async () => {
+      if (!currentPost) return;
+      haptic(20);
+      const isDislikedNow = toggleDislikeLocally(currentPost);
+      btnDislikeModal.classList.toggle('active', isDislikedNow);
+      showToast(isDislikedNow ? 'Пост скрыт (рекомендации обновлены)' : 'Скрытие отменено');
+      try {
+        await toggleDislikeApi(currentPost);
+      } catch (e) {}
     });
   }
 

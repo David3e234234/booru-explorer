@@ -188,11 +188,13 @@ export function registerUser(username, password, initialData = {}) {
   const userSettings = { ...DEFAULT_SETTINGS, ...(initialData.settings || {}) };
   const userFavorites = Array.isArray(initialData.favorites) ? initialData.favorites : [];
   const userLikes = Array.isArray(initialData.likes) ? initialData.likes : [];
+  const userDislikes = Array.isArray(initialData.dislikes) ? initialData.dislikes : [];
   const userFavoriteAuthors = Array.isArray(initialData.favoriteAuthors) ? initialData.favoriteAuthors : [];
 
   writeJsonFile(path.join(userDir, 'settings.json'), userSettings);
   writeJsonFile(path.join(userDir, 'favorites.json'), userFavorites);
   writeJsonFile(path.join(userDir, 'likes.json'), userLikes);
+  writeJsonFile(path.join(userDir, 'dislikes.json'), userDislikes);
   writeJsonFile(path.join(userDir, 'favorite_authors.json'), userFavoriteAuthors);
 
   logInfo('Auth', `Зарегистрирован новый пользователь: ${cleanUsername} (ID: ${userId})`);

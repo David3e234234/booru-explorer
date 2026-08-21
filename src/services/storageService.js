@@ -6,6 +6,7 @@ import {
   FAVORITES_FILE, 
   FAVORITE_AUTHORS_FILE, 
   LIKES_FILE, 
+  DISLIKES_FILE, 
   BROWSER_USER_AGENT,
   DATA_DIR 
 } from '../config/constants.js';
@@ -137,6 +138,21 @@ export function getLikes(userId = null) {
 export function saveLikes(likes, userId = null) {
   const filePath = getUserFilePath(userId, LIKES_FILE, 'likes.json');
   writeJsonFileAsync(filePath, likes);
+}
+
+export function getDislikes(userId = null) {
+  const filePath = getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json');
+  return readJsonFile(filePath, []);
+}
+
+export function saveDislikes(dislikes, userId = null) {
+  const filePath = getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json');
+  writeJsonFileAsync(filePath, dislikes);
+}
+
+export function clearDislikes(userId = null) {
+  const filePath = getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json');
+  writeJsonFileAsync(filePath, []);
 }
 
 export async function sendBooruLike(site, postId, isLike, settings) {
