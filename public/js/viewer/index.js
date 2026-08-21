@@ -114,160 +114,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     state.currentViewerIndex = -1;
   }
 
-  function renderViewerPost() {
-    if (!currentPost) return;
-
-    if (currentPost.id) {
-      markPostViewed(currentPost.id);
-    }
-
-    if (activeAbortController) {
-      activeAbortController.abort();
-      activeAbortController = null;
-    }
-    if (activeBlobUrl) {
-      URL.revokeObjectURL(activeBlobUrl);
-      activeBlobUrl = null;
-    }
-    if (currentZoomInstance) {
-      currentZoomInstance.destroy();
-      currentZoomInstance = null;
-    }
-    if (currentVideoInstance) {
-      currentVideoInstance.destroy();
-      currentVideoInstance = null;
-    }
-
-    if (siteBadge) siteBadge.textContent = currentPost.siteName || currentPost.site;
-    if (resBadge) resBadge.textContent = (currentPost.width && currentPost.height) ? `${currentPost.width} × ${currentPost.height}` : 'Оригинал';
-    if (extBadge) extBadge.textContent = (currentPost.fileExt || 'JPG').toUpperCase();
-
-    // Отображение Автора
-    const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
-    const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
-    if (authorName && authorName.trim()) {
-      const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
-      const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
-
-      if (viewerAuthorBadge && viewerAuthorText) {
-        viewerAuthorText.textContent = authorName;
-        viewerAuthorBadge.style.display = 'inline-flex';
-        viewerAuthorBadge.onclick = (e) => {
-          e.stopPropagation();
-          closeViewer();
-          const tagToSearch = (currentPost.site === 'rule34video' && !cleanAuthorTag.includes(':'))
-            ? `artist:${cleanAuthorTag}`
-            : cleanAuthorTag;
-          if (onTagSelect) onTagSelect(tagToSearch);
-        };
-      }
-      if (viewerFavAuthorBtn) {
-        viewerFavAuthorBtn.style.display = 'inline-flex';
-        viewerFavAuthorBtn.classList.toggle('active', isFavAuthor);
-        viewerFavAuthorBtn.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
-      }
-      if (infoAuthorRow && infoAuthor) {
-        infoAuthor.textContent = authorName;
-        infoAuthorRow.style.display = 'flex';
-        infoAuthor.onclick = () => {
-          closeViewer();
-          const tagToSearch = (currentPost.site === 'rule34video' && !cleanAuthorTag.includes(':'))
-            ? `artist:${cleanAuthorTag}`
-            : cleanAuthorTag;
-          if (onTagSelect) onTagSelect(tagToSearch);
-        };
-      }
-      if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
-        btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
-        btnFavAuthorSidebarText.textContent = isFavAuthor ? 'В избранном' : 'В избранное';
-        btnFavAuthorSidebar.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
-      }
-      if (btnSetAuthorCoverSidebar) {
-        btnSetAuthorCoverSidebar.style.display = isFavAuthor ? 'inline-flex' : 'none';
-        btnSetAuthorCoverSidebar.onclick = async (e) => {
-          e.stopPropagation();
-          haptic(15);
-          const isVideo = currentPost.isVideo || isVideoUrl(currentPost.fileUrl) || isVideoUrl(currentPost.sampleUrl) || isVideoUrl(currentPost.previewUrl);
-          const rawUrl = currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl;
-          const chosenUrl = isVideo ? (currentPost.previewUrl || rawUrl) : (currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl);
-          if (!chosenUrl) return;
-
-          const sampleUrl = isVideo ? '' : (currentPost.sampleUrl || '');
-          const fileUrl = isVideo ? '' : (currentPost.fileUrl || '');
-          const thumb180 = currentPost.previewUrl || '';
-          const thumb360 = currentPost.sampleUrl || '';
-          const thumb720 = currentPost.fileUrl || '';
-
-          const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === cleanAuthorTag.toLowerCase());
-          if (target) {
-            target.previewUrl = chosenUrl;
-            target.sampleUrl = sampleUrl;
-            target.fileUrl = fileUrl;
-            target.thumb180 = thumb180;
-            target.thumb360 = thumb360;
-            target.thumb720 = thumb720;
-            target.site = currentPost.site || target.site || 'danbooru';
-          }
-          setFavoriteAuthors([...state.favoriteAuthors]);
-          showToast(`Этот арт установлен обложкой автора ${authorName}!`);
-          if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
-
-          try {
-            await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl, currentPost.site || 'danbooru', { sampleUrl, fileUrl, thumb180, thumb360, thumb720 });
-            await syncFavoriteAuthors(state.favoriteAuthors);
-          } catch (err) {
-            console.error('Ошибка сохранения обложки автора:', err);
-          }
-        };
-      }
-    } else {
-      if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
-      if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
-      if (infoAuthorRow) infoAuthorRow.style.display = 'none';
-      if (btnSetAuthorCoverSidebar) btnSetAuthorCoverSidebar.style.display = 'none';
-    }
-
-    const isFav = isPostFavorite(currentPost.id);
-    if (btnFavModal) {
-      btnFavModal.classList.toggle('active', isFav);
-      btnFavModal.querySelector('svg')?.setAttribute('fill', isFav ? 'currentColor' : 'none');
-    }
-
-    const isLiked = isPostLiked(currentPost.id);
-    if (btnLikeModal) {
-      btnLikeModal.classList.toggle('active', isLiked);
-      btnLikeModal.querySelector('svg')?.setAttribute('fill', isLiked ? 'currentColor' : 'none');
-    }
-
-    const isDisliked = isPostDisliked(currentPost.id);
-    if (btnDislikeModal) {
-      btnDislikeModal.classList.toggle('active', isDisliked);
-    }
-
-    const infoDurationRow = document.getElementById('infoDurationRow');
-    const infoDuration = document.getElementById('infoDuration');
-    if (currentPost.isVideo && (currentPost.durationText || currentPost.duration > 0)) {
-      const durText = currentPost.durationText || `${Math.floor(currentPost.duration / 60)}:${Math.floor(currentPost.duration % 60) < 10 ? '0' : ''}${Math.floor(currentPost.duration % 60)}`;
-      if (infoDuration) infoDuration.textContent = durText;
-      if (infoDurationRow) infoDurationRow.style.display = 'flex';
-    } else {
-      if (infoDurationRow) infoDurationRow.style.display = 'none';
-    }
-
-    if (infoSite) infoSite.textContent = currentPost.siteName || currentPost.site;
-    if (infoRating) infoRating.textContent = formatRating(currentPost.rating);
-    let scoreText = `★ ${currentPost.score || 0}`;
-    if (currentPost.views > 0 || currentPost.viewsText) {
-      scoreText += `  •  👁️ ${currentPost.viewsText || currentPost.views}`;
-    } else if (currentPost.favCount > 0) {
-      scoreText += `  •  🔖 ${currentPost.favCount}`;
-    }
-    if (infoScore) infoScore.textContent = scoreText;
-    if (infoAi) {
-      infoAi.textContent = currentPost.isAi ? 'Да (ИИ-арт)' : 'Нет (Авторский)';
-      infoAi.style.color = currentPost.isAi ? 'var(--accent-warning)' : 'var(--text-primary)';
-    }
-
     function getCurrentMediaItem() {
       if (currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) {
         return currentPost.albumItems[currentAlbumIndex] || currentPost;
@@ -436,6 +282,143 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         currentZoomInstance = setupImageZoom(img, { showToast });
         mediaWrapper.appendChild(img);
       }
+    }
+
+  function renderViewerPost() {
+    if (!currentPost) return;
+
+    if (currentPost.id) {
+      markPostViewed(currentPost.id);
+    }
+
+    if (siteBadge) siteBadge.textContent = currentPost.siteName || currentPost.site;
+    if (resBadge) resBadge.textContent = (currentPost.width && currentPost.height) ? `${currentPost.width} × ${currentPost.height}` : 'Оригинал';
+    if (extBadge) extBadge.textContent = (currentPost.fileExt || 'JPG').toUpperCase();
+
+    // Отображение Автора
+    const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
+    const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
+    if (authorName && authorName.trim()) {
+      const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
+
+      if (viewerAuthorBadge && viewerAuthorText) {
+        viewerAuthorText.textContent = authorName;
+        viewerAuthorBadge.style.display = 'inline-flex';
+        viewerAuthorBadge.onclick = (e) => {
+          e.stopPropagation();
+          closeViewer();
+          const tagToSearch = (currentPost.site === 'rule34video' && !cleanAuthorTag.includes(':'))
+            ? `artist:${cleanAuthorTag}`
+            : cleanAuthorTag;
+          if (onTagSelect) onTagSelect(tagToSearch);
+        };
+      }
+      if (viewerFavAuthorBtn) {
+        viewerFavAuthorBtn.style.display = 'inline-flex';
+        viewerFavAuthorBtn.classList.toggle('active', isFavAuthor);
+        viewerFavAuthorBtn.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+      }
+      if (infoAuthorRow && infoAuthor) {
+        infoAuthor.textContent = authorName;
+        infoAuthorRow.style.display = 'flex';
+        infoAuthor.onclick = () => {
+          closeViewer();
+          const tagToSearch = (currentPost.site === 'rule34video' && !cleanAuthorTag.includes(':'))
+            ? `artist:${cleanAuthorTag}`
+            : cleanAuthorTag;
+          if (onTagSelect) onTagSelect(tagToSearch);
+        };
+      }
+      if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
+        btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
+        btnFavAuthorSidebarText.textContent = isFavAuthor ? 'В избранном' : 'В избранное';
+        btnFavAuthorSidebar.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+      }
+      if (btnSetAuthorCoverSidebar) {
+        btnSetAuthorCoverSidebar.style.display = isFavAuthor ? 'inline-flex' : 'none';
+        btnSetAuthorCoverSidebar.onclick = async (e) => {
+          e.stopPropagation();
+          haptic(15);
+          const isVideo = currentPost.isVideo || isVideoUrl(currentPost.fileUrl) || isVideoUrl(currentPost.sampleUrl) || isVideoUrl(currentPost.previewUrl);
+          const rawUrl = currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl;
+          const chosenUrl = isVideo ? (currentPost.previewUrl || rawUrl) : (currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl);
+          if (!chosenUrl) return;
+
+          const sampleUrl = isVideo ? '' : (currentPost.sampleUrl || '');
+          const fileUrl = isVideo ? '' : (currentPost.fileUrl || '');
+          const thumb180 = currentPost.previewUrl || '';
+          const thumb360 = currentPost.sampleUrl || '';
+          const thumb720 = currentPost.fileUrl || '';
+
+          const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === cleanAuthorTag.toLowerCase());
+          if (target) {
+            target.previewUrl = chosenUrl;
+            target.sampleUrl = sampleUrl;
+            target.fileUrl = fileUrl;
+            target.thumb180 = thumb180;
+            target.thumb360 = thumb360;
+            target.thumb720 = thumb720;
+            target.site = currentPost.site || target.site || 'danbooru';
+          }
+          setFavoriteAuthors([...state.favoriteAuthors]);
+          showToast(`Этот арт установлен обложкой автора ${authorName}!`);
+          if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
+
+          try {
+            await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl, currentPost.site || 'danbooru', { sampleUrl, fileUrl, thumb180, thumb360, thumb720 });
+            await syncFavoriteAuthors(state.favoriteAuthors);
+          } catch (err) {
+            console.error('Ошибка сохранения обложки автора:', err);
+          }
+        };
+      }
+    } else {
+      if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
+      if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
+      if (infoAuthorRow) infoAuthorRow.style.display = 'none';
+      if (btnSetAuthorCoverSidebar) btnSetAuthorCoverSidebar.style.display = 'none';
+    }
+
+    const isFav = isPostFavorite(currentPost.id);
+    if (btnFavModal) {
+      btnFavModal.classList.toggle('active', isFav);
+      btnFavModal.querySelector('svg')?.setAttribute('fill', isFav ? 'currentColor' : 'none');
+    }
+
+    const isLiked = isPostLiked(currentPost.id);
+    if (btnLikeModal) {
+      btnLikeModal.classList.toggle('active', isLiked);
+      btnLikeModal.querySelector('svg')?.setAttribute('fill', isLiked ? 'currentColor' : 'none');
+    }
+
+    const isDisliked = isPostDisliked(currentPost.id);
+    if (btnDislikeModal) {
+      btnDislikeModal.classList.toggle('active', isDisliked);
+    }
+
+    const infoDurationRow = document.getElementById('infoDurationRow');
+    const infoDuration = document.getElementById('infoDuration');
+    if (currentPost.isVideo && (currentPost.durationText || currentPost.duration > 0)) {
+      const durText = currentPost.durationText || `${Math.floor(currentPost.duration / 60)}:${Math.floor(currentPost.duration % 60) < 10 ? '0' : ''}${Math.floor(currentPost.duration % 60)}`;
+      if (infoDuration) infoDuration.textContent = durText;
+      if (infoDurationRow) infoDurationRow.style.display = 'flex';
+    } else {
+      if (infoDurationRow) infoDurationRow.style.display = 'none';
+    }
+
+    if (infoSite) infoSite.textContent = currentPost.siteName || currentPost.site;
+    if (infoRating) infoRating.textContent = formatRating(currentPost.rating);
+    let scoreText = `★ ${currentPost.score || 0}`;
+    if (currentPost.views > 0 || currentPost.viewsText) {
+      scoreText += `  •  👁️ ${currentPost.viewsText || currentPost.views}`;
+    } else if (currentPost.favCount > 0) {
+      scoreText += `  •  🔖 ${currentPost.favCount}`;
+    }
+    if (infoScore) infoScore.textContent = scoreText;
+    if (infoAi) {
+      infoAi.textContent = currentPost.isAi ? 'Да (ИИ-арт)' : 'Нет (Авторский)';
+      infoAi.style.color = currentPost.isAi ? 'var(--accent-warning)' : 'var(--text-primary)';
     }
 
     // Рендер тегов в сайдбаре
@@ -827,26 +810,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     });
   }
 
-  if (btnPrev) {
-    btnPrev.addEventListener('click', () => {
-      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-      if (state.currentViewerIndex > 0) {
-        haptic(15);
-        openViewer(state.currentViewerIndex - 1);
-      }
-    });
-  }
-
-  if (btnNext) {
-    btnNext.addEventListener('click', () => {
-      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-      if (state.currentViewerIndex < list.length - 1) {
-        haptic(15);
-        openViewer(state.currentViewerIndex + 1);
-      }
-    });
-  }
-
   if (btnClose) btnClose.addEventListener('click', closeViewer);
   if (backdrop) backdrop.addEventListener('click', closeViewer);
 
@@ -986,16 +949,23 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   window.addEventListener('keydown', (e) => {
     if (!modal || modal.style.display !== 'flex') return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
     if (e.key === 'Escape') {
+      e.preventDefault();
       closeViewer();
     } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
       goToPrev(e.shiftKey);
     } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
       goToNext(e.shiftKey);
     } else if (e.key.toLowerCase() === 'f') {
+      e.preventDefault();
       btnFavModal?.click();
     } else if (e.key.toLowerCase() === 'l') {
+      e.preventDefault();
       btnLikeModal?.click();
     }
   });
