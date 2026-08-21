@@ -132,16 +132,37 @@ export function makeBannerDraggable(bannerEl) {
   };
 
   bannerEl.addEventListener('touchstart', (e) => {
+    e.stopPropagation();
     if (e.touches.length === 1) {
-      if (startDrag(e.touches[0].clientX, e.touches[0].clientY, e.target)) {
-        e.stopPropagation();
-      }
+      startDrag(e.touches[0].clientX, e.touches[0].clientY, e.target);
     }
   }, { passive: false });
+
+  bannerEl.addEventListener('touchmove', (e) => {
+    e.stopPropagation();
+    if (isDraggingBanner && e.touches.length === 1) {
+      moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
+    }
+  }, { passive: false });
+
+  bannerEl.addEventListener('touchend', (e) => {
+    e.stopPropagation();
+    if (isDraggingBanner) {
+      endDrag();
+    }
+  }, { passive: true });
+
+  bannerEl.addEventListener('touchcancel', (e) => {
+    e.stopPropagation();
+    if (isDraggingBanner) {
+      endDrag();
+    }
+  }, { passive: true });
 
   window.addEventListener('touchmove', (e) => {
     if (isDraggingBanner && e.touches.length === 1) {
       moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
+      if (e.cancelable) e.preventDefault();
       e.stopPropagation();
     }
   }, { passive: false });
@@ -159,9 +180,8 @@ export function makeBannerDraggable(bannerEl) {
   }, { passive: true });
 
   bannerEl.addEventListener('mousedown', (e) => {
-    if (startDrag(e.clientX, e.clientY, e.target)) {
-      e.stopPropagation();
-    }
+    e.stopPropagation();
+    startDrag(e.clientX, e.clientY, e.target);
   });
 
   window.addEventListener('mousemove', (e) => {

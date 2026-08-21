@@ -47,6 +47,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const infoAlbumRow = document.getElementById('infoAlbumRow');
   const btnFetchFullAlbum = document.getElementById('btnFetchFullAlbum');
   const btnFetchFullAlbumText = document.getElementById('btnFetchFullAlbumText');
+  const btnDownloadAlbumSidebar = document.getElementById('btnDownloadAlbumSidebar');
+  const btnDislikeSidebar = document.getElementById('btnDislikeSidebar');
+  const btnDislikeSidebarText = document.getElementById('btnDislikeSidebarText');
   const infoRating = document.getElementById('infoRating');
   const infoScore = document.getElementById('infoScore');
   const infoAi = document.getElementById('infoAi');
@@ -135,6 +138,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (btnDownloadAlbum) {
           btnDownloadAlbum.style.display = 'inline-flex';
         }
+        if (btnDownloadAlbumSidebar) {
+          btnDownloadAlbumSidebar.style.display = 'inline-flex';
+        }
 
         albumFilmstripInner.innerHTML = '';
         currentPost.albumItems.forEach((item, idx) => {
@@ -169,6 +175,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         viewerAlbumFilmstrip.style.display = 'none';
         if (viewerAlbumBadge) viewerAlbumBadge.style.display = 'none';
         if (btnDownloadAlbum) btnDownloadAlbum.style.display = 'none';
+        if (btnDownloadAlbumSidebar) btnDownloadAlbumSidebar.style.display = 'none';
       }
 
       // Наличие серии для дозагрузки в сайдбаре
@@ -396,6 +403,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (btnDislikeModal) {
       btnDislikeModal.classList.toggle('active', isDisliked);
     }
+    if (btnDislikeSidebar) {
+      btnDislikeSidebar.classList.toggle('active', isDisliked);
+      if (btnDislikeSidebarText) {
+        btnDislikeSidebarText.textContent = isDisliked ? 'Скрыто из ленты' : 'Скрыть из ленты';
+      }
+    }
 
     const infoDurationRow = document.getElementById('infoDurationRow');
     const infoDuration = document.getElementById('infoDuration');
@@ -508,42 +521,47 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   // Скачивание всех изображений альбома
-  if (btnDownloadAlbum) {
-    btnDownloadAlbum.addEventListener('click', async (e) => {
-      e.preventDefault();
-      if (!currentPost || !currentPost.isAlbum || !Array.isArray(currentPost.albumItems) || currentPost.albumItems.length === 0) return;
-      haptic(20);
-      showToast(`Начато скачивание альбома (${currentPost.albumItems.length} файлов)...`);
+  async function downloadFullAlbum(e) {
+    if (e) e.preventDefault();
+    if (!currentPost || !currentPost.isAlbum || !Array.isArray(currentPost.albumItems) || currentPost.albumItems.length === 0) return;
+    haptic(20);
+    showToast(`Начато скачивание альбома (${currentPost.albumItems.length} файлов)...`);
 
-      for (let i = 0; i < currentPost.albumItems.length; i++) {
-        const item = currentPost.albumItems[i];
-        const downloadTarget = item.fileUrl || item.sampleUrl || item.previewUrl;
-        if (!downloadTarget) continue;
+    for (let i = 0; i < currentPost.albumItems.length; i++) {
+      const item = currentPost.albumItems[i];
+      const downloadTarget = item.fileUrl || item.sampleUrl || item.previewUrl;
+      if (!downloadTarget) continue;
 
-        try {
-          const proxyUrl = getProxiedUrl(downloadTarget);
-          const res = await fetch(proxyUrl);
-          if (res.ok) {
-            const blob = await res.blob();
-            const ext = item.fileExt || (item.isVideo ? 'mp4' : 'jpg');
-            const filename = `album_${currentPost.site || 'post'}_${currentPost.id}_p${i + 1}.${ext}`;
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-          }
-        } catch (err) {
-          console.warn(`[Album download err on page ${i + 1}]`, err);
+      try {
+        const proxyUrl = getProxiedUrl(downloadTarget);
+        const res = await fetch(proxyUrl);
+        if (res.ok) {
+          const blob = await res.blob();
+          const ext = item.fileExt || (item.isVideo ? 'mp4' : 'jpg');
+          const filename = `album_${currentPost.site || 'post'}_${currentPost.id}_p${i + 1}.${ext}`;
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
         }
-        // Небольшая задержка между скачиваниями
-        await new Promise(r => setTimeout(r, 350));
+      } catch (err) {
+        console.warn(`[Album download err on page ${i + 1}]`, err);
       }
-      showToast('Все изображения альбома загружены');
-    });
+      // Небольшая задержка между скачиваниями
+      await new Promise(r => setTimeout(r, 350));
+    }
+    showToast('Все изображения альбома загружены');
+  }
+
+  if (btnDownloadAlbum) {
+    btnDownloadAlbum.addEventListener('click', downloadFullAlbum);
+  }
+  if (btnDownloadAlbumSidebar) {
+    btnDownloadAlbumSidebar.addEventListener('click', downloadFullAlbum);
   }
 
   // Переключение шторки тегов на мобильных
@@ -561,17 +579,28 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     });
   }
 
+  async function handleDislikeToggle() {
+    if (!currentPost) return;
+    haptic(20);
+    const isDislikedNow = toggleDislikeLocally(currentPost);
+    if (btnDislikeModal) btnDislikeModal.classList.toggle('active', isDislikedNow);
+    if (btnDislikeSidebar) {
+      btnDislikeSidebar.classList.toggle('active', isDislikedNow);
+      if (btnDislikeSidebarText) {
+        btnDislikeSidebarText.textContent = isDislikedNow ? 'Скрыто из ленты' : 'Скрыть из ленты';
+      }
+    }
+    showToast(isDislikedNow ? 'Пост скрыт (рекомендации обновлены)' : 'Скрытие отменено');
+    try {
+      await toggleDislikeApi(currentPost);
+    } catch (e) {}
+  }
+
   if (btnDislikeModal) {
-    btnDislikeModal.addEventListener('click', async () => {
-      if (!currentPost) return;
-      haptic(20);
-      const isDislikedNow = toggleDislikeLocally(currentPost);
-      btnDislikeModal.classList.toggle('active', isDislikedNow);
-      showToast(isDislikedNow ? 'Пост скрыт (рекомендации обновлены)' : 'Скрытие отменено');
-      try {
-        await toggleDislikeApi(currentPost);
-      } catch (e) {}
-    });
+    btnDislikeModal.addEventListener('click', handleDislikeToggle);
+  }
+  if (btnDislikeSidebar) {
+    btnDislikeSidebar.addEventListener('click', handleDislikeToggle);
   }
 
   if (btnLikeModal) {
@@ -836,9 +865,33 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   if (btnClose) btnClose.addEventListener('click', closeViewer);
   if (backdrop) backdrop.addEventListener('click', closeViewer);
 
+  // Проверка касания по интерактивным элементам (плашка видео, лента альбома, сайдбар, кнопки)
+  function isInteractiveTouchTarget(target) {
+    if (!target) return false;
+    return Boolean(
+      target.closest('.video-status-banner') ||
+      target.closest('.viewer-album-filmstrip') ||
+      target.closest('.btn-video-unmute') ||
+      target.closest('.viewer-sidebar') ||
+      target.closest('.viewer-header') ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('a')
+    );
+  }
+
   // Сенсорные жесты
   if (mediaWrapper) {
     mediaWrapper.addEventListener('touchstart', (e) => {
+      if (isInteractiveTouchTarget(e.target)) {
+        isPinching = false;
+        isDraggingDown = false;
+        touchStartX = 0;
+        touchStartY = 0;
+        touchStartTime = 0;
+        return;
+      }
+
       if (e.touches.length === 2) {
         isPinching = true;
         isDraggingDown = false;
@@ -857,6 +910,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }, { passive: true });
 
     mediaWrapper.addEventListener('touchmove', (e) => {
+      if (isInteractiveTouchTarget(e.target) || !touchStartY) {
+        return;
+      }
+
       if (isPinching && e.touches.length === 2 && currentZoomInstance) {
         const currentDist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
@@ -883,6 +940,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }, { passive: true });
 
     mediaWrapper.addEventListener('touchend', (e) => {
+      if (isInteractiveTouchTarget(e.target) && !isDraggingDown) {
+        touchStartX = 0;
+        touchStartY = 0;
+        touchStartTime = 0;
+        return;
+      }
+
       if (isPinching) {
         if (e.touches.length < 2) isPinching = false;
         if (currentZoomInstance && currentZoomInstance.getZoomLevel() < 1) {
@@ -926,6 +990,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
 
       if (e.changedTouches.length === 1 && (!currentZoomInstance || currentZoomInstance.getZoomLevel() <= 1.05)) {
+        if (!touchStartY) return;
         const deltaX = e.changedTouches[0].clientX - touchStartX;
         const deltaY = e.changedTouches[0].clientY - touchStartY;
         const deltaTime = Date.now() - touchStartTime;
