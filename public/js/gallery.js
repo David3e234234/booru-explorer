@@ -460,15 +460,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       return String(num);
     };
 
-    let viewsBadge = '';
-    if (post.views > 0 || post.viewsText) {
-      const viewsLabel = post.viewsText || formatCompactNumber(post.views);
-      viewsBadge = `<span class="badge-format badge-views" title="Просмотры: ${viewsLabel}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 2px; vertical-align: -1px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>${viewsLabel}</span>`;
-    } else if (post.favCount > 0) {
-      const favLabel = formatCompactNumber(post.favCount);
-      viewsBadge = `<span class="badge-format badge-favs" title="В избранном: ${post.favCount}"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 2px; vertical-align: -1px;"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>${favLabel}</span>`;
-    }
-
     const isFav = isPostFavorite(post.id);
     const isLiked = isPostLiked(post.id);
 
@@ -499,12 +490,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         ${post.isVideo ? `<video class="hover-video-preview" loop muted playsinline preload="none" referrerpolicy="no-referrer"></video>` : ''}
 
         <div class="badge-group-bottom">
-          <div class="badge-author-wrap">
-            ${authorBadge}
-          </div>
-          <div class="badge-views-wrap">
-            ${viewsBadge}
-          </div>
+          ${authorBadge}
         </div>
 
         <div class="card-overlay-bottom">

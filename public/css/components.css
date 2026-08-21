@@ -149,28 +149,9 @@
   right: 6px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  justify-content: flex-start;
   z-index: 4;
   pointer-events: none;
-}
-
-.badge-author-wrap, .badge-views-wrap {
-  display: inline-flex;
-  align-items: center;
-  min-width: 0;
-}
-
-.badge-format.badge-views {
-  background: rgba(15, 23, 42, 0.88);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.25);
-}
-
-.badge-format.badge-favs {
-  background: rgba(15, 23, 42, 0.88);
-  color: #f43f5e;
-  border: 1px solid rgba(244, 63, 94, 0.25);
 }
 
 .badge-format {
