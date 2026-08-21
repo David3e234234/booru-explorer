@@ -854,14 +854,18 @@
 
 .viewer-tag-row {
   display: flex;
+  flex-direction: row;
   align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
   gap: 8px;
-  padding: 4px 6px;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   background: transparent;
   transition: background-color var(--transition-fast);
   min-height: 34px;
   box-sizing: border-box;
+  width: 100%;
 }
 
 .viewer-tag-row:hover {
@@ -901,9 +905,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   flex-shrink: 0;
+  margin-left: auto;
   border-radius: var(--radius-sm);
   color: var(--text-muted);
   background: transparent;

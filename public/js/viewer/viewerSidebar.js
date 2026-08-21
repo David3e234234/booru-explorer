@@ -182,6 +182,8 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
 
     tagList.forEach(tag => {
       const rowEl = document.createElement('div');
+      rowEl.className = `viewer-tag-row ${config.colorClass}`;
+
       // 1. Ссылка/название тега (поиск в галерее)
       const tagBtn = document.createElement('button');
       tagBtn.type = 'button';
