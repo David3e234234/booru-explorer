@@ -30,15 +30,15 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   let res = null;
   try {
     res = await fetchSafe(url);
-    if (!res.ok && siteId === 'konachan' && siteUrl.includes('.net')) {
-      const altUrl = url.replace('konachan.net', 'konachan.com');
+    if (!res.ok && siteId === 'konachan' && ratingFilter !== 'nsfw') {
+      const altUrl = url.includes('konachan.com') ? url.replace('konachan.com', 'konachan.net') : url.replace('konachan.net', 'konachan.com');
       const altRes = await fetchSafe(altUrl);
       if (altRes.ok) res = altRes;
     }
   } catch (e) {
-    if (siteId === 'konachan' && siteUrl.includes('.net')) {
+    if (siteId === 'konachan' && ratingFilter !== 'nsfw') {
       try {
-        const altUrl = url.replace('konachan.net', 'konachan.com');
+        const altUrl = url.includes('konachan.com') ? url.replace('konachan.com', 'konachan.net') : url.replace('konachan.net', 'konachan.com');
         res = await fetchSafe(altUrl);
       } catch (err) {}
     }

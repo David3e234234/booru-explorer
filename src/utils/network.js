@@ -51,7 +51,7 @@ export function getFfmpegHeaders(targetUrl, currentSettings = {}) {
         authHeader = `Authorization: Basic ${Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64')}\r\n`;
       }
     } else if (parsed.hostname.includes('yande.re')) referer = 'https://yande.re/';
-    else if (parsed.hostname.includes('konachan')) referer = 'https://konachan.net/';
+    else if (parsed.hostname.includes('konachan')) referer = 'https://konachan.com/';
     else if (parsed.hostname.includes('gelbooru.com')) referer = 'https://gelbooru.com/';
     else if (parsed.hostname.includes('safebooru.org')) referer = 'https://safebooru.org/';
     else if (parsed.hostname.includes('xbooru.com')) referer = 'https://xbooru.com/';

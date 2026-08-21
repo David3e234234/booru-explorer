@@ -285,12 +285,12 @@ export const SITES = {
   konachan: {
     id: 'konachan',
     name: 'Konachan',
-    baseUrl: 'https://konachan.net',
-    rating: 'safe_questionable',
+    baseUrl: 'https://konachan.com',
+    rating: 'all',
     supportsVideo: false,
     supportsTags: true,
     accentColor: '#f97316',
-    description: 'Аниме-обои и иллюстрации сверхвысокого разрешения'
+    description: 'Аниме-обои и иллюстрации сверхвысокого разрешения (включая 18+)'
   },
   rule34: {
     id: 'rule34',

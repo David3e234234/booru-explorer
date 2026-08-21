@@ -441,7 +441,7 @@ router.get('/tags/autocomplete', async (req, res) => {
         tagsResult = await fetchDanbooruTags(query);
       }
     } else if (site === 'yandere' || site === 'konachan') {
-      const base = site === 'yandere' ? 'https://yande.re' : 'https://konachan.net';
+      const base = site === 'yandere' ? 'https://yande.re' : 'https://konachan.com';
       try {
         const url = `${base}/tag.json?name=${encodeURIComponent(query)}&limit=15&order=count`;
         const resp = await fetchSafe(url, { timeout: 3000 });

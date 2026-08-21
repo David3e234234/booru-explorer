@@ -63,7 +63,7 @@ export async function handleProxyRequest(req, res) {
       } else if (parsed.hostname.includes('yande.re')) {
         headers['Referer'] = 'https://yande.re/';
       } else if (parsed.hostname.includes('konachan')) {
-        headers['Referer'] = 'https://konachan.net/';
+        headers['Referer'] = 'https://konachan.com/';
       } else if (parsed.hostname.includes('hypnohub.net')) {
         headers['Referer'] = 'https://hypnohub.net/';
       } else if (parsed.hostname.includes('xbooru.com')) {

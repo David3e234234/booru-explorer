@@ -75,7 +75,7 @@ export function getPostSiteUrl(post) {
     return `https://yande.re/post/show/${origId}`;
   }
   if (site === 'konachan' && origId) {
-    return `https://konachan.net/post/show/${origId}`;
+    return `https://konachan.com/post/show/${origId}`;
   }
   if (site === 'safebooru' && origId) {
     return `https://safebooru.org/index.php?page=post&s=view&id=${origId}`;

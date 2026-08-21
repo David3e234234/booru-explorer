@@ -35,7 +35,7 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
     case 'safebooru':
       return await fetchSafebooru(params, aiTagsList);
     case 'konachan':
-      return await fetchMoebooru('konachan', 'https://konachan.net', 'Konachan', params, aiTagsList);
+      return await fetchMoebooru('konachan', 'https://konachan.com', 'Konachan', params, aiTagsList);
     case 'rule34':
       return await fetchRule34(params, aiTagsList, settings);
     case 'gelbooru':
