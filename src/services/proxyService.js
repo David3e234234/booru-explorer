@@ -90,25 +90,72 @@ export async function handleProxyRequest(req, res) {
       signal: controller.signal
     });
 
-    // Умный fallback для альтернативных CDN-хостов и расширений файлов (mp4 <-> webm, jpg <-> png) при 404
-    if (response.status === 404 && (targetUrl.includes('rule34.xxx') || targetUrl.includes('gelbooru.com') || targetUrl.includes('paheal.net'))) {
+    // Умный исчерпывающий fallback для альтернативных CDN-хостов, путей (/samples/ <-> /images/) и расширений (jpg, png, jpeg, webp, gif, mp4, webm) при 404
+    if (response.status === 404 && (targetUrl.includes('rule34.xxx') || targetUrl.includes('gelbooru.com') || targetUrl.includes('paheal.net') || targetUrl.includes('paheal-cdn.net'))) {
       const candidates = [];
-      
-      // 1. Проверка альтернативных расширений
-      if (targetUrl.endsWith('.mp4')) candidates.push(targetUrl.replace(/\.mp4$/, '.webm'));
-      else if (targetUrl.endsWith('.webm')) candidates.push(targetUrl.replace(/\.webm$/, '.mp4'));
-      else if (targetUrl.endsWith('.jpg')) candidates.push(targetUrl.replace(/\.jpg$/, '.png'));
-      else if (targetUrl.endsWith('.png')) candidates.push(targetUrl.replace(/\.png$/, '.jpg'));
+      const imageExts = ['.jpg', '.png', '.jpeg', '.webp', '.gif'];
+      const videoExts = ['.mp4', '.webm'];
 
-      // 2. Для Rule34.xxx - перебор альтернативных CDN доменов
+      // 1. Для Rule34.xxx
       if (targetUrl.includes('rule34.xxx')) {
-        const cdnHosts = ['https://api-cdn-mp4.rule34.xxx', 'https://wimg.rule34.xxx', 'https://us.rule34.xxx', 'https://api-cdn.rule34.xxx'];
+        const cdnHosts = ['https://api-cdn.rule34.xxx', 'https://us.rule34.xxx', 'https://wimg.rule34.xxx', 'https://api-cdn-mp4.rule34.xxx'];
+        const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm') || targetUrl.includes('api-cdn-mp4');
+        const targetExts = isVid ? videoExts : imageExts;
+
+        // Базовые пути: проверяем как /images/, так и /samples/
+        const basePaths = [];
+        const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+\.rule34\.xxx/i, '');
+        basePaths.push(cleanNoHost);
+        if (cleanNoHost.includes('/samples/')) {
+          basePaths.push(cleanNoHost.replace('/samples/', '/images/').replace('sample_', ''));
+        } else if (cleanNoHost.includes('/images/')) {
+          const matchDirHash = cleanNoHost.match(/\/images\/+(\d+)\/([a-f0-9]+)\.[a-z0-9]+/i);
+          if (matchDirHash) {
+            basePaths.push(`/samples/${matchDirHash[1]}/sample_${matchDirHash[2]}.jpg`);
+          }
+        }
+
         for (const host of cdnHosts) {
-          const replaced = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+\.rule34\.xxx/i, host);
-          if (replaced !== targetUrl && !candidates.includes(replaced)) {
-            candidates.push(replaced);
-            if (replaced.endsWith('.mp4')) candidates.push(replaced.replace(/\.mp4$/, '.webm'));
-            else if (replaced.endsWith('.webm')) candidates.push(replaced.replace(/\.webm$/, '.mp4'));
+          for (const bPath of basePaths) {
+            const pathWithoutExt = bPath.replace(/\.[a-zA-Z0-9]+$/, '');
+            for (const ext of targetExts) {
+              const fullCandidate = `${host}${pathWithoutExt}${ext}`;
+              if (fullCandidate !== targetUrl && !candidates.includes(fullCandidate)) {
+                candidates.push(fullCandidate);
+              }
+            }
+          }
+        }
+      } else if (targetUrl.includes('gelbooru.com')) {
+        // 2. Для Gelbooru
+        const gelbooruHosts = ['https://img3.gelbooru.com', 'https://img2.gelbooru.com', 'https://img1.gelbooru.com', 'https://video.gelbooru.com'];
+        const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm');
+        const targetExts = isVid ? videoExts : imageExts;
+        const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+\.gelbooru\.com/i, '');
+        const pathWithoutExt = cleanNoHost.replace(/\.[a-zA-Z0-9]+$/, '');
+
+        for (const host of gelbooruHosts) {
+          for (const ext of targetExts) {
+            const fullCandidate = `${host}${pathWithoutExt}${ext}`;
+            if (fullCandidate !== targetUrl && !candidates.includes(fullCandidate)) {
+              candidates.push(fullCandidate);
+            }
+          }
+        }
+      } else if (targetUrl.includes('paheal')) {
+        // 3. Для Paheal
+        const pahealHosts = ['https://paheal-cdn.net', 'https://rule34.paheal.net', 'https://img.paheal.net'];
+        const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm');
+        const targetExts = isVid ? videoExts : imageExts;
+        const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+(?:paheal\.net|paheal-cdn\.net)/i, '');
+        const pathWithoutExt = cleanNoHost.replace(/\.[a-zA-Z0-9]+$/, '');
+
+        for (const host of pahealHosts) {
+          for (const ext of targetExts) {
+            const fullCandidate = `${host}${pathWithoutExt}${ext}`;
+            if (fullCandidate !== targetUrl && !candidates.includes(fullCandidate)) {
+              candidates.push(fullCandidate);
+            }
           }
         }
       }
@@ -166,11 +213,12 @@ export async function handleProxyRequest(req, res) {
     if (isImage && !isRangeReq && response.ok) {
       const arrayBuf = await response.arrayBuffer();
       const buf = Buffer.from(arrayBuf);
-      const hash = crypto.createHash('md5').update(targetUrl).digest('hex');
+      const hash = crypto.createHash('md5').update(req.query.url).digest('hex');
       let ext = 'jpg';
-      if (cleanPath.endsWith('.png')) ext = 'png';
-      else if (cleanPath.endsWith('.webp')) ext = 'webp';
-      else if (cleanPath.endsWith('.gif')) ext = 'gif';
+      const effectivePath = targetUrl.split('?')[0].toLowerCase();
+      if (effectivePath.endsWith('.png')) ext = 'png';
+      else if (effectivePath.endsWith('.webp')) ext = 'webp';
+      else if (effectivePath.endsWith('.gif')) ext = 'gif';
 
       const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${ext}`);
       fs.promises.writeFile(cacheFilePath, buf).catch(() => {});

@@ -141,7 +141,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         viewerAuthorBadge.onclick = (e) => {
           e.stopPropagation();
           closeViewer();
-          if (onTagSelect) onTagSelect(cleanAuthorTag);
+          const tagToSearch = (currentPost.site === 'rule34video' && !cleanAuthorTag.includes(':'))
+            ? `artist:${cleanAuthorTag}`
+            : cleanAuthorTag;
+          if (onTagSelect) onTagSelect(tagToSearch);
         };
       }
       if (viewerFavAuthorBtn) {
@@ -154,7 +157,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         infoAuthorRow.style.display = 'flex';
         infoAuthor.onclick = () => {
           closeViewer();
-          if (onTagSelect) onTagSelect(cleanAuthorTag);
+          const tagToSearch = (currentPost.site === 'rule34video' && !cleanAuthorTag.includes(':'))
+            ? `artist:${cleanAuthorTag}`
+            : cleanAuthorTag;
+          if (onTagSelect) onTagSelect(tagToSearch);
         };
       }
       if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
@@ -168,18 +174,16 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           e.stopPropagation();
           haptic(15);
           const isVideo = currentPost.isVideo || isVideoUrl(currentPost.fileUrl) || isVideoUrl(currentPost.sampleUrl) || isVideoUrl(currentPost.previewUrl);
-          const staticPreview = (!isVideoUrl(currentPost.previewUrl) && currentPost.previewUrl) || '';
-          const videoTarget = currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl || '';
-          const chosenUrl = staticPreview || (isVideo ? `/api/video-thumbnail?url=${encodeURIComponent(videoTarget)}&quality=medium` : (currentPost.sampleUrl || currentPost.fileUrl || ''));
+          const rawUrl = currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl;
+          const chosenUrl = isVideo ? (currentPost.previewUrl || rawUrl) : (currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl);
           if (!chosenUrl) return;
 
-          const sampleUrl = currentPost.sampleUrl || '';
-          const fileUrl = currentPost.fileUrl || '';
-          const thumb180 = currentPost.thumb180 || '';
-          const thumb360 = currentPost.thumb360 || '';
-          const thumb720 = currentPost.thumb720 || '';
+          const sampleUrl = isVideo ? '' : (currentPost.sampleUrl || '');
+          const fileUrl = isVideo ? '' : (currentPost.fileUrl || '');
+          const thumb180 = currentPost.previewUrl || '';
+          const thumb360 = currentPost.sampleUrl || '';
+          const thumb720 = currentPost.fileUrl || '';
 
-          // 1. Оптимистичное локальное обновление
           const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === cleanAuthorTag.toLowerCase());
           if (target) {
             target.previewUrl = chosenUrl;
@@ -188,18 +192,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             target.thumb180 = thumb180;
             target.thumb360 = thumb360;
             target.thumb720 = thumb720;
-            if (currentPost.site) target.site = currentPost.site;
+            target.site = currentPost.site || target.site || 'danbooru';
           }
           setFavoriteAuthors([...state.favoriteAuthors]);
           showToast(`Этот арт установлен обложкой автора ${authorName}!`);
           if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
 
-          // 2. Отправка на бэкенд
           try {
             await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl, currentPost.site || 'danbooru', { sampleUrl, fileUrl, thumb180, thumb360, thumb720 });
             await syncFavoriteAuthors(state.favoriteAuthors);
           } catch (err) {
-            console.warn('Сервер не ответил, сохранено локально:', err);
+            console.error('Ошибка сохранения обложки автора:', err);
           }
         };
       }
@@ -240,33 +243,29 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       infoAi.style.color = currentPost.isAi ? 'var(--accent-warning)' : 'var(--text-primary)';
     }
 
-    renderSidebarTags(currentPost, { onTagSelect, closeViewer });
+    // Рендер тегов в сайдбаре
+    renderSidebarTags(currentPost, {
+      onTagSelect: (t) => {
+        if (onTagSelect) onTagSelect(t);
+      },
+      closeViewer
+    });
 
-    if (!mediaWrapper) return;
-    mediaWrapper.innerHTML = '';
-
-    const directMedia = currentPost.isVideo 
-      ? (currentPost.fileUrl || currentPost.sampleUrl) 
-      : (currentPost.sampleUrl || currentPost.fileUrl);
-
+    // Загрузка медиа
+    const directMedia = currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl || '';
     if (!directMedia) {
-      mediaWrapper.innerHTML = `
-        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--text-muted); padding: 40px; text-align: center;">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="16"/></svg>
-          <span style="font-size: 14px; font-weight: 600; color: var(--text-primary);">Медиафайл недоступен</span>
-          <span style="font-size: 12px;">Пост находится в обработке на сервере источника или недоступен для публичного скачивания</span>
-        </div>
-      `;
+      showToast('Ссылка на медиа недоступна');
       return;
     }
 
-    const abortRef = {
-      get current() { return activeAbortController; },
-      set current(val) { activeAbortController = val; }
-    };
-    const blobRef = {
-      get current() { return activeBlobUrl; },
-      set current(val) { activeBlobUrl = val; }
+    mediaWrapper.innerHTML = '';
+    const abortRef = { aborted: false };
+    const blobRef = { blobUrl: null };
+    currentViewerAbort = () => {
+      abortRef.aborted = true;
+      if (blobRef.blobUrl) {
+        try { URL.revokeObjectURL(blobRef.blobUrl); } catch {}
+      }
     };
 
     if (currentPost.isVideo) {
@@ -291,6 +290,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (this.src !== proxyMedia) {
           console.warn('[Viewer Image Fallback] Переключение на прокси');
           this.src = proxyMedia;
+        } else if (currentPost.fileUrl && currentPost.sampleUrl && this.src.includes(encodeURIComponent(currentPost.sampleUrl))) {
+          console.warn('[Viewer Image Fallback] Переключение на fileUrl');
+          this.src = getProxiedUrl(currentPost.fileUrl);
+        } else if (currentPost.previewUrl && !this.src.includes(encodeURIComponent(currentPost.previewUrl))) {
+          console.warn('[Viewer Image Fallback] Переключение на previewUrl');
+          this.src = getProxiedUrl(currentPost.previewUrl);
         } else {
           showToast('Не удалось загрузить полноразмерное фото');
         }
@@ -373,16 +378,26 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     btnDownload.addEventListener('click', async (e) => {
       e.preventDefault();
       if (!currentPost) return;
-      const downloadTarget = currentPost.fileUrl || currentPost.sampleUrl;
+      const downloadTarget = currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl;
       if (!downloadTarget) {
         showToast('Ссылка на файл недоступна');
         return;
       }
-      const ext = currentPost.fileExt || (currentPost.isVideo ? 'mp4' : 'jpg');
-      const filename = `booru_${currentPost.site || 'post'}_${currentPost.id}.${ext}`;
 
       showToast('Начата загрузка на устройство...');
       
+      const getExtensionFromMime = (mimeType, fallbackExt) => {
+        if (!mimeType) return fallbackExt || 'jpg';
+        const low = mimeType.toLowerCase();
+        if (low.includes('png')) return 'png';
+        if (low.includes('jpeg') || low.includes('jpg')) return 'jpg';
+        if (low.includes('webp')) return 'webp';
+        if (low.includes('gif')) return 'gif';
+        if (low.includes('mp4')) return 'mp4';
+        if (low.includes('webm')) return 'webm';
+        return fallbackExt || 'jpg';
+      };
+
       const shouldUseProxyDownload = currentPost.site === 'danbooru' || downloadTarget.includes('donmai.us') || state.settings?.proxyDownloads !== false;
       
       if (!shouldUseProxyDownload) {
@@ -390,6 +405,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           const directRes = await fetch(downloadTarget, { mode: 'cors' });
           if (directRes.ok) {
             const blob = await directRes.blob();
+            const ext = getExtensionFromMime(blob.type, currentPost.fileExt || (currentPost.isVideo ? 'mp4' : 'jpg'));
+            const filename = `booru_${currentPost.site || 'post'}_${currentPost.id}.${ext}`;
             const blobUrl = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = blobUrl;
@@ -411,6 +428,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         const res = await fetch(proxyUrl);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
+        const ext = getExtensionFromMime(blob.type, currentPost.fileExt || (currentPost.isVideo ? 'mp4' : 'jpg'));
+        const filename = `booru_${currentPost.site || 'post'}_${currentPost.id}.${ext}`;
         const blobUrl = URL.createObjectURL(blob);
 
         const a = document.createElement('a');
@@ -422,15 +441,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
         showToast('Файл сохранён в память устройства');
       } catch (err) {
-        console.warn('[Direct download fallback]', err);
-        const a = document.createElement('a');
-        a.href = getProxiedUrl(downloadTarget);
-        a.target = '_blank';
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        showToast('Файл открыт для сохранения');
+        console.warn('[Download error]', err);
+        showToast('Не удалось загрузить файл для сохранения');
       }
     });
   }

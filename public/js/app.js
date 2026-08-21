@@ -271,10 +271,15 @@ function handleExploreAuthor(author) {
   if (!author || !author.name) return;
   if (author.site && state.sites.some(s => s.id === author.site)) {
     state.currentSite = author.site;
+    updateCurrentSiteLabel();
     renderSitesBar({ onSelectSite: selectSite });
+    renderMobileSourcesSheet({ onSelectSite: selectSite });
   }
   state.searchTags = [];
-  addSearchTag(author.name);
+  const tagToAdd = (state.currentSite === 'rule34video' && !author.name.includes(':'))
+    ? `artist:${author.name}`
+    : author.name;
+  addSearchTag(tagToAdd);
   if (autocompleteInstance) {
     autocompleteInstance.renderTagsChips();
   }

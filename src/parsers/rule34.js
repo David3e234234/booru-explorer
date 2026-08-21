@@ -181,7 +181,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         let fileUrl = '';
         let sampleUrl = '';
         const previewUrl = thumbUrl;
-        let fileExt = isVideo ? 'mp4' : (isGif ? 'gif' : 'jpg');
+        let fileExt = isVideo ? 'mp4' : (isGif ? 'gif' : (rawTags.includes('png') ? 'png' : (rawTags.includes('webp') ? 'webp' : 'jpg')));
 
         if (thumbMatch) {
           const dir = thumbMatch[1];
@@ -204,8 +204,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
             sampleUrl = fileUrl;
             fileExt = 'gif';
           } else {
-            fileUrl = `${imgHost}/images/${dir}/${hash}.jpg`;
-            sampleUrl = `${imgHost}/samples/${dir}/sample_${hash}.jpg`;
+            fileUrl = `${imgHost}/images/${dir}/${hash}.${fileExt}`;
+            sampleUrl = `${imgHost}/samples/${dir}/sample_${hash}.${fileExt}`;
           }
         } else {
           fileUrl = thumbUrl.replace('/thumbnails/', '/images/').replace('thumbnail_', '').split('?')[0];
@@ -273,7 +273,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
           let fileUrl = thumbUrl;
           let sampleUrl = thumbUrl;
-          let fileExt = isVideo ? 'mp4' : (isGif ? 'gif' : 'jpg');
+          let fileExt = isVideo ? 'mp4' : (isGif ? 'gif' : (rawTags.includes('png') ? 'png' : (rawTags.includes('webp') ? 'webp' : 'jpg')));
 
           if (thumbMatch) {
             const dir = thumbMatch[1];
@@ -290,12 +290,14 @@ export async function fetchRule34(params, aiTagsList, settings) {
             if (isVideo) {
               fileUrl = `${videoHost}/images/${dir}/${hash}.mp4`;
               sampleUrl = fileUrl;
+              fileExt = 'mp4';
             } else if (isGif) {
               fileUrl = `${imgHost}/images/${dir}/${hash}.gif`;
               sampleUrl = fileUrl;
+              fileExt = 'gif';
             } else {
-              fileUrl = `${imgHost}/images/${dir}/${hash}.jpg`;
-              sampleUrl = `${imgHost}/samples/${dir}/sample_${hash}.jpg`;
+              fileUrl = `${imgHost}/images/${dir}/${hash}.${fileExt}`;
+              sampleUrl = `${imgHost}/samples/${dir}/sample_${hash}.${fileExt}`;
             }
           }
 

@@ -142,7 +142,7 @@ export async function fetchRule34Video(params, aiTagsList) {
       .replace(/^(?:channel|user|account|artist|author|uploader|creator|member|model):\s*/i, '')
       .replace(/[_+]+/g, ' ')
       .trim();
-  } else if (tokens.length === 1 && !tokens[0].startsWith('-') && !category) {
+  } else if (tokens.length === 1 && !tokens[0].startsWith('-')) {
     extractedAuthor = tokens[0].replace(/[_+]+/g, ' ').trim();
   }
 
@@ -304,7 +304,7 @@ export async function fetchRule34Video(params, aiTagsList) {
         }
 
         // Фильтрация по автору только если автор НЕ был разрешен в точный ID модели/канала (текстовый поиск)
-        if (!authorTarget && authorTokens.length > 0 && extractedAuthor) {
+        if (!authorTarget && extractedAuthor && authorTokens.length > 0) {
           const cleanRequestedAuthor = extractedAuthor.toLowerCase().replace(/[\s_]+/g, '');
           const postAuthorClean = (author || '').toLowerCase().replace(/[\s_]+/g, '');
           const titleClean = title.toLowerCase().replace(/[\s_]+/g, '');
