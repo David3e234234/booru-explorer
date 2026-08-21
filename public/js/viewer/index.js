@@ -259,13 +259,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     mediaWrapper.innerHTML = '';
-    const abortRef = { aborted: false };
-    const blobRef = { blobUrl: null };
-    currentViewerAbort = () => {
-      abortRef.aborted = true;
-      if (blobRef.blobUrl) {
-        try { URL.revokeObjectURL(blobRef.blobUrl); } catch {}
-      }
+    const abortRef = {
+      get current() { return activeAbortController; },
+      set current(val) { activeAbortController = val; }
+    };
+    const blobRef = {
+      get current() { return activeBlobUrl; },
+      set current(val) { activeBlobUrl = val; }
     };
 
     if (currentPost.isVideo) {
