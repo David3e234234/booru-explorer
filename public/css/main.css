@@ -900,34 +900,6 @@ input.search-input:focus,
   background-color: var(--bg-surface-elevated);
 }
 
-.s-tag-wiki {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 700;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  font-family: var(--font-mono);
-}
-
-.s-tag-wiki.category-artist { color: var(--tag-artist); }
-.s-tag-wiki.category-copyright { color: var(--tag-copyright); }
-.s-tag-wiki.category-character { color: var(--tag-character); }
-.s-tag-wiki.category-general { color: var(--tag-general); }
-.s-tag-wiki.category-meta { color: var(--tag-meta); }
-
-.s-tag-wiki:hover {
-  transform: scale(1.1);
-  border-color: currentColor;
-}
-
 .s-tag-name {
   color: var(--tag-general);
   word-break: break-all;

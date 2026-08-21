@@ -868,40 +868,6 @@
   background-color: var(--bg-surface-hover);
 }
 
-.viewer-tag-wiki {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 700;
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  user-select: none;
-  font-family: var(--font-mono);
-}
-
-.viewer-tag-wiki.category-artist { color: var(--tag-artist); }
-.viewer-tag-wiki.category-copyright { color: var(--tag-copyright); }
-.viewer-tag-wiki.category-character { color: var(--tag-character); }
-.viewer-tag-wiki.category-general { color: var(--tag-general); }
-.viewer-tag-wiki.category-meta { color: var(--tag-meta); }
-
-.viewer-tag-wiki:hover {
-  transform: scale(1.08);
-  filter: brightness(1.2);
-  border-color: currentColor;
-}
-
-.viewer-tag-wiki:active {
-  transform: scale(0.92);
-}
-
 .viewer-tag-link {
   display: flex;
   align-items: center;
@@ -1250,13 +1216,6 @@
     padding: 6px 10px;
     gap: 10px;
     border-radius: var(--radius-md);
-  }
-
-  .viewer-tag-wiki {
-    width: 28px;
-    height: 28px;
-    font-size: 13px;
-    border-radius: var(--radius-sm);
   }
 
   .viewer-tag-link {

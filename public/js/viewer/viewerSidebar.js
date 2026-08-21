@@ -182,27 +182,7 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
 
     tagList.forEach(tag => {
       const rowEl = document.createElement('div');
-      rowEl.className = `viewer-tag-row ${config.colorClass}`;
-
-      // 1. Кнопка '?' (справка / быстрое копирование)
-      const wikiBtn = document.createElement('button');
-      wikiBtn.type = 'button';
-      wikiBtn.className = `viewer-tag-wiki ${config.colorClass}`;
-      wikiBtn.textContent = '?';
-      wikiBtn.title = `Скопировать тег: ${tag}`;
-      wikiBtn.setAttribute('aria-label', `Справка по тегу ${tag}`);
-
-      wikiBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        haptic(15);
-        const copied = await copyToClipboard(tag);
-        if (copied) {
-          showToast(`Тег скопирован: ${tag.replace(/_/g, ' ')}`);
-        }
-      });
-
-      // 2. Ссылка/название тега (поиск в галерее)
+      // 1. Ссылка/название тега (поиск в галерее)
       const tagBtn = document.createElement('button');
       tagBtn.type = 'button';
       tagBtn.className = `viewer-tag-link ${config.colorClass}`;
@@ -216,7 +196,7 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
         if (onTagSelect) onTagSelect(tag);
       });
 
-      // 3. Кнопка копирования тега справа
+      // 2. Кнопка копирования тега справа
       const copyBtn = document.createElement('button');
       copyBtn.type = 'button';
       copyBtn.className = 'viewer-tag-copy';
@@ -239,7 +219,6 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
         }
       });
 
-      rowEl.appendChild(wikiBtn);
       rowEl.appendChild(tagBtn);
       rowEl.appendChild(copyBtn);
       listEl.appendChild(rowEl);

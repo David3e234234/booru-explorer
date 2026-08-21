@@ -85,24 +85,6 @@ export function renderSidebarPageTags({ onTagSelect }) {
       tagEl.className = `sidebar-tag-item ${config.colorClass}`;
       tagEl.title = `Искать по тегу: ${tag} (${count})`;
 
-      // Кнопка ? для быстрого копирования
-      const wikiBtn = document.createElement('button');
-      wikiBtn.type = 'button';
-      wikiBtn.className = `s-tag-wiki ${config.colorClass}`;
-      wikiBtn.textContent = '?';
-      wikiBtn.title = `Скопировать тег: ${tag}`;
-      wikiBtn.setAttribute('aria-label', `Скопировать ${tag}`);
-
-      wikiBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        haptic(15);
-        const copied = await copyToClipboard(tag);
-        if (copied) {
-          showToast(`Тег скопирован: ${tag.replace(/_/g, ' ')}`);
-        }
-      });
-
       // Название тега
       const nameEl = document.createElement('span');
       nameEl.className = `s-tag-name ${config.colorClass}`;
@@ -113,7 +95,6 @@ export function renderSidebarPageTags({ onTagSelect }) {
       countEl.className = 's-tag-count';
       countEl.textContent = String(count);
 
-      tagEl.appendChild(wikiBtn);
       tagEl.appendChild(nameEl);
       tagEl.appendChild(countEl);
 
