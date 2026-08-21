@@ -237,7 +237,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     if (infoSite) infoSite.textContent = currentPost.siteName || currentPost.site;
     if (infoRating) infoRating.textContent = formatRating(currentPost.rating);
-    if (infoScore) infoScore.textContent = `★ ${currentPost.score || 0}`;
+    let scoreText = `★ ${currentPost.score || 0}`;
+    if (currentPost.views > 0 || currentPost.viewsText) {
+      scoreText += `  •  👁️ ${currentPost.viewsText || currentPost.views}`;
+    } else if (currentPost.favCount > 0) {
+      scoreText += `  •  🔖 ${currentPost.favCount}`;
+    }
+    if (infoScore) infoScore.textContent = scoreText;
     if (infoAi) {
       infoAi.textContent = currentPost.isAi ? 'Да (ИИ-арт)' : 'Нет (Авторский)';
       infoAi.style.color = currentPost.isAi ? 'var(--accent-warning)' : 'var(--text-primary)';

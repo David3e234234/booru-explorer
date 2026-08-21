@@ -38,9 +38,10 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   }
 
   // Приоритет Сортировка
+  const isScoreSort = (category === 'top' || category === 'views');
   if (queryTags.length < 2) {
-    if (category === 'top') queryTags.push('order:score');
-    else if (category === 'views' || category === 'popular' || category === 'recommended') queryTags.push('order:rank');
+    if (isScoreSort) queryTags.push('order:score');
+    else if (category === 'popular' || category === 'recommended') queryTags.push('order:rank');
     else if (category === 'random') queryTags.push('order:random');
   }
 
@@ -56,10 +57,13 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       'month': 'age:..30d',
       '90d': 'age:..90d',
       '3months': 'age:..90d',
-      '365d': 'age:..365d',
-      'year': 'age:..365d'
+      '365d': 'score:>=10',
+      'year': 'score:>=10'
     };
     if (ageMap[dateFilter]) queryTags.push(ageMap[dateFilter]);
+  } else if (isScoreSort && queryTags.length < 2 && userTagList.length === 0) {
+    // Для Danbooru: голый order:score без фильтра/тегов падает в 500 timeout. score:>=30 использует B-Tree индекс и отдает топ всех времен
+    queryTags.push('score:>=30');
   }
 
   // Приоритет Рейтинг
@@ -305,6 +309,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         meta: (item.tag_string_meta || '').split(' ').filter(Boolean)
       },
       score: item.score || 0,
+      favCount: item.fav_count || 0,
       rating: item.rating || 'g',
       width: item.image_width || 0,
       height: item.image_height || 0,

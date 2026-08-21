@@ -447,6 +447,28 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       matchBadge = `<span class="badge-format match-percent" title="Совпадение со вкусами: ${post.matchPercent}%">${post.matchPercent}%</span>`;
     }
 
+    const formatCompactNumber = (num) => {
+      if (!num) return '0';
+      if (typeof num === 'string') {
+        if (num.match(/[KkMmBb]/)) return num;
+        const parsed = parseFloat(num);
+        if (isNaN(parsed)) return num;
+        num = parsed;
+      }
+      if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+      return String(num);
+    };
+
+    let viewsBadge = '';
+    if (post.views > 0 || post.viewsText) {
+      const viewsLabel = post.viewsText || formatCompactNumber(post.views);
+      viewsBadge = `<span class="badge-format badge-views" title="Просмотры: ${viewsLabel}"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 2px; vertical-align: -1px;"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>${viewsLabel}</span>`;
+    } else if (post.favCount > 0) {
+      const favLabel = formatCompactNumber(post.favCount);
+      viewsBadge = `<span class="badge-format badge-favs" title="В избранном: ${post.favCount}"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 2px; vertical-align: -1px;"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>${favLabel}</span>`;
+    }
+
     const isFav = isPostFavorite(post.id);
     const isLiked = isPostLiked(post.id);
 
@@ -477,13 +499,31 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         ${post.isVideo ? `<video class="hover-video-preview" loop muted playsinline preload="none" referrerpolicy="no-referrer"></video>` : ''}
 
         <div class="badge-group-bottom">
-          ${authorBadge}
+          <div class="badge-author-wrap">
+            ${authorBadge}
+          </div>
+          <div class="badge-views-wrap">
+            ${viewsBadge}
+          </div>
         </div>
 
         <div class="card-overlay-bottom">
-          <div class="card-score">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 28.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-            ${post.score || 0}
+          <div class="card-meta-indicators">
+            <div class="card-score" title="Оценка / Рейтинг: ${post.score || 0}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 28.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span>${post.score || 0}</span>
+            </div>
+            ${(post.views > 0 || post.viewsText) ? `
+              <div class="card-views" title="Просмотры: ${post.viewsText || post.views}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span>${post.viewsText || formatCompactNumber(post.views)}</span>
+              </div>
+            ` : (post.favCount > 0 ? `
+              <div class="card-views card-favs" title="В закладках: ${post.favCount}">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+                <span>${formatCompactNumber(post.favCount)}</span>
+              </div>
+            ` : '')}
           </div>
           <div class="card-action-btns">
             <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? 'Убрать лайк' : 'Нравится'}">

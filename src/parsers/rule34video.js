@@ -384,6 +384,62 @@ export async function fetchRule34Video(params, aiTagsList) {
           }
         }
 
+        // Парсинг просмотров
+        let views = 0;
+        let viewsText = '';
+        const viewsMatch = block.match(/class="[^"]*views[^"]*"[^>]*>[\s\S]*?<\/svg>\s*([^<]+)<\/div>/i) ||
+                           block.match(/class="[^"]*views[^"]*"[^>]*>([^<]+)<\/div>/i);
+        if (viewsMatch) {
+          viewsText = viewsMatch[1].trim();
+          const numMatch = viewsText.match(/^([\d.,]+)\s*([KkMmBb])?$/);
+          if (numMatch) {
+            let val = parseFloat(numMatch[1].replace(',', '.'));
+            const mult = (numMatch[2] || '').toUpperCase();
+            if (mult === 'K') val *= 1000;
+            else if (mult === 'M') val *= 1000000;
+            else if (mult === 'B') val *= 1000000000;
+            views = Math.round(val);
+          }
+        }
+
+        // Парсинг рейтинга / оценок
+        let score = 0;
+        const ratingMatch = block.match(/class="[^"]*rating[^"]*"[^>]*>[\s\S]*?<\/svg>\s*([^<]+)<\/div>/i) ||
+                            block.match(/class="[^"]*rating[^"]*"[^>]*>([^<]+)<\/div>/i);
+        if (ratingMatch) {
+          const rawRating = ratingMatch[1].trim();
+          const countMatch = rawRating.match(/\((\d+)\)/);
+          if (countMatch) {
+            score = parseInt(countMatch[1], 10) || 0;
+          } else {
+            const pctMatch = rawRating.match(/(\d+)/);
+            if (pctMatch) score = parseInt(pctMatch[1], 10) || 0;
+          }
+        }
+
+        // Парсинг относительной даты добавления
+        let createdAt = '';
+        const addedMatch = block.match(/class="[^"]*added[^"]*"[^>]*>[\s\S]*?<\/svg>\s*([^<]+)<\/div>/i) ||
+                           block.match(/class="[^"]*added[^"]*"[^>]*>([^<]+)<\/div>/i);
+        if (addedMatch) {
+          const addedText = addedMatch[1].trim().toLowerCase();
+          const num = parseInt(addedText, 10) || 1;
+          const now = Date.now();
+          if (addedText.includes('minute') || addedText.includes('min')) {
+            createdAt = new Date(now - num * 60 * 1000).toISOString();
+          } else if (addedText.includes('hour')) {
+            createdAt = new Date(now - num * 3600 * 1000).toISOString();
+          } else if (addedText.includes('day')) {
+            createdAt = new Date(now - num * 24 * 3600 * 1000).toISOString();
+          } else if (addedText.includes('week')) {
+            createdAt = new Date(now - num * 7 * 24 * 3600 * 1000).toISOString();
+          } else if (addedText.includes('month')) {
+            createdAt = new Date(now - num * 30 * 24 * 3600 * 1000).toISOString();
+          } else if (addedText.includes('year')) {
+            createdAt = new Date(now - num * 365 * 24 * 3600 * 1000).toISOString();
+          }
+        }
+
         pageResults.push({
           id: `rule34video_${id}`,
           originalId: String(id),
@@ -400,14 +456,16 @@ export async function fetchRule34Video(params, aiTagsList) {
           hasSound: true,
           duration,
           durationText,
+          views,
+          viewsText,
           tags: rawTags,
           tagDetails,
-          score: 100,
+          score,
           rating: 'e',
           width: 1280,
           height: 720,
           source: pageUrl,
-          createdAt: '',
+          createdAt,
           isAi
         });
       }

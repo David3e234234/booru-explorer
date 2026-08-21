@@ -149,9 +149,28 @@
   right: 6px;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
+  gap: 6px;
   z-index: 4;
   pointer-events: none;
+}
+
+.badge-author-wrap, .badge-views-wrap {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.badge-format.badge-views {
+  background: rgba(15, 23, 42, 0.88);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.badge-format.badge-favs {
+  background: rgba(15, 23, 42, 0.88);
+  color: #f43f5e;
+  border: 1px solid rgba(244, 63, 94, 0.25);
 }
 
 .badge-format {
@@ -263,13 +282,33 @@
   opacity: 1;
 }
 
-.card-score {
+.card-meta-indicators {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.card-score, .card-views {
   font-size: 11px;
   font-weight: 600;
   color: #ffffff;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3.5px;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 3px 6px;
+  border-radius: var(--radius-sm);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.card-views {
+  color: #38bdf8;
+}
+
+.card-views.card-favs {
+  color: #f43f5e;
 }
 
 .card-action-btns {
