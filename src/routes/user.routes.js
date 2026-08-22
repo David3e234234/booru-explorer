@@ -15,8 +15,18 @@ import {
   getDislikes, 
   saveDislikes, 
   clearDislikes, 
-  sendBooruLike 
+  sendBooruLike,
+  getSubscriptions,
+  saveSubscriptions,
+  getPushSubscriptions,
+  savePushSubscriptions
 } from '../services/storageService.js';
+import {
+  runSubscriptionCheck,
+  markSubscriptionSeen,
+  sendPushToUser,
+  getVapidPublicKey
+} from '../services/subscriptionService.js';
 import { 
   apiPostsCache, 
   tagAutocompleteCache, 
@@ -503,6 +513,151 @@ router.get('/backup/telegram/status', (req, res) => {
     interval: settings.telegramBackupInterval || 'daily',
     lastBackupAt: settings.telegramLastBackupAt || null
   });
+});
+
+// ── Сохраненные поиски / тег-подписки ──
+
+// GET /api/subscriptions
+router.get('/subscriptions', (req, res) => {
+  const userId = req.user?.id || null;
+  const subscriptions = getSubscriptions(userId).map(({ knownIds, ...pub }) => pub);
+  res.json({ success: true, subscriptions });
+});
+
+// POST /api/subscriptions { query, site }
+router.post('/subscriptions', async (req, res) => {
+  const { query, site } = req.body || {};
+  const cleanQuery = String(query || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (!cleanQuery) {
+    return res.status(400).json({ success: false, message: 'Укажите поисковый запрос' });
+  }
+
+  const userId = req.user?.id || null;
+  const subscriptions = getSubscriptions(userId);
+
+  if (subscriptions.some(s => (s.query || '') === cleanQuery && (s.site || 'all') === (site || 'all'))) {
+    return res.status(400).json({ success: false, message: 'Такой запрос уже сохранен' });
+  }
+  if (subscriptions.length >= 30) {
+    return res.status(400).json({ success: false, message: 'Максимум 30 сохраненных поисков' });
+  }
+
+  const sub = {
+    id: 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    query: cleanQuery,
+    site: site || 'all',
+    createdAt: new Date().toISOString(),
+    lastCheckedAt: null,
+    newIds: []
+  };
+  subscriptions.unshift(sub);
+  saveSubscriptions(subscriptions, userId);
+
+  // Первый запуск: запоминаем текущую выдачу как «прочитанную», чтобы бейдж
+  // не показывал весь существующий контент как новинки
+  try {
+    await runSubscriptionCheck(userId, sub.id);
+  } catch (err) {
+    logError('Subscriptions', 'Ошибка первичной проверки подписки:', err);
+  }
+
+  const saved = getSubscriptions(userId).find(s => s.id === sub.id) || sub;
+  const { knownIds, ...pub } = saved;
+  res.json({ success: true, subscription: pub });
+});
+
+// DELETE /api/subscriptions/:id
+router.delete('/subscriptions/:id', (req, res) => {
+  const userId = req.user?.id || null;
+  const subscriptions = getSubscriptions(userId);
+  const filtered = subscriptions.filter(s => s.id !== req.params.id);
+  saveSubscriptions(filtered, userId);
+  res.json({ success: true, count: filtered.length });
+});
+
+// POST /api/subscriptions/:id/check - ручная проверка новых постов
+router.post('/subscriptions/:id/check', async (req, res) => {
+  try {
+    const userId = req.user?.id || null;
+    const { subscription } = await runSubscriptionCheck(userId, req.params.id);
+    const { knownIds, ...pub } = subscription;
+    res.json({ success: true, subscription: pub });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/subscriptions/:id/seen - сбросить счетчик непрочитанных
+router.post('/subscriptions/:id/seen', (req, res) => {
+  try {
+    const userId = req.user?.id || null;
+    const sub = markSubscriptionSeen(userId, req.params.id);
+    const { knownIds, ...pub } = sub;
+    res.json({ success: true, subscription: pub });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// ── Web Push уведомления ──
+
+// GET /api/push/public-key
+router.get('/push/public-key', (req, res) => {
+  const key = getVapidPublicKey();
+  if (!key) return res.status(500).json({ success: false, message: 'Пуш-сервис недоступен' });
+  res.json({ success: true, publicKey: key });
+});
+
+// GET /api/push/status
+router.get('/push/status', (req, res) => {
+  const userId = req.user?.id || null;
+  res.json({
+    success: true,
+    endpoints: getPushSubscriptions(userId).length
+  });
+});
+
+// POST /api/push/subscribe { subscription }
+router.post('/push/subscribe', (req, res) => {
+  const sub = req.body?.subscription;
+  if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
+    return res.status(400).json({ success: false, message: 'Некорректная push-подписка' });
+  }
+  const userId = req.user?.id || null;
+  const endpoints = getPushSubscriptions(userId);
+  if (!endpoints.some(ep => ep.endpoint === sub.endpoint)) {
+    endpoints.push({ ...sub, createdAt: new Date().toISOString() });
+    savePushSubscriptions(endpoints, userId);
+  }
+  res.json({ success: true, count: endpoints.length });
+});
+
+// POST /api/push/unsubscribe { endpoint }
+router.post('/push/unsubscribe', (req, res) => {
+  const endpoint = req.body?.endpoint;
+  if (!endpoint) return res.status(400).json({ success: false, message: 'Не указан endpoint' });
+  const userId = req.user?.id || null;
+  const filtered = getPushSubscriptions(userId).filter(ep => ep.endpoint !== endpoint);
+  savePushSubscriptions(filtered, userId);
+  res.json({ success: true, count: filtered.length });
+});
+
+// POST /api/push/test
+router.post('/push/test', async (req, res) => {
+  try {
+    const userId = req.user?.id || null;
+    const result = await sendPushToUser(userId, {
+      title: 'Booru Explorer',
+      body: 'Проверка push-уведомлений: всё работает!',
+      url: '/'
+    });
+    if (result.sent === 0) {
+      return res.status(400).json({ success: false, message: 'Нет активных устройств для отправки' });
+    }
+    res.json({ success: true, sent: result.sent });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 export default router;

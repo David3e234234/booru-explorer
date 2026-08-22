@@ -15,10 +15,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/variables.css?v=6.2">
-  <link rel="stylesheet" href="css/main.css?v=6.2">
-  <link rel="stylesheet" href="css/components.css?v=6.2">
-  <link rel="stylesheet" href="css/viewer.css?v=6.2">
+  <link rel="stylesheet" href="css/variables.css?v=6.3">
+  <link rel="stylesheet" href="css/main.css?v=6.3">
+  <link rel="stylesheet" href="css/components.css?v=6.3">
+  <link rel="stylesheet" href="css/viewer.css?v=6.3">
   <script src="js/mp4box.all.min.js"></script>
 </head>
 <body>
@@ -371,6 +371,10 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
               <span>Подписки</span>
             </button>
+            <button class="profile-tab-btn" data-profile-tab="searches" id="btnProfileTabSearches">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+              <span>Поиски</span>
+            </button>
             <button class="profile-tab-btn" data-profile-tab="analytics" id="btnProfileTabAnalytics">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
               <span>Интересы</span>
@@ -387,6 +391,37 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span>Добавить автора</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Контейнер для вкладки сохраненных поисков (тег-подписки) -->
+        <div class="profile-searches-pane" id="profileSearchesPane" style="display: none;">
+          <div class="analytics-card">
+            <div class="analytics-header">
+              <div class="analytics-header-content">
+                <h3 class="analytics-title">Сохраненные поиски</h3>
+                <p class="analytics-desc">Следите за новыми постами по тегам: сервер проверяет подписки каждые 15 минут и присылает push-уведомления.</p>
+              </div>
+              <button type="button" class="btn-icon btn-toggle-push" id="btnTogglePushNotifications" title="Включить push-уведомления о новых постах">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              </button>
+            </div>
+
+            <div class="subscription-add-row">
+              <input type="text" id="subscriptionQueryInput" class="subscription-query-input" placeholder="Запрос, например: genshin_impact или artist:name" autocomplete="off" spellcheck="false">
+              <select id="subscriptionSiteSelect" class="subscription-site-select" title="Источник для проверки"></select>
+              <button type="button" class="btn-action-primary subscription-create-btn" id="btnCreateSubscription">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                <span>Сохранить</span>
+              </button>
+            </div>
+            <button type="button" class="btn-restore-interests subscription-save-current" id="btnSaveCurrentSearch">
+              Сохранить текущий поиск
+            </button>
+
+            <div class="subscriptions-list" id="subscriptionsList">
+              <!-- Заполняется через JS -->
+            </div>
           </div>
         </div>
 
@@ -1440,6 +1475,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=6.2"></script>
+  <script type="module" src="js/app.js?v=6.3"></script>
 </body>
 </html>

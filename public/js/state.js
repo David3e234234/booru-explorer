@@ -38,7 +38,8 @@ export const state = {
   dislikedIds: new Set(),
   viewedIds: new Set(),
   favoritesSubTab: 'posts', // 'posts' | 'authors'
-  profileSubTab: 'likes', // 'likes' | 'favorites' | 'authors' | 'analytics'
+  profileSubTab: 'likes', // 'likes' | 'favorites' | 'authors' | 'searches' | 'analytics'
+  subscriptions: [],
   currentUser: null, // { id, username, createdAt, ... }
   authToken: null,
   favoriteAuthors: [],

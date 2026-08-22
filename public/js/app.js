@@ -69,6 +69,7 @@ import {
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initProfileUI } from './modules/profileUI.js';
+import { initSubscriptionsUI } from './modules/subscriptionsUI.js';
 
 export { isMyLiveDemoHost, isVercelHost, showToast, openDrawer, closeAllDrawers };
 
@@ -77,6 +78,7 @@ let galleryInstance = null;
 let viewerInstance = null;
 let authModalInstance = null;
 let profileUIInstance = null;
+let subscriptionsInstance = null;
 let deferredInstallPrompt = null;
 
 async function init() {
@@ -107,6 +109,7 @@ async function init() {
       updateHeaderAuthUI();
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
+      subscriptionsInstance?.load();
       selectCategory('profile');
     },
     onLogout: async () => {
@@ -131,6 +134,9 @@ async function init() {
       } else if (type === 'profile-subtab') {
         if (val === 'authors') {
           renderFavoriteAuthors();
+        } else if (val === 'searches') {
+          subscriptionsInstance?.load();
+          performSearch(true);
         } else {
           performSearch(true);
         }
@@ -142,8 +148,13 @@ async function init() {
       updateHeaderAuthUI();
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
+      subscriptionsInstance?.load();
       selectCategory('new');
     }
+  });
+
+  subscriptionsInstance = initSubscriptionsUI({
+    onRunSearch: runSubscriptionSearch
   });
 
   autocompleteInstance = initAutocomplete({
@@ -173,7 +184,7 @@ async function init() {
 
   viewerInstance = initViewer({
     onFavoriteToggle: () => {
-      galleryInstance.renderGallery(false);
+      galleryInstance.renderGallery(false, { preserveScroll: true });
       updateFavoritesBadge();
     },
     onFavoriteAuthorToggle: () => {
@@ -294,6 +305,22 @@ function handleExploreAuthor(author) {
   }
   selectCategory('new');
   showToast(`Поиск работ автора: ${author.displayName || author.name}`);
+}
+
+function runSubscriptionSearch(sub) {
+  if (!sub || !sub.query) return;
+
+  if (sub.site && sub.site !== 'all' && state.sites.some(s => s.id === sub.site)) {
+    state.currentSite = sub.site;
+    updateCurrentSiteLabel();
+    renderSitesBar({ onSelectSite: selectSite });
+    renderMobileSourcesSheet({ onSelectSite: selectSite });
+  }
+
+  state.searchTags = sub.query.split(/\s+/).filter(Boolean);
+  if (autocompleteInstance) autocompleteInstance.renderTagsChips();
+  selectCategory('new');
+  showToast(`Поиск по подписке: ${sub.query}`);
 }
 
 function selectSite(siteId) {
@@ -504,7 +531,9 @@ async function performSearch(reset = false, options = {}) {
       return;
     }
 
-    if (state.profileSubTab === 'favorites') {
+    if (state.profileSubTab === 'searches') {
+      state.posts = [];
+    } else if (state.profileSubTab === 'favorites') {
       state.posts = [...state.favorites];
     } else if (state.profileSubTab === 'likes') {
       state.posts = [...state.likes];
@@ -960,7 +989,7 @@ function setupEventListeners() {
       document.querySelectorAll('.video-sort-pill').forEach(p => {
         p.classList.toggle('active', p.dataset.sort === sort);
       });
-      galleryInstance.renderGallery(false);
+      galleryInstance.renderGallery(false, { preserveScroll: true });
     });
   });
 
@@ -1050,7 +1079,7 @@ function setupEventListeners() {
         const j = Math.floor(Math.random() * (i + 1));
         [state.posts[i], state.posts[j]] = [state.posts[j], state.posts[i]];
       }
-      galleryInstance.renderGallery(false);
+      galleryInstance.renderGallery(false, { preserveScroll: true });
       renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
       showToast('Лента перемешана');
     });
@@ -1296,7 +1325,7 @@ function setupEventListeners() {
             (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
           renderFavoriteAuthors();
         } else {
-          galleryInstance.renderGallery(false);
+          galleryInstance.renderGallery(false, { preserveScroll: true });
         }
       }
     });

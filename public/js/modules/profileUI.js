@@ -22,8 +22,10 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   const btnTabLikes = document.getElementById('btnProfileTabLikes');
   const btnTabFavs = document.getElementById('btnProfileTabFavs');
   const btnTabAuthors = document.getElementById('btnProfileTabAuthors');
+  const btnTabSearches = document.getElementById('btnProfileTabSearches');
   const btnTabAnalytics = document.getElementById('btnProfileTabAnalytics');
   const analyticsPane = document.getElementById('profileAnalyticsPane');
+  const searchesPane = document.getElementById('profileSearchesPane');
   const btnEditInterests = document.getElementById('btnEditInterests');
 
   let isEditingInterests = false;
@@ -222,12 +224,15 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
 
   function setProfileSubTab(subTab) {
     state.profileSubTab = subTab;
-    [btnTabLikes, btnTabFavs, btnTabAuthors, btnTabAnalytics].forEach(btn => btn?.classList.remove('active'));
+    [btnTabLikes, btnTabFavs, btnTabAuthors, btnTabSearches, btnTabAnalytics].forEach(btn => btn?.classList.remove('active'));
     
     const profileAuthorsToolbar = document.getElementById('profileAuthorsToolbar');
     if (profileAuthorsToolbar) {
       profileAuthorsToolbar.style.display = subTab === 'authors' ? 'flex' : 'none';
     }
+
+    const showSearchesPane = subTab === 'searches';
+    if (searchesPane) searchesPane.style.display = showSearchesPane ? 'block' : 'none';
 
     if (subTab === 'likes') {
       btnTabLikes?.classList.add('active');
@@ -237,6 +242,9 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       if (analyticsPane) analyticsPane.style.display = 'none';
     } else if (subTab === 'authors') {
       btnTabAuthors?.classList.add('active');
+      if (analyticsPane) analyticsPane.style.display = 'none';
+    } else if (subTab === 'searches') {
+      btnTabSearches?.classList.add('active');
       if (analyticsPane) analyticsPane.style.display = 'none';
     } else if (subTab === 'analytics') {
       btnTabAnalytics?.classList.add('active');
@@ -260,6 +268,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   btnTabLikes?.addEventListener('click', () => setProfileSubTab('likes'));
   btnTabFavs?.addEventListener('click', () => setProfileSubTab('favorites'));
   btnTabAuthors?.addEventListener('click', () => setProfileSubTab('authors'));
+  btnTabSearches?.addEventListener('click', () => setProfileSubTab('searches'));
   btnTabAnalytics?.addEventListener('click', () => setProfileSubTab('analytics'));
 
   document.getElementById('statLikesItem')?.addEventListener('click', () => setProfileSubTab('likes'));

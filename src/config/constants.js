@@ -20,6 +20,11 @@ export const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json'
 export const LIKES_FILE = path.join(DATA_DIR, 'likes.json');
 export const DISLIKES_FILE = path.join(DATA_DIR, 'dislikes.json');
 export const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+export const SUBSCRIPTIONS_FILE = path.join(DATA_DIR, 'subscriptions.json');
+export const PUSH_SUBSCRIPTIONS_FILE = path.join(DATA_DIR, 'push_subscriptions.json');
+
+// Ключи VAPID для веб-пушей: env -> файл data/.vapid_keys.json (генерируется при первом запуске)
+export const VAPID_KEYS_FILE = path.join(DATA_DIR, '.vapid_keys.json');
 
 export const DEFAULT_AI_TAGS = [
   'ai_generated',
@@ -57,8 +62,7 @@ export const FURRY_TAGS = [
   'anthro_male',
   'furred',
   'canine',
-  'feline',
-  'e621'
+  'feline'
 ];
 
 export const PREGNANT_TAGS = [

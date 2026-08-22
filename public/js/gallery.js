@@ -189,6 +189,138 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     });
   }
 
+  // ── Виртуализация бесконечной ленты ──
+  // Посты разбиваются на чанки; вне зоны просмотра вместо карточек стоят
+  // легковесные заглушки той же высоты, поэтому скроллбар и позиции стабильны.
+  const VIRT_CHUNK_SIZE = 24;
+  const VIRT_MOUNT_MARGIN = 1.5;   // во сколько раз высоты экрана монтируем вперед
+  const VIRT_UNMOUNT_MARGIN = 4;   // гистерезис: размонтируем дальше, чем монтируем
+  let virtChunks = [];             // [{ els: [], mounted }]
+  let virtTotal = 0;
+  let virtUpdateScheduled = false;
+
+  function createPlaceholder(index) {
+    const ph = document.createElement('div');
+    ph.className = 'media-card-placeholder';
+    ph.dataset.index = String(index);
+    return ph;
+  }
+
+  function detachCardObservers(card) {
+    if (mobileVideoObserver) mobileVideoObserver.unobserve(card);
+    if (videoMetadataObserver) videoMetadataObserver.unobserve(card);
+  }
+
+  function resetVirtualization() {
+    virtChunks = [];
+    virtTotal = 0;
+  }
+
+  function buildPlaceholderRange(from, to) {
+    for (let start = from; start < to; start += VIRT_CHUNK_SIZE) {
+      const end = Math.min(start + VIRT_CHUNK_SIZE, to);
+      const els = [];
+      for (let i = start; i < end; i++) els.push(createPlaceholder(i));
+      virtChunks.push({ els, mounted: false });
+    }
+    virtTotal = to;
+  }
+
+  function chunkBounds(chunk) {
+    const first = chunk.els[0];
+    const last = chunk.els[chunk.els.length - 1];
+    if (!first) return null;
+    const a = first.getBoundingClientRect();
+    const b = last !== first ? last.getBoundingClientRect() : a;
+    return { top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) };
+  }
+
+  function updateVisibleChunks() {
+    virtUpdateScheduled = false;
+    if (!virtChunks.length) return;
+
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const mountMargin = vh * VIRT_MOUNT_MARGIN;
+    const unmountMargin = vh * VIRT_UNMOUNT_MARGIN;
+    const toMount = [];
+    const toUnmount = [];
+
+    for (let i = 0; i < virtChunks.length; i++) {
+      const chunk = virtChunks[i];
+      const bounds = chunkBounds(chunk);
+      if (!bounds) continue;
+      if (!chunk.mounted) {
+        if (bounds.bottom >= -mountMargin && bounds.top <= vh + mountMargin) toMount.push(i);
+      } else if (bounds.bottom < -unmountMargin || bounds.top > vh + unmountMargin) {
+        toUnmount.push(i);
+      }
+    }
+
+    toMount.forEach(idx => mountChunk(idx));
+    toUnmount.forEach(idx => unmountChunk(idx));
+  }
+
+  function scheduleVirtualUpdate() {
+    if (virtUpdateScheduled) return;
+    virtUpdateScheduled = true;
+    requestAnimationFrame(updateVisibleChunks);
+  }
+
+  function mountChunk(chunkIdx) {
+    const chunk = virtChunks[chunkIdx];
+    if (!chunk || chunk.mounted) return;
+    const postsToDisplay = state.displayedPosts || state.posts;
+    chunk.els = chunk.els.map((el, slot) => {
+      const index = parseInt(el.dataset.index, 10);
+      if (el.classList.contains('media-card')) return el;
+      const post = postsToDisplay[index];
+      if (!post) return el;
+      const card = createMediaCard(post, index);
+      card._chunkIdx = chunkIdx;
+      el.replaceWith(card);
+      return card;
+    });
+    chunk.mounted = true;
+  }
+
+  function unmountChunk(chunkIdx) {
+    const chunk = virtChunks[chunkIdx];
+    if (!chunk || !chunk.mounted) return;
+    if (hoverState.card && chunk.els.includes(hoverState.card)) {
+      stopHoverPreview();
+    }
+    const postsToDisplay = state.displayedPosts || state.posts;
+    chunk.els = chunk.els.map(el => {
+      if (!el.classList.contains('media-card')) return el;
+      detachCardObservers(el);
+      const ph = createPlaceholder(parseInt(el.dataset.index, 10));
+      el.replaceWith(ph);
+      return ph;
+    });
+    chunk.mounted = false;
+  }
+
+  function removeCardFromVirtualFlow(card) {
+    const chunkIdx = card._chunkIdx;
+    if (typeof chunkIdx === 'number' && virtChunks[chunkIdx]) {
+      const chunk = virtChunks[chunkIdx];
+      const pos = chunk.els.indexOf(card);
+      if (pos !== -1) chunk.els.splice(pos, 1);
+    }
+    if (virtTotal > 0) virtTotal -= 1;
+    detachCardObservers(card);
+  }
+
+  if (mainContent) {
+    mainContent.addEventListener('scroll', scheduleVirtualUpdate, { passive: true });
+  }
+  window.addEventListener('scroll', scheduleVirtualUpdate, { passive: true });
+  window.addEventListener('resize', scheduleVirtualUpdate, { passive: true });
+  if ('ResizeObserver' in window) {
+    const gridResizeObserver = new ResizeObserver(() => scheduleVirtualUpdate());
+    gridResizeObserver.observe(galleryGrid);
+  }
+
   function getProcessedPosts() {
     if (!state.videoDurationSort || state.videoDurationSort === 'none') {
       return state.posts;
@@ -206,7 +338,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     return postsCopy;
   }
 
-  function renderGallery(append = false) {
+  function renderGallery(append = false, opts = {}) {
     if (btnLoadMore) {
       btnLoadMore.classList.remove('loading');
     }
@@ -216,10 +348,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     // массива, поэтому нельзя просто добавить их в конец DOM
     if (append && state.videoDurationSort && state.videoDurationSort !== 'none') {
       append = false;
-    }
-
-    if (!append) {
-      galleryGrid.innerHTML = '';
     }
 
     loadingSpinner.style.display = 'none';
@@ -252,6 +380,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         } else if (state.profileSubTab === 'authors') {
           if (emptyTitle) emptyTitle.textContent = 'Нет отслеживаемых авторов';
           if (emptyDesc) emptyDesc.textContent = 'Добавляйте художников в любимые, чтобы отслеживать их новые работы.';
+        } else if (state.profileSubTab === 'searches') {
+          if (emptyTitle) emptyTitle.textContent = 'Сохраненные поиски';
+          if (emptyDesc) emptyDesc.textContent = 'Настройте подписки на теги в панели выше: новые посты будут отмечаться счетчиком.';
         }
       } else if (state.currentCategory === 'favorites') {
         if (emptyTitle) emptyTitle.textContent = 'В избранном пока пусто';
@@ -263,6 +394,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
       resultsCount.textContent = '0 постов';
       if (loadMoreContainer) loadMoreContainer.style.display = 'none';
+      stopHoverPreview();
+      resetVirtualization();
+      galleryGrid.innerHTML = '';
       return;
     }
 
@@ -278,17 +412,43 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    const startIndex = append ? galleryGrid.children.length : 0;
-    const postsToRender = postsToDisplay.slice(startIndex);
+    const prevScrollTop = mainContent ? mainContent.scrollTop : 0;
 
-    // Батчевая вставка через DocumentFragment для минимизации перерисовок DOM
-    const fragment = document.createDocumentFragment();
-    postsToRender.forEach((post, i) => {
-      const globalIndex = startIndex + i;
-      const card = createMediaCard(post, globalIndex);
-      fragment.appendChild(card);
-    });
-    galleryGrid.appendChild(fragment);
+    if (!append) {
+      // Полный ререндер: сначала заглушки на все посты (стабильная высота ленты),
+      // затем восстановление прокрутки и монтаж чанков вокруг видимой зоны
+      stopHoverPreview();
+      virtChunks.forEach(chunk => {
+        if (!chunk.mounted) return;
+        chunk.els.forEach(el => {
+          if (el.classList.contains('media-card')) detachCardObservers(el);
+        });
+      });
+      galleryGrid.innerHTML = '';
+      resetVirtualization();
+
+      const fragment = document.createDocumentFragment();
+      buildPlaceholderRange(0, postsToDisplay.length);
+      virtChunks.forEach(chunk => chunk.els.forEach(el => fragment.appendChild(el)));
+      galleryGrid.appendChild(fragment);
+
+      if (mainContent) {
+        mainContent.scrollTop = opts.preserveScroll ? prevScrollTop : 0;
+      }
+      updateVisibleChunks();
+    } else {
+      // Дозагрузка: новые посты получают заглушки, видимые смонтируются сами
+      const startIndex = Math.min(virtTotal, postsToDisplay.length);
+      if (startIndex < postsToDisplay.length) {
+        buildPlaceholderRange(startIndex, postsToDisplay.length);
+        const fragment = document.createDocumentFragment();
+        virtChunks.forEach(chunk => chunk.els.forEach(el => {
+          if (parseInt(el.dataset.index, 10) >= startIndex) fragment.appendChild(el);
+        }));
+        galleryGrid.appendChild(fragment);
+        updateVisibleChunks();
+      }
+    }
 
     // Авто-дозагрузка: если постов так мало, что нет скроллбара
     setTimeout(() => {
@@ -716,6 +876,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     card.classList.add('card-hiding');
     setTimeout(() => {
       state.posts = state.posts.filter(p => p.id !== post.id);
+      removeCardFromVirtualFlow(card);
       card.remove();
       const resultsCountEl = document.getElementById('resultsCount');
       if (resultsCountEl) resultsCountEl.textContent = `${state.posts.length} постов`;
@@ -739,7 +900,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       if (useEl) useEl.setAttribute('href', '#ic-heart');
       if (state.currentCategory === 'profile' && state.profileSubTab === 'likes') {
         state.posts = state.posts.filter(p => p.id !== post.id);
-        renderGallery();
+        renderGallery(false, { preserveScroll: true });
       }
     }
     if (onFavoriteToggle) onFavoriteToggle();
@@ -767,7 +928,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           if (useEl) useEl.setAttribute('href', '#ic-bookmark');
           if (state.currentCategory === 'favorites' || (state.currentCategory === 'profile' && state.profileSubTab === 'favorites')) {
             state.posts = state.posts.filter(p => p.id !== post.id);
-            renderGallery();
+            renderGallery(false, { preserveScroll: true });
           }
         }
         if (onFavoriteToggle) onFavoriteToggle();
@@ -778,6 +939,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   }
 
   function renderAuthorCards(authorsList, { onExplore, onDelete, onAddAuthor, onChangePreview } = {}) {
+    stopHoverPreview();
+    resetVirtualization();
     galleryGrid.innerHTML = '';
     loadingSpinner.style.display = 'none';
     scrollLoader.style.display = 'none';
@@ -965,6 +1128,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       const cols = btn.dataset.cols;
       const is1Col = localStorage.getItem('booru_grid_mobile') === '1col';
       galleryGrid.className = `gallery-grid grid-${cols} ${is1Col ? 'grid-1col' : ''}`;
+      scheduleVirtualUpdate();
     });
   });
 

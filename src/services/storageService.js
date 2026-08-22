@@ -7,6 +7,8 @@ import {
   FAVORITE_AUTHORS_FILE, 
   LIKES_FILE, 
   DISLIKES_FILE, 
+  SUBSCRIPTIONS_FILE,
+  PUSH_SUBSCRIPTIONS_FILE,
   BROWSER_USER_AGENT,
   DATA_DIR 
 } from '../config/constants.js';
@@ -158,6 +160,30 @@ export function saveDislikes(dislikes, userId = null) {
 export function clearDislikes(userId = null) {
   const filePath = getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json');
   writeJsonFileAsync(filePath, []);
+}
+
+// Сохраненные поиски / тег-подписки
+export function getSubscriptions(userId = null) {
+  const filePath = getUserFilePath(userId, SUBSCRIPTIONS_FILE, 'subscriptions.json');
+  const data = readJsonFile(filePath, []);
+  return Array.isArray(data) ? data : [];
+}
+
+export function saveSubscriptions(subscriptions, userId = null) {
+  const filePath = getUserFilePath(userId, SUBSCRIPTIONS_FILE, 'subscriptions.json');
+  writeJsonFileAsync(filePath, subscriptions);
+}
+
+// Push-подписки браузеров (endpoints) для отправки уведомлений
+export function getPushSubscriptions(userId = null) {
+  const filePath = getUserFilePath(userId, PUSH_SUBSCRIPTIONS_FILE, 'push_subscriptions.json');
+  const data = readJsonFile(filePath, []);
+  return Array.isArray(data) ? data : [];
+}
+
+export function savePushSubscriptions(subscriptions, userId = null) {
+  const filePath = getUserFilePath(userId, PUSH_SUBSCRIPTIONS_FILE, 'push_subscriptions.json');
+  writeJsonFileAsync(filePath, subscriptions);
 }
 
 export async function sendBooruLike(site, postId, isLike, settings) {

@@ -196,6 +196,8 @@ export function registerUser(username, password, initialData = {}) {
   writeJsonFile(path.join(userDir, 'likes.json'), userLikes);
   writeJsonFile(path.join(userDir, 'dislikes.json'), userDislikes);
   writeJsonFile(path.join(userDir, 'favorite_authors.json'), userFavoriteAuthors);
+  writeJsonFile(path.join(userDir, 'subscriptions.json'), []);
+  writeJsonFile(path.join(userDir, 'push_subscriptions.json'), []);
 
   logInfo('Auth', `Зарегистрирован новый пользователь: ${cleanUsername} (ID: ${userId})`);
 
