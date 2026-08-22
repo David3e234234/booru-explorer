@@ -5,10 +5,13 @@ import { Readable } from 'stream';
 import { THUMBS_DIR, BROWSER_USER_AGENT, BOORU_USER_AGENT } from '../config/constants.js';
 import { getSettings } from './storageService.js';
 import { resolveSiteReferer } from '../utils/network.js';
-import { logError } from '../utils/logger.js';
+import { logError, logInfo } from '../utils/logger.js';
 
 // Максимальный размер изображения, который буферизуется в память и пишется в дисковый кэш
 const MAX_CACHED_IMAGE_BYTES = 30 * 1024 * 1024;
+
+// Таймаут апстрима с запасом на повторные попытки при троттлинге источника
+const PROXY_ABORT_MS = 35000;
 
 const IMAGE_EXTS = [
   ['.png', 'png'],
@@ -125,10 +128,50 @@ async function tryFetch(url, headers, signal) {
   return fetch(url, { headers, redirect: 'follow', signal });
 }
 
+// Источники вроде rule34video отвечают 429 на серию Range-запросов одного видео.
+// Повторяем такие ответы с паузой, вместо того чтобы сразу отдавать ошибку плееру
+const RETRYABLE_STATUSES = new Set([429, 502, 503]);
+const UPSTREAM_COOLDOWN_MS = 3000;
+const upstreamCooldown = new Map();
+
+function pruneUpstreamCooldown() {
+  const now = Date.now();
+  for (const [url, until] of upstreamCooldown) {
+    if (until < now) upstreamCooldown.delete(url);
+  }
+}
+
+async function fetchUpstreamWithRetry(targetUrl, headers, signal, maxRetries = 2) {
+  for (let attempt = 0; ; attempt++) {
+    // Кулдаун после недавнего 429: серия Range-запросов не должна долбить источник вплотную
+    const cooldownEnd = upstreamCooldown.get(targetUrl) || 0;
+    const waitMs = cooldownEnd - Date.now();
+    if (waitMs > 0 && !signal?.aborted) {
+      await new Promise(resolve => setTimeout(resolve, Math.min(waitMs, UPSTREAM_COOLDOWN_MS)));
+    }
+
+    const response = await tryFetch(targetUrl, headers, signal);
+    if (!RETRYABLE_STATUSES.has(response.status) || attempt >= maxRetries || signal?.aborted) {
+      return response;
+    }
+
+    // Освобождаем соединение неудачного ответа перед повтором
+    try { await response.body?.cancel(); } catch {}
+
+    if (upstreamCooldown.size > 200) pruneUpstreamCooldown();
+    upstreamCooldown.set(targetUrl, Date.now() + UPSTREAM_COOLDOWN_MS);
+
+    const retryAfterSec = parseInt(response.headers.get('retry-after') || '', 10);
+    const delayMs = Math.min(5000, retryAfterSec > 0 ? retryAfterSec * 1000 : 1000 * (attempt + 1));
+    logInfo('Proxy', `Источник ответил ${response.status}, повтор ${attempt + 1}/${maxRetries} через ${delayMs} мс: ${targetUrl.split('?')[0]}`);
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+}
+
 // Полный цикл: скачать изображение (с 404-фолбэком), положить в дисковый кэш и вернуть клиенту
 async function downloadAndCacheImage(req, res, originalUrl, headers) {
   const controller = new AbortController();
-  const abortTimeout = setTimeout(() => controller.abort(), 20000);
+  const abortTimeout = setTimeout(() => controller.abort(), PROXY_ABORT_MS);
   req.on('close', () => {
     clearTimeout(abortTimeout);
     try { controller.abort(); } catch {}
@@ -137,7 +180,7 @@ async function downloadAndCacheImage(req, res, originalUrl, headers) {
   let response;
   let effectiveUrl = originalUrl;
   try {
-    response = await tryFetch(originalUrl, headers, controller.signal);
+    response = await fetchUpstreamWithRetry(originalUrl, headers, controller.signal);
 
     if (response.status === 404) {
       for (const altUrl of build404FallbackCandidates(originalUrl)) {
@@ -275,17 +318,13 @@ export async function handleProxyRequest(req, res) {
     }
 
     const controller = new AbortController();
-    const abortTimeout = setTimeout(() => controller.abort(), 20000);
+    const abortTimeout = setTimeout(() => controller.abort(), PROXY_ABORT_MS);
     req.on('close', () => {
       clearTimeout(abortTimeout);
       try { controller.abort(); } catch {}
     });
 
-    let response = await fetch(targetUrl, {
-      headers,
-      redirect: 'follow',
-      signal: controller.signal
-    });
+    let response = await fetchUpstreamWithRetry(targetUrl, headers, controller.signal);
 
     if (response.status === 404) {
       for (const altUrl of build404FallbackCandidates(targetUrl)) {

@@ -1,7 +1,10 @@
-const CACHE_NAME = 'booru-explorer-v7.1';
-const MEDIA_CACHE = 'booru-media-v7.1';
+const CACHE_NAME = 'booru-explorer-v7.2';
+const MEDIA_CACHE = 'booru-media-v7.2';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
+
+// Заглушка для respondWith: без нее обрыв сети или потока падает с "неожиданной ошибкой" SW
+const offlineResponse = () => new Response(null, { status: 504, statusText: 'Gateway Timeout' });
 
 const STATIC_ASSETS = [
   '/',
@@ -43,7 +46,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Кэширование App Shell v7.1');
+      console.log('[ServiceWorker] Кэширование App Shell v7.2');
       return cache.addAll(STATIC_ASSETS).catch(err => {
         console.warn('[ServiceWorker] Не удалось закэшировать часть ресурсов:', err);
       });
@@ -106,7 +109,7 @@ self.addEventListener('fetch', (event) => {
               cache.put(event.request, resClone).then(() => trimMediaCache());
             }
             return response;
-          });
+          }).catch(() => offlineResponse());
         })
       )
     );
@@ -124,6 +127,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => caches.match(event.request))
+        .then((cached) => cached || offlineResponse())
     );
     return;
   }
@@ -148,13 +152,16 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => caches.match(event.request))
+        .then((cached) => cached || offlineResponse())
     );
     return;
   }
 
   // Для прочих запросов (API, видео, прокси) - прямой сетевой запрос с фоллбэком на кэш
   event.respondWith(
-    fetch(event.request).catch(() => caches.match(event.request))
+    fetch(event.request)
+      .catch(() => caches.match(event.request))
+      .then((cached) => cached || offlineResponse())
   );
 });
 

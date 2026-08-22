@@ -198,9 +198,16 @@ export function makeBannerDraggable(bannerEl) {
 }
 
 export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef, blobRef }) {
-  const directMedia = currentPost.fileUrl || currentPost.sampleUrl;
-  const proxyMedia = getProxiedUrl(directMedia);
-  const transcodeMedia = `/api/transcode-video?url=${encodeURIComponent(directMedia)}`;
+  let directMedia = currentPost.fileUrl || currentPost.sampleUrl;
+  let proxyMedia = getProxiedUrl(directMedia);
+  let transcodeMedia = `/api/transcode-video?url=${encodeURIComponent(directMedia)}`;
+
+  // Ссылки Rule34Video одноразовые: после обновления токена пересобираем все варианты источника
+  const rebuildMediaUrls = () => {
+    directMedia = currentPost.fileUrl || currentPost.sampleUrl;
+    proxyMedia = getProxiedUrl(directMedia);
+    transcodeMedia = `/api/transcode-video?url=${encodeURIComponent(directMedia)}`;
+  };
 
   const videoContainer = document.createElement('div');
   videoContainer.className = 'viewer-video-container';
@@ -396,10 +403,24 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   });
 
   let mediaSourceInstance = null;
+  let reresolvedOnce = false;
+  let lastFallbackTime = 0;
+
+  const switchToTranscode = (message) => {
+    currentSource = 'transcode';
+    if (btnTranscode) {
+      btnTranscode.classList.add('active');
+      btnTranscode.textContent = '🔄 FFmpeg фикс';
+    }
+    setProgress(0, message, true);
+    video.src = transcodeMedia;
+    safePlay();
+  };
 
   const startClientRemux = async (targetUrl) => {
     if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
+    const controller = new AbortController();
+    abortRef.current = controller;
     isPreCaching = true;
     currentSource = 'remux';
     if (btnTranscode) {
@@ -408,6 +429,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
     setProgress(0, '🚀 Клиентский JS-демуксинг (MSE)...', true);
 
+    let internalAbortReason = null;
     try {
       if (!window.MediaSource || !window.MP4Box) {
         throw new Error('MediaSource или MP4Box не поддерживается');
@@ -424,72 +446,91 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       video.src = blobRef.current;
 
       const mp4boxfile = window.MP4Box.createFile();
-      let videoSourceBuffer = null;
-      let audioSourceBuffer = null;
-      let videoTrackId = null;
-      let audioTrackId = null;
+
+      // Очередь сегментов на каждый трек: appendBuffer нельзя вызывать, пока SourceBuffer
+      // занят предыдущим. Раньше такие сегменты просто выбрасывались и ломали поток
+      const trackPipes = [];
+      const pumpTrack = (id) => {
+        const pipe = trackPipes.find(p => p.id === id);
+        if (!pipe || pipe.sourceBuffer.updating || ms.readyState !== 'open') return;
+        const buffer = pipe.queue.shift();
+        if (!buffer) return;
+        try { pipe.sourceBuffer.appendBuffer(buffer); } catch {}
+      };
+      const pumpAll = () => trackPipes.forEach(p => pumpTrack(p.id));
+      const enqueueSegment = (id, buffer) => {
+        if (!buffer || ms.readyState !== 'open') return;
+        const pipe = trackPipes.find(p => p.id === id);
+        if (!pipe) return;
+        pipe.queue.push(buffer);
+        pumpTrack(id);
+      };
 
       await new Promise((resolve, reject) => {
         ms.addEventListener('sourceopen', () => resolve(), { once: true });
         setTimeout(() => reject(new Error('MediaSource timeout')), 3500);
       });
 
+      let readySettled = false;
       mp4boxfile.onReady = (info) => {
+        readySettled = true;
         try {
           const videoTrack = info.tracks.find(t => t.video || t.type === 'video') || info.tracks[0];
           const audioTrack = info.tracks.find(t => t.audio || t.type === 'audio');
 
+          const registerPipe = (trackId, sourceBuffer) => {
+            sourceBuffer.mode = 'segments';
+            trackPipes.push({ id: trackId, sourceBuffer, queue: [] });
+            sourceBuffer.addEventListener('updateend', pumpAll);
+          };
+
           if (videoTrack) {
-            videoTrackId = videoTrack.id;
             mp4boxfile.setSegmentOptions(videoTrack.id, null, { nbSamples: 100 });
             const codec = videoTrack.codec || 'avc1.42E01E';
             const vMime = `video/mp4; codecs="${codec}"`;
-            if (MediaSource.isTypeSupported(vMime)) {
-              videoSourceBuffer = ms.addSourceBuffer(vMime);
-            } else {
-              videoSourceBuffer = ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
-            }
-            videoSourceBuffer.mode = 'segments';
+            const sb = MediaSource.isTypeSupported(vMime)
+              ? ms.addSourceBuffer(vMime)
+              : ms.addSourceBuffer('video/mp4; codecs="avc1.42E01E"');
+            registerPipe(videoTrack.id, sb);
           }
 
           if (audioTrack) {
-            audioTrackId = audioTrack.id;
             mp4boxfile.setSegmentOptions(audioTrack.id, null, { nbSamples: 100 });
             const aCodec = audioTrack.codec || 'mp4a.40.2';
             const aMime = `audio/mp4; codecs="${aCodec}"`;
             if (MediaSource.isTypeSupported(aMime)) {
-              audioSourceBuffer = ms.addSourceBuffer(aMime);
+              registerPipe(audioTrack.id, ms.addSourceBuffer(aMime));
             } else if (MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.2"')) {
-              audioSourceBuffer = ms.addSourceBuffer('audio/mp4; codecs="mp4a.40.2"');
+              registerPipe(audioTrack.id, ms.addSourceBuffer('audio/mp4; codecs="mp4a.40.2"'));
             }
-            if (audioSourceBuffer) audioSourceBuffer.mode = 'segments';
           }
 
           const initSegs = mp4boxfile.initializeSegmentation();
           if (Array.isArray(initSegs)) {
-            initSegs.forEach(seg => {
-              if (seg.id === videoTrackId && videoSourceBuffer && seg.buffer) {
-                try { videoSourceBuffer.appendBuffer(seg.buffer); } catch {}
-              } else if (seg.id === audioTrackId && audioSourceBuffer && seg.buffer) {
-                try { audioSourceBuffer.appendBuffer(seg.buffer); } catch {}
-              }
-            });
+            initSegs.forEach(seg => enqueueSegment(seg.id, seg.buffer));
           }
         } catch (e) {
           console.warn('[MSE Init Warning]', e);
         }
       };
 
-      mp4boxfile.onSegment = (id, user, buffer) => {
-        if (id === videoTrackId && videoSourceBuffer && !videoSourceBuffer.updating && ms.readyState === 'open') {
-          try { videoSourceBuffer.appendBuffer(buffer); } catch {}
-        } else if (id === audioTrackId && audioSourceBuffer && !audioSourceBuffer.updating && ms.readyState === 'open') {
-          try { audioSourceBuffer.appendBuffer(buffer); } catch {}
-        }
-      };
+      mp4boxfile.onSegment = (id, user, buffer) => enqueueSegment(id, buffer);
 
-      const res = await fetch(targetUrl, { signal: abortRef.current.signal });
+      // Если MP4-структура не распознана (например, пришел HTML-ответ), не висим вечно
+      const readyWatchdog = setTimeout(() => {
+        if (!readySettled) {
+          console.warn('[Client Remux] MP4-метаданные не распознаны, отмена');
+          internalAbortReason = new Error('MP4-метаданные не распознаны');
+          try { controller.abort(); } catch {}
+        }
+      }, 12000);
+
+      const res = await fetch(targetUrl, { signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const resType = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+      if (resType.includes('text/html') || resType.includes('application/json') || resType.includes('text/plain')) {
+        throw new Error(`Источник вернул ${resType} вместо видео`);
+      }
       const contentLength = res.headers.get('content-length');
       const total = contentLength ? parseInt(contentLength, 10) : 0;
       let loaded = 0;
@@ -511,6 +552,13 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         setProgress(pct, `🚀 JS Ремукс: ${(loaded / (1024 * 1024)).toFixed(1)} MB`, true);
       }
 
+      if (total > 0 && loaded < total * 0.98) {
+        throw new Error(`Поток оборвался: получено ${(loaded / 1048576).toFixed(1)} из ${(total / 1048576).toFixed(1)} MB`);
+      }
+      if (!readySettled) {
+        throw new Error('MP4-метаданные не распознаны');
+      }
+
       isPreCaching = false;
       if (btnTranscode) {
         btnTranscode.textContent = '🚀 JS Ремукс (OK)';
@@ -519,22 +567,55 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       safePlay();
       setTimeout(hideStatus, 1200);
     } catch (err) {
-      if (err.name === 'AbortError') return;
+      // Отмена пользователем или при переключении источника не должна уводить на FFmpeg
+      if (err.name === 'AbortError' && !internalAbortReason) return;
+      clearTimeout(loadTimeout);
       console.warn('[Client Remux Error]', err);
       isPreCaching = false;
-      currentSource = 'transcode';
-      if (btnTranscode) {
-        btnTranscode.classList.add('active');
-        btnTranscode.textContent = '🔄 FFmpeg фикс';
-      }
-      setProgress(0, '🔄 Аппаратный кодек не подошел. Переход на FFmpeg (H.264/AAC)...', true);
-      video.src = transcodeMedia;
-      safePlay();
+      switchToTranscode('🔄 Аппаратный кодек не подошел. Переход на FFmpeg (H.264/AAC)...');
     }
+  };
+
+  const startRemuxOrTranscodeFallback = () => {
+    if (state.settings?.enableJsDemuxing !== false) {
+      startClientRemux(proxyMedia);
+    } else {
+      switchToTranscode('🔄 Перекодирование через серверный FFmpeg (H.264/AAC)...');
+    }
+  };
+
+  const handleProxySourceFailure = () => {
+    // Одноразовые ссылки Rule34Video быстро протухают: до ремукса пробуем свежий токен
+    if (currentPost.site === 'rule34video' && !reresolvedOnce) {
+      reresolvedOnce = true;
+      setProgress(0, 'Ссылка источника устарела, обновляем...', true);
+      fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.fullVideoUrl) {
+            currentPost.fileUrl = data.fullVideoUrl;
+            currentPost.hasSound = true;
+            rebuildMediaUrls();
+            setProgress(0, 'Повторное подключение через прокси...', true);
+            video.src = proxyMedia;
+            safePlay();
+          } else {
+            startRemuxOrTranscodeFallback();
+          }
+        })
+        .catch(() => startRemuxOrTranscodeFallback());
+      return;
+    }
+    startRemuxOrTranscodeFallback();
   };
 
   const handleVideoError = () => {
     if (isPreCaching) return;
+    // Ошибки прилетают пачкой на одно переключение: гасим дребезг, чтобы не молотить источник
+    const now = Date.now();
+    if (now - lastFallbackTime < 1200) return;
+    lastFallbackTime = now;
+
     if (currentSource === 'direct') {
       currentSource = 'proxy';
       if (switchBtn) switchBtn.textContent = '⚡ Прямой CDN';
@@ -542,27 +623,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       video.src = proxyMedia;
       safePlay();
     } else if (currentSource === 'proxy') {
-      if (state.settings?.enableJsDemuxing !== false) {
-        startClientRemux(proxyMedia);
-      } else {
-        currentSource = 'transcode';
-        if (btnTranscode) {
-          btnTranscode.classList.add('active');
-          btnTranscode.textContent = '🔄 FFmpeg фикс';
-        }
-        setProgress(0, '🔄 Перекодирование через серверный FFmpeg (H.264/AAC)...', true);
-        video.src = transcodeMedia;
-        safePlay();
-      }
+      handleProxySourceFailure();
     } else if (currentSource === 'remux') {
-      currentSource = 'transcode';
-      if (btnTranscode) {
-        btnTranscode.classList.add('active');
-        btnTranscode.textContent = '🔄 FFmpeg фикс';
-      }
-      setProgress(0, '🔄 Авто-исправление кодека через FFmpeg (H.264/AAC)...', true);
-      video.src = transcodeMedia;
-      safePlay();
+      switchToTranscode('🔄 Авто-исправление кодека через FFmpeg (H.264/AAC)...');
     } else {
       setProgress(0, 'Не удалось воспроизвести видео (ошибка исходного файла)', false, true);
     }
@@ -580,12 +643,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       if (state.settings?.enableJsDemuxing !== false) {
         startClientRemux(proxyMedia);
       } else {
-        currentSource = 'transcode';
-        btnTranscode.classList.add('active');
-        btnTranscode.textContent = '🔄 FFmpeg фикс';
-        setProgress(0, '🔄 Перекодирование через серверный FFmpeg (H.264/AAC)...', true);
-        video.src = transcodeMedia;
-        safePlay();
+        switchToTranscode('🔄 Перекодирование через серверный FFmpeg (H.264/AAC)...');
       }
     });
   }
@@ -673,6 +731,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         if (data && data.fullVideoUrl) {
           currentPost.fileUrl = data.fullVideoUrl;
           currentPost.hasSound = true;
+          rebuildMediaUrls();
           const fullDirect = data.fullVideoUrl;
           const fullProxy = getProxiedUrl(fullDirect);
           const targetUrl = (currentSource === 'proxy' || needsProxy) ? fullProxy : fullDirect;

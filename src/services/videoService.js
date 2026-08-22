@@ -165,7 +165,13 @@ export async function handleTranscodeVideoRequest(req, res) {
       ];
 
       const proc = spawn('ffmpeg', args);
-      
+
+      // Хвост stderr нужен, чтобы отличить недоступный источник от нашей поломки
+      let stderrTail = '';
+      proc.stderr?.on('data', (chunk) => {
+        stderrTail = `${stderrTail}${chunk}`.slice(-500);
+      });
+
       req.on('close', () => {
         try {
           if (proc && !proc.killed) proc.kill('SIGKILL');
@@ -185,7 +191,7 @@ export async function handleTranscodeVideoRequest(req, res) {
           if (fs.existsSync(tempPath)) {
             try { fs.unlinkSync(tempPath); } catch {}
           }
-          reject(new Error(`FFmpeg вернул код ошибки ${code}`));
+          reject(new Error(`FFmpeg вернул код ошибки ${code}${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`));
         }
       });
 
@@ -211,6 +217,11 @@ export async function handleTranscodeVideoRequest(req, res) {
   } catch (err) {
     logError('FFmpeg', `Ошибка транскодирования ${targetUrl}`, err);
     if (!res.headersSent) {
+      // Недоступный источник (троттлинг, протухшая ссылка) это 503, а не наша ошибка
+      const upstreamIssue = /\b(?:HTTP error|Server returned)\s+\d{3}\b|\b429\b|Connection (?:refused|timed out)|Failed to resolve|Invalid data found/.test(String(err.message));
+      if (upstreamIssue) {
+        return res.status(503).send('Источник видео недоступен (лимит запросов или истекшая ссылка), попробуйте позже');
+      }
       return res.status(500).send('Ошибка транскодирования видео: ' + err.message);
     }
   }
