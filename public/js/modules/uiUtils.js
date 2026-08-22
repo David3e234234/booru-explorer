@@ -119,3 +119,11 @@ export function formatBytes(bytes, decimals = 1) {
   return (val.endsWith('.0') ? val.slice(0, -2) : val) + ' ' + sizes[i];
 }
 
+// Единая проверка видео-расширения (раньше дублировалась в gallery.js, network.js и др.)
+export function isVideoMediaUrl(url) {
+  if (!url) return false;
+  const clean = url.split('?')[0].toLowerCase();
+  return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.zip') ||
+         clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
+}
+

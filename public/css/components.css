@@ -413,7 +413,8 @@
 }
 
 /* Анимация плавного схлопывания при скрытии поста */
-.gallery-card.card-hiding {
+.gallery-card.card-hiding,
+.media-card.card-hiding {
   opacity: 0 !important;
   transform: scale(0.85) translateY(12px) !important;
   pointer-events: none;

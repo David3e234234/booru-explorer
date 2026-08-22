@@ -10,6 +10,26 @@ import {
   LGBT_TAGS
 } from '../config/constants.js';
 
+const criteriaSetsCache = new WeakMap();
+
+function getCriteriaSets(criteria, activeCurvyTags, activePetiteTags, activeFurryTags, activePregnantTags, activeLgbtTags) {
+  let sets = criteriaSetsCache.get(criteria);
+  if (sets) return sets;
+  sets = {
+    blacklist: new Set((Array.isArray(criteria.blacklist) ? criteria.blacklist : [])
+      .map(b => (typeof b === 'string' ? b.toLowerCase().trim() : '')).filter(Boolean)),
+    curvyInclude: new Set(activeCurvyTags),
+    curvyExclude: new Set(CURVY_EXCLUDE_TAGS),
+    petiteInclude: new Set(activePetiteTags),
+    petiteExclude: new Set(PETITE_EXCLUDE_TAGS),
+    furry: Array.isArray(activeFurryTags) && activeFurryTags.length > 0 ? activeFurryTags : FURRY_TAGS,
+    pregnant: Array.isArray(activePregnantTags) && activePregnantTags.length > 0 ? activePregnantTags : PREGNANT_TAGS,
+    lgbt: Array.isArray(activeLgbtTags) && activeLgbtTags.length > 0 ? activeLgbtTags : LGBT_TAGS
+  };
+  criteriaSetsCache.set(criteria, sets);
+  return sets;
+}
+
 export function isPostMatchingFilters(post, criteria = {}) {
   if (!post || (!post.previewUrl && !post.fileUrl && !post.sampleUrl)) return false;
 
@@ -22,7 +42,6 @@ export function isPostMatchingFilters(post, criteria = {}) {
     hideFurry = false,
     hidePregnant = false,
     hideLgbt = false,
-    blacklist = [],
     negativeTokens = [],
     activeCurvyTags = CURVY_INCLUDE_TAGS,
     activePetiteTags = PETITE_INCLUDE_TAGS,
@@ -31,6 +50,8 @@ export function isPostMatchingFilters(post, criteria = {}) {
     activeLgbtTags = LGBT_TAGS,
     hasUserPositiveTags = false
   } = criteria;
+
+  const sets = getCriteriaSets(criteria, activeCurvyTags, activePetiteTags, activeFurryTags, activePregnantTags, activeLgbtTags);
 
   // 1. Фильтр типа контента
   if (typeFilter === 'audio' || typeFilter === 'sound') {
@@ -41,21 +62,35 @@ export function isPostMatchingFilters(post, criteria = {}) {
     if (post.isVideo || post.isGif) return false;
   }
 
-  const postTags = Array.isArray(post.tags) ? post.tags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean) : [];
-  const postTagsFlat = postTags.join(' ').replace(/_/g, ' ');
+  const postTagSet = new Set(Array.isArray(post.tags)
+    ? post.tags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean)
+    : []);
+  const postTagsFlat = Array.from(postTagSet).join(' ').replace(/_/g, ' ');
 
   // 2. Локальная фильтрация по исключающим (-tag) тегам
   if (negativeTokens && negativeTokens.length > 0) {
-    if (negativeTokens.some(neg => postTagsFlat.includes(neg) || postTags.includes(neg))) return false;
+    if (negativeTokens.some(neg => postTagsFlat.includes(neg) || postTagSet.has(neg))) return false;
   }
 
   // 3. Фильтр телосложения и типажей (Мамочки vs Лоли)
   if (ageFilter === 'adult') {
-    if (CURVY_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
-    if (!hasUserPositiveTags && !activeCurvyTags.some(tag => postTags.includes(tag))) return false;
+    let excluded = false;
+    for (const t of postTagSet) { if (sets.curvyExclude.has(t)) { excluded = true; break; } }
+    if (excluded) return false;
+    if (!hasUserPositiveTags) {
+      let included = false;
+      for (const t of postTagSet) { if (sets.curvyInclude.has(t)) { included = true; break; } }
+      if (!included) return false;
+    }
   } else if (ageFilter === 'young') {
-    if (PETITE_EXCLUDE_TAGS.some(tag => postTags.includes(tag))) return false;
-    if (!hasUserPositiveTags && !activePetiteTags.some(tag => postTags.includes(tag))) return false;
+    let excluded = false;
+    for (const t of postTagSet) { if (sets.petiteExclude.has(t)) { excluded = true; break; } }
+    if (excluded) return false;
+    if (!hasUserPositiveTags) {
+      let included = false;
+      for (const t of postTagSet) { if (sets.petiteInclude.has(t)) { included = true; break; } }
+      if (!included) return false;
+    }
   }
 
   // 4. AI Фильтр
@@ -77,28 +112,19 @@ export function isPostMatchingFilters(post, criteria = {}) {
     if (r !== 's' && r !== 'g' && r !== 'safe' && r !== 'general') return false;
   }
 
-  // 6. Фильтр фурри
-  if (hideFurry) {
-    const furryList = Array.isArray(activeFurryTags) && activeFurryTags.length > 0 ? activeFurryTags : FURRY_TAGS;
-    if (furryList.some(fTag => postTags.some(t => t === fTag || t.startsWith(fTag + '_') || t.endsWith('_' + fTag)))) return false;
+  // 6-8. Контентные фильтры (фурри / беременность / ЛГБТ)
+  if (hideFurry || hidePregnant || hideLgbt) {
+    const tagList = Array.from(postTagSet);
+    if (hideFurry && sets.furry.some(fTag => tagList.some(t => t === fTag || t.startsWith(fTag + '_') || t.endsWith('_' + fTag)))) return false;
+    if (hidePregnant && sets.pregnant.some(pTag => tagList.some(t => t === pTag || t.includes(pTag)))) return false;
+    if (hideLgbt && sets.lgbt.some(lTag => tagList.some(t => t === lTag || t.startsWith(lTag + '_') || t.endsWith('_' + lTag) || t.includes('_' + lTag + '_')))) return false;
   }
 
-  // 7. Фильтр беременности
-  if (hidePregnant) {
-    const pregnantList = Array.isArray(activePregnantTags) && activePregnantTags.length > 0 ? activePregnantTags : PREGNANT_TAGS;
-    if (pregnantList.some(pTag => postTags.some(t => t === pTag || t.includes(pTag)))) return false;
-  }
-
-  // 8. Фильтр ЛГБТ
-  if (hideLgbt) {
-    const lgbtList = Array.isArray(activeLgbtTags) && activeLgbtTags.length > 0 ? activeLgbtTags : LGBT_TAGS;
-    if (lgbtList.some(lTag => postTags.some(t => t === lTag || t.startsWith(lTag + '_') || t.endsWith('_' + lTag) || t.includes('_' + lTag + '_')))) return false;
-  }
-
-  // 8. Черный список
-  if (blacklist && blacklist.length > 0) {
-    const lowerBlacklist = blacklist.map(b => (typeof b === 'string' ? b.toLowerCase().trim() : '')).filter(Boolean);
-    if (lowerBlacklist.some(blackTag => postTags.includes(blackTag))) return false;
+  // 8. Черный список (Set — O(1) на тег)
+  if (sets.blacklist.size > 0) {
+    for (const t of postTagSet) {
+      if (sets.blacklist.has(t)) return false;
+    }
   }
 
   // 9. Фильтр по дате создания / добавления
@@ -130,11 +156,21 @@ export function isPostMatchingFilters(post, criteria = {}) {
   return true;
 }
 
+const aiTagsSetCache = new WeakMap();
+
 export function checkIsAi(tagsArray, aiTagsList) {
   if (!Array.isArray(tagsArray)) return false;
-  const lowerTags = tagsArray.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : ''));
-  const checkList = (aiTagsList && aiTagsList.length > 0 ? aiTagsList : DEFAULT_AI_TAGS).map(t => t.toLowerCase().trim());
-  return lowerTags.some(tag => checkList.includes(tag) || tag.includes('ai_gen') || tag.includes('novelai') || tag.includes('stable_diffusion') || tag.includes('midjourney'));
+  const source = (aiTagsList && aiTagsList.length > 0 ? aiTagsList : DEFAULT_AI_TAGS);
+  let checkSet = aiTagsSetCache.get(source);
+  if (!checkSet) {
+    checkSet = new Set(source.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')));
+    aiTagsSetCache.set(source, checkSet);
+  }
+  return tagsArray.some(rawTag => {
+    if (typeof rawTag !== 'string') return false;
+    const tag = rawTag.toLowerCase().trim();
+    return checkSet.has(tag) || tag.includes('ai_gen') || tag.includes('novelai') || tag.includes('stable_diffusion') || tag.includes('midjourney');
+  });
 }
 
 export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {

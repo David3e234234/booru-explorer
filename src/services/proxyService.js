@@ -4,7 +4,223 @@ import fs from 'fs';
 import { Readable } from 'stream';
 import { THUMBS_DIR, BROWSER_USER_AGENT, BOORU_USER_AGENT } from '../config/constants.js';
 import { getSettings } from './storageService.js';
+import { resolveSiteReferer } from '../utils/network.js';
 import { logError } from '../utils/logger.js';
+
+// Максимальный размер изображения, который буферизуется в память и пишется в дисковый кэш
+const MAX_CACHED_IMAGE_BYTES = 30 * 1024 * 1024;
+
+const IMAGE_EXTS = [
+  ['.png', 'png'],
+  ['.webp', 'webp'],
+  ['.gif', 'gif']
+];
+
+function detectImageExt(cleanPath) {
+  for (const [suffix, ext] of IMAGE_EXTS) {
+    if (cleanPath.endsWith(suffix)) return ext;
+  }
+  return 'jpg';
+}
+
+// Дедупликация одновременных запросов одного изображения (thundering herd)
+const inflightImages = new Map();
+
+function buildUpstreamHeaders(targetUrl, isImage, currentSettings) {
+  const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net');
+  const headers = {
+    'User-Agent': isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT,
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Sec-Fetch-Dest': isImage ? 'image' : 'video',
+    'Sec-Fetch-Mode': 'no-cors',
+    'Sec-Fetch-Site': 'cross-site',
+    'Referer': resolveSiteReferer(targetUrl)
+  };
+
+  try {
+    const parsed = new URL(targetUrl);
+    if (parsed.hostname.includes('donmai.us') && currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
+      headers['Authorization'] = 'Basic ' + Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64');
+    }
+  } catch {}
+
+  return headers;
+}
+
+// Умный исчерпывающий fallback для альтернативных CDN-хостов, путей (/samples/ <-> /images/)
+// и расширений (jpg, png, jpeg, webp, gif, mp4, webm) при 404
+function build404FallbackCandidates(targetUrl) {
+  const candidates = [];
+  const pushCandidate = (c) => {
+    if (c && c !== targetUrl && !candidates.includes(c)) candidates.push(c);
+  };
+  const expandHosts = (hosts, basePaths, targetExts) => {
+    for (const host of hosts) {
+      for (const bPath of basePaths) {
+        const pathWithoutExt = bPath.replace(/\.[a-zA-Z0-9]+$/, '');
+        for (const ext of targetExts) {
+          pushCandidate(`${host}${pathWithoutExt}${ext}`);
+        }
+      }
+    }
+  };
+
+  const imageExts = ['.jpg', '.png', '.jpeg', '.webp', '.gif'];
+  const videoExts = ['.mp4', '.webm'];
+
+  if (targetUrl.includes('rule34.xxx')) {
+    const cdnHosts = ['https://api-cdn.rule34.xxx', 'https://us.rule34.xxx', 'https://wimg.rule34.xxx', 'https://api-cdn-mp4.rule34.xxx'];
+    const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm') || targetUrl.includes('api-cdn-mp4');
+    const targetExts = isVid ? videoExts : imageExts;
+
+    const basePaths = [];
+    const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+\.rule34\.xxx/i, '');
+    basePaths.push(cleanNoHost);
+    if (cleanNoHost.includes('/samples/')) {
+      basePaths.push(cleanNoHost.replace('/samples/', '/images/').replace('sample_', ''));
+    } else if (cleanNoHost.includes('/images/')) {
+      const matchDirHash = cleanNoHost.match(/\/images\/+(\d+)\/([a-f0-9]+)\.[a-z0-9]+/i);
+      if (matchDirHash) {
+        basePaths.push(`/samples/${matchDirHash[1]}/sample_${matchDirHash[2]}.jpg`);
+      }
+    }
+    expandHosts(cdnHosts, basePaths, targetExts);
+  } else if (targetUrl.includes('gelbooru.com')) {
+    const gelbooruHosts = ['https://img3.gelbooru.com', 'https://img2.gelbooru.com', 'https://img1.gelbooru.com', 'https://video.gelbooru.com'];
+    const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm');
+    const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+\.gelbooru\.com/i, '');
+    expandHosts(gelbooruHosts, [cleanNoHost], isVid ? videoExts : imageExts);
+  } else if (targetUrl.includes('paheal')) {
+    const pahealHosts = ['https://paheal-cdn.net', 'https://rule34.paheal.net', 'https://img.paheal.net'];
+    const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm');
+    const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+(?:paheal\.net|paheal-cdn\.net)/i, '');
+    expandHosts(pahealHosts, [cleanNoHost], isVid ? videoExts : imageExts);
+  }
+
+  return candidates;
+}
+
+function fixContentType(res, targetUrl) {
+  const normalizedPath = targetUrl.split('?')[0].replace(/\/+$/, '').toLowerCase();
+  let currentType = res.getHeader('content-type') || '';
+  if (!currentType || currentType.includes('octet-stream') || currentType.includes('text/plain') || currentType.includes('text/html')) {
+    if (normalizedPath.includes('.mp4') || normalizedPath.includes('.m4v') || targetUrl.toLowerCase().includes('.mp4')) {
+      res.setHeader('Content-Type', 'video/mp4');
+    } else if (normalizedPath.includes('.webm') || targetUrl.toLowerCase().includes('.webm')) {
+      res.setHeader('Content-Type', 'video/webm');
+    } else if (normalizedPath.endsWith('.gif')) {
+      res.setHeader('Content-Type', 'image/gif');
+    } else if (normalizedPath.endsWith('.png')) {
+      res.setHeader('Content-Type', 'image/png');
+    } else if (normalizedPath.endsWith('.webp')) {
+      res.setHeader('Content-Type', 'image/webp');
+    } else if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg')) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    }
+  }
+}
+
+async function tryFetch(url, headers, signal) {
+  return fetch(url, { headers, redirect: 'follow', signal });
+}
+
+// Полный цикл: скачать изображение (с 404-фолбэком), положить в дисковый кэш и вернуть клиенту
+async function downloadAndCacheImage(req, res, originalUrl, headers) {
+  const controller = new AbortController();
+  const abortTimeout = setTimeout(() => controller.abort(), 20000);
+  req.on('close', () => {
+    clearTimeout(abortTimeout);
+    try { controller.abort(); } catch {}
+  });
+
+  let response;
+  let effectiveUrl = originalUrl;
+  try {
+    response = await tryFetch(originalUrl, headers, controller.signal);
+
+    if (response.status === 404) {
+      for (const altUrl of build404FallbackCandidates(originalUrl)) {
+        try {
+          const altResp = await tryFetch(altUrl, headers, controller.signal);
+          if (altResp.ok || altResp.status === 206) {
+            response = altResp;
+            effectiveUrl = altUrl;
+            break;
+          }
+        } catch {}
+      }
+    }
+  } finally {
+    clearTimeout(abortTimeout);
+  }
+
+  res.status(response.status);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Accept-Ranges', 'bytes');
+
+  const forwardHeaders = ['content-type', 'content-length', 'cache-control', 'last-modified', 'etag'];
+  forwardHeaders.forEach(h => {
+    const val = response.headers.get(h);
+    if (val && h !== 'content-range') {
+      res.setHeader(h, h === 'content-type' && val.includes(',') ? val.split(',')[0].trim() : val);
+    }
+  });
+  fixContentType(res, effectiveUrl);
+  if (!res.getHeader('cache-control')) {
+    res.setHeader('Cache-Control', 'public, max-age=604800');
+  }
+
+  if (!response.ok || req.headers.range) {
+    if (response.body) {
+      pipeUpstream(req, res, response.body);
+    } else {
+      res.end();
+    }
+    return;
+  }
+
+  // Большие файлы стримим без кэширования
+  const declaredLength = parseInt(response.headers.get('content-length') || '0', 10);
+  if (declaredLength > MAX_CACHED_IMAGE_BYTES) {
+    if (response.body) {
+      pipeUpstream(req, res, response.body);
+    } else {
+      res.end();
+    }
+    return;
+  }
+
+  const arrayBuf = await response.arrayBuffer();
+  const buf = Buffer.from(arrayBuf);
+
+  if (buf.length > MAX_CACHED_IMAGE_BYTES) {
+    return res.send(buf);
+  }
+
+  const hash = crypto.createHash('md5').update(originalUrl).digest('hex');
+  const ext = detectImageExt(effectiveUrl.split('?')[0].toLowerCase());
+  const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${ext}`);
+  fs.promises.writeFile(cacheFilePath, buf).catch(() => {});
+  res.send(buf);
+}
+
+function pipeUpstream(req, res, webStream) {
+  const nodeStream = Readable.fromWeb(webStream);
+
+  nodeStream.on('error', () => {
+    try {
+      if (!res.headersSent) res.status(502).end();
+      else res.end();
+    } catch {}
+  });
+
+  req.on('close', () => {
+    try { nodeStream.destroy(); } catch {}
+  });
+
+  nodeStream.pipe(res);
+}
 
 export async function handleProxyRequest(req, res) {
   const targetUrl = req.query.url;
@@ -14,65 +230,46 @@ export async function handleProxyRequest(req, res) {
     const cleanPath = targetUrl.split('?')[0].toLowerCase();
     const isImage = cleanPath.endsWith('.jpg') || cleanPath.endsWith('.jpeg') || cleanPath.endsWith('.png') || cleanPath.endsWith('.webp') || cleanPath.endsWith('.gif');
     const isRangeReq = Boolean(req.headers.range);
+    const currentSettings = getSettings();
 
-    // Дисковый кэш для картинок
+    // Дисковый кэш для картинок (неблокирующий)
     if (isImage && !isRangeReq) {
       const hash = crypto.createHash('md5').update(targetUrl).digest('hex');
-      let ext = 'jpg';
-      if (cleanPath.endsWith('.png')) ext = 'png';
-      else if (cleanPath.endsWith('.webp')) ext = 'webp';
-      else if (cleanPath.endsWith('.gif')) ext = 'gif';
+      const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${detectImageExt(cleanPath)}`);
 
-      const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${ext}`);
-      if (fs.existsSync(cacheFilePath) && fs.statSync(cacheFilePath).size > 0) {
-        res.setHeader('Cache-Control', 'public, max-age=604800');
-        return res.sendFile(cacheFilePath);
+      try {
+        const stats = await fs.promises.stat(cacheFilePath);
+        if (stats.size > 0) {
+          res.setHeader('Cache-Control', 'public, max-age=604800');
+          return res.sendFile(cacheFilePath);
+        }
+      } catch {}
+
+      // Если такой же файл уже качается — дождаться его, затем снова проверить кэш
+      const inflightJob = inflightImages.get(targetUrl);
+      if (inflightJob) {
+        await inflightJob.catch(() => {});
+        try {
+          const stats = await fs.promises.stat(cacheFilePath);
+          if (stats.size > 0) {
+            res.setHeader('Cache-Control', 'public, max-age=604800');
+            return res.sendFile(cacheFilePath);
+          }
+        } catch {}
       }
+
+      // Регистрируем свою загрузку как активную
+      const job = downloadAndCacheImage(req, res, targetUrl, buildUpstreamHeaders(targetUrl, true, currentSettings));
+      inflightImages.set(targetUrl, job);
+      const cleanup = () => {
+        if (inflightImages.get(targetUrl) === job) inflightImages.delete(targetUrl);
+      };
+      job.then(cleanup, cleanup);
+      return await job;
     }
 
-    const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net');
-    const ua = isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT;
-
-    const headers = {
-      'User-Agent': ua,
-      'Accept': '*/*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Sec-Fetch-Dest': isImage ? 'image' : 'video',
-      'Sec-Fetch-Mode': 'no-cors',
-      'Sec-Fetch-Site': 'cross-site'
-    };
-
-    const currentSettings = getSettings();
-    try {
-      const parsed = new URL(targetUrl);
-      if (parsed.hostname.includes('paheal.net') || parsed.hostname.includes('paheal-cdn.net')) {
-        headers['Referer'] = 'https://rule34.paheal.net/';
-      } else if (parsed.hostname.includes('rule34.xxx')) {
-        headers['Referer'] = 'https://rule34.xxx/';
-      } else if (parsed.hostname.includes('paheal.net') || parsed.hostname.includes('paheal-cdn')) {
-        headers['Referer'] = 'https://rule34.paheal.net/';
-      } else if (parsed.hostname.includes('donmai.us')) {
-        headers['Referer'] = 'https://danbooru.donmai.us/';
-        if (currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
-          headers['Authorization'] = 'Basic ' + Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64');
-        }
-      } else if (parsed.hostname.includes('rule34video.com') || parsed.hostname.includes('boomio-cdn.com')) {
-        headers['Referer'] = 'https://rule34video.com/';
-      } else if (parsed.hostname.includes('gelbooru.com')) {
-        headers['Referer'] = 'https://gelbooru.com/';
-      } else if (parsed.hostname.includes('yande.re')) {
-        headers['Referer'] = 'https://yande.re/';
-      } else if (parsed.hostname.includes('konachan')) {
-        headers['Referer'] = 'https://konachan.com/';
-      } else if (parsed.hostname.includes('hypnohub.net')) {
-        headers['Referer'] = 'https://hypnohub.net/';
-      } else if (parsed.hostname.includes('xbooru.com')) {
-        headers['Referer'] = 'https://xbooru.com/';
-      } else {
-        headers['Referer'] = `${parsed.protocol}//${parsed.host}/`;
-      }
-    } catch {}
-
+    // Потоковый путь: видео, Range-запросы и не-кэшируемые ответы
+    const headers = buildUpstreamHeaders(targetUrl, !isImage, currentSettings);
     if (req.headers.range) {
       headers['Range'] = req.headers.range;
     }
@@ -90,79 +287,10 @@ export async function handleProxyRequest(req, res) {
       signal: controller.signal
     });
 
-    // Умный исчерпывающий fallback для альтернативных CDN-хостов, путей (/samples/ <-> /images/) и расширений (jpg, png, jpeg, webp, gif, mp4, webm) при 404
-    if (response.status === 404 && (targetUrl.includes('rule34.xxx') || targetUrl.includes('gelbooru.com') || targetUrl.includes('paheal.net') || targetUrl.includes('paheal-cdn.net'))) {
-      const candidates = [];
-      const imageExts = ['.jpg', '.png', '.jpeg', '.webp', '.gif'];
-      const videoExts = ['.mp4', '.webm'];
-
-      // 1. Для Rule34.xxx
-      if (targetUrl.includes('rule34.xxx')) {
-        const cdnHosts = ['https://api-cdn.rule34.xxx', 'https://us.rule34.xxx', 'https://wimg.rule34.xxx', 'https://api-cdn-mp4.rule34.xxx'];
-        const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm') || targetUrl.includes('api-cdn-mp4');
-        const targetExts = isVid ? videoExts : imageExts;
-
-        // Базовые пути: проверяем как /images/, так и /samples/
-        const basePaths = [];
-        const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+\.rule34\.xxx/i, '');
-        basePaths.push(cleanNoHost);
-        if (cleanNoHost.includes('/samples/')) {
-          basePaths.push(cleanNoHost.replace('/samples/', '/images/').replace('sample_', ''));
-        } else if (cleanNoHost.includes('/images/')) {
-          const matchDirHash = cleanNoHost.match(/\/images\/+(\d+)\/([a-f0-9]+)\.[a-z0-9]+/i);
-          if (matchDirHash) {
-            basePaths.push(`/samples/${matchDirHash[1]}/sample_${matchDirHash[2]}.jpg`);
-          }
-        }
-
-        for (const host of cdnHosts) {
-          for (const bPath of basePaths) {
-            const pathWithoutExt = bPath.replace(/\.[a-zA-Z0-9]+$/, '');
-            for (const ext of targetExts) {
-              const fullCandidate = `${host}${pathWithoutExt}${ext}`;
-              if (fullCandidate !== targetUrl && !candidates.includes(fullCandidate)) {
-                candidates.push(fullCandidate);
-              }
-            }
-          }
-        }
-      } else if (targetUrl.includes('gelbooru.com')) {
-        // 2. Для Gelbooru
-        const gelbooruHosts = ['https://img3.gelbooru.com', 'https://img2.gelbooru.com', 'https://img1.gelbooru.com', 'https://video.gelbooru.com'];
-        const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm');
-        const targetExts = isVid ? videoExts : imageExts;
-        const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+\.gelbooru\.com/i, '');
-        const pathWithoutExt = cleanNoHost.replace(/\.[a-zA-Z0-9]+$/, '');
-
-        for (const host of gelbooruHosts) {
-          for (const ext of targetExts) {
-            const fullCandidate = `${host}${pathWithoutExt}${ext}`;
-            if (fullCandidate !== targetUrl && !candidates.includes(fullCandidate)) {
-              candidates.push(fullCandidate);
-            }
-          }
-        }
-      } else if (targetUrl.includes('paheal')) {
-        // 3. Для Paheal
-        const pahealHosts = ['https://paheal-cdn.net', 'https://rule34.paheal.net', 'https://img.paheal.net'];
-        const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm');
-        const targetExts = isVid ? videoExts : imageExts;
-        const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+(?:paheal\.net|paheal-cdn\.net)/i, '');
-        const pathWithoutExt = cleanNoHost.replace(/\.[a-zA-Z0-9]+$/, '');
-
-        for (const host of pahealHosts) {
-          for (const ext of targetExts) {
-            const fullCandidate = `${host}${pathWithoutExt}${ext}`;
-            if (fullCandidate !== targetUrl && !candidates.includes(fullCandidate)) {
-              candidates.push(fullCandidate);
-            }
-          }
-        }
-      }
-
-      for (const altUrl of candidates) {
+    if (response.status === 404) {
+      for (const altUrl of build404FallbackCandidates(targetUrl)) {
         try {
-          const altResp = await fetch(altUrl, { headers, redirect: 'follow', signal: controller.signal });
+          const altResp = await tryFetch(altUrl, headers, controller.signal);
           if (altResp.ok || altResp.status === 206) {
             response = altResp;
             targetUrl = altUrl;
@@ -179,67 +307,18 @@ export async function handleProxyRequest(req, res) {
 
     const forwardHeaders = ['content-type', 'content-length', 'content-range', 'cache-control', 'last-modified', 'etag'];
     forwardHeaders.forEach(h => {
-      let val = response.headers.get(h);
+      const val = response.headers.get(h);
       if (val) {
-        if (h === 'content-type' && val.includes(',')) {
-          val = val.split(',')[0].trim();
-        }
-        res.setHeader(h, val);
+        res.setHeader(h, h === 'content-type' && val.includes(',') ? val.split(',')[0].trim() : val);
       }
     });
-
-    const normalizedPath = targetUrl.split('?')[0].replace(/\/+$/, '').toLowerCase();
-    let currentType = res.getHeader('content-type') || '';
-    if (!currentType || currentType.includes('octet-stream') || currentType.includes('text/plain') || currentType.includes('text/html')) {
-      if (normalizedPath.includes('.mp4') || normalizedPath.includes('.m4v') || targetUrl.toLowerCase().includes('.mp4')) {
-        res.setHeader('Content-Type', 'video/mp4');
-      } else if (normalizedPath.includes('.webm') || targetUrl.toLowerCase().includes('.webm')) {
-        res.setHeader('Content-Type', 'video/webm');
-      } else if (normalizedPath.endsWith('.gif')) {
-        res.setHeader('Content-Type', 'image/gif');
-      } else if (normalizedPath.endsWith('.png')) {
-        res.setHeader('Content-Type', 'image/png');
-      } else if (normalizedPath.endsWith('.webp')) {
-        res.setHeader('Content-Type', 'image/webp');
-      } else if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg')) {
-        res.setHeader('Content-Type', 'image/jpeg');
-      }
-    }
-
+    fixContentType(res, targetUrl);
     if (!res.getHeader('cache-control')) {
       res.setHeader('Cache-Control', 'public, max-age=604800');
     }
 
-    if (isImage && !isRangeReq && response.ok) {
-      const arrayBuf = await response.arrayBuffer();
-      const buf = Buffer.from(arrayBuf);
-      const hash = crypto.createHash('md5').update(req.query.url).digest('hex');
-      let ext = 'jpg';
-      const effectivePath = targetUrl.split('?')[0].toLowerCase();
-      if (effectivePath.endsWith('.png')) ext = 'png';
-      else if (effectivePath.endsWith('.webp')) ext = 'webp';
-      else if (effectivePath.endsWith('.gif')) ext = 'gif';
-
-      const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${ext}`);
-      fs.promises.writeFile(cacheFilePath, buf).catch(() => {});
-      return res.send(buf);
-    }
-
     if (response.body) {
-      const nodeStream = Readable.fromWeb(response.body);
-      
-      nodeStream.on('error', () => {
-        try {
-          if (!res.headersSent) res.status(502).end();
-          else res.end();
-        } catch {}
-      });
-
-      req.on('close', () => {
-        try { nodeStream.destroy(); } catch {}
-      });
-
-      nodeStream.pipe(res);
+      pipeUpstream(req, res, response.body);
     } else {
       res.end();
     }

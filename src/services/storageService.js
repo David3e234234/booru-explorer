@@ -78,6 +78,19 @@ function getUserFilePath(userId, defaultFile, filename) {
   return path.join(userDir, filename);
 }
 
+// Переменные окружения не меняются в рантайме — считываем один раз,
+// а не при каждом вызове getSettings() (он происходит на каждый запрос прокси)
+const ENV_OVERRIDES = (() => {
+  const envOverrides = {};
+  if (process.env.RULE34_API_KEY) envOverrides.rule34ApiKey = process.env.RULE34_API_KEY;
+  if (process.env.RULE34_USER_ID) envOverrides.rule34UserId = process.env.RULE34_USER_ID;
+  if (process.env.GELBOORU_API_KEY) envOverrides.gelbooruApiKey = process.env.GELBOORU_API_KEY;
+  if (process.env.GELBOORU_USER_ID) envOverrides.gelbooruUserId = process.env.GELBOORU_USER_ID;
+  if (process.env.DANBOORU_API_KEY) envOverrides.danbooruApiKey = process.env.DANBOORU_API_KEY;
+  if (process.env.DANBOORU_LOGIN) envOverrides.danbooruLogin = process.env.DANBOORU_LOGIN;
+  return Object.freeze(envOverrides);
+})();
+
 let inMemorySettings = null;
 export function getSettings(userId = null) {
   const filePath = getUserFilePath(userId, SETTINGS_FILE, 'settings.json');
@@ -89,16 +102,8 @@ export function getSettings(userId = null) {
     settings = { ...DEFAULT_SETTINGS, ...raw };
     if (!userId) inMemorySettings = settings;
   }
-  
-  const envOverrides = {};
-  if (process.env.RULE34_API_KEY) envOverrides.rule34ApiKey = process.env.RULE34_API_KEY;
-  if (process.env.RULE34_USER_ID) envOverrides.rule34UserId = process.env.RULE34_USER_ID;
-  if (process.env.GELBOORU_API_KEY) envOverrides.gelbooruApiKey = process.env.GELBOORU_API_KEY;
-  if (process.env.GELBOORU_USER_ID) envOverrides.gelbooruUserId = process.env.GELBOORU_USER_ID;
-  if (process.env.DANBOORU_API_KEY) envOverrides.danbooruApiKey = process.env.DANBOORU_API_KEY;
-  if (process.env.DANBOORU_LOGIN) envOverrides.danbooruLogin = process.env.DANBOORU_LOGIN;
 
-  return { ...settings, ...envOverrides };
+  return { ...settings, ...ENV_OVERRIDES };
 }
 
 export function updateSettings(partial, userId = null) {

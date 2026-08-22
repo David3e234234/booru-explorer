@@ -55,18 +55,26 @@ process.on('unhandledRejection', (reason) => {
 app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
-app.use((req, res, next) => {
+
+// Отключение кэширования только для API (статика кэшируется браузером)
+app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   next();
 });
 
-// Статика фронтенда
+// Статика фронтенда: etag + час кэша (раньше был полный запрет кэша —
+// браузер заново скачивал все бандлы при каждом визите)
 const publicDir = path.join(ROOT_DIR, 'public');
 app.use(express.static(publicDir, {
-  maxAge: 0,
-  etag: false
+  etag: true,
+  maxAge: '1h',
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
 }));
 
 // Подключение модульных роутеров API
@@ -76,40 +84,23 @@ app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);
 
 // SPA Fallback: отдача index.html для всех не-API страниц
-app.get('/api/debug-fs', (req, res) => {
-  try {
-    const cwd = process.cwd();
-    const dirname = path.dirname(fileURLToPath(import.meta.url));
-    const cwdFiles = fs.readdirSync(cwd);
-    const publicInCwd = fs.existsSync(path.join(cwd, 'public')) ? fs.readdirSync(path.join(cwd, 'public')) : [];
-    const publicInDirname = fs.existsSync(path.join(dirname, 'public')) ? fs.readdirSync(path.join(dirname, 'public')) : [];
-    res.json({
-      cwd,
-      dirname,
-      cwdFiles,
-      publicInCwd,
-      publicInDirname,
-      ROOT_DIR
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message, stack: err.stack });
-  }
-});
+let spaIndexPath = null;
 
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'Endpoint not found' });
   }
-  const possiblePaths = [
-    path.join(process.cwd(), 'public', 'index.html'),
-    path.join(path.dirname(fileURLToPath(import.meta.url)), 'public', 'index.html'),
-    path.resolve('public', 'index.html'),
-    path.resolve('./public/index.html')
-  ];
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      return res.sendFile(p);
-    }
+  // Путь резолвится один раз, а не четырьмя existsSync на каждый запрос
+  if (spaIndexPath === null) {
+    const candidates = [
+      path.join(process.cwd(), 'public', 'index.html'),
+      path.join(path.dirname(fileURLToPath(import.meta.url)), 'public', 'index.html'),
+      path.resolve('public', 'index.html')
+    ];
+    spaIndexPath = candidates.find(p => fs.existsSync(p)) || '';
+  }
+  if (spaIndexPath) {
+    return res.sendFile(spaIndexPath);
   }
   res.status(404).send(`index.html not found. CWD: ${process.cwd()}`);
 });

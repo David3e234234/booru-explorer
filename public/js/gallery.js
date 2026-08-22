@@ -1,6 +1,6 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, toggleDislikeLocally, isPostDisliked } from './state.js';
 import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
-import { showToast } from './modules/uiUtils.js';
+import { showToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh }) {
   const galleryGrid = document.getElementById('galleryGrid');
@@ -309,11 +309,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     card.dataset.postId = post.id;
     card._post = post;
 
-    const isVideoExt = (url) => {
-      if (!url) return false;
-      const clean = url.split('?')[0].toLowerCase();
-      return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.zip') || clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
-    };
+    const isVideoExt = isVideoMediaUrl;
 
     // Выбор источника превью в соответствии с настройкой качества: 'low', 'medium', 'high', 'original'
     const quality = state.settings?.previewQuality || 'medium';
@@ -454,7 +450,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     let albumBadge = '';
     if (post.isAlbum && post.albumCount > 1) {
       card.classList.add('is-album-card');
-      albumBadge = `<span class="badge-format badge-album" title="Альбом: ${post.albumCount} изображений"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></svg> <span>${post.albumCount}</span></span>`;
+      albumBadge = `<span class="badge-format badge-album" title="Альбом: ${post.albumCount} изображений"><svg width="10" height="10" viewBox="0 0 24 24"><use href="#ic-album"/></svg> <span>${post.albumCount}</span></span>`;
     }
 
     const formatCompactNumber = (num) => {
@@ -507,30 +503,30 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         <div class="card-overlay-bottom">
           <div class="card-meta-indicators">
             <div class="card-score" title="Оценка / Рейтинг: ${post.score || 0}">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 28.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-star-filled"/></svg>
               <span>${post.score || 0}</span>
             </div>
             ${(post.views > 0 || post.viewsText) ? `
               <div class="card-views" title="Просмотры: ${post.viewsText || post.views}">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-eye"/></svg>
                 <span>${post.viewsText || formatCompactNumber(post.views)}</span>
               </div>
             ` : (post.favCount > 0 ? `
               <div class="card-views card-favs" title="В закладках: ${post.favCount}">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+                <svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-bookmark-filled"/></svg>
                 <span>${formatCompactNumber(post.favCount)}</span>
               </div>
             ` : '')}
           </div>
           <div class="card-action-btns">
             <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="Не интересно (скрыть и меньше рекомендовать)">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-dislike"/></svg>
             </button>
             <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? 'Убрать лайк' : 'Нравится'}">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="${isLiked ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isLiked ? '#ic-heart-filled' : '#ic-heart'}"/></svg>
             </button>
             <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? 'Удалить из закладок' : 'Сохранить в закладки'}">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isFav ? '#ic-bookmark-filled' : '#ic-bookmark'}"/></svg>
             </button>
           </div>
         </div>
@@ -556,44 +552,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       });
     }
 
-    card.addEventListener('click', (e) => {
-      const dislikeBtn = e.target.closest('.btn-card-dislike');
-      if (dislikeBtn) {
-        e.stopPropagation();
-        if (navigator.vibrate) try { navigator.vibrate(20); } catch (err) {}
-        handleDislikeClick(post, card);
-        return;
-      }
-      const likeBtn = e.target.closest('.btn-card-like');
-      if (likeBtn) {
-        e.stopPropagation();
-        if (navigator.vibrate) try { navigator.vibrate([15, 20]); } catch (err) {}
-        handleLikeClick(post, likeBtn);
-        return;
-      }
-      const favBtn = e.target.closest('.btn-card-fav');
-      if (favBtn) {
-        e.stopPropagation();
-        if (navigator.vibrate) try { navigator.vibrate([15, 25, 15]); } catch (err) {}
-        handleFavoriteClick(post, favBtn);
-        return;
-      }
-      const authorBadgeEl = e.target.closest('.badge-format.author');
-      if (authorBadgeEl) {
-        e.stopPropagation();
-        const rawA = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
-        let cleanTag = rawA.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/\s+/g, '_');
-        if (cleanTag && onTagSelect) {
-          onTagSelect(cleanTag);
-          return;
-        }
-      }
-      onOpenViewer(index);
-    });
+    // Клик-логика обрабатывается делегированием на galleryGrid (см. initGallery)
 
     if (post.isVideo) {
       const videoEl = card.querySelector('.hover-video-preview');
-      let hoverTimer = null;
 
       if (videoEl) {
         videoEl.addEventListener('loadedmetadata', () => {
@@ -615,6 +577,21 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             if (durBadge) durBadge.textContent = `⏱️ ${post.durationText}`;
           }
         }, { once: true });
+
+        videoEl.addEventListener('error', function () {
+          const videoTarget = post.fileUrl || post.sampleUrl;
+          const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(videoTarget)}`;
+          const proxyUrl = getProxiedUrl(videoTarget);
+          if (this.src !== proxyUrl && !this.src.includes('/api/proxy') && this.src !== transcodeUrl) {
+            this.src = proxyUrl;
+            this.play().catch(() => {});
+          } else if (this.src !== transcodeUrl) {
+            this.src = transcodeUrl;
+            this.play().catch(() => {});
+          } else {
+            card.classList.remove('video-playing');
+          }
+        });
       }
 
       if (mobileVideoObserver && state.settings?.videoAutoplayMobile !== false) {
@@ -624,64 +601,112 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       if (videoMetadataObserver && !post.duration) {
         videoMetadataObserver.observe(card);
       }
-
-      card.addEventListener('mouseenter', () => {
-        if (state.settings?.videoAutoplayHover === false || !videoEl) return;
-        if (checkHoverPreview && !checkHoverPreview.checked) return;
-        
-        // Умная задержка (150 мс), чтобы не перегружать сеть при быстром скролле
-        hoverTimer = setTimeout(() => {
-          if (!videoEl.src) {
-            const videoTarget = post.fileUrl || post.sampleUrl;
-            if (videoTarget) {
-              const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
-              videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
-            }
-          }
-          
-          videoEl.muted = true;
-          const playPromise = videoEl.play();
-          if (playPromise !== undefined) {
-            playPromise
-              .then(() => {
-                card.classList.add('video-playing');
-              })
-              .catch(() => {});
-          }
-        }, 150);
-      });
-
-      card.addEventListener('mouseleave', () => {
-        if (hoverTimer) {
-          clearTimeout(hoverTimer);
-          hoverTimer = null;
-        }
-        if (videoEl) {
-          videoEl.pause();
-          videoEl.removeAttribute('src');
-          videoEl.load();
-          card.classList.remove('video-playing');
-        }
-      });
-
-      videoEl.addEventListener('error', function () {
-        const videoTarget = post.fileUrl || post.sampleUrl;
-        const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(videoTarget)}`;
-        const proxyUrl = getProxiedUrl(videoTarget);
-        if (this.src !== proxyUrl && !this.src.includes('/api/proxy') && this.src !== transcodeUrl) {
-          this.src = proxyUrl;
-          this.play().catch(() => {});
-        } else if (this.src !== transcodeUrl) {
-          this.src = transcodeUrl;
-          this.play().catch(() => {});
-        } else {
-          card.classList.remove('video-playing');
-        }
-      });
     }
 
     return card;
   }
+
+  // ── Делегирование событий на сетке: один слушатель вместо тысяч на карточках ──
+
+  galleryGrid.addEventListener('click', (e) => {
+    const card = e.target.closest('.media-card');
+    if (!card || !galleryGrid.contains(card)) return;
+    const post = card._post;
+    if (!post) return;
+
+    const dislikeBtn = e.target.closest('.btn-card-dislike');
+    if (dislikeBtn) {
+      e.stopPropagation();
+      haptic(20);
+      handleDislikeClick(post, card);
+      return;
+    }
+    const likeBtn = e.target.closest('.btn-card-like');
+    if (likeBtn) {
+      e.stopPropagation();
+      haptic([15, 20]);
+      handleLikeClick(post, likeBtn);
+      return;
+    }
+    const favBtn = e.target.closest('.btn-card-fav');
+    if (favBtn) {
+      e.stopPropagation();
+      haptic([15, 25, 15]);
+      handleFavoriteClick(post, favBtn);
+      return;
+    }
+    const authorBadgeEl = e.target.closest('.badge-format.author');
+    if (authorBadgeEl) {
+      e.stopPropagation();
+      const rawA = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
+      let cleanTag = rawA.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/\s+/g, '_');
+      if (cleanTag && onTagSelect) {
+        onTagSelect(cleanTag);
+        return;
+      }
+    }
+    onOpenViewer(parseInt(card.dataset.index, 10));
+  });
+
+  // Hover-превью видео через делегирование mouseover/mouseout
+  let hoverState = { card: null, timer: null, videoEl: null };
+
+  function stopHoverPreview() {
+    if (hoverState.timer) {
+      clearTimeout(hoverState.timer);
+      hoverState.timer = null;
+    }
+    if (hoverState.videoEl && hoverState.card) {
+      hoverState.videoEl.pause();
+      hoverState.videoEl.removeAttribute('src');
+      hoverState.videoEl.load();
+      hoverState.card.classList.remove('video-playing');
+    }
+    hoverState = { card: null, timer: null, videoEl: null };
+  }
+
+  galleryGrid.addEventListener('mouseover', (e) => {
+    const card = e.target.closest('.media-card');
+    if (card === hoverState.card) return;
+    stopHoverPreview();
+    if (!card || !galleryGrid.contains(card)) return;
+
+    const post = card._post;
+    const videoEl = card.querySelector('.hover-video-preview');
+    if (!post || !post.isVideo || !videoEl) return;
+    if (state.settings?.videoAutoplayHover === false) return;
+    if (checkHoverPreview && !checkHoverPreview.checked) return;
+
+    // Умная задержка (150 мс), чтобы не перегружать сеть при быстром скролле
+    hoverState = { card, timer: null, videoEl };
+    hoverState.timer = setTimeout(() => {
+      if (!videoEl.src) {
+        const videoTarget = post.fileUrl || post.sampleUrl;
+        if (videoTarget) {
+          const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+          videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
+        }
+      }
+
+      videoEl.muted = true;
+      const playPromise = videoEl.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            card.classList.add('video-playing');
+          })
+          .catch(() => {});
+      }
+    }, 150);
+  });
+
+  galleryGrid.addEventListener('mouseleave', () => stopHoverPreview());
+  galleryGrid.addEventListener('mouseout', (e) => {
+    if (!hoverState.card) return;
+    const related = e.relatedTarget;
+    if (related && hoverState.card.contains(related)) return;
+    stopHoverPreview();
+  });
 
   async function handleDislikeClick(post, card) {
     toggleDislikeLocally(post);
@@ -705,12 +730,13 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
   async function handleLikeClick(post, btn) {
     const isLikedNow = toggleLikeLocally(post);
+    const useEl = btn.querySelector('use');
     if (isLikedNow) {
       btn.classList.add('active');
-      btn.querySelector('svg').setAttribute('fill', 'currentColor');
+      if (useEl) useEl.setAttribute('href', '#ic-heart-filled');
     } else {
       btn.classList.remove('active');
-      btn.querySelector('svg').setAttribute('fill', 'none');
+      if (useEl) useEl.setAttribute('href', '#ic-heart');
       if (state.currentCategory === 'profile' && state.profileSubTab === 'likes') {
         state.posts = state.posts.filter(p => p.id !== post.id);
         renderGallery();
@@ -728,16 +754,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     try {
       const res = await toggleFavoritePost(post);
       if (res.success) {
+        const useEl = btn.querySelector('use');
         if (res.isFavorite) {
           state.favoriteIds.add(post.id);
           state.favorites.unshift(post);
           btn.classList.add('active');
-          btn.querySelector('svg').setAttribute('fill', 'currentColor');
+          if (useEl) useEl.setAttribute('href', '#ic-bookmark-filled');
         } else {
           state.favoriteIds.delete(post.id);
           state.favorites = state.favorites.filter(f => f.id !== post.id);
           btn.classList.remove('active');
-          btn.querySelector('svg').setAttribute('fill', 'none');
+          if (useEl) useEl.setAttribute('href', '#ic-bookmark');
           if (state.currentCategory === 'favorites' || (state.currentCategory === 'profile' && state.profileSubTab === 'favorites')) {
             state.posts = state.posts.filter(p => p.id !== post.id);
             renderGallery();
@@ -796,11 +823,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     galleryGrid.appendChild(fragment);
   }
 
-  function isVideoUrl(url) {
-    if (!url) return false;
-    const clean = url.split('?')[0].toLowerCase();
-    return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.mkv') || clean.endsWith('.avi');
-  }
+  const isVideoUrl = isVideoMediaUrl;
 
   function getAuthorPreviewByQuality(author) {
     if (!author) return '';

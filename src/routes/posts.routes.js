@@ -1,29 +1,45 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import open from 'open';
 import AdmZip from 'adm-zip';
-import { 
-  SITES, 
-  DEFAULT_AI_TAGS, 
-  FURRY_TAGS, 
-  PREGNANT_TAGS, 
-  CURVY_INCLUDE_TAGS, 
-  CURVY_EXCLUDE_TAGS, 
-  PETITE_INCLUDE_TAGS, 
-  PETITE_EXCLUDE_TAGS,
-  LGBT_TAGS,
+import {
+  SITES,
+  DEFAULT_AI_TAGS,
   ROOT_DIR
 } from '../config/constants.js';
 import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js';
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
-import { isPostMatchingFilters } from '../utils/tagHelpers.js';
-import { groupPostsIntoAlbums, extractSeriesKey } from '../utils/albumHelper.js';
+import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
 import { fetchSafe } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 const router = express.Router();
+
+// Поля настроек клиента, влияющие на результат фильтрации — участвуют в ключе кэша
+const AUTH_CACHE_FIELDS = [
+  'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
+  'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'customSources'
+];
+
+function parseClientAuth(req) {
+  let clientAuth = {};
+  if (req.headers['x-booru-auth']) {
+    try {
+      clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
+    } catch {
+      try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
+    }
+  }
+  return clientAuth;
+}
+
+function buildAuthCacheKey(clientAuth, settings) {
+  const parts = AUTH_CACHE_FIELDS.map(f => JSON.stringify(clientAuth[f] ?? settings[f] ?? null));
+  return crypto.createHash('md5').update(parts.join('|')).digest('hex').slice(0, 10);
+}
 
 // GET /api/sites
 router.get('/sites', (req, res) => {
@@ -59,7 +75,14 @@ router.get('/posts', async (req, res) => {
     const customSites = req.query.customSites || '';
 
     // Проверка кэша в оперативной памяти (для всего кроме random)
-    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}`;
+    let clientAuth = parseClientAuth(req);
+    const baseSettings = getSettings();
+    const settings = {
+      ...baseSettings,
+      ...clientAuth
+    };
+
+    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${buildAuthCacheKey(clientAuth, settings)}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
@@ -67,27 +90,12 @@ router.get('/posts', async (req, res) => {
       }
     }
 
-    let clientAuth = {};
-    if (req.headers['x-booru-auth']) {
-      try {
-        clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
-      } catch {
-        try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
-      }
-    }
-
-    const baseSettings = getSettings();
-    const settings = {
-      ...baseSettings,
-      ...clientAuth
-    };
-
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
-    const blacklist = settings.blacklist || [];
 
     logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, category=${category}, date=${dateFilter}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}`);
 
-    let posts = await fetchPosts(site, { 
+    // fetchPosts сам выполняет полную локальную фильтрацию (isPostMatchingFilters)
+    let posts = await fetchPosts(site, {
       tags, 
       page, 
       limit, 
@@ -103,36 +111,7 @@ router.get('/posts', async (req, res) => {
       hideLgbt
     }, aiTagsList, settings);
 
-    // Дополнительная валидация и сортировка
-    const activeCurvyTags = (Array.isArray(settings.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS;
-    const activePetiteTags = (Array.isArray(settings.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS;
-    const activeFurryTags = (Array.isArray(settings.furryTags) && settings.furryTags.length > 0) ? settings.furryTags : FURRY_TAGS;
-    const activePregnantTags = (Array.isArray(settings.pregnantTags) && settings.pregnantTags.length > 0) ? settings.pregnantTags : PREGNANT_TAGS;
-    const activeLgbtTags = (Array.isArray(settings.lgbtTags) && settings.lgbtTags.length > 0) ? settings.lgbtTags : LGBT_TAGS;
-    const negativeTokens = tags
-      ? tags.split(/\s+/).filter(t => t.startsWith('-') && t.length > 1).map(t => t.substring(1).toLowerCase().replace(/_/g, ' '))
-      : [];
-    const hasUserPositiveTags = Boolean(tags && tags.split(/\s+/).some(t => t && !t.startsWith('-') && !t.includes(':')));
-
-    posts = posts.filter(post => isPostMatchingFilters(post, {
-      typeFilter,
-      ageFilter,
-      aiFilter,
-      ratingFilter,
-      dateFilter,
-      hideFurry: hideFurry || settings.hideFurry,
-      hidePregnant: hidePregnant || settings.hidePregnant,
-      hideLgbt: hideLgbt || settings.hideLgbt,
-      blacklist,
-      negativeTokens,
-      activeCurvyTags,
-      activePetiteTags,
-      activeFurryTags,
-      activePregnantTags,
-      activeLgbtTags,
-      hasUserPositiveTags
-    }));
-
+    // Сортировка для категорий top/views (после Round-Robin слияния мульти-сайтов)
     if (category === 'top' && site !== 'all') {
       posts.sort((a, b) => (b.score || 0) - (a.score || 0));
     } else if (category === 'views' && site !== 'all') {
@@ -166,13 +145,16 @@ router.get('/posts', async (req, res) => {
     res.json(responsePayload);
   } catch (err) {
     logError('Search', `Ошибка при поиске`, err);
-    res.json({
-      success: true,
-      site: req.query.site || 'danbooru',
-      page: 1,
-      count: 0,
-      posts: []
-    });
+    if (!res.headersSent) {
+      res.status(502).json({
+        success: false,
+        site: req.query.site || 'danbooru',
+        page: 1,
+        count: 0,
+        posts: [],
+        error: err.message
+      });
+    }
   }
 });
 
@@ -184,18 +166,9 @@ router.get('/posts/album', async (req, res) => {
     const parentId = req.query.parentId || '';
     const originalId = req.query.originalId || '';
 
-    let clientAuth = {};
-    if (req.headers['x-booru-auth']) {
-      try {
-        clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
-      } catch {
-        try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
-      }
-    }
-
     const settings = {
       ...getSettings(),
-      ...clientAuth
+      ...parseClientAuth(req)
     };
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
 
@@ -217,29 +190,28 @@ router.get('/posts/album', async (req, res) => {
       }
     };
 
-    // 1. Поиск по parentId
+    // Независимые запросы выполняем параллельно
+    const pendingQueries = [];
     if (parentId && String(parentId) !== '0') {
-      await fetchAndCollect(`parent:${parentId}`);
+      pendingQueries.push(fetchAndCollect(`parent:${parentId}`));
     }
-
-    // 2. Поиск по originalId (если сам пост был родителем)
     if (originalId && String(originalId) !== '0') {
-      await fetchAndCollect(`parent:${originalId}`);
+      pendingQueries.push(fetchAndCollect(`parent:${originalId}`));
     }
-
-    // 3. Поиск по Pixiv ID
     if (seriesKey.startsWith('pixiv:')) {
-      const pixivId = seriesKey.replace('pixiv:', '');
-      await fetchAndCollect(`pixiv:${pixivId}`);
-      if (foundPostsMap.size === 0) {
-        await fetchAndCollect(`pixiv_id:${pixivId}`);
-      }
+      pendingQueries.push(fetchAndCollect(seriesKey));
+    }
+    if (seriesKey.startsWith('twitter:')) {
+      pendingQueries.push(fetchAndCollect(`source:*${seriesKey.replace('twitter:', '')}*`));
+    }
+    if (pendingQueries.length > 0) {
+      await Promise.all(pendingQueries);
     }
 
-    // 4. Поиск по Twitter Status ID
-    if (seriesKey.startsWith('twitter:')) {
-      const twitterId = seriesKey.replace('twitter:', '');
-      await fetchAndCollect(`source:*${twitterId}*`);
+    // Fallback-запросы, зависящие от результатов первых (последовательно)
+    if (seriesKey.startsWith('pixiv:') && foundPostsMap.size === 0) {
+      const pixivId = seriesKey.replace('pixiv:', '');
+      await fetchAndCollect(`pixiv_id:${pixivId}`);
     }
 
     let items = Array.from(foundPostsMap.values());
@@ -344,16 +316,7 @@ router.get('/tags/autocomplete', async (req, res) => {
   const query = rawQuery.replace(/\s+/g, '_');
   const site = req.query.site || 'danbooru';
 
-  let clientAuth = {};
-  if (req.headers['x-booru-auth']) {
-    try {
-      clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
-    } catch {
-      try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
-    }
-  }
-
-  const settings = { ...getSettings(), ...clientAuth };
+  const settings = { ...getSettings(), ...parseClientAuth(req) };
 
   const cacheKey = `${site}:${query.toLowerCase()}`;
   const cached = tagAutocompleteCache.get(cacheKey);

@@ -8,83 +8,117 @@ import { getSettings } from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 const activeTranscodes = new Map();
+const activeThumbnails = new Map();
 
 export async function handleVideoThumbnailRequest(req, res) {
   const targetUrl = req.query.url;
   const quality = req.query.quality || 'medium';
   if (!targetUrl) return res.status(400).send('Требуется параметр url');
 
-  try {
-    const hash = crypto.createHash('md5').update(`${targetUrl}_${quality}`).digest('hex');
-    const thumbPath = path.join(THUMBS_DIR, `${hash}_${quality}.jpg`);
+  const hash = crypto.createHash('md5').update(`${targetUrl}_${quality}`).digest('hex');
+  const thumbPath = path.join(THUMBS_DIR, `${hash}_${quality}.jpg`);
 
+  try {
     if (fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0) {
       res.setHeader('Content-Type', 'image/jpeg');
       res.setHeader('Cache-Control', 'public, max-age=604800');
       return res.sendFile(thumbPath);
     }
 
-    const currentSettings = getSettings();
-    const headers = getFfmpegHeaders(targetUrl, currentSettings);
-
-    let scaleFilter = 'scale=480:-1';
-    let qScale = '2';
-    if (quality === 'low') {
-      scaleFilter = 'scale=280:-1';
-      qScale = '4';
-    } else if (quality === 'high') {
-      scaleFilter = 'scale=854:-1';
-      qScale = '2';
-    } else if (quality === 'original') {
-      scaleFilter = 'scale=1280:-1';
-      qScale = '1';
+    // Дедупликация: галерея запрашивает одно превью несколькими параллельными запросами.
+    // Без этого на каждую карточку видео spawn'ится отдельный FFmpeg-процесс.
+    if (activeThumbnails.has(hash)) {
+      const ok = await activeThumbnails.get(hash).catch(() => false);
+      if (ok && fs.existsSync(thumbPath)) {
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Cache-Control', 'public, max-age=604800');
+        return res.sendFile(thumbPath);
+      }
+      return sendVideoPlaceholder(res);
     }
 
-    const extractFrame = (ssTime) => {
-      return new Promise((resolve) => {
-        const args = [
-          '-headers', headers,
-          '-ss', ssTime,
-          '-i', targetUrl,
-          '-vframes', '1',
-          '-vf', scaleFilter,
-          '-q:v', qScale,
-          '-y',
-          thumbPath
-        ];
-        const proc = spawn('ffmpeg', args);
-        
-        req.on('close', () => {
-          try {
-            if (proc && !proc.killed) proc.kill('SIGKILL');
-          } catch {}
-        });
-
-        proc.on('close', (code) => {
-          resolve(code === 0 && fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0);
-        });
-        proc.on('error', () => resolve(false));
-      });
+    const generation = generateThumbnail(req, targetUrl, quality, thumbPath);
+    activeThumbnails.set(hash, generation);
+    const cleanup = () => {
+      if (activeThumbnails.get(hash) === generation) activeThumbnails.delete(hash);
     };
+    generation.then(cleanup, cleanup);
 
+    const success = await generation;
+    if (success && fs.existsSync(thumbPath)) {
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+      return res.sendFile(thumbPath);
+    }
+    return sendVideoPlaceholder(res);
+  } catch (err) {
+    logError('Thumbnail', `Ошибка генерации превью для ${targetUrl}`, err);
+    return sendVideoPlaceholder(res);
+  }
+}
+
+function sendVideoPlaceholder(res) {
+  res.setHeader('Content-Type', 'image/svg+xml');
+  return res.send(`<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" fill="#1e293b"><rect width="100%" height="100%"/><text x="50%" y="50%" fill="#94a3b8" dominant-baseline="middle" text-anchor="middle" font-size="14" font-family="sans-serif">🎬 Видео</text></svg>`);
+}
+
+function generateThumbnail(req, targetUrl, quality, thumbPath) {
+  const currentSettings = getSettings();
+  const headers = getFfmpegHeaders(targetUrl, currentSettings);
+
+  let scaleFilter = 'scale=480:-1';
+  let qScale = '2';
+  if (quality === 'low') {
+    scaleFilter = 'scale=280:-1';
+    qScale = '4';
+  } else if (quality === 'high') {
+    scaleFilter = 'scale=854:-1';
+    qScale = '2';
+  } else if (quality === 'original') {
+    scaleFilter = 'scale=1280:-1';
+    qScale = '1';
+  }
+
+  const extractFrame = (ssTime) => {
+    return new Promise((resolve) => {
+      const args = [
+        '-headers', headers,
+        '-ss', ssTime,
+        '-i', targetUrl,
+        '-vframes', '1',
+        '-vf', scaleFilter,
+        '-q:v', qScale,
+        '-y',
+        thumbPath
+      ];
+      let proc;
+      try {
+        proc = spawn('ffmpeg', args);
+      } catch {
+        resolve(false);
+        return;
+      }
+
+      req.on('close', () => {
+        try {
+          if (proc && !proc.killed) proc.kill('SIGKILL');
+        } catch {}
+      });
+
+      proc.on('close', (code) => {
+        resolve(code === 0 && fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0);
+      });
+      proc.on('error', () => resolve(false));
+    });
+  };
+
+  return (async () => {
     let success = await extractFrame('00:00:01');
     if (!success) {
       success = await extractFrame('00:00:00');
     }
-
-    if (success) {
-      res.setHeader('Content-Type', 'image/jpeg');
-      res.setHeader('Cache-Control', 'public, max-age=604800');
-      return res.sendFile(thumbPath);
-    } else {
-      res.setHeader('Content-Type', 'image/svg+xml');
-      return res.send(`<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" fill="#1e293b"><rect width="100%" height="100%"/><text x="50%" y="50%" fill="#94a3b8" dominant-baseline="middle" text-anchor="middle" font-size="14" font-family="sans-serif">🎬 Видео</text></svg>`);
-    }
-  } catch (err) {
-    logError('Thumbnail', `Ошибка генерации превью для ${targetUrl}`, err);
-    res.setHeader('Content-Type', 'image/svg+xml');
-    return res.send(`<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" fill="#1e293b"><rect width="100%" height="100%"/><text x="50%" y="50%" fill="#94a3b8" dominant-baseline="middle" text-anchor="middle" font-size="14" font-family="sans-serif">🎬 Видео</text></svg>`);
-  }
+    return success;
+  })();
 }
 
 export async function handleTranscodeVideoRequest(req, res) {
@@ -165,10 +199,15 @@ export async function handleTranscodeVideoRequest(req, res) {
 
     activeTranscodes.set(hash, transcodePromise);
 
-    await transcodePromise;
-    activeTranscodes.delete(hash);
-
-    return res.sendFile(videoPath, { acceptRanges: true });
+    try {
+      await transcodePromise;
+      return res.sendFile(videoPath, { acceptRanges: true });
+    } finally {
+      // Раньше при ошибке запись оставалась в Map навсегда (утечка отклонённых промисов)
+      if (activeTranscodes.get(hash) === transcodePromise) {
+        activeTranscodes.delete(hash);
+      }
+    }
   } catch (err) {
     logError('FFmpeg', `Ошибка транскодирования ${targetUrl}`, err);
     if (!res.headersSent) {

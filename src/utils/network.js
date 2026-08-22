@@ -37,28 +37,36 @@ export async function fetchSafe(url, options = {}) {
   }
 }
 
+// Единая карта соответствия хост -> Referer (используется прокси и FFmpeg)
+export function resolveSiteReferer(targetUrl) {
+  try {
+    const parsed = new URL(targetUrl);
+    const h = parsed.hostname;
+    if (h.includes('rule34video.com') || h.includes('boomio-cdn.com')) return 'https://rule34video.com/';
+    if (h.includes('paheal.net') || h.includes('paheal-cdn.net')) return 'https://rule34.paheal.net/';
+    if (h.includes('rule34.xxx')) return 'https://rule34.xxx/';
+    if (h.includes('donmai.us')) return 'https://danbooru.donmai.us/';
+    if (h.includes('yande.re')) return 'https://yande.re/';
+    if (h.includes('konachan')) return 'https://konachan.com/';
+    if (h.includes('gelbooru.com')) return 'https://gelbooru.com/';
+    if (h.includes('safebooru.org')) return 'https://safebooru.org/';
+    if (h.includes('xbooru.com')) return 'https://xbooru.com/';
+    if (h.includes('hypnohub.net')) return 'https://hypnohub.net/';
+    return `${parsed.protocol}//${parsed.host}/`;
+  } catch {
+    return 'https://danbooru.donmai.us/';
+  }
+}
+
 export function getFfmpegHeaders(targetUrl, currentSettings = {}) {
-  let referer = 'https://danbooru.donmai.us/';
   let authHeader = '';
   try {
     const parsed = new URL(targetUrl);
-    if (parsed.hostname.includes('rule34video.com')) referer = 'https://rule34video.com/';
-    else if (parsed.hostname.includes('paheal.net') || parsed.hostname.includes('paheal-cdn.net')) referer = 'https://rule34.paheal.net/';
-    else if (parsed.hostname.includes('rule34.xxx')) referer = 'https://rule34.xxx/';
-    else if (parsed.hostname.includes('donmai.us')) {
-      referer = 'https://danbooru.donmai.us/';
-      if (currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
-        authHeader = `Authorization: Basic ${Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64')}\r\n`;
-      }
-    } else if (parsed.hostname.includes('yande.re')) referer = 'https://yande.re/';
-    else if (parsed.hostname.includes('konachan')) referer = 'https://konachan.com/';
-    else if (parsed.hostname.includes('gelbooru.com')) referer = 'https://gelbooru.com/';
-    else if (parsed.hostname.includes('safebooru.org')) referer = 'https://safebooru.org/';
-    else if (parsed.hostname.includes('xbooru.com')) referer = 'https://xbooru.com/';
-    else if (parsed.hostname.includes('hypnohub.net')) referer = 'https://hypnohub.net/';
-    else referer = `${parsed.protocol}//${parsed.host}/`;
+    if (parsed.hostname.includes('donmai.us') && currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
+      authHeader = `Authorization: Basic ${Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64')}\r\n`;
+    }
   } catch {}
-  return `User-Agent: ${BROWSER_USER_AGENT}\r\nReferer: ${referer}\r\n${authHeader}`;
+  return `User-Agent: ${BROWSER_USER_AGENT}\r\nReferer: ${resolveSiteReferer(targetUrl)}\r\n${authHeader}`;
 }
 
 export function resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo) {

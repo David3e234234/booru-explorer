@@ -33,6 +33,16 @@ const router = express.Router();
 // Middleware аутентификации для всех маршрутов пользователя
 router.use(authMiddleware);
 
+// Храним минимум: альбомные вложения — это полные копии постов (огромный раздув JSON),
+// а дублирующие ключи серий пересчитываются при рендере
+function sanitizeStoredPost(post) {
+  if (!post || typeof post !== 'object') return post;
+  const clean = { ...post };
+  delete clean.albumItems;
+  delete clean.allSeriesKeys;
+  return clean;
+}
+
 // GET & POST /api/git-pull (Deploy hook для Alwaysdata / серверов)
 router.all('/git-pull', (req, res) => {
   exec('git reset --hard origin/main && git pull origin main', { cwd: ROOT_DIR }, (err, stdout, stderr) => {
@@ -90,7 +100,7 @@ router.post('/favorites', (req, res) => {
     saveFavorites(favorites, userId);
     return res.json({ success: true, isFavorite: false, count: favorites.length });
   } else {
-    favorites.unshift({ ...post, savedAt: new Date().toISOString() });
+    favorites.unshift({ ...sanitizeStoredPost(post), savedAt: new Date().toISOString() });
     saveFavorites(favorites, userId);
     return res.json({ success: true, isFavorite: true, count: favorites.length });
   }
@@ -106,7 +116,7 @@ router.post('/favorites/sync', (req, res) => {
   const current = getFavorites(userId);
   const map = new Map();
   current.forEach(f => { if (f && f.id) map.set(f.id, f); });
-  favorites.forEach(f => { if (f && f.id) map.set(f.id, f); });
+  favorites.forEach(f => { if (f && f.id) map.set(f.id, sanitizeStoredPost(f)); });
   const merged = Array.from(map.values());
 
   saveFavorites(merged, userId);
@@ -264,7 +274,7 @@ router.post('/like', async (req, res) => {
     saveLikes(likes, userId);
     isLiked = false;
   } else {
-    likes.unshift({ ...post, likedAt: new Date().toISOString() });
+    likes.unshift({ ...sanitizeStoredPost(post), likedAt: new Date().toISOString() });
     saveLikes(likes, userId);
     isLiked = true;
   }
@@ -285,7 +295,7 @@ router.post('/likes/sync', (req, res) => {
   const current = getLikes(userId);
   const map = new Map();
   current.forEach(l => { if (l && l.id) map.set(l.id, l); });
-  likes.forEach(l => { if (l && l.id) map.set(l.id, l); });
+  likes.forEach(l => { if (l && l.id) map.set(l.id, sanitizeStoredPost(l)); });
   const merged = Array.from(map.values());
 
   saveLikes(merged, userId);
@@ -314,7 +324,7 @@ router.post('/dislike', async (req, res) => {
     saveDislikes(dislikes, userId);
     isDisliked = false;
   } else {
-    dislikes.unshift({ ...post, dislikedAt: new Date().toISOString() });
+    dislikes.unshift({ ...sanitizeStoredPost(post), dislikedAt: new Date().toISOString() });
     saveDislikes(dislikes, userId);
     isDisliked = true;
   }
@@ -339,7 +349,7 @@ router.post('/dislikes/sync', (req, res) => {
   const current = getDislikes(userId);
   const map = new Map();
   current.forEach(d => { if (d && d.id) map.set(d.id, d); });
-  dislikes.forEach(d => { if (d && d.id) map.set(d.id, d); });
+  dislikes.forEach(d => { if (d && d.id) map.set(d.id, sanitizeStoredPost(d)); });
   const merged = Array.from(map.values());
 
   saveDislikes(merged, userId);
@@ -347,13 +357,15 @@ router.post('/dislikes/sync', (req, res) => {
 });
 
 // GET /api/cache-info
-router.get('/cache-info', (req, res) => {
+router.get('/cache-info', async (req, res) => {
   const userId = req.user?.id || null;
   const settings = getSettings(userId);
-  const thumbs = getDirectoryStats(THUMBS_DIR);
-  const videos = getDirectoryStats(VIDEOS_DIR);
+  const [thumbs, videos] = await Promise.all([
+    getDirectoryStats(THUMBS_DIR),
+    getDirectoryStats(VIDEOS_DIR)
+  ]);
   const totalDiskBytes = thumbs.totalBytes + videos.totalBytes;
-  
+
   res.json({
     success: true,
     diskCacheBytes: totalDiskBytes,
@@ -366,16 +378,18 @@ router.get('/cache-info', (req, res) => {
 });
 
 // POST /api/cache-clear
-router.post('/cache-clear', (req, res) => {
+router.post('/cache-clear', async (req, res) => {
   try {
     apiPostsCache.clear();
     tagAutocompleteCache.clear();
 
-    const thumbs = getDirectoryStats(THUMBS_DIR);
-    const videos = getDirectoryStats(VIDEOS_DIR);
+    const [thumbs, videos] = await Promise.all([
+      getDirectoryStats(THUMBS_DIR),
+      getDirectoryStats(VIDEOS_DIR)
+    ]);
 
     for (const f of [...thumbs.fileList, ...videos.fileList]) {
-      try { fs.unlinkSync(f.path); } catch {}
+      try { await fs.promises.unlink(f.path); } catch {}
     }
 
     logInfo('Cache', 'Кэш полностью очищен по запросу пользователя');

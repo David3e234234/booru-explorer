@@ -54,30 +54,28 @@ export class MemoryCache {
 export const apiPostsCache = new MemoryCache(400, 6 * 60 * 1000); // 6 минут кэш постов
 export const tagAutocompleteCache = new MemoryCache(600, 30 * 60 * 1000); // 30 минут кэш тегов
 
-export function getDirectoryStats(dirPath) {
+export async function getDirectoryStats(dirPath) {
   let totalBytes = 0;
   const fileList = [];
   try {
-    if (fs.existsSync(dirPath)) {
-      const files = fs.readdirSync(dirPath);
-      for (const file of files) {
-        const fullPath = path.join(dirPath, file);
-        try {
-          const stats = fs.statSync(fullPath);
-          if (stats.isFile()) {
-            totalBytes += stats.size;
-            fileList.push({ path: fullPath, size: stats.size, mtime: stats.mtimeMs });
-          }
-        } catch {}
-      }
-    }
+    const files = await fs.promises.readdir(dirPath).catch(() => []);
+    await Promise.all(files.map(async (file) => {
+      const fullPath = path.join(dirPath, file);
+      try {
+        const stats = await fs.promises.stat(fullPath);
+        if (stats.isFile()) {
+          totalBytes += stats.size;
+          fileList.push({ path: fullPath, size: stats.size, mtime: stats.mtimeMs });
+        }
+      } catch {}
+    }));
   } catch {}
   return { totalBytes, fileList };
 }
 
 import { getSettings } from './storageService.js';
 
-export function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
+export async function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
   try {
     let maxBytes = explicitMaxBytes;
     if (maxBytes === null || maxBytes === undefined) {
@@ -99,8 +97,8 @@ export function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
 
     if (!maxBytes || maxBytes <= 0) return;
 
-    const thumbs = getDirectoryStats(THUMBS_DIR);
-    const videos = getDirectoryStats(VIDEOS_DIR);
+    const thumbs = await getDirectoryStats(THUMBS_DIR);
+    const videos = await getDirectoryStats(VIDEOS_DIR);
     let totalBytes = thumbs.totalBytes + videos.totalBytes;
 
     if (totalBytes > maxBytes) {
@@ -111,7 +109,7 @@ export function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
       for (const f of allFiles) {
         if (totalBytes <= maxBytes * 0.75) break;
         try {
-          fs.unlinkSync(f.path);
+          await fs.promises.unlink(f.path);
           totalBytes -= f.size;
         } catch {}
       }

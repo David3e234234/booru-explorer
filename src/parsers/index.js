@@ -49,6 +49,19 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
   }
 }
 
+const SITE_FETCH_DEADLINE_MS = 15000;
+
+function withDeadline(promise, ms = SITE_FETCH_DEADLINE_MS) {
+  let timer = null;
+  const timeout = new Promise(resolve => {
+    timer = setTimeout(() => resolve([]), ms);
+    if (timer && typeof timer.unref === 'function') timer.unref();
+  });
+  return Promise.race([promise.catch(() => []), timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
 export async function fetchPosts(site, params, aiTagsList, settings) {
   if (site === 'danbooru') {
     return await fetchDanbooru(params, aiTagsList, settings);
@@ -98,7 +111,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
 
     const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / Math.max(1, mainSites.length)));
     const results = await Promise.allSettled(
-      mainSites.map(s => fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, settings))
+      mainSites.map(s => withDeadline(fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, settings)))
     );
     const lists = [];
     results.forEach(res => {
@@ -163,17 +176,25 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   const pageMultiplier = Math.max(1, deepFetchPagesSetting);
   const startRemotePage = (page - 1) * pageMultiplier + 1;
   const maxIterations = shouldDeepFetch ? Math.max(deepFetchPagesSetting * 2, 6) : 1;
+  // Раньше лимит всегда раздувался до >=100, даже в режиме «все сайты» с perSiteLimit=25.
+  // Теперь уважаем запрошенный лимит (в пределах разумного), а глубину добираем страницами.
+  const batchLimit = Math.min(200, Math.max(targetLimit, 25));
 
   logInfo(site, `Глубокий поиск: tags="${params.tags || ''}", page=${page} (remote: ${startRemotePage}), limit=${targetLimit}, deepFetch=${shouldDeepFetch ? maxIterations + ' макс. стр.' : 'выкл'}`);
 
   const accumulatedPosts = [];
   const seenIds = new Set();
 
-  for (let i = 0; i < maxIterations; i++) {
-    const currentRemotePage = startRemotePage + i;
-    const batchLimit = Math.max(targetLimit, 100);
-    const batch = await fetchSingleSiteBatch(site, { ...params, page: currentRemotePage, limit: batchLimit }, aiTagsList, settings);
+  // Пайплайн: следующая страница запрашивается, пока обрабатывается текущая
+  const launchPage = (remotePage) =>
+    withDeadline(fetchSingleSiteBatch(site, { ...params, page: remotePage, limit: batchLimit }, aiTagsList, settings))
+      .catch(() => []);
 
+  let inflight = launchPage(startRemotePage);
+  let nextRemotePage = startRemotePage;
+
+  for (let i = 0; i < maxIterations; i++) {
+    const batch = await inflight;
     if (!Array.isArray(batch) || batch.length === 0) break;
 
     for (const post of batch) {
@@ -192,6 +213,12 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     if (batch.length < 15) {
       break;
     }
+    if (i >= maxIterations - 1) {
+      break;
+    }
+
+    nextRemotePage += 1;
+    inflight = launchPage(nextRemotePage);
   }
 
   if (params.category === 'top' && site !== 'all') {
