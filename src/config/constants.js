@@ -23,6 +23,9 @@ export const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 export const SUBSCRIPTIONS_FILE = path.join(DATA_DIR, 'subscriptions.json');
 export const PUSH_SUBSCRIPTIONS_FILE = path.join(DATA_DIR, 'push_subscriptions.json');
 
+// Состояние проверки любимых авторов для уведомлений (ключ site:name -> knownIds/newIds)
+export const AUTHOR_FEED_STATE_FILE = path.join(DATA_DIR, 'author_feed_state.json');
+
 // Ключи VAPID для веб-пушей: env -> файл data/.vapid_keys.json (генерируется при первом запуске)
 export const VAPID_KEYS_FILE = path.join(DATA_DIR, '.vapid_keys.json');
 

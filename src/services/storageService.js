@@ -9,6 +9,7 @@ import {
   DISLIKES_FILE, 
   SUBSCRIPTIONS_FILE,
   PUSH_SUBSCRIPTIONS_FILE,
+  AUTHOR_FEED_STATE_FILE,
   BROWSER_USER_AGENT,
   DATA_DIR 
 } from '../config/constants.js';
@@ -184,6 +185,18 @@ export function getPushSubscriptions(userId = null) {
 export function savePushSubscriptions(subscriptions, userId = null) {
   const filePath = getUserFilePath(userId, PUSH_SUBSCRIPTIONS_FILE, 'push_subscriptions.json');
   writeJsonFileAsync(filePath, subscriptions);
+}
+
+// Состояние проверки авторов: { "site:name": { lastCheckedAt, knownIds, newIds } }
+export function getAuthorFeedState(userId = null) {
+  const filePath = getUserFilePath(userId, AUTHOR_FEED_STATE_FILE, 'author_feed_state.json');
+  const data = readJsonFile(filePath, {});
+  return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+}
+
+export function saveAuthorFeedState(state, userId = null) {
+  const filePath = getUserFilePath(userId, AUTHOR_FEED_STATE_FILE, 'author_feed_state.json');
+  writeJsonFileAsync(filePath, state);
 }
 
 export async function sendBooruLike(site, postId, isLike, settings) {

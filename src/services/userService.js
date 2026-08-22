@@ -198,7 +198,7 @@ export function registerUser(username, password, initialData = {}) {
   writeJsonFile(path.join(userDir, 'favorite_authors.json'), userFavoriteAuthors);
   writeJsonFile(path.join(userDir, 'subscriptions.json'), []);
   writeJsonFile(path.join(userDir, 'push_subscriptions.json'), []);
-
+  writeJsonFile(path.join(userDir, 'author_feed_state.json'), {});
   logInfo('Auth', `Зарегистрирован новый пользователь: ${cleanUsername} (ID: ${userId})`);
 
   const token = generateToken({ id: userId, username: cleanUsername });
