@@ -111,8 +111,7 @@ export const DEFAULT_FURRY_TAGS = [
   'anthro_male',
   'furred',
   'canine',
-  'feline',
-  'e621'
+  'feline'
 ];
 
 export const DEFAULT_PREGNANT_TAGS = [
