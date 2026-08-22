@@ -1,6 +1,7 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { BROWSER_USER_AGENT } from '../config/constants.js';
-import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
@@ -99,7 +100,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         if (!text.includes('Missing authentication')) {
           const data = safeJsonParse(text, null);
           if (Array.isArray(data) && data.length > 0) {
-            const mappedPosts = data.map(item => {
+            const mappedPosts = await Promise.all(data.map(async item => {
               const rawTags = (item.tags || '').split(' ').filter(Boolean);
               let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
               const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
@@ -112,8 +113,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 sampleUrl = fileUrl;
               }
               previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
-              const author = extractAuthor(rawTags, item.source, '');
-              const tagDetails = classifyTags(rawTags, author);
+              const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
               const createdAt = normalizeDate(item.created_at || item.change);
               const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
               const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -152,7 +152,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 createdAt,
                 isAi: checkIsAi(rawTags, aiTagsList)
               };
-            });
+            }));
             if (category === 'popular' && mappedPosts.length > 0) {
               mappedPosts.sort((a, b) => (b.score || 0) - (a.score || 0));
             }
@@ -187,9 +187,10 @@ export async function fetchRule34(params, aiTagsList, settings) {
     });
     if (res.ok) {
       const html = await res.text();
-      const posts = [];
+      let posts = [];
       // Универсальный поиск блоков превью: <span class="thumb" id="s123"> или <span id="s123" class="thumb">
       const spanRegex = /<span\b[^>]*?(?:class="[^"]*\bthumb\b[^"]*"[^>]*?id="s?(\d+)"|id="s?(\d+)"[^>]*?class="[^"]*\bthumb\b[^"]*")[^>]*>([\s\S]*?)<\/span>/gi;
+      const rawParsedItems = [];
       let match;
       while ((match = spanRegex.exec(html)) !== null) {
         const id = match[1] || match[2];
@@ -265,47 +266,66 @@ export async function fetchRule34(params, aiTagsList, settings) {
         }
 
         const source = `https://rule34.xxx/index.php?page=post&s=view&id=${id}`;
-        const author = extractAuthor(rawTags, source, '');
-        const tagDetails = classifyTags(rawTags, author);
-        const seriesKey = extractSeriesKey({
-          source,
-          parentId: null,
-          hasChildren: false,
-          originalId: id,
-          tags: rawTags
-        }, 'rule34');
-
-        posts.push({
-          id: `rule34_${id}`,
-          originalId: id,
-          site: 'rule34',
-          siteName: 'Rule34.xxx',
+        rawParsedItems.push({
+          id,
+          thumbUrl,
           previewUrl,
           sampleUrl,
           fileUrl,
           fileExt,
           isVideo,
           isGif,
-          hasSound: isVideo && (rawTags.includes('sound') || rawTags.includes('audio')),
-          author,
-          tags: rawTags,
-          tagDetails,
+          rawTags,
           score,
           rating,
-          width: 0,
-          height: 0,
-          source,
-          parentId: null,
-          hasChildren: false,
-          seriesKey,
-          createdAt: '',
-          isAi: checkIsAi(rawTags, aiTagsList)
+          source
         });
+      }
+
+      if (rawParsedItems.length > 0) {
+        posts = await Promise.all(rawParsedItems.map(async p => {
+          const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source);
+          const seriesKey = extractSeriesKey({
+            source: p.source,
+            parentId: null,
+            hasChildren: false,
+            originalId: p.id,
+            tags: p.rawTags
+          }, 'rule34');
+
+          return {
+            id: `rule34_${p.id}`,
+            originalId: p.id,
+            site: 'rule34',
+            siteName: 'Rule34.xxx',
+            previewUrl: p.previewUrl,
+            sampleUrl: p.sampleUrl,
+            fileUrl: p.fileUrl,
+            fileExt: p.fileExt,
+            isVideo: p.isVideo,
+            isGif: p.isGif,
+            hasSound: p.isVideo && (p.rawTags.includes('sound') || p.rawTags.includes('audio')),
+            author,
+            tags: p.rawTags,
+            tagDetails,
+            score: p.score,
+            rating: p.rating,
+            width: 0,
+            height: 0,
+            source: p.source,
+            parentId: null,
+            hasChildren: false,
+            seriesKey,
+            createdAt: '',
+            isAi: checkIsAi(p.rawTags, aiTagsList)
+          };
+        }));
       }
 
       // Fallback: поиск по тегам <img title="..." id="p..."> если span с классом thumb не найден
       if (posts.length === 0 && html.includes('id="p')) {
         const altImgRegex = /<a[^>]*id="p(\d+)"[^>]*href="[^"]*id=(\d+)"[^>]*>[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"[^>]*title="([^"]*)"/gi;
+        const altItems = [];
         let altMatch;
         while ((altMatch = altImgRegex.exec(html)) !== null) {
           const id = altMatch[1] || altMatch[2];
@@ -360,33 +380,49 @@ export async function fetchRule34(params, aiTagsList, settings) {
           }
 
           const source = `https://rule34.xxx/index.php?page=post&s=view&id=${id}`;
-          const author = extractAuthor(rawTags, source, '');
-          const tagDetails = classifyTags(rawTags, author);
-
-          posts.push({
-            id: `rule34_${id}`,
-            originalId: id,
-            site: 'rule34',
-            siteName: 'Rule34.xxx',
-            previewUrl: thumbUrl,
-            sampleUrl,
+          altItems.push({
+            id,
+            thumbUrl,
             fileUrl,
+            sampleUrl,
             fileExt,
             isVideo,
             isGif,
-            hasSound: isVideo && (rawTags.includes('sound') || rawTags.includes('audio')),
-            author,
-            tags: rawTags,
-            tagDetails,
+            rawTags,
             score,
             rating,
-            width: 0,
-            height: 0,
-            source,
-            postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${id}`,
-            createdAt: '',
-            isAi: checkIsAi(rawTags, aiTagsList)
+            source
           });
+        }
+
+        if (altItems.length > 0) {
+          posts = await Promise.all(altItems.map(async p => {
+            const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source);
+            return {
+              id: `rule34_${p.id}`,
+              originalId: p.id,
+              site: 'rule34',
+              siteName: 'Rule34.xxx',
+              previewUrl: p.thumbUrl,
+              sampleUrl: p.sampleUrl,
+              fileUrl: p.fileUrl,
+              fileExt: p.fileExt,
+              isVideo: p.isVideo,
+              isGif: p.isGif,
+              hasSound: p.isVideo && (p.rawTags.includes('sound') || p.rawTags.includes('audio')),
+              author,
+              tags: p.rawTags,
+              tagDetails,
+              score: p.score,
+              rating: p.rating,
+              width: 0,
+              height: 0,
+              source: p.source,
+              postUrl: p.source,
+              createdAt: '',
+              isAi: checkIsAi(p.rawTags, aiTagsList)
+            };
+          }));
         }
       }
 
@@ -445,7 +481,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
     if (!pahealRes.ok) return [];
     const text = await pahealRes.text();
 
-    const posts = [];
+    const rawAttrsList = [];
     const tagRegex = /<(?:post|tag)\b\s+([^>]+)>/gi;
     let match;
     while ((match = tagRegex.exec(text)) !== null) {
@@ -457,43 +493,46 @@ export async function fetchRule34(params, aiTagsList, settings) {
         attrs[attrMatch[1]] = attrMatch[2];
       }
       if (attrs.file_url) {
-        const rawTags = (attrs.tags || '').split(' ').filter(Boolean);
-        const fileName = attrs.file_name || '';
-        let { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(attrs.file_url, fileName, rawTags);
-        if (fileName.toLowerCase().endsWith('.mp4') || fileName.toLowerCase().endsWith('.webm')) {
-          isVideo = true;
-          fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
-        }
-        const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
-        const author = extractAuthor(rawTags, attrs.source, attrs.author);
-        const tagDetails = classifyTags(rawTags, author);
-        const createdAt = normalizeDate(attrs.created_at || attrs.date);
-        posts.push({
-          id: `paheal_${attrs.id}`,
-          originalId: attrs.id,
-          site: 'rule34',
-          siteName: 'Rule34',
-          previewUrl,
-          sampleUrl: attrs.file_url,
-          fileUrl: attrs.file_url,
-          fileExt,
-          isVideo,
-          isGif,
-          hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
-          author,
-          tags: rawTags,
-          tagDetails,
-          score: parseInt(attrs.score, 10) || 0,
-          rating: 'e',
-          width: parseInt(attrs.width, 10) || 0,
-          height: parseInt(attrs.height, 10) || 0,
-          source: attrs.source || '',
-          postUrl: `https://rule34.paheal.net/post/view/${attrs.id}`,
-          createdAt,
-          isAi: checkIsAi(rawTags, aiTagsList)
-        });
+        rawAttrsList.push(attrs);
       }
     }
+
+    const posts = await Promise.all(rawAttrsList.map(async attrs => {
+      const rawTags = (attrs.tags || '').split(' ').filter(Boolean);
+      const fileName = attrs.file_name || '';
+      let { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(attrs.file_url, fileName, rawTags);
+      if (fileName.toLowerCase().endsWith('.mp4') || fileName.toLowerCase().endsWith('.webm')) {
+        isVideo = true;
+        fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
+      }
+      const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
+      const { tagDetails, author } = await classifyPostTags(rawTags, attrs.source);
+      const createdAt = normalizeDate(attrs.created_at || attrs.date);
+      return {
+        id: `paheal_${attrs.id}`,
+        originalId: attrs.id,
+        site: 'rule34',
+        siteName: 'Rule34',
+        previewUrl,
+        sampleUrl: attrs.file_url,
+        fileUrl: attrs.file_url,
+        fileExt,
+        isVideo,
+        isGif,
+        hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+        author,
+        tags: rawTags,
+        tagDetails,
+        score: parseInt(attrs.score, 10) || 0,
+        rating: 'e',
+        width: parseInt(attrs.width, 10) || 0,
+        height: parseInt(attrs.height, 10) || 0,
+        source: attrs.source || '',
+        postUrl: `https://rule34.paheal.net/post/view/${attrs.id}`,
+        createdAt,
+        isAi: checkIsAi(rawTags, aiTagsList)
+      };
+    }));
     return posts;
   };
 

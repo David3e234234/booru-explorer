@@ -1,5 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
@@ -82,14 +83,13 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
         const data = safeJsonParse(text, []);
         const posts = data?.post || (Array.isArray(data) ? data : []);
         if (Array.isArray(posts) && posts.length > 0) {
-          return posts.map(item => {
+          return await Promise.all(posts.map(async item => {
             const rawTags = (item.tags || '').split(' ').filter(Boolean);
             const fileUrl = item.file_url || '';
             const sampleUrl = item.sample_url || fileUrl;
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
             const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
-            const author = extractAuthor(rawTags, item.source, '');
-            const tagDetails = classifyTags(rawTags, author);
+            const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
             const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -128,7 +128,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
               createdAt,
               isAi: checkIsAi(rawTags, aiTagsList)
             };
-          });
+          }));
         }
       }
     } catch (err) {
@@ -143,7 +143,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     if (!res.ok) return [];
     const html = await res.text();
 
-    const posts = [];
+    const rawParsed = [];
     const articleRegex = /<article\s+class="thumbnail-preview"[^>]*>[\s\S]*?<\/article>/g;
     let match;
     while ((match = articleRegex.exec(html)) !== null) {
@@ -172,47 +172,67 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
       const sampleUrl = thumbUrl.replace('/thumbnails/', '/samples/').replace('thumbnail_', 'sample_');
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(thumbUrl, fileUrl, sampleUrl, isVideo);
-      const author = extractAuthor(rawTags, `https://gelbooru.com/index.php?page=post&s=view&id=${id}`, '');
-      const tagDetails = classifyTags(rawTags, author);
+      const source = `https://gelbooru.com/index.php?page=post&s=view&id=${id}`;
 
-      const seriesKey = extractSeriesKey({
-        source: '',
-        parentId: null,
-        hasChildren: false,
-        originalId: id,
-        tags: rawTags
-      }, 'gelbooru');
-
-      posts.push({
-        id: `gelbooru_${id}`,
-        originalId: id,
-        site: 'gelbooru',
-        siteName: 'Gelbooru',
-        previewUrl,
-        sampleUrl,
+      rawParsed.push({
+        id,
+        thumbUrl,
         fileUrl,
+        sampleUrl,
         fileExt,
         isVideo,
         isGif,
-        hasSound: isVideo && hasSound,
-        author,
-        tags: rawTags,
-        tagDetails,
+        hasSound,
+        previewUrl,
+        rawTags,
         score,
         rating,
-        width: 0,
-        height: 0,
-        source: `https://gelbooru.com/index.php?page=post&s=view&id=${id}`,
-        postUrl: `https://gelbooru.com/index.php?page=post&s=view&id=${id}`,
-        parentId: null,
-        hasChildren: false,
-        seriesKey,
-        createdAt: '',
-        isAi: checkIsAi(rawTags, aiTagsList)
+        source
       });
     }
 
-    return posts;
+    if (rawParsed.length > 0) {
+      return await Promise.all(rawParsed.map(async p => {
+        const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source);
+        const seriesKey = extractSeriesKey({
+          source: '',
+          parentId: null,
+          hasChildren: false,
+          originalId: p.id,
+          tags: p.rawTags
+        }, 'gelbooru');
+
+        return {
+          id: `gelbooru_${p.id}`,
+          originalId: p.id,
+          site: 'gelbooru',
+          siteName: 'Gelbooru',
+          previewUrl: p.previewUrl,
+          sampleUrl: p.sampleUrl,
+          fileUrl: p.fileUrl,
+          fileExt: p.fileExt,
+          isVideo: p.isVideo,
+          isGif: p.isGif,
+          hasSound: p.isVideo && p.hasSound,
+          author,
+          tags: p.rawTags,
+          tagDetails,
+          score: p.score,
+          rating: p.rating,
+          width: 0,
+          height: 0,
+          source: p.source,
+          postUrl: p.source,
+          parentId: null,
+          hasChildren: false,
+          seriesKey,
+          createdAt: '',
+          isAi: checkIsAi(p.rawTags, aiTagsList)
+        };
+      }));
+    }
+
+    return [];
   } catch (err) {
     logError('Gelbooru HTML', 'Ошибка веб-парсинга Gelbooru', err);
     return [];

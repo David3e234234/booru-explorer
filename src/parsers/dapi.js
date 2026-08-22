@@ -1,5 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
@@ -14,9 +15,6 @@ function getRecentDateFilter(days = 30) {
 
 export async function fetchXbooru(params, aiTagsList) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
-  if (ratingFilter === 'sfw') {
-    return [];
-  }
 
   let searchTags = adaptTagsForSite('xbooru', tags, ageFilter, typeFilter);
   if (category === 'top') {
@@ -42,6 +40,15 @@ export async function fetchXbooru(params, aiTagsList) {
     }
   }
 
+  // Фильтр рейтинга
+  if (ratingFilter === 'nsfw') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
+  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:q` : 'rating:q';
+  } else if (ratingFilter === 'sfw') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
+  }
+
   if (dateFilter && dateFilter !== 'all' && !searchTags.includes('date:')) {
     const daysMap = { '24h': 1, '1d': 1, '2d': 2, '7d': 7, 'week': 7, '30d': 30, 'month': 30, '90d': 90, '3months': 90, '365d': 365, 'year': 365 };
     const days = daysMap[dateFilter];
@@ -51,33 +58,17 @@ export async function fetchXbooru(params, aiTagsList) {
     }
   }
 
-  if (ratingFilter === 'nsfw') {
-    searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
-  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
-    searchTags = searchTags ? `${searchTags} rating:q` : 'rating:q';
-  } else if (ratingFilter === 'sfw') {
-    searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
-  }
-
-  if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
-    searchTags = searchTags ? `${searchTags} animated` : 'animated';
-  }
-
   const pid = Math.max(0, page - 1);
   const url = `https://xbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
 
   try {
-    const res = await fetchSafe(url, {
-      headers: {
-        'Referer': 'https://xbooru.com/'
-      }
-    });
+    const res = await fetchSafe(url);
     if (!res.ok) return [];
     const text = await res.text();
     const data = safeJsonParse(text, []);
     const posts = data?.post || (Array.isArray(data) ? data : []);
 
-    return posts.map(item => {
+    return await Promise.all(posts.map(async item => {
       const rawTags = (item.tags || '').split(' ').filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
@@ -94,8 +85,7 @@ export async function fetchXbooru(params, aiTagsList) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const author = extractAuthor(rawTags, item.source, '');
-      const tagDetails = classifyTags(rawTags, author);
+      const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
       const createdAt = normalizeDate(item.created_at || item.change);
 
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
@@ -135,7 +125,7 @@ export async function fetchXbooru(params, aiTagsList) {
         createdAt,
         isAi: checkIsAi(rawTags, aiTagsList)
       };
-    });
+    }));
   } catch (err) {
     logError('Xbooru', 'Ошибка загрузки постов', err);
     return [];
@@ -169,6 +159,15 @@ export async function fetchHypnohub(params, aiTagsList) {
     }
   }
 
+  // Фильтр рейтинга
+  if (ratingFilter === 'nsfw') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
+  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:q` : 'rating:q';
+  } else if (ratingFilter === 'sfw') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
+  }
+
   if (dateFilter && dateFilter !== 'all' && !searchTags.includes('date:')) {
     const daysMap = { '24h': 1, '1d': 1, '2d': 2, '7d': 7, 'week': 7, '30d': 30, 'month': 30, '90d': 90, '3months': 90, '365d': 365, 'year': 365 };
     const days = daysMap[dateFilter];
@@ -178,33 +177,17 @@ export async function fetchHypnohub(params, aiTagsList) {
     }
   }
 
-  if (ratingFilter === 'nsfw') {
-    searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
-  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
-    searchTags = searchTags ? `${searchTags} rating:q` : 'rating:q';
-  } else if (ratingFilter === 'sfw') {
-    searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
-  }
-
-  if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
-    searchTags = searchTags ? `${searchTags} animated` : 'animated';
-  }
-
   const pid = Math.max(0, page - 1);
   const url = `https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
 
   try {
-    const res = await fetchSafe(url, {
-      headers: {
-        'Referer': 'https://hypnohub.net/'
-      }
-    });
+    const res = await fetchSafe(url);
     if (!res.ok) return [];
     const text = await res.text();
     const data = safeJsonParse(text, []);
     const posts = data?.post || (Array.isArray(data) ? data : []);
 
-    return posts.map(item => {
+    return await Promise.all(posts.map(async item => {
       const rawTags = (item.tags || '').split(' ').filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
@@ -221,8 +204,7 @@ export async function fetchHypnohub(params, aiTagsList) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const author = extractAuthor(rawTags, item.source, '');
-      const tagDetails = classifyTags(rawTags, author);
+      const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
       const createdAt = normalizeDate(item.created_at || item.change);
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
       const hasChildren = Boolean(item.has_children);
@@ -245,12 +227,12 @@ export async function fetchHypnohub(params, aiTagsList) {
         fileExt,
         isVideo,
         isGif,
-        hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+        hasSound: isVideo && hasSound,
         author,
         tags: rawTags,
         tagDetails,
         score: parseInt(item.score, 10) || 0,
-        rating: item.rating || 'q',
+        rating: item.rating || 'e',
         width: parseInt(item.width, 10) || 0,
         height: parseInt(item.height, 10) || 0,
         source: item.source || '',
@@ -261,7 +243,7 @@ export async function fetchHypnohub(params, aiTagsList) {
         createdAt,
         isAi: checkIsAi(rawTags, aiTagsList)
       };
-    });
+    }));
   } catch (err) {
     logError('Hypnohub', 'Ошибка загрузки постов', err);
     return [];

@@ -1,6 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
-import { getMoebooruTagDetails } from '../utils/moebooruTags.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
@@ -62,10 +62,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList);
 
-    const { tagDetails: moebooruDetails, detectedAuthor } = await getMoebooruTagDetails(siteId, rawTags);
-    const authorFromSource = extractAuthor(rawTags, item.source, '');
-    const author = detectedAuthor || authorFromSource || '';
-    const tagDetails = moebooruDetails || classifyTags(rawTags, author);
+    const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
 
     const createdAt = normalizeDate(item.created_at);
     const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;

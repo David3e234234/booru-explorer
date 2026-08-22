@@ -266,6 +266,18 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     if (skebMatch) {
       return `@${skebMatch[1]}`;
     }
+    const newgroundsViewMatch = s.match(/newgrounds\.com\/art\/view\/([a-zA-Z0-9_-]+)/i);
+    if (newgroundsViewMatch) {
+      return newgroundsViewMatch[1];
+    }
+    const newgroundsSubMatch = s.match(/([a-zA-Z0-9_-]+)\.newgrounds\.com/i);
+    if (newgroundsSubMatch && !['www', 'art', 'portal', 'wiki', 'bbs', 'ngfiles', 'uploads'].includes(newgroundsSubMatch[1].toLowerCase())) {
+      return newgroundsSubMatch[1];
+    }
+    const nijieMatch = s.match(/nijie\.info\/members\.php\?id=(\d+)/i);
+    if (nijieMatch) {
+      return `nijie:${nijieMatch[1]}`;
+    }
   }
 
   // 4. Использование поля itemAuthor если оно не мусорное

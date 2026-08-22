@@ -1,5 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 
 function getRecentDateFilter(days = 30) {
@@ -70,7 +71,7 @@ export async function fetchSafebooru(params, aiTagsList) {
   const data = safeJsonParse(text, []);
   const posts = Array.isArray(data) ? data : (data?.post || []);
 
-  return posts.map(item => {
+  return await Promise.all(posts.map(async item => {
     const rawTags = (item.tags || '').split(' ').filter(Boolean);
     let fileUrl = item.file_url || '';
     if (fileUrl.startsWith('//')) fileUrl = 'https:' + fileUrl;
@@ -87,8 +88,7 @@ export async function fetchSafebooru(params, aiTagsList) {
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList);
-    const author = extractAuthor(rawTags, item.source, '');
-    const tagDetails = classifyTags(rawTags, author);
+    const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
     const createdAt = normalizeDate(item.created_at || item.change);
     const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
     const hasChildren = Boolean(item.has_children);
@@ -127,5 +127,5 @@ export async function fetchSafebooru(params, aiTagsList) {
       createdAt,
       isAi
     };
-  });
+  }));
 }
