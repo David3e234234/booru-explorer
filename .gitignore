@@ -44,4 +44,5 @@ AGENT_CONTEXT.md
 *.agent_context.md
 GEMINI.md
 *.gemini.md
+.antigravity/
 

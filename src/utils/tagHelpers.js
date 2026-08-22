@@ -68,7 +68,10 @@ export function isPostMatchingFilters(post, criteria = {}) {
   // 5. Возрастной рейтинг
   if (ratingFilter === 'nsfw') {
     const r = (post.rating || '').toLowerCase();
-    if (r !== 'e' && r !== 'q' && r !== 'explicit' && r !== 'questionable' && r !== 'sensitive' && r !== '?') return false;
+    if (r !== 'e' && r !== 'explicit' && r !== '?') return false;
+  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+    const r = (post.rating || '').toLowerCase();
+    if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
   } else if (ratingFilter === 'sfw') {
     const r = (post.rating || '').toLowerCase();
     if (r !== 's' && r !== 'g' && r !== 'safe' && r !== 'general') return false;

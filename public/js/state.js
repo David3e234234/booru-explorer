@@ -17,7 +17,7 @@ export const state = {
   currentSite: 'danbooru',
   currentCategory: 'new', // 'new', 'views', 'top', 'recommended', 'random', 'favorites'
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
-  ratingFilter: 'all', // 'all', 'nsfw', 'sfw'
+  ratingFilter: 'all', // 'all', 'nsfw' (18+), 'questionable' (16+), 'sfw' (безопасно)
   typeFilter: 'all', // 'all', 'video', 'image'
   ageFilter: 'all', // 'all', 'adult', 'young'
   dateFilter: 'all', // 'all', '24h', '2d', '7d', '30d', '90d', '365d'

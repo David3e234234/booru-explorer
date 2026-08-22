@@ -81,6 +81,14 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
       const nsfwAllowed = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan'];
       mainSites = mainSites.filter(s => nsfwAllowed.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'rule34'];
+    } else if (params.ratingFilter === 'questionable' || params.ratingFilter === '16+') {
+      const qAllowed = ['danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan'];
+      mainSites = mainSites.filter(s => qAllowed.includes(s));
+      if (mainSites.length === 0) mainSites = ['danbooru', 'rule34', 'gelbooru'];
+    } else if (params.ratingFilter === 'sfw') {
+      const sfwAllowed = ['danbooru', 'safebooru', 'gelbooru', 'yandere', 'konachan'];
+      mainSites = mainSites.filter(s => sfwAllowed.includes(s));
+      if (mainSites.length === 0) mainSites = ['danbooru', 'safebooru'];
     }
 
     if (params.excludeSites) {

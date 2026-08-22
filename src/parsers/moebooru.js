@@ -1,5 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, extractAuthor, classifyTags, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { getMoebooruTagDetails } from '../utils/moebooruTags.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
@@ -21,7 +22,9 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   }
 
   if (ratingFilter === 'nsfw') {
-    finalTags += ' rating:questionable,explicit';
+    finalTags += ' rating:explicit';
+  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+    finalTags += ' rating:questionable';
   } else if (ratingFilter === 'sfw') {
     finalTags += ' rating:safe';
   }
@@ -30,13 +33,13 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   let res = null;
   try {
     res = await fetchSafe(url);
-    if (!res.ok && siteId === 'konachan' && ratingFilter !== 'nsfw') {
+    if (!res.ok && siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
       const altUrl = url.includes('konachan.com') ? url.replace('konachan.com', 'konachan.net') : url.replace('konachan.net', 'konachan.com');
       const altRes = await fetchSafe(altUrl);
       if (altRes.ok) res = altRes;
     }
   } catch (e) {
-    if (siteId === 'konachan' && ratingFilter !== 'nsfw') {
+    if (siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
       try {
         const altUrl = url.includes('konachan.com') ? url.replace('konachan.com', 'konachan.net') : url.replace('konachan.net', 'konachan.com');
         res = await fetchSafe(altUrl);
@@ -51,15 +54,19 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   const data = safeJsonParse(text, []);
   if (!Array.isArray(data)) return [];
 
-  return data.map(item => {
+  return await Promise.all(data.map(async item => {
     const rawTags = (item.tags || '').split(' ').filter(Boolean);
     const fileUrl = item.file_url || item.jpeg_url || item.sample_url || item.preview_url;
     const sampleUrl = item.sample_url || item.jpeg_url || fileUrl;
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList);
-    const author = extractAuthor(rawTags, item.source, item.author);
-    const tagDetails = classifyTags(rawTags, author);
+
+    const { tagDetails: moebooruDetails, detectedAuthor } = await getMoebooruTagDetails(siteId, rawTags);
+    const authorFromSource = extractAuthor(rawTags, item.source, '');
+    const author = detectedAuthor || authorFromSource || '';
+    const tagDetails = moebooruDetails || classifyTags(rawTags, author);
+
     const createdAt = normalizeDate(item.created_at);
     const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
     const hasChildren = Boolean(item.has_children);
@@ -98,5 +105,5 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
       createdAt,
       isAi
     };
-  });
+  }));
 }

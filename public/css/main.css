@@ -635,6 +635,11 @@ input.search-input:focus,
   color: var(--accent-danger);
 }
 
+.rating-pill[data-rating="questionable"].active {
+  background-color: var(--accent-warning-subtle);
+  color: var(--accent-warning);
+}
+
 .rating-pill[data-rating="sfw"].active {
   background-color: var(--accent-success-subtle);
   color: var(--accent-success);

@@ -197,7 +197,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'kotobox',
   gridColumns: 'auto',
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
-  ratingFilter: 'all', // 'all', 'nsfw', 'sfw'
+  ratingFilter: 'all', // 'all', 'nsfw' (18+), 'questionable' (16+), 'sfw' (безопасно)
   typeFilter: 'all', // 'all', 'video', 'image'
   ageFilter: 'all', // 'all', 'adult', 'young'
   hideFurry: true,

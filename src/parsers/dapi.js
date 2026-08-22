@@ -51,6 +51,14 @@ export async function fetchXbooru(params, aiTagsList) {
     }
   }
 
+  if (ratingFilter === 'nsfw') {
+    searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
+  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+    searchTags = searchTags ? `${searchTags} rating:q` : 'rating:q';
+  } else if (ratingFilter === 'sfw') {
+    searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
+  }
+
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
     searchTags = searchTags ? `${searchTags} animated` : 'animated';
   }
@@ -86,7 +94,7 @@ export async function fetchXbooru(params, aiTagsList) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const author = extractAuthor(rawTags, item.source, item.owner || item.creator_id || item.author);
+      const author = extractAuthor(rawTags, item.source, '');
       const tagDetails = classifyTags(rawTags, author);
       const createdAt = normalizeDate(item.created_at || item.change);
 
@@ -111,7 +119,7 @@ export async function fetchXbooru(params, aiTagsList) {
         fileExt,
         isVideo,
         isGif,
-        hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+        hasSound: isVideo && hasSound,
         author,
         tags: rawTags,
         tagDetails,
@@ -172,6 +180,8 @@ export async function fetchHypnohub(params, aiTagsList) {
 
   if (ratingFilter === 'nsfw') {
     searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
+  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+    searchTags = searchTags ? `${searchTags} rating:q` : 'rating:q';
   } else if (ratingFilter === 'sfw') {
     searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
   }
@@ -211,7 +221,7 @@ export async function fetchHypnohub(params, aiTagsList) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const author = extractAuthor(rawTags, item.source, item.owner || item.creator_id || item.author);
+      const author = extractAuthor(rawTags, item.source, '');
       const tagDetails = classifyTags(rawTags, author);
       const createdAt = normalizeDate(item.created_at || item.change);
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;

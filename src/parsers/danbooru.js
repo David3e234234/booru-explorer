@@ -87,7 +87,8 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
 
   // Приоритет Рейтинг
   if (queryTags.length < 2) {
-    if (ratingFilter === 'nsfw') queryTags.push('rating:q,e');
+    if (ratingFilter === 'nsfw') queryTags.push('rating:e');
+    else if (ratingFilter === 'questionable' || ratingFilter === '16+') queryTags.push('rating:q');
     else if (ratingFilter === 'sfw') queryTags.push('rating:g,s');
   }
 
@@ -121,10 +122,13 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     }
     if (ratingFilter === 'nsfw') {
       const r = (item.rating || '').toLowerCase();
-      if (r !== 'e' && r !== 'q' && r !== 'explicit' && r !== 'questionable' && r !== 'sensitive') return false;
+      if (r !== 'e' && r !== 'explicit' && r !== '?') return false;
+    } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+      const r = (item.rating || '').toLowerCase();
+      if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
     } else if (ratingFilter === 'sfw') {
       const r = (item.rating || '').toLowerCase();
-      if (r !== 's' && r !== 'g' && r !== 'general') return false;
+      if (r !== 's' && r !== 'g' && r !== 'general' && r !== 'safe') return false;
     }
     const activeCurvy = (Array.isArray(settings?.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS;
     const activePetite = (Array.isArray(settings?.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS;
@@ -311,7 +315,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     const thumbOriginal = (!isVideo && (findImgVariant(['original'])?.url || item.file_url || fileUrl)) || '';
     const previewUrl = resolvePreviewUrl(thumb180 || item.preview_file_url, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList) || (item.tag_string_meta && item.tag_string_meta.includes('ai_generated'));
-    const author = (item.tag_string_artist || '').split(' ').filter(Boolean).join(', ') || item.uploader_name || '';
+    const author = (item.tag_string_artist || '').split(' ').filter(Boolean).join(', ');
 
     const duration = item.media_asset?.duration || any_video?.duration || 0;
     let durationText = '';

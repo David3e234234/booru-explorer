@@ -13,7 +13,7 @@ function getRecentDateFilter(days = 30) {
 }
 
 export async function fetchGelbooru(params, aiTagsList, settings) {
-  const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
   
   let searchTags = adaptTagsForSite('gelbooru', tags, ageFilter, typeFilter);
 
@@ -38,6 +38,15 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
     }
+  }
+
+  // Фильтр рейтинга
+  if (ratingFilter === 'nsfw') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:explicit` : 'rating:explicit';
+  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:questionable` : 'rating:questionable';
+  } else if (ratingFilter === 'sfw') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:general` : 'rating:general';
   }
 
   if (dateFilter && dateFilter !== 'all' && !searchTags.includes('date:')) {
@@ -79,7 +88,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
             const sampleUrl = item.sample_url || fileUrl;
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
             const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
-            const author = extractAuthor(rawTags, item.source, item.owner || item.creator_id || item.author);
+            const author = extractAuthor(rawTags, item.source, '');
             const tagDetails = classifyTags(rawTags, author);
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
