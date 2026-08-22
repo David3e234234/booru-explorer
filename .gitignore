@@ -46,3 +46,7 @@ GEMINI.md
 *.gemini.md
 .antigravity/
 
+
+# Локальные папки ИИ-агентов (не для репозитория)
+.agents/
+anti-slop/
