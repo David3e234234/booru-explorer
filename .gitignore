@@ -12,7 +12,10 @@ data/favorite_authors.json
 data/likes.json
 data/users.json
 data/users/
+data/author_feed_state.json
+data/subscriptions.json
 data/.session_secret*
+data/.vapid_keys.json
 data/cache/
 data/*.json.bak
 
@@ -45,7 +48,6 @@ AGENT_CONTEXT.md
 GEMINI.md
 *.gemini.md
 .antigravity/
-
 
 # Локальные папки ИИ-агентов (не для репозитория)
 .agents/

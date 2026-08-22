@@ -86,6 +86,33 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     renderViewerPost();
     if (modal) modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+
+    // Для видео Rule34Video обновляем полные метаданные (автора, теги, HD поток)
+    if (currentPost?.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
+      const targetPostId = currentPost.id;
+      fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data || currentPost?.id !== targetPostId) return;
+          let changed = false;
+          if (data.author && data.author !== currentPost.author) {
+            currentPost.author = data.author;
+            changed = true;
+          }
+          if (data.tags && Array.isArray(data.tags) && data.tags.length > (currentPost.tags?.length || 0)) {
+            currentPost.tags = data.tags;
+            currentPost.tagDetails = data.tagDetails || currentPost.tagDetails;
+            changed = true;
+          }
+          if (data.fullVideoUrl && !currentPost.fileUrl.includes('1080p') && data.fullVideoUrl !== currentPost.fileUrl) {
+            currentPost.fileUrl = data.fullVideoUrl;
+          }
+          if (changed) {
+            renderViewerPost(true);
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   function closeViewer() {
@@ -296,7 +323,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
 
-  function renderViewerPost() {
+  function renderViewerPost(skipMediaLoad = false) {
     if (!currentPost) return;
 
     if (currentPost.id) {
@@ -456,8 +483,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     });
 
     renderAlbumFilmstrip();
-    const activeMediaItem = getCurrentMediaItem();
-    loadMediaItem(activeMediaItem);
+
+    if (!skipMediaLoad) {
+      const activeMediaItem = getCurrentMediaItem();
+      loadMediaItem(activeMediaItem);
+    }
   }
 
   // Загрузка всех частей серии по кнопке в сайдбаре
