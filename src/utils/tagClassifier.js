@@ -68,16 +68,17 @@ const GENERIC_NON_ARTIST_TAGS = new Set([
   'comic', 'parody', 'original', 'cosplay', 'edit', 'cg', 'illustration', 'sketch', 
   'webm', 'gif', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'ai_generated', 'ai', 'unknown', 
   'anonymous', 'various', 'bad_id', 'bad_link', 'translated', 'translation', 'sample', 'thumbnail',
-  'throat', 'oral', 'solo', 'female', 'male', 'breasts', 'nipples', 'pussy', 'penis', 'anal', 'hentai'
+  'throat', 'oral', 'solo', 'female', 'male', 'breasts', 'nipples', 'pussy', 'penis', 'anal', 'hentai',
+  'artist_request', 'artist request', 'source_request', 'source request', 'character_request', 'character request'
 ]);
 
 const META_KEYWORDS = new Set([
   'highres', 'absurdres', 'superabsurdres', '4k', 'sound', 'audio', 'video', 'animated', 
   'ugoira', 'translated', 'translation_request', 'commentary', 'commentary_request', 
-  'tagme', 'bad_id', 'bad_link', 'duplicate', 'source_request', 'check_my_note', 
+  'tagme', 'bad_id', 'bad_link', 'duplicate', 'source_request', 'source request', 'check_my_note', 
   'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail', 'patreon_reward', 
   'fantia', 'fanbox', 'skeb', 'lowres', 'downscaled', 'text', 'signature', 'username',
-  'official_art', 'scan', 'wallpaper'
+  'official_art', 'scan', 'wallpaper', 'artist_request', 'artist request', 'character_request', 'character request'
 ]);
 
 async function loadGlobalTagSummary() {
