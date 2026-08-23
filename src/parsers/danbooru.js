@@ -88,8 +88,8 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   // Приоритет Рейтинг
   if (queryTags.length < 2) {
     if (ratingFilter === 'nsfw') queryTags.push('rating:e');
-    else if (ratingFilter === 'questionable' || ratingFilter === '16+') queryTags.push('rating:q');
-    else if (ratingFilter === 'sfw') queryTags.push('rating:g,s');
+    else if (ratingFilter === 'questionable' || ratingFilter === '16+') queryTags.push('rating:q,s');
+    else if (ratingFilter === 'sfw') queryTags.push('rating:g');
   }
 
   const isTagsDropped = userTagList.length + (typeFilter !== 'all' ? 1 : 0) + (ratingFilter !== 'all' ? 1 : 0) > 2;
@@ -128,7 +128,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
     } else if (ratingFilter === 'sfw') {
       const r = (item.rating || '').toLowerCase();
-      if (r !== 's' && r !== 'g' && r !== 'general' && r !== 'safe') return false;
+      if (r !== 'g' && r !== 'general') return false;
     }
     const activeCurvy = (Array.isArray(settings?.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS;
     const activePetite = (Array.isArray(settings?.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS;

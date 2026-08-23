@@ -109,7 +109,13 @@ export function isPostMatchingFilters(post, criteria = {}) {
     if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
   } else if (ratingFilter === 'sfw') {
     const r = (post.rating || '').toLowerCase();
-    if (r !== 's' && r !== 'g' && r !== 'safe' && r !== 'general') return false;
+    // У Danbooru и Gelbooru 4-уровневая шкала: 's' = sensitive (16+), безопасный там только 'g'.
+    // На остальных сайтах легаси-шкала, где 's' = safe.
+    if (post.site === 'danbooru' || post.site === 'gelbooru') {
+      if (r !== 'g' && r !== 'general') return false;
+    } else {
+      if (r !== 's' && r !== 'g' && r !== 'safe' && r !== 'general') return false;
+    }
   }
 
   // 6-8. Контентные фильтры (фурри / беременность / ЛГБТ)
