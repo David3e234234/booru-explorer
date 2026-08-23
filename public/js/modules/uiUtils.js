@@ -100,6 +100,9 @@ export function getPostSiteUrl(post) {
   if (site === 'hypnohub' && origId) {
     return `https://hypnohub.net/index.php?page=post&s=view&id=${origId}`;
   }
+  if (site === 'tbib' && origId) {
+    return `https://tbib.org/index.php?page=post&s=view&id=${origId}`;
+  }
 
   if (post.source && /^https?:\/\//i.test(post.source)) {
     return post.source;

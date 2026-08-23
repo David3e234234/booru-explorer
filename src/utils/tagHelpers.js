@@ -395,12 +395,12 @@ export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilt
   }
 
   // 2. Алиасы тегов для совместимости с Danbooru
-  if (site === 'gelbooru' || site === 'rule34' || site === 'safebooru' || site === 'yandere' || site === 'konachan' || site === 'rule34video' || site === 'xbooru' || site === 'hypnohub') {
+  if (site === 'gelbooru' || site === 'rule34' || site === 'safebooru' || site === 'yandere' || site === 'konachan' || site === 'rule34video' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
     tags = tags.replace(/\bpetite\b/gi, 'small_breasts');
   }
 
   // 3. Адаптация директив сортировки (order:* <-> sort:*) между движками
-  if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+  if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
     tags = tags
       .replace(/\border:score_desc\b/gi, 'sort:score:desc')
       .replace(/\border:score\b/gi, 'sort:score:desc')
@@ -425,25 +425,25 @@ export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilt
 
   // 4. Подмешивание тегов телосложения / типажей
   if (ageFilter === 'adult') {
-    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
       if (!tagList.some(t => t.startsWith('-loli'))) tagList.push('-loli');
       if (!tagList.some(t => t.startsWith('-shota'))) tagList.push('-shota');
       if (!tagList.some(t => t.startsWith('-flat_chest'))) tagList.push('-flat_chest');
     }
     if (tagList.length === 0) {
-      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
         tagList.push('mature_female');
       } else if (site === 'yandere' || site === 'konachan') {
         tagList.push('mature');
       }
     }
   } else if (ageFilter === 'young') {
-    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
       if (!tagList.some(t => t.startsWith('-milf'))) tagList.push('-milf');
       if (!tagList.some(t => t.startsWith('-huge_breasts'))) tagList.push('-huge_breasts');
     }
     if (tagList.length === 0) {
-      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub') {
+      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
         tagList.push('small_breasts');
       } else if (site === 'yandere' || site === 'konachan') {
         tagList.push('loli');

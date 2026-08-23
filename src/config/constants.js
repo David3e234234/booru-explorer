@@ -338,6 +338,16 @@ export const SITES = {
     supportsTags: true,
     accentColor: '#8b5cf6',
     description: 'Тематический Booru-архив с открытым DAPI каталогом'
+  },
+  tbib: {
+    id: 'tbib',
+    name: 'TBIB',
+    baseUrl: 'https://tbib.org',
+    rating: 'all',
+    supportsVideo: false,
+    supportsTags: true,
+    accentColor: '#f59e0b',
+    description: 'Крупнейший агрегатор изображений (~19 млн артов), синхронизируется с другими Booru'
   }
 };
 

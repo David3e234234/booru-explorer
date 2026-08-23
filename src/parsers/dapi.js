@@ -249,3 +249,112 @@ export async function fetchHypnohub(params, aiTagsList) {
     return [];
   }
 }
+
+// Нормализация рейтинга TBIB: JSON API возвращает полные слова (safe/questionable/explicit)
+function normalizeTbibRating(raw) {
+  const r = String(raw || '').toLowerCase();
+  if (r === 'safe' || r === 's') return 's';
+  if (r === 'questionable' || r === 'q') return 'q';
+  return 'e';
+}
+
+export async function fetchTbib(params, aiTagsList) {
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
+
+  let searchTags = adaptTagsForSite('tbib', tags, ageFilter, typeFilter);
+  // TBIB не поддерживает метатеги date:* — вырезаем, иначе выдача пустая
+  searchTags = searchTags.replace(/\bdate:\S+/gi, '').trim();
+
+  if (category === 'top' || category === 'views' || category === 'recommended') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'popular') {
+    // Без поддержки date:* «популярное за месяц» сводится к сортировке по скору
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+    }
+  } else if (category === 'random') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
+    }
+  }
+
+  // Фильтр рейтинга: TBIB принимает только полные слова (rating:safe и т.п.)
+  if (ratingFilter === 'nsfw') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:explicit` : 'rating:explicit';
+  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:questionable` : 'rating:questionable';
+  } else if (ratingFilter === 'sfw') {
+    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:safe` : 'rating:safe';
+  }
+
+  const pid = Math.max(0, page - 1);
+  const url = `https://tbib.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
+
+  try {
+    const res = await fetchSafe(url);
+    if (!res.ok) return [];
+    const text = await res.text();
+    const data = safeJsonParse(text, []);
+    const posts = Array.isArray(data) ? data : [];
+
+    return await Promise.all(posts.map(async item => {
+      const rawTags = (item.tags || '').split(' ').filter(Boolean);
+      let fileUrl = item.file_url || '';
+      if (!fileUrl && item.directory && item.image) {
+        fileUrl = `https://tbib.org/images/${item.directory}/${item.image}`;
+      }
+
+      const sampleUrl = fileUrl;
+      let previewUrlRaw = item.preview_url || (item.directory && item.image ? `https://tbib.org/thumbnails/${item.directory}/thumbnail_${item.image}` : fileUrl);
+      if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
+
+      const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+      const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
+      const createdAt = normalizeDate(item.created_at || item.change);
+
+      const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
+      const hasChildren = Boolean(item.has_children);
+      const seriesKey = extractSeriesKey({
+        source: item.source || '',
+        parentId,
+        hasChildren,
+        originalId: String(item.id),
+        tags: rawTags
+      }, 'tbib');
+
+      return {
+        id: `tbib_${item.id}`,
+        originalId: String(item.id),
+        site: 'tbib',
+        siteName: 'TBIB',
+        previewUrl,
+        sampleUrl,
+        fileUrl,
+        fileExt,
+        isVideo,
+        isGif,
+        hasSound: isVideo && hasSound,
+        author,
+        tags: rawTags,
+        tagDetails,
+        score: parseInt(item.score, 10) || 0,
+        rating: normalizeTbibRating(item.rating),
+        width: parseInt(item.width, 10) || 0,
+        height: parseInt(item.height, 10) || 0,
+        source: item.source || '',
+        postUrl: `https://tbib.org/index.php?page=post&s=view&id=${item.id}`,
+        parentId,
+        hasChildren,
+        seriesKey,
+        createdAt,
+        isAi: checkIsAi(rawTags, aiTagsList)
+      };
+    }));
+  } catch (err) {
+    logError('TBIB', 'Ошибка загрузки постов', err);
+    return [];
+  }
+}
