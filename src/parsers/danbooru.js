@@ -17,28 +17,28 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   const prioritizeUserTags = settings?.prioritizeUserTags === true;
   const deepFetchPagesSetting = settings?.deepFetchPages ? parseInt(settings.deepFetchPages, 10) : 2;
 
-  // Если приоритет у ручных тегов - сначала добавляем их
+  // When manual tags take priority, add them first
   if (prioritizeUserTags) {
     for (const t of userTagList) {
       if (queryTags.length < 2) queryTags.push(t);
     }
   }
 
-  // Приоритет Видео/звук
+  // Priority: video/sound
   if (typeFilter === 'audio' || typeFilter === 'sound') {
     if (queryTags.length < 2) queryTags.push('sound');
   } else if (typeFilter === 'video') {
     if (queryTags.length < 2) queryTags.push('animated');
   }
 
-  // Если ручные теги не в приоритете - добавляем их после медиа-фильтра
+  // When manual tags are not prioritized, add them after the media filter
   if (!prioritizeUserTags) {
     for (const t of userTagList) {
       if (queryTags.length < 2) queryTags.push(t);
     }
   }
 
-  // Приоритет Сортировка и фильтр по дате
+  // Priority: sorting and date filter
   const hasDateFilter = dateFilter && dateFilter !== 'all';
   const ageMap = {
     '24h': 'age:..1d',
@@ -80,12 +80,12 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     }
   }
 
-  // Приоритет Фильтр по дате (age:..Nd)
+  // Priority: date filter (age:..Nd)
   if (queryTags.length < 2 && hasDateFilter && ageMap[dateFilter]) {
     queryTags.push(ageMap[dateFilter]);
   }
 
-  // Приоритет Рейтинг
+  // Priority: rating
   if (queryTags.length < 2) {
     if (ratingFilter === 'nsfw') queryTags.push('rating:e');
     else if (ratingFilter === 'questionable' || ratingFilter === '16+') queryTags.push('rating:q,s');
@@ -258,7 +258,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     } catch (e) {}
   }
 
-  // Общий надежный fallback для Danbooru при сбое API/таймауте
+  // General reliable fallback for Danbooru on API failure/timeout
   if (allData.length === 0 && userTagList.length === 0) {
     try {
       const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)

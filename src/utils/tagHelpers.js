@@ -53,7 +53,7 @@ export function isPostMatchingFilters(post, criteria = {}) {
 
   const sets = getCriteriaSets(criteria, activeCurvyTags, activePetiteTags, activeFurryTags, activePregnantTags, activeLgbtTags);
 
-  // 1. Фильтр типа контента
+  // 1. Content type filter
   if (typeFilter === 'audio' || typeFilter === 'sound') {
     if (!post.isVideo || !post.hasSound) return false;
   } else if (typeFilter === 'video') {
@@ -67,12 +67,12 @@ export function isPostMatchingFilters(post, criteria = {}) {
     : []);
   const postTagsFlat = Array.from(postTagSet).join(' ').replace(/_/g, ' ');
 
-  // 2. Локальная фильтрация по исключающим (-tag) тегам
+  // 2. Local filtering by excluded (-tag) tags
   if (negativeTokens && negativeTokens.length > 0) {
     if (negativeTokens.some(neg => postTagsFlat.includes(neg) || postTagSet.has(neg))) return false;
   }
 
-  // 3. Фильтр телосложения и типажей (Мамочки vs Лоли)
+  // 3. Body type and archetype filter (milfs vs lolis)
   if (ageFilter === 'adult') {
     let excluded = false;
     for (const t of postTagSet) { if (sets.curvyExclude.has(t)) { excluded = true; break; } }
@@ -93,14 +93,14 @@ export function isPostMatchingFilters(post, criteria = {}) {
     }
   }
 
-  // 4. AI Фильтр
+  // 4. AI filter
   if (aiFilter === 'no-ai') {
     if (post.isAi) return false;
   } else if (aiFilter === 'only-ai') {
     if (!post.isAi) return false;
   }
 
-  // 5. Возрастной рейтинг
+  // 5. Age rating
   if (ratingFilter === 'nsfw') {
     const r = (post.rating || '').toLowerCase();
     if (r !== 'e' && r !== 'explicit' && r !== '?') return false;
@@ -109,8 +109,8 @@ export function isPostMatchingFilters(post, criteria = {}) {
     if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
   } else if (ratingFilter === 'sfw') {
     const r = (post.rating || '').toLowerCase();
-    // У Danbooru и Gelbooru 4-уровневая шкала: 's' = sensitive (16+), безопасный там только 'g'.
-    // На остальных сайтах легаси-шкала, где 's' = safe.
+    // Danbooru and Gelbooru use a 4-level scale: 's' = sensitive (16+), only 'g' is safe there.
+    // Other sites use the legacy scale where 's' = safe.
     if (post.site === 'danbooru' || post.site === 'gelbooru') {
       if (r !== 'g' && r !== 'general') return false;
     } else {
@@ -118,7 +118,7 @@ export function isPostMatchingFilters(post, criteria = {}) {
     }
   }
 
-  // 6-8. Контентные фильтры (фурри / беременность / ЛГБТ)
+  // 6-8. Content filters (furry / pregnancy / LGBT)
   if (hideFurry || hidePregnant || hideLgbt) {
     const tagList = Array.from(postTagSet);
     if (hideFurry && sets.furry.some(fTag => tagList.some(t => t === fTag || t.startsWith(fTag + '_') || t.endsWith('_' + fTag)))) return false;
@@ -126,14 +126,14 @@ export function isPostMatchingFilters(post, criteria = {}) {
     if (hideLgbt && sets.lgbt.some(lTag => tagList.some(t => t === lTag || t.startsWith(lTag + '_') || t.endsWith('_' + lTag) || t.includes('_' + lTag + '_')))) return false;
   }
 
-  // 8. Черный список (Set — O(1) на тег)
+  // 8. Blacklist (Set - O(1) per tag)
   if (sets.blacklist.size > 0) {
     for (const t of postTagSet) {
       if (sets.blacklist.has(t)) return false;
     }
   }
 
-  // 9. Фильтр по дате создания / добавления
+  // 9. Creation/upload date filter
   if (dateFilter && dateFilter !== 'all' && post.createdAt) {
     const postTime = new Date(post.createdAt).getTime();
     if (!isNaN(postTime) && postTime > 0) {
@@ -183,7 +183,7 @@ export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
   const lowerTags = Array.isArray(rawTags) ? rawTags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')) : [];
   const tagsStr = lowerTags.join(' ');
   
-  // 1. Извлекаем чистое расширение (без пути, параметров и лишних точек)
+  // 1. Extract the clean extension (no path, params, or stray dots)
   let ext = '';
   if (fileExt && typeof fileExt === 'string') {
     const cleanExt = fileExt.trim().split('?')[0];
@@ -202,25 +202,25 @@ export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
     }
   }
 
-  // 2. Детекция GIF (GIF - это анимированное изображение (img), а не контейнер HTML5 video)
+  // 2. GIF detection (a GIF is an animated image (img), not an HTML5 video container)
   const isGif = ext === 'gif' || lowerTags.includes('gif') || (!ext && ((url && url.toLowerCase().includes('.gif')) || (fileExt && fileExt.toLowerCase().includes('.gif'))));
 
-  // 3. Детекция Видео (MP4, WebM, MKV, MOV, M4V, FLV, AVI)
-  // ВАЖНО: тег 'animated' ставится как на GIF, так и на видео, поэтому animated сам по себе не делает файл видео если это GIF или статический формат.
+  // 3. Video detection (MP4, WebM, MKV, MOV, M4V, FLV, AVI)
+  // IMPORTANT: the 'animated' tag is applied to both GIFs and videos, so animated alone does not make a file a video when it is a GIF or a static format.
   const videoExts = ['mp4', 'webm', 'mkv', 'mov', 'm4v', 'flv', 'avi'];
   const hasVideoExt = videoExts.includes(ext) || videoExts.some(vExt => (url && url.toLowerCase().includes(`.${vExt}`)) || (fileExt && fileExt.toLowerCase().includes(`.${vExt}`)));
   const hasVideoTag = lowerTags.includes('video') || lowerTags.includes('webm') || lowerTags.includes('mp4') || lowerTags.includes('ugoira');
   
   const isVideo = !isGif && (hasVideoExt || (hasVideoTag && ext !== 'jpg' && ext !== 'jpeg' && ext !== 'png' && ext !== 'webp' && ext !== 'bmp' && ext !== 'gif'));
 
-  // 4. Окончательное определение расширения
+  // 4. Final extension determination
   if (!ext) {
     if (isVideo) ext = 'mp4';
     else if (isGif) ext = 'gif';
     else ext = 'jpg';
   }
 
-  // 5. Проверка звука
+  // 5. Sound check
   const hasSound = isVideo && (
     lowerTags.some(t => SOUND_KEYWORDS.includes(t)) || 
     tagsStr.includes('has_audio') || 
@@ -257,7 +257,7 @@ export function normalizeDate(rawDate) {
 export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
   const tags = Array.isArray(rawTags) ? rawTags : [];
   
-  // 1. Поиск в явных тегах автора
+  // 1. Look in explicit artist tags
   const explicitArtistTags = tags.filter(t => 
     t.startsWith('artist:') || t.startsWith('creator:') || t.startsWith('author:') || t.startsWith('draw:')
   ).map(t => t.replace(/^(artist|creator|author|draw):/, ''));
@@ -265,7 +265,7 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     return explicitArtistTags.join(', ');
   }
 
-  // 2. Поиск тегов со специальными маркерами: name_(artist), name_(creator), by_name, etc.
+  // 2. Look for tags with special markers: name_(artist), name_(creator), by_name, etc.
   const markerArtistTags = tags.filter(t => 
     t.endsWith('_(artist)') || t.endsWith('_(creator)') || t.endsWith('_(circle)') || t.endsWith('_(studio)') || t.startsWith('by_')
   ).map(t => t.replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, ''));
@@ -273,7 +273,7 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     return markerArtistTags.join(', ');
   }
 
-  // 3. Извлечение автора из ссылки источника (source)
+  // 3. Extract the author from the source URL
   if (source && typeof source === 'string') {
     const s = source.trim();
     const twitterMatch = s.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)(?:\/status|\/|$)/i);
@@ -322,7 +322,7 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     }
   }
 
-  // 4. Использование поля itemAuthor если оно не мусорное
+  // 4. Use the itemAuthor field when it is not junk
   if (itemAuthor && typeof itemAuthor === 'string') {
     const cleanAuthor = itemAuthor.trim();
     const isBad = !cleanAuthor || cleanAuthor === '0' || cleanAuthor === 'null' || cleanAuthor === 'undefined' || cleanAuthor.toLowerCase() === 'anonymous' || /^\d+$/.test(cleanAuthor);
@@ -387,19 +387,19 @@ export function classifyTags(rawTags = [], author = '') {
 export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'all') {
   let tags = (rawTags || '').trim();
 
-  // 1. Адаптация тегов: для Rule34Video преобразуем скобки в поисковые фразы
+  // 1. Tag adaptation: convert parentheses into search phrases for Rule34Video
   if (site === 'rule34video' && tags) {
     tags = tags.replace(/([a-zA-Z0-9_-]+)_\(([^)]+)\)/g, '$1 $2');
     tags = tags.replace(/([a-zA-Z0-9_-]+)\s*\(([^)]+)\)/g, '$1 $2');
     tags = tags.replace(/[()]/g, '');
   }
 
-  // 2. Алиасы тегов для совместимости с Danbooru
+  // 2. Tag aliases for Danbooru compatibility
   if (site === 'gelbooru' || site === 'rule34' || site === 'safebooru' || site === 'yandere' || site === 'konachan' || site === 'rule34video' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
     tags = tags.replace(/\bpetite\b/gi, 'small_breasts');
   }
 
-  // 3. Адаптация директив сортировки (order:* <-> sort:*) между движками
+  // 3. Adapt sort directives (order:* <-> sort:*) between engines
   if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
     tags = tags
       .replace(/\border:score_desc\b/gi, 'sort:score:desc')
@@ -423,7 +423,7 @@ export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilt
 
   const tagList = tags.split(/\s+/).filter(Boolean);
 
-  // 4. Подмешивание тегов телосложения / типажей
+  // 4. Mix in body type / archetype tags
   if (ageFilter === 'adult') {
     if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
       if (!tagList.some(t => t.startsWith('-loli'))) tagList.push('-loli');

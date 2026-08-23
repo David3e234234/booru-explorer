@@ -14,7 +14,7 @@ router.get('/video-thumbnail', handleVideoThumbnailRequest);
 // GET /api/transcode-video
 router.get('/transcode-video', handleTranscodeVideoRequest);
 
-// GET /api/resolve-video (Разрешение полных HD видеопотоков Rule34Video и др.)
+// GET /api/resolve-video (resolves full HD video streams from Rule34Video etc.)
 router.get('/resolve-video', async (req, res) => {
   const { url, id, site } = req.query;
   if (site === 'rule34video' || (url && url.includes('rule34video.com'))) {

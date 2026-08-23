@@ -18,7 +18,7 @@ import { logInfo, logError } from '../utils/logger.js';
 
 const router = express.Router();
 
-// Поля настроек клиента, влияющие на результат фильтрации — участвуют в ключе кэша
+// Client settings fields that affect filtering results - they are part of the cache key
 const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
   'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'customSources'
@@ -74,7 +74,7 @@ router.get('/posts', async (req, res) => {
     const excludeSites = req.query.excludeSites || '';
     const customSites = req.query.customSites || '';
 
-    // Проверка кэша в оперативной памяти (для всего кроме random)
+    // Check the in-memory cache (for everything except random)
     let clientAuth = parseClientAuth(req);
     const baseSettings = getSettings();
     const settings = {
@@ -94,7 +94,7 @@ router.get('/posts', async (req, res) => {
 
     logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, category=${category}, date=${dateFilter}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}`);
 
-    // fetchPosts сам выполняет полную локальную фильтрацию (isPostMatchingFilters)
+    // fetchPosts performs the full local filtering itself (isPostMatchingFilters)
     let posts = await fetchPosts(site, {
       tags, 
       page, 
@@ -111,14 +111,14 @@ router.get('/posts', async (req, res) => {
       hideLgbt
     }, aiTagsList, settings);
 
-    // Сортировка для категорий top/views (после Round-Robin слияния мульти-сайтов)
+    // Sort top/views categories (after the multi-site round-robin merge)
     if (category === 'top' && site !== 'all') {
       posts.sort((a, b) => (b.score || 0) - (a.score || 0));
     } else if (category === 'views' && site !== 'all') {
       posts.sort((a, b) => (b.views || b.score || 0) - (a.views || a.score || 0));
     }
 
-    // Автоматическая группировка связанных изображений в альбомы
+    // Automatically group related images into albums
     const shouldGroupAlbums = req.query.groupAlbums !== 'false';
     if (shouldGroupAlbums && posts.length > 0) {
       posts = groupPostsIntoAlbums(posts, { enabled: true });
@@ -158,7 +158,7 @@ router.get('/posts', async (req, res) => {
   }
 });
 
-// GET /api/posts/album — Поиск всех частей серии/альбома по parentId или Pixiv ID
+// GET /api/posts/album - find all parts of a series/album by parentId or Pixiv ID
 router.get('/posts/album', async (req, res) => {
   try {
     const site = req.query.site || 'danbooru';
@@ -190,7 +190,7 @@ router.get('/posts/album', async (req, res) => {
       }
     };
 
-    // Независимые запросы выполняем параллельно
+    // Run independent requests in parallel
     const pendingQueries = [];
     if (parentId && String(parentId) !== '0') {
       pendingQueries.push(fetchAndCollect(`parent:${parentId}`));
@@ -208,7 +208,7 @@ router.get('/posts/album', async (req, res) => {
       await Promise.all(pendingQueries);
     }
 
-    // Fallback-запросы, зависящие от результатов первых (последовательно)
+    // Fallback requests that depend on the first results (sequential)
     if (seriesKey.startsWith('pixiv:') && foundPostsMap.size === 0) {
       const pixivId = seriesKey.replace('pixiv:', '');
       await fetchAndCollect(`pixiv_id:${pixivId}`);
@@ -216,7 +216,7 @@ router.get('/posts/album', async (req, res) => {
 
     let items = Array.from(foundPostsMap.values());
 
-    // Если пост родительский не вернулся в parent:ID (на некоторых Booru), запрашиваем сам parentId
+    // If the parent post did not come back under parent:ID (on some Boorus), query the parentId itself
     if (parentId && !foundPostsMap.has(`${site}_${parentId}`) && !foundPostsMap.has(parentId)) {
       try {
         const rootPost = await fetchPosts(site, { tags: `id:${parentId}`, page: 1, limit: 1, ratingFilter: 'all', typeFilter: 'all' }, aiTagsList, settings);
@@ -228,7 +228,7 @@ router.get('/posts/album', async (req, res) => {
       } catch {}
     }
 
-    // Сортируем страницы сета
+    // Sort the set pages
     items.sort((a, b) => {
       const aIsParent = Boolean(a.hasChildren && !a.parentId);
       const bIsParent = Boolean(b.hasChildren && !b.parentId);
@@ -312,7 +312,7 @@ router.get('/tags/autocomplete', async (req, res) => {
   const rawQuery = (req.query.q || req.query.query || '').trim();
   if (!rawQuery) return res.json({ tags: [] });
 
-  // Нормализация: заменяем пробелы на подчеркивания (hu ta -> hu_ta)
+  // Normalize: replace spaces with underscores (hu ta -> hu_ta)
   const query = rawQuery.replace(/\s+/g, '_');
   const site = req.query.site || 'danbooru';
 
@@ -324,7 +324,7 @@ router.get('/tags/autocomplete', async (req, res) => {
     return res.json({ tags: cached });
   }
 
-  // Универсальный запрос к Danbooru как эталону тегов
+  // Universal query against Danbooru as the tag reference
   const fetchDanbooruTags = async (q) => {
     try {
       const url = `https://danbooru.donmai.us/tags.json?search[name_matches]=*${encodeURIComponent(q)}*&limit=15&search[order]=count`;

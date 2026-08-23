@@ -2,15 +2,15 @@ import { fetchSafe } from './network.js';
 import { logError } from './logger.js';
 import { extractAuthor as extractAuthorFromSource } from './tagHelpers.js';
 
-// Кеш глобальной карты тегов (1 = artist, 3 = copyright, 4 = character, 0 = general, 6 = meta)
+// Cache of the global tag map (1 = artist, 3 = copyright, 4 = character, 0 = general, 6 = meta)
 let globalTagMap = null;
 let isLoadingMap = null;
 let lastFetchedTime = 0;
 
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 часа
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const KNOWN_EXTRA_TAGS = {
-  // Популярные художники и аниматоры
+  // Popular artists and animators
   minus8: 1,
   derpixon: 1,
   'zone-sama': 1,
@@ -46,7 +46,7 @@ const KNOWN_EXTRA_TAGS = {
   reDrop: 1,
   wlop: 1,
 
-  // Популярные франшизы (Copyright)
+  // Popular franchises (copyright)
   hololive: 3,
   genshin_impact: 3,
   honkai_star_rail: 3,
@@ -92,7 +92,7 @@ async function loadGlobalTagSummary() {
 
   isLoadingMap = (async () => {
     try {
-      // Загружаем полную базу тегов с konachan (или yandere при ошибке)
+      // Load the full tag database from konachan (or yandere on error)
       let res = await fetchSafe('https://konachan.com/tag/summary.json', { timeout: 15000 });
       if (!res.ok) {
         res = await fetchSafe('https://yande.re/tag/summary.json', { timeout: 15000 });
@@ -107,7 +107,7 @@ async function loadGlobalTagSummary() {
           const entries = json.data.split(' ');
           const map = new Map();
 
-          // Добавляем теги из summary
+          // Add tags from summary
           for (const entryStr of entries) {
             if (!entryStr) continue;
             const parts = entryStr.split('`');
@@ -120,7 +120,7 @@ async function loadGlobalTagSummary() {
             }
           }
 
-          // Добавляем дополнительные теги
+          // Add extra tags
           for (const [tag, type] of Object.entries(KNOWN_EXTRA_TAGS)) {
             map.set(tag.toLowerCase(), type);
           }
@@ -136,7 +136,7 @@ async function loadGlobalTagSummary() {
       isLoadingMap = null;
     }
 
-    // Fallback: базовый набор
+    // Fallback: base set
     if (!globalTagMap) {
       globalTagMap = new Map(Object.entries(KNOWN_EXTRA_TAGS));
     }
@@ -147,10 +147,10 @@ async function loadGlobalTagSummary() {
 }
 
 /**
- * Универсальная классификация тегов поста для любых Booru сайтов (Rule34, Danbooru, Gelbooru, Moebooru и т.д.)
- * @param {string[]} rawTags - исходный массив тегов
- * @param {string} sourceUrl - ссылка на источник (источник Pixiv, Twitter и т.д.)
- * @param {string} initialAuthor - заранее известный автор (если передан)
+ * Universal post tag classification for any Booru site (Rule34, Danbooru, Gelbooru, Moebooru, etc.)
+ * @param {string[]} rawTags - raw tag array
+ * @param {string} sourceUrl - source link (Pixiv, Twitter, etc.)
+ * @param {string} initialAuthor - author known in advance (if provided)
  * @returns {Promise<{ tagDetails: { artist: string[], copyright: string[], character: string[], general: string[], meta: string[] }, author: string }>}
  */
 export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuthor = '') {
@@ -176,7 +176,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       .replace(/_?\((artist|creator|circle|studio|character|cosplay|person|series|game|anime|manga|vtuber|novel|comic|franchise|project)\)$/i, '')
       .replace(/^by_/i, '');
 
-    // 1. Проверка явных префиксов и маркеров
+    // 1. Check explicit prefixes and markers
     if (lower.startsWith('artist:') || lower.startsWith('creator:') || lower.startsWith('author:') || lower.startsWith('draw:') ||
         lower.endsWith('_(artist)') || lower.endsWith('_(creator)') || lower.endsWith('_(circle)') || lower.endsWith('_(studio)') || lower.startsWith('by_')) {
       addUnique(artist, cleanLower);
@@ -200,7 +200,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       continue;
     }
 
-    // 2. Поиск по словарю типов тегов (tagMap)
+    // 2. Look up the tag-type dictionary (tagMap)
     const type = tagMap ? (tagMap.get(lower) ?? tagMap.get(cleanLower)) : undefined;
 
     if (type === 1 && !GENERIC_NON_ARTIST_TAGS.has(cleanLower)) {
@@ -216,16 +216,16 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     }
   }
 
-  // Извлечение автора:
-  // Приоритет 1: определенные теги художника
-  // Приоритет 2: заранее переданный автор (например из tag_string_artist на Danbooru)
-  // Приоритет 3: ссылка на источник (Pixiv ID, Twitter аккаунт и т.д.)
+  // Author extraction:
+  // Priority 1: explicit artist tags
+  // Priority 2: author passed in advance (e.g. from tag_string_artist on Danbooru)
+  // Priority 3: source link (Pixiv ID, Twitter account, etc.)
   let author = '';
   if (artist.length > 0) {
     author = artist.join(', ');
   } else if (initialAuthor && typeof initialAuthor === 'string' && initialAuthor.trim()) {
     author = initialAuthor.trim();
-    // Добавляем в категорию artist если его там еще нет
+    // Add to the artist category if not already there
     author.split(',').forEach(a => {
       const cleanA = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
       if (cleanA) addUnique(artist, cleanA);

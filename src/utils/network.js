@@ -37,7 +37,7 @@ export async function fetchSafe(url, options = {}) {
   }
 }
 
-// Единая карта соответствия хост -> Referer (используется прокси и FFmpeg)
+// Single host -> Referer map (used by the proxy and FFmpeg)
 export function resolveSiteReferer(targetUrl) {
   try {
     const parsed = new URL(targetUrl);

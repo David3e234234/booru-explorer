@@ -7,10 +7,10 @@ import { getSettings } from './storageService.js';
 import { resolveSiteReferer } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
 
-// Максимальный размер изображения, который буферизуется в память и пишется в дисковый кэш
+// Max image size that gets buffered into memory and written to the disk cache
 const MAX_CACHED_IMAGE_BYTES = 30 * 1024 * 1024;
 
-// Таймаут апстрима с запасом на повторные попытки при троттлинге источника
+// Upstream timeout with headroom for retries while the source throttles
 const PROXY_ABORT_MS = 35000;
 
 const IMAGE_EXTS = [
@@ -26,7 +26,7 @@ function detectImageExt(cleanPath) {
   return 'jpg';
 }
 
-// Дедупликация одновременных запросов одного изображения (thundering herd)
+// Deduplicate concurrent requests for the same image (thundering herd)
 const inflightImages = new Map();
 
 function buildUpstreamHeaders(targetUrl, isImage, currentSettings) {
@@ -51,8 +51,8 @@ function buildUpstreamHeaders(targetUrl, isImage, currentSettings) {
   return headers;
 }
 
-// Умный исчерпывающий fallback для альтернативных CDN-хостов, путей (/samples/ <-> /images/)
-// и расширений (jpg, png, jpeg, webp, gif, mp4, webm) при 404
+// Exhaustive smart fallback over alternative CDN hosts, paths (/samples/ <-> /images/)
+// and extensions (jpg, png, jpeg, webp, gif, mp4, webm) on 404
 function build404FallbackCandidates(targetUrl) {
   const candidates = [];
   const pushCandidate = (c) => {
@@ -128,8 +128,8 @@ async function tryFetch(url, headers, signal) {
   return fetch(url, { headers, redirect: 'follow', signal });
 }
 
-// Источники вроде rule34video отвечают 429 на серию Range-запросов одного видео.
-// Повторяем такие ответы с паузой, вместо того чтобы сразу отдавать ошибку плееру
+// Sources like rule34video answer 429 to a burst of Range requests for one video.
+// Retry such responses after a pause instead of failing the player right away
 const RETRYABLE_STATUSES = new Set([429, 502, 503]);
 const UPSTREAM_COOLDOWN_MS = 3000;
 const upstreamCooldown = new Map();
@@ -143,7 +143,7 @@ function pruneUpstreamCooldown() {
 
 async function fetchUpstreamWithRetry(targetUrl, headers, signal, maxRetries = 2) {
   for (let attempt = 0; ; attempt++) {
-    // Кулдаун после недавнего 429: серия Range-запросов не должна долбить источник вплотную
+    // Cooldown after a recent 429: a burst of Range requests must not hammer the source back-to-back
     const cooldownEnd = upstreamCooldown.get(targetUrl) || 0;
     const waitMs = cooldownEnd - Date.now();
     if (waitMs > 0 && !signal?.aborted) {
@@ -155,7 +155,7 @@ async function fetchUpstreamWithRetry(targetUrl, headers, signal, maxRetries = 2
       return response;
     }
 
-    // Освобождаем соединение неудачного ответа перед повтором
+    // Release the failed response's connection before retrying
     try { await response.body?.cancel(); } catch {}
 
     if (upstreamCooldown.size > 200) pruneUpstreamCooldown();
@@ -168,7 +168,7 @@ async function fetchUpstreamWithRetry(targetUrl, headers, signal, maxRetries = 2
   }
 }
 
-// Полный цикл: скачать изображение (с 404-фолбэком), положить в дисковый кэш и вернуть клиенту
+// Full cycle: download the image (with 404 fallback), put it in the disk cache, and return it to the client
 async function downloadAndCacheImage(req, res, originalUrl, headers) {
   const controller = new AbortController();
   const abortTimeout = setTimeout(() => controller.abort(), PROXY_ABORT_MS);
@@ -223,7 +223,7 @@ async function downloadAndCacheImage(req, res, originalUrl, headers) {
     return;
   }
 
-  // Большие файлы стримим без кэширования
+  // Stream large files without caching
   const declaredLength = parseInt(response.headers.get('content-length') || '0', 10);
   if (declaredLength > MAX_CACHED_IMAGE_BYTES) {
     if (response.body) {
@@ -275,7 +275,7 @@ export async function handleProxyRequest(req, res) {
     const isRangeReq = Boolean(req.headers.range);
     const currentSettings = getSettings();
 
-    // Дисковый кэш для картинок (неблокирующий)
+    // Disk cache for images (non-blocking)
     if (isImage && !isRangeReq) {
       const hash = crypto.createHash('md5').update(targetUrl).digest('hex');
       const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${detectImageExt(cleanPath)}`);
@@ -288,7 +288,7 @@ export async function handleProxyRequest(req, res) {
         }
       } catch {}
 
-      // Если такой же файл уже качается — дождаться его, затем снова проверить кэш
+      // The same file is already downloading - wait for it, then re-check the cache
       const inflightJob = inflightImages.get(targetUrl);
       if (inflightJob) {
         await inflightJob.catch(() => {});
@@ -301,7 +301,7 @@ export async function handleProxyRequest(req, res) {
         } catch {}
       }
 
-      // Регистрируем свою загрузку как активную
+      // Register our own download as active
       const job = downloadAndCacheImage(req, res, targetUrl, buildUpstreamHeaders(targetUrl, true, currentSettings));
       inflightImages.set(targetUrl, job);
       const cleanup = () => {
@@ -311,7 +311,7 @@ export async function handleProxyRequest(req, res) {
       return await job;
     }
 
-    // Потоковый путь: видео, Range-запросы и не-кэшируемые ответы
+    // Streaming path: videos, Range requests, and non-cacheable responses
     const headers = buildUpstreamHeaders(targetUrl, !isImage, currentSettings);
     if (req.headers.range) {
       headers['Range'] = req.headers.range;

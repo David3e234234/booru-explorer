@@ -1,10 +1,30 @@
-const CACHE_NAME = 'booru-explorer-v7.2';
-const MEDIA_CACHE = 'booru-media-v7.2';
+const CACHE_NAME = 'booru-explorer-v8.2';
+const MEDIA_CACHE = 'booru-media-v8.2';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
 
-// Заглушка для respondWith: без нее обрыв сети или потока падает с "неожиданной ошибкой" SW
+// Placeholder for respondWith: without it a network or stream abort crashes the SW with "unexpected error"
 const offlineResponse = () => new Response(null, { status: 504, statusText: 'Gateway Timeout' });
+
+// respondWith must NEVER reject: an AbortError or stream teardown inside the
+// handler otherwise surfaces as "ServiceWorker caught an unexpected error"
+// and leaves the page with dead handlers and a spinning loader.
+async function safeRespond(request, strategy) {
+  try {
+    return await strategy();
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      const cached = await caches.match(request).catch(() => undefined);
+      return cached || offlineResponse();
+    }
+    console.warn('[ServiceWorker] Ошибка обработки запроса:', request.url, err);
+    try {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+    } catch (_) { /* ignore */ }
+    return offlineResponse();
+  }
+}
 
 const STATIC_ASSETS = [
   '/',
@@ -16,6 +36,7 @@ const STATIC_ASSETS = [
   '/css/viewer.css',
   '/js/state.js',
   '/js/api.js',
+  '/js/i18n.js',
   '/js/app.js',
   '/js/gallery.js',
   '/js/viewer.js',
@@ -29,8 +50,6 @@ const STATIC_ASSETS = [
   '/js/modules/authModal.js',
   '/js/modules/profileUI.js',
   '/js/modules/favoriteAuthorsUI.js',
-  '/js/modules/subscriptionsUI.js',
-  '/js/modules/pushManager.js',
   '/js/viewer/imageZoom.js',
   '/js/viewer/videoPlayer.js',
   '/js/viewer/viewerSidebar.js',
@@ -42,11 +61,11 @@ const STATIC_ASSETS = [
   '/icons/icon.svg'
 ];
 
-// Установка Service Worker и предварительное кэширование App Shell
+// Install the Service Worker and precache the App Shell
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Кэширование App Shell v7.2');
+      console.log('[ServiceWorker] Кэширование App Shell v8.2');
       return cache.addAll(STATIC_ASSETS).catch(err => {
         console.warn('[ServiceWorker] Не удалось закэшировать часть ресурсов:', err);
       });
@@ -54,7 +73,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Активация и очистка старых версий кэша
+// Activation and cleanup of old cache versions
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -70,7 +89,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Ограничение кэша медиа: LRU по порядку ключей (старые вытесняются первыми)
+// Media cache cap: LRU by key order (oldest evicted first)
 async function trimMediaCache() {
   const cache = await caches.open(MEDIA_CACHE);
   const keys = await cache.keys();
@@ -86,53 +105,63 @@ function isCacheableMediaResponse(response) {
   return len === 0 || len <= MAX_CACHED_MEDIA_BYTES;
 }
 
-// Перехват запросов
+// Cache put that never rejects (body may already be consumed on abort)
+function putSafe(cache, request, response) {
+  try {
+    const resClone = response.clone();
+    return cache.put(request, resClone).catch(() => {});
+  } catch (_) {
+    return Promise.resolve();
+  }
+}
+
+// Intercept requests
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Игнорируем не-GET запросы и сторонние API вызовы
+  // Skip non-GET requests and third-party API calls
   if (event.request.method !== 'GET') return;
 
-  // Миниатюры через прокси неизменяемы (ключ = md5 от URL) — Cache First,
-  // чтобы галерея открывалась мгновенно и была доступна офлайн
+  // Proxied thumbnails are immutable (key = md5 of URL) — Cache First,
+  // so the gallery opens instantly and works offline
   if (
     url.origin === self.location.origin &&
     (url.pathname === '/api/proxy' || url.pathname === '/api/video-thumbnail')
   ) {
-    event.respondWith(
-      caches.open(MEDIA_CACHE).then(cache =>
-        cache.match(event.request).then(cached => {
-          if (cached) return cached;
-          return fetch(event.request).then(response => {
-            if (response && response.status === 200 && isCacheableMediaResponse(response)) {
-              const resClone = response.clone();
-              cache.put(event.request, resClone).then(() => trimMediaCache());
-            }
-            return response;
-          }).catch(() => offlineResponse());
-        })
-      )
-    );
+    event.respondWith(safeRespond(event.request, async () => {
+      const cache = await caches.open(MEDIA_CACHE);
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+      const response = await fetch(event.request);
+      if (response && response.status === 200 && isCacheableMediaResponse(response)) {
+        putSafe(cache, event.request, response).then(() => trimMediaCache().catch(() => {}));
+      }
+      return response;
+    }));
     return;
   }
 
-  // Кэширование запросов Избранного (/api/favorites) и выдачи поиска (/api/posts):
-  // Network First с фоллбэком на последний успешный ответ для офлайн-просмотра
+  // Cache Favorites (/api/favorites) and search results (/api/posts) requests:
+  // Network First with a fallback to the last successful response for offline viewing
   if (url.pathname === '/api/favorites' || url.pathname === '/api/posts') {
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const resClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, resClone));
-          return response;
-        })
-        .catch(() => caches.match(event.request))
-        .then((cached) => cached || offlineResponse())
-    );
+    event.respondWith(safeRespond(event.request, async () => {
+      try {
+        const response = await fetch(event.request);
+        if (response && response.status === 200) {
+          const cache = await caches.open(CACHE_NAME);
+          putSafe(cache, event.request, response);
+        }
+        return response;
+      } catch (networkErr) {
+        if (networkErr && networkErr.name === 'AbortError') throw networkErr;
+        const cached = await caches.match(event.request);
+        return cached || offlineResponse();
+      }
+    }));
     return;
   }
 
-  // Network First для статических файлов приложения (HTML, CSS, JS, SVG, JSON)
+  // Network First for app static files (HTML, CSS, JS, SVG, JSON)
   if (
     url.origin === self.location.origin &&
     (url.pathname === '/' ||
@@ -142,66 +171,31 @@ self.addEventListener('fetch', (event) => {
      url.pathname.endsWith('.svg') ||
      url.pathname.endsWith('.json'))
   ) {
-    event.respondWith(
-      fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const resClone = networkResponse.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(event.request, resClone));
-          }
-          return networkResponse;
-        })
-        .catch(() => caches.match(event.request))
-        .then((cached) => cached || offlineResponse())
-    );
+    event.respondWith(safeRespond(event.request, async () => {
+      try {
+        const networkResponse = await fetch(event.request);
+        if (networkResponse && networkResponse.ok && networkResponse.status === 200) {
+          const cache = await caches.open(CACHE_NAME);
+          putSafe(cache, event.request, networkResponse);
+        }
+        return networkResponse;
+      } catch (networkErr) {
+        if (networkErr && networkErr.name === 'AbortError') throw networkErr;
+        const cached = await caches.match(event.request);
+        return cached || offlineResponse();
+      }
+    }));
     return;
   }
 
-  // Для прочих запросов (API, видео, прокси) - прямой сетевой запрос с фоллбэком на кэш
-  event.respondWith(
-    fetch(event.request)
-      .catch(() => caches.match(event.request))
-      .then((cached) => cached || offlineResponse())
-  );
-});
-
-// ── Push-уведомления ──
-
-self.addEventListener('push', (event) => {
-  let payload = { title: 'Booru Explorer', body: 'Новые посты по вашим подпискам', url: '/' };
-  try {
-    if (event.data) {
-      payload = { ...payload, ...event.data.json() };
+  // For all other requests (API, video, proxy): direct network request with cache fallback
+  event.respondWith(safeRespond(event.request, async () => {
+    try {
+      return await fetch(event.request);
+    } catch (networkErr) {
+      if (networkErr && networkErr.name === 'AbortError') throw networkErr;
+      const cached = await caches.match(event.request);
+      return cached || offlineResponse();
     }
-  } catch (err) {
-    if (event.data) payload.body = event.data.text();
-  }
-
-  event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/favicon.png',
-      tag: 'booru-subscriptions',
-      data: { url: payload.url || '/' },
-      renotify: true
-    })
-  );
-});
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/';
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      for (const client of clientList) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
-          client.navigate(targetUrl).catch(() => {});
-          return client.focus();
-        }
-      }
-      return self.clients.openWindow(targetUrl);
-    })
-  );
+  }));
 });

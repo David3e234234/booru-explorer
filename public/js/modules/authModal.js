@@ -1,6 +1,7 @@
 import { state, saveLocalAuth, clearLocalAuth, loadLocalFavorites, loadLocalLikes, loadLocalFavoriteAuthors, loadLocalSettings } from '../state.js';
 import { apiLogin, apiRegister, apiLogout } from '../api.js';
 import { showToast } from './uiUtils.js';
+import { t } from '../i18n.js';
 
 export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
   const modalBackdrop = document.getElementById('modalAuthBackdrop');
@@ -48,7 +49,7 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
     }
   }
 
-  // Очистка сообщений об ошибках при наборе
+  // Clear error messages while typing
   modalBackdrop?.querySelectorAll('input').forEach(inp => {
     inp.addEventListener('input', clearErrors);
   });
@@ -68,7 +69,7 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
     }
   }
 
-  // Обработчики вкладок и закрытия
+  // Tab and close handlers
   btnTabLogin?.addEventListener('click', () => switchTab('login'));
   btnTabRegister?.addEventListener('click', () => switchTab('register'));
   btnClose?.addEventListener('click', closeAuthModal);
@@ -79,7 +80,7 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
 
   btnHeaderAuth?.addEventListener('click', () => {
     if (state.currentUser) {
-      // Если уже залогинен, переходим во вкладку Профиль
+      // Already logged in: jump to the Profile tab
       if (typeof onOpenProfile === 'function') {
         onOpenProfile();
       }
@@ -88,7 +89,7 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
     }
   });
 
-  // Отправка формы логина
+  // Login form submission
   formLogin?.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearErrors();
@@ -103,18 +104,18 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
       const res = await apiLogin(username, password);
       if (res.success && res.token && res.user) {
         saveLocalAuth(res.token, res.user);
-        showToast(`С возвращением, ${res.user.username}!`, 'success');
+        showToast(t('auth.welcome', 'С возвращением, {name}!').replace('{name}', res.user.username), 'success');
         closeAuthModal();
         if (typeof onAuthSuccess === 'function') onAuthSuccess(res.user);
       } else {
         if (loginErrorMsg) {
-          loginErrorMsg.textContent = res.message || 'Ошибка авторизации';
+          loginErrorMsg.textContent = res.message || t('auth.loginFailed', 'Ошибка авторизации');
           loginErrorMsg.style.display = 'block';
         }
       }
     } catch (err) {
       if (loginErrorMsg) {
-        loginErrorMsg.textContent = err.message || 'Ошибка соединения с сервером';
+        loginErrorMsg.textContent = err.message || t('auth.connError', 'Ошибка соединения с сервером');
         loginErrorMsg.style.display = 'block';
       }
     } finally {
@@ -122,7 +123,7 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
     }
   });
 
-  // Отправка формы регистрации
+  // Register form submission
   formRegister?.addEventListener('submit', async (e) => {
     e.preventDefault();
     clearErrors();
@@ -136,13 +137,13 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
 
     if (password !== passwordConfirm) {
       if (regErrorMsg) {
-        regErrorMsg.textContent = 'Пароли не совпадают';
+        regErrorMsg.textContent = t('auth.passwordMismatch', 'Пароли не совпадают');
         regErrorMsg.style.display = 'block';
       }
       return;
     }
 
-    // Собираем локальные данные для миграции, если флажок включен
+    // Collect local data for migration if the checkbox is enabled
     const initialData = {};
     if (shouldMigrate) {
       initialData.favorites = state.favorites || [];
@@ -156,18 +157,18 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
       const res = await apiRegister(username, password, initialData);
       if (res.success && res.token && res.user) {
         saveLocalAuth(res.token, res.user);
-        showToast(`Аккаунт ${res.user.username} успешно создан!`, 'success');
+        showToast(t('auth.accountCreated', 'Аккаунт {name} успешно создан!').replace('{name}', res.user.username), 'success');
         closeAuthModal();
         if (typeof onAuthSuccess === 'function') onAuthSuccess(res.user);
       } else {
         if (regErrorMsg) {
-          regErrorMsg.textContent = res.message || 'Ошибка при регистрации';
+          regErrorMsg.textContent = res.message || t('auth.registerFailed', 'Ошибка при регистрации');
           regErrorMsg.style.display = 'block';
         }
       }
     } catch (err) {
       if (regErrorMsg) {
-        regErrorMsg.textContent = err.message || 'Ошибка соединения с сервером';
+        regErrorMsg.textContent = err.message || t('auth.connError', 'Ошибка соединения с сервером');
         regErrorMsg.style.display = 'block';
       }
     } finally {
@@ -196,12 +197,12 @@ export function updateHeaderAuthUI() {
       mobileNavProfileLabel.textContent = `@${name}`;
     }
   } else {
-    if (headerUserName) headerUserName.textContent = 'Войти';
+    if (headerUserName) headerUserName.textContent = t('header.login', 'Войти');
     if (headerUserAvatar) {
       headerUserAvatar.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     }
     if (mobileNavProfileLabel) {
-      mobileNavProfileLabel.textContent = 'Профиль';
+      mobileNavProfileLabel.textContent = t('mobileNav.profile', 'Профиль');
     }
   }
 }

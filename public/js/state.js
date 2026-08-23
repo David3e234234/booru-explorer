@@ -18,7 +18,7 @@ export const state = {
   currentSite: 'danbooru',
   currentCategory: 'new', // 'new', 'views', 'top', 'recommended', 'random', 'favorites'
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
-  ratingFilter: 'all', // 'all', 'nsfw' (18+), 'questionable' (16+), 'sfw' (безопасно)
+  ratingFilter: 'all', // 'all', 'nsfw' (18+), 'questionable' (16+), 'sfw' (safe)
   typeFilter: 'all', // 'all', 'video', 'image'
   ageFilter: 'all', // 'all', 'adult', 'young'
   dateFilter: 'all', // 'all', '24h', '2d', '7d', '30d', '90d', '365d'
@@ -39,8 +39,7 @@ export const state = {
   dislikedIds: new Set(),
   viewedIds: new Set(),
   favoritesSubTab: 'posts', // 'posts' | 'authors'
-  profileSubTab: 'likes', // 'likes' | 'favorites' | 'authors' | 'searches' | 'analytics'
-  subscriptions: [],
+  profileSubTab: 'likes', // 'likes' | 'favorites' | 'authors' | 'analytics'
   currentUser: null, // { id, username, createdAt, ... }
   authToken: null,
   favoriteAuthors: [],
@@ -300,7 +299,7 @@ export function saveLocalLikes(likesList) {
   } catch (e) {}
 }
 
-// 📦 Экспорт всех данных пользователя (Настройки, Закладки, Лайки, Скрытые, Авторы) в JSON объект
+// 📦 Export all user data (settings, favorites, likes, dislikes, authors) into a JSON object
 export function exportUserData() {
   const exportObject = {
     version: 1,
@@ -314,7 +313,7 @@ export function exportUserData() {
   return exportObject;
 }
 
-// 📥 Импорт данных пользователя из JSON
+// 📥 Import user data from JSON
 export function importUserData(data) {
   if (!data || typeof data !== 'object') {
     throw new Error('Некорректный формат файла данных');
@@ -322,14 +321,14 @@ export function importUserData(data) {
 
   let importedCounts = { settings: false, favorites: 0, favoriteAuthors: 0, likes: 0, dislikes: 0 };
 
-  // 1. Настройки
+  // 1. Settings
   if (data.settings && typeof data.settings === 'object') {
     saveLocalSettings(data.settings);
     state.settings = { ...state.settings, ...data.settings };
     importedCounts.settings = true;
   }
 
-  // 2. Закладки (Favorites)
+  // 2. Favorites
   if (Array.isArray(data.favorites)) {
     const existing = loadLocalFavorites() || [];
     const mergedMap = new Map();
@@ -340,7 +339,7 @@ export function importUserData(data) {
     importedCounts.favorites = mergedList.length;
   }
 
-  // 3. Любимые авторы
+  // 3. Favorite authors
   if (Array.isArray(data.favoriteAuthors)) {
     const existing = loadLocalFavoriteAuthors() || [];
     const mergedMap = new Map();
@@ -353,7 +352,7 @@ export function importUserData(data) {
     importedCounts.favoriteAuthors = mergedList.length;
   }
 
-  // 4. Лайки
+  // 4. Likes
   if (Array.isArray(data.likes)) {
     const existing = loadLocalLikes() || [];
     const mergedMap = new Map();
@@ -364,7 +363,7 @@ export function importUserData(data) {
     importedCounts.likes = mergedList.length;
   }
 
-  // 5. Скрытые (Dislikes)
+  // 5. Dislikes
   if (Array.isArray(data.dislikes)) {
     const existing = loadLocalDislikes() || [];
     const mergedMap = new Map();
@@ -441,42 +440,42 @@ export function isAuthorFavorite(name) {
   return state.favoriteAuthorNames.has(clean);
 }
 
-// 🧠 Алгоритм извлечения карты интересов пользователя
+// 🧠 Algorithm for extracting the user's interest map
 export function getUserInterestTags(limit = null) {
   const counts = new Map(); // tag -> positive weight sum
   const dislikeCounts = new Map(); // tag -> negative penalty sum
   const weights = new Map(); // tag -> baseWeight
   const catMap = new Map(); // tag -> category
 
-  // 1. Анализируем все пролайканные посты (вес × 2.0)
+  // 1. Analyze all liked posts (weight × 2.0)
   for (const post of state.likes) {
     extractTagsFromPost(post, counts, weights, catMap, 2.0);
   }
 
-  // 2. Анализируем закладки (вес × 1.5)
+  // 2. Analyze favorites (weight × 1.5)
   for (const post of state.favorites) {
     extractTagsFromPost(post, counts, weights, catMap, 1.5);
   }
 
-  // 3. Анализируем скрытые / задизлайканные посты (штраф × 1.8)
+  // 3. Analyze hidden / disliked posts (penalty × 1.8)
   for (const post of (state.dislikes || [])) {
     extractTagsFromPost(post, dislikeCounts, weights, catMap, 1.8);
   }
 
   const scores = new Map();
 
-  // Применяем сублинейное сглаживание с вычетом штрафов: baseWeight * log2(1 + netCount)
+  // Apply sublinear smoothing with penalty subtraction: baseWeight * log2(1 + netCount)
   for (const [tag, count] of counts.entries()) {
     const penalty = dislikeCounts.get(tag) || 0;
     const netCount = count - penalty;
-    if (netCount <= 0.1) continue; // Тег полностью подавлен дизлайками
+    if (netCount <= 0.1) continue; // Tag fully suppressed by dislikes
 
     const baseWeight = weights.get(tag) || 1.0;
     const score = baseWeight * Math.log2(1 + netCount);
     scores.set(tag, score);
   }
 
-  // 4. Анализируем любимых авторов (вес × 5.0) -> фиксированный бонус
+  // 4. Analyze favorite authors (weight × 5.0) -> fixed bonus
   for (const author of state.favoriteAuthors) {
     const raw = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
     if (raw) {
@@ -497,7 +496,7 @@ export function getUserInterestTags(limit = null) {
   return (typeof limit === 'number' && limit > 0) ? list.slice(0, limit) : list;
 }
 
-// 🔗 Извлечение устойчивых парных комбинаций тегов (Автор + Персонаж, Персонаж + Франшиза) для сид-запросов
+// 🔗 Extract stable tag pair combinations (Author + Character, Character + Franchise) for seed queries
 export function getUserInterestSeedPairs(limit = 10) {
   const userInterests = getUserInterestTags();
   if (userInterests.length === 0) return [];
@@ -528,7 +527,7 @@ export function getUserInterestSeedPairs(limit = 10) {
       pairScores.set(sortedPair, (pairScores.get(sortedPair) || 0) + pairScore);
     };
 
-    // Комбинации с наивысшим качеством сид-выдачи
+    // Highest-quality seed result combinations
     for (const a of artists) {
       for (const c of characters) addPair(a, c, 2.5);
       for (const cp of copyrights) addPair(a, cp, 2.0);
@@ -590,7 +589,7 @@ function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {
     }
   };
 
-  // Авторы (вес 5.0)
+  // Authors (weight 5.0)
   if (post.author) {
     addTag(post.author, 'artist', 5.0);
   }
@@ -612,7 +611,7 @@ function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {
   }
 }
 
-// 🎯 Вычисление процента релевантности поста и списка совпавших тегов
+// 🎯 Compute a post's relevance percentage and its list of matched tags
 export function calculatePostMatchPercent(post, userInterestMap) {
   if (!post || !userInterestMap || userInterestMap.size === 0) {
     return {
@@ -664,7 +663,7 @@ export function calculatePostMatchPercent(post, userInterestMap) {
     };
   }
 
-  // Сортируем совпавшие теги по значимости
+  // Sort matched tags by significance
   matchedTags.sort((a, b) => b.score - a.score);
 
   const ratio = matchPoints / (matchPoints + 12);

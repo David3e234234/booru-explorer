@@ -6,24 +6,24 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Booru Explorer">
-  <meta name="theme-color" content="#0e0d0c">
-  <title>Booru Explorer: медиа и видео поисковик</title>
+  <meta name="theme-color" content="#14110d">
+  <title data-i18n="app.title">Booru Explorer: медиа и видео поисковик</title>
   <link rel="manifest" href="manifest.json?v=7.0">
   <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon.png?v=7.0">
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=7.0">
   <link rel="apple-touch-icon-precomposed" href="icons/apple-touch-icon.png?v=7.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/variables.css?v=6.3">
-  <link rel="stylesheet" href="css/main.css?v=6.3">
-  <link rel="stylesheet" href="css/components.css?v=6.4">
-  <link rel="stylesheet" href="css/viewer.css?v=6.3">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/variables.css?v=8.1">
+  <link rel="stylesheet" href="css/main.css?v=8.1">
+  <link rel="stylesheet" href="css/components.css?v=8.1">
+  <link rel="stylesheet" href="css/viewer.css?v=8.1">
   <script src="js/mp4box.all.min.js"></script>
 </head>
 <body>
 
-  <!-- SVG-спрайт: один экземпляр на все карточки галереи вместо дублирования inline-SVG -->
+  <!-- SVG sprite: one instance for all gallery cards instead of duplicating inline SVG -->
   <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
     <symbol id="ic-dislike" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></g></symbol>
     <symbol id="ic-heart" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
@@ -35,7 +35,7 @@
     <symbol id="ic-album" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.5"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></g></symbol>
   </svg>
 
-  <!-- Верхняя панель навигации -->
+  <!-- Top navigation bar -->
   <header class="app-header">
     <div class="header-left">
       <div class="brand" id="btnLogo">
@@ -45,53 +45,53 @@
         <span class="brand-title">Booru<span class="brand-accent">Explorer</span></span>
       </div>
 
-      <!-- Вкладки разделов и сортировки (Десктоп) -->
+      <!-- Category and sorting tabs (desktop) -->
       <nav class="nav-tabs desktop-only">
-        <button class="nav-tab active" data-category="new" title="Свежие публикации (по дате)">
+        <button class="nav-tab active" data-category="new" title="Свежие публикации (по дате)" data-i18n-title="nav.fresh.title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span>Свежие</span>
+          <span data-i18n="nav.fresh">Свежие</span>
         </button>
-        <button class="nav-tab" data-category="views" title="Самые просматриваемые и популярные публикации">
+        <button class="nav-tab" data-category="views" title="Самые просматриваемые и популярные публикации" data-i18n-title="nav.views.title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-          <span>Просматриваемые</span>
+          <span data-i18n="nav.views">Просматриваемые</span>
         </button>
-        <button class="nav-tab" data-category="top" title="Высокий рейтинг: лучшее за все время по оценкам">
+        <button class="nav-tab" data-category="top" title="Высокий рейтинг: лучшее за все время по оценкам" data-i18n-title="nav.top.title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          <span>По рейтингу</span>
+          <span data-i18n="nav.top">По рейтингу</span>
         </button>
-        <button class="nav-tab" data-category="recommended" title="Персональные рекомендации на основе ваших лайков">
+        <button class="nav-tab" data-category="recommended" title="Персональные рекомендации на основе ваших лайков" data-i18n-title="nav.recommended.title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>
-          <span>Для вас</span>
+          <span data-i18n="nav.recommended">Для вас</span>
         </button>
-        <button class="nav-tab" data-category="random" title="Случайная выборка">
+        <button class="nav-tab" data-category="random" title="Случайная выборка" data-i18n-title="nav.random.title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/></svg>
-          <span>Случайно</span>
+          <span data-i18n="nav.random">Случайно</span>
         </button>
       </nav>
     </div>
 
-    <!-- Правая часть: опции и настройки -->
+    <!-- Right side: options and settings -->
     <div class="header-right">
-      <button class="btn-user-profile desktop-only" id="btnHeaderAuth" title="Личный кабинет">
+      <button class="btn-user-profile desktop-only" id="btnHeaderAuth" title="Личный кабинет" data-i18n-title="header.profile.title">
         <div class="user-avatar-mini" id="headerUserAvatar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         </div>
-        <span class="user-name-label desktop-only" id="headerUserName">Войти</span>
+        <span class="user-name-label desktop-only" id="headerUserName" data-i18n="header.login">Войти</span>
       </button>
 
-      <div class="header-status-info" id="headerStatusBox" title="Нажмите для смены источника">
+      <div class="header-status-info" id="headerStatusBox" title="Нажмите для смены источника" data-i18n-title="header.site.title">
         <span class="active-site-badge" id="currentSiteLabel">Danbooru</span>
         <span class="results-count desktop-only" id="resultsCount">0 постов</span>
       </div>
 
-      <button class="btn-action-shuffle" id="btnShuffleGallery" title="Перемешать посты в случайном порядке">
+      <button class="btn-action-shuffle" id="btnShuffleGallery" title="Перемешать посты в случайном порядке" data-i18n-title="header.shuffle.title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.6-8.6c.8-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l6.6 8.6c.8 1.1 2 1.7 3.3 1.7H22"/><path d="m18 14 4 4-4 4"/></svg>
-        <span class="desktop-only">Перемешать</span>
+        <span class="desktop-only" data-i18n="header.shuffle">Перемешать</span>
       </button>
 
-      <!-- Переключатель колонок для десктопа -->
+      <!-- Column switcher for desktop -->
       <div class="grid-size-selector desktop-only" id="desktopGridSizeSelector">
-        <button class="btn-size" data-cols="small" title="Мелкая сетка (много колонок)">
+        <button class="btn-size" data-cols="small" title="Мелкая сетка (много колонок)" data-i18n-title="header.gridSmall.title">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
             <rect x="1" y="2" width="3" height="16" rx="1"/>
             <rect x="6" y="2" width="3" height="16" rx="1"/>
@@ -99,14 +99,14 @@
             <rect x="16" y="2" width="3" height="16" rx="1"/>
           </svg>
         </button>
-        <button class="btn-size active" data-cols="medium" title="Оптимальная сетка (стандарт)">
+        <button class="btn-size active" data-cols="medium" title="Оптимальная сетка (стандарт)" data-i18n-title="header.gridMedium.title">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
             <rect x="1.5" y="2" width="4.5" height="16" rx="1"/>
             <rect x="7.75" y="2" width="4.5" height="16" rx="1"/>
             <rect x="14" y="2" width="4.5" height="16" rx="1"/>
           </svg>
         </button>
-        <button class="btn-size" data-cols="large" title="Крупная сетка (2-3 колонки)">
+        <button class="btn-size" data-cols="large" title="Крупная сетка (2-3 колонки)" data-i18n-title="header.gridLarge.title">
           <svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor">
             <rect x="2" y="2" width="7" height="16" rx="1"/>
             <rect x="11" y="2" width="7" height="16" rx="1"/>
@@ -114,189 +114,189 @@
         </button>
       </div>
 
-      <!-- Переключатель колонок для мобильных (1 или 2 колонки) -->
-      <button class="btn-icon mobile-only" id="btnMobileGridToggle" title="Переключить сетку (1/2 колонки)">
+      <!-- Column switcher for mobile (1 or 2 columns) -->
+      <button class="btn-icon mobile-only" id="btnMobileGridToggle" title="Переключить сетку (1/2 колонки)" data-i18n-title="header.mobileGrid.title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
       </button>
 
-      <button class="btn-icon desktop-only" id="btnSettings" title="Настройки">
+      <button class="btn-icon desktop-only" id="btnSettings" title="Настройки" data-i18n-title="header.settings.title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
     </div>
   </header>
 
-  <!-- Оверлей-затемнение для мобильных шторок и сайдбара -->
+  <!-- Dimming overlay for mobile sheets and the sidebar -->
   <div class="drawer-backdrop" id="drawerBackdrop"></div>
 
-  <!-- Главный макет с левым сайдбаром поиска и тегов -->
+  <!-- Main layout with left search/tag sidebar -->
   <div class="app-layout">
-    <!-- Левый сайдбар поиска, фильтров и тегов -->
+    <!-- Left sidebar with search, filters, and tags -->
     <aside class="sidebar-search" id="sidebarSearch">
-      <!-- Мобильный заголовок сайдбара -->
+      <!-- Mobile sidebar header -->
       <div class="sidebar-mobile-header mobile-only">
         <div class="sheet-handle"></div>
         <div class="sidebar-mobile-title-row">
-          <span class="sidebar-mobile-title">Поиск и фильтры</span>
-          <button class="btn-icon" id="btnCloseSidebar" title="Закрыть">
+          <span class="sidebar-mobile-title" data-i18n="sidebar.filters">Поиск и фильтры</span>
+          <button class="btn-icon" id="btnCloseSidebar" title="Закрыть" data-i18n-title="sidebar.close">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
       </div>
 
-      <!-- 1. Поиск по тегам -->
+      <!-- 1. Tag search -->
       <div class="sidebar-block">
         <h3 class="sidebar-title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          Поиск по тегам
+          <span data-i18n="sidebar.searchTags">Поиск по тегам</span>
         </h3>
         <div class="sidebar-search-box">
           <div class="search-tags-wrapper" id="searchTagsWrapper">
-            <input type="text" id="searchInput" class="search-input" placeholder="Введите тег (1girl, video)..." autocomplete="off" spellcheck="false">
+            <input type="text" id="searchInput" class="search-input" placeholder="Введите тег (1girl, video)..." data-i18n-placeholder="sidebar.search.placeholder" autocomplete="off" spellcheck="false">
           </div>
-          <button class="btn-clear-search" id="btnClearSearch" title="Очистить поиск" style="display: none;">
+          <button class="btn-clear-search" id="btnClearSearch" title="Очистить поиск" data-i18n-title="sidebar.clear.title" style="display: none;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
-          <button class="btn-refresh-search" id="btnRefreshSearch" title="Обновить выдачу поиска (сброс кеша)">
+          <button class="btn-refresh-search" id="btnRefreshSearch" title="Обновить выдачу поиска (сброс кеша)" data-i18n-title="sidebar.refresh.title">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
           </button>
-          <!-- Выпадающий список подсказок -->
+          <!-- Suggestions dropdown -->
           <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
         </div>
 
-        <!-- Кнопка поиска / применения фильтров -->
-        <button class="btn-sidebar-search" id="btnApplySearch" title="Найти по заданным тегам и фильтрам (Enter)">
+        <!-- Search / apply-filters button -->
+        <button class="btn-sidebar-search" id="btnApplySearch" title="Найти по заданным тегам и фильтрам (Enter)" data-i18n-title="sidebar.searchBtn.title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-          <span>Искать</span>
+          <span data-i18n="sidebar.searchBtn">Искать</span>
         </button>
       </div>
 
-      <!-- 2. Фильтр ИИ (AI Filter) -->
+      <!-- 2. AI filter -->
       <div class="sidebar-block">
-        <h3 class="sidebar-title">Фильтр ИИ</h3>
+        <h3 class="sidebar-title" data-i18n="sidebar.aiFilter">Фильтр ИИ</h3>
         <div class="ai-filter-toggle" id="aiFilterGroup">
-          <button class="ai-pill" data-ai="all" title="Показывать все работы">Все</button>
-          <button class="ai-pill active" data-ai="no-ai" title="Скрыть ИИ-генерации (только авторский арт)">Без ИИ</button>
-          <button class="ai-pill" data-ai="only-ai" title="Только ИИ-генерации">ИИ</button>
+          <button class="ai-pill" data-ai="all" title="Показывать все работы" data-i18n-title="sidebar.aiAll.title"><span data-i18n="sidebar.aiAll">Все</span></button>
+          <button class="ai-pill active" data-ai="no-ai" title="Скрыть ИИ-генерации (только авторский арт)" data-i18n-title="sidebar.aiNoAi.title"><span data-i18n="sidebar.aiNoAi">Без ИИ</span></button>
+          <button class="ai-pill" data-ai="only-ai" title="Только ИИ-генерации" data-i18n-title="sidebar.aiOnly.title"><span data-i18n="sidebar.aiOnly">ИИ</span></button>
         </div>
       </div>
 
-      <!-- 2.1 Фильтр Возрастного Рейтинга (SFW / NSFW) -->
+      <!-- 2.1 Age rating filter (SFW / NSFW) -->
       <div class="sidebar-block">
-        <h3 class="sidebar-title">Возрастной рейтинг</h3>
+        <h3 class="sidebar-title" data-i18n="sidebar.rating">Возрастной рейтинг</h3>
         <div class="rating-filter-toggle" id="ratingFilterGroup">
-          <button class="rating-pill active" data-rating="all" title="Показывать все рейтинги">Все</button>
-          <button class="rating-pill" data-rating="nsfw" title="Отсечь SFW: показывать только откровенный 18+ контент">18+</button>
-          <button class="rating-pill" data-rating="questionable" title="Эротика и фансервис 16+ (Questionable)">16+</button>
-          <button class="rating-pill" data-rating="sfw" title="Только безопасный SFW контент">Безопасно</button>
+          <button class="rating-pill active" data-rating="all" title="Показывать все рейтинги" data-i18n-title="sidebar.ratingAll.title"><span data-i18n="sidebar.ratingAll">Все</span></button>
+          <button class="rating-pill" data-rating="nsfw" title="Отсечь SFW: показывать только откровенный 18+ контент" data-i18n-title="sidebar.ratingNsfw.title"><span data-i18n="sidebar.ratingNsfw">18+</span></button>
+          <button class="rating-pill" data-rating="questionable" title="Эротика и фансервис 16+ (Questionable)" data-i18n-title="sidebar.ratingQuestionable.title"><span data-i18n="sidebar.ratingQuestionable">16+</span></button>
+          <button class="rating-pill" data-rating="sfw" title="Только безопасный SFW контент" data-i18n-title="sidebar.ratingSfw.title"><span data-i18n="sidebar.ratingSfw">Безопасно</span></button>
         </div>
       </div>
 
-      <!-- 2.1.1 Фильтр периода добавления (Date Added Dropdown) -->
+      <!-- 2.1.1 Date-added period filter (dropdown) -->
       <div class="sidebar-block" id="dateFilterBlock">
         <h3 class="sidebar-title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-          Период добавления
+          <span data-i18n="sidebar.dateFilter">Период добавления</span>
         </h3>
         <div class="date-filter-dropdown" id="dateFilterDropdown">
-          <button type="button" class="btn-dropdown-toggle" id="btnDateFilterToggle" aria-haspopup="listbox" aria-expanded="false" title="Выбрать период добавления">
-            <span class="dropdown-label" id="dateFilterLabel">За всё время</span>
+          <button type="button" class="btn-dropdown-toggle" id="btnDateFilterToggle" aria-haspopup="listbox" aria-expanded="false" title="Выбрать период добавления" data-i18n-title="sidebar.dateFilter.title">
+            <span class="dropdown-label" id="dateFilterLabel" data-i18n="sidebar.dateAll">За всё время</span>
             <svg class="dropdown-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
           <div class="dropdown-menu" id="dateFilterMenu" role="listbox">
-            <button type="button" class="dropdown-item active" data-date="all" role="option">За всё время</button>
-            <button type="button" class="dropdown-item" data-date="24h" role="option">За 24 часа</button>
-            <button type="button" class="dropdown-item" data-date="2d" role="option">За 2 дня</button>
-            <button type="button" class="dropdown-item" data-date="7d" role="option">За неделю</button>
-            <button type="button" class="dropdown-item" data-date="30d" role="option">За месяц</button>
-            <button type="button" class="dropdown-item" data-date="90d" role="option">За 3 месяца</button>
-            <button type="button" class="dropdown-item" data-date="365d" role="option">За год</button>
+            <button type="button" class="dropdown-item active" data-date="all" role="option" data-i18n="sidebar.dateAll">За всё время</button>
+            <button type="button" class="dropdown-item" data-date="24h" role="option" data-i18n="sidebar.date24h">За 24 часа</button>
+            <button type="button" class="dropdown-item" data-date="2d" role="option" data-i18n="sidebar.date2d">За 2 дня</button>
+            <button type="button" class="dropdown-item" data-date="7d" role="option" data-i18n="sidebar.date7d">За неделю</button>
+            <button type="button" class="dropdown-item" data-date="30d" role="option" data-i18n="sidebar.date30d">За месяц</button>
+            <button type="button" class="dropdown-item" data-date="90d" role="option" data-i18n="sidebar.date90d">За 3 месяца</button>
+            <button type="button" class="dropdown-item" data-date="365d" role="option" data-i18n="sidebar.date365d">За год</button>
           </div>
         </div>
       </div>
 
-      <!-- 2.2 Переключатель Формата (Видео / Картинки) -->
+      <!-- 2.2 Content type toggle (video / images) -->
       <div class="sidebar-block">
-        <h3 class="sidebar-title">Тип контента</h3>
+        <h3 class="sidebar-title" data-i18n="sidebar.type">Тип контента</h3>
         <div class="type-filter-toggle" id="typeFilterGroup">
-          <button class="type-pill active" data-type="all" title="Все форматы (видео, гифки и картинки)">Все</button>
-          <button class="type-pill" data-type="video" title="Все видео и анимации">Видео</button>
-          <button class="type-pill" data-type="audio" title="Только видео со звуком (озвучка / музыка)">Со звуком</button>
-          <button class="type-pill" data-type="image" title="Только статичные изображения">Изображения</button>
+          <button class="type-pill active" data-type="all" title="Все форматы (видео, гифки и картинки)" data-i18n-title="sidebar.typeAll.title"><span data-i18n="sidebar.typeAll">Все</span></button>
+          <button class="type-pill" data-type="video" title="Все видео и анимации" data-i18n-title="sidebar.typeVideo.title"><span data-i18n="sidebar.typeVideo">Видео</span></button>
+          <button class="type-pill" data-type="audio" title="Только видео со звуком (озвучка / музыка)" data-i18n-title="sidebar.typeAudio.title"><span data-i18n="sidebar.typeAudio">Со звуком</span></button>
+          <button class="type-pill" data-type="image" title="Только статичные изображения" data-i18n-title="sidebar.typeImage.title"><span data-i18n="sidebar.typeImage">Изображения</span></button>
         </div>
       </div>
 
-      <!-- 2.2.1 Сортировка видео по длительности -->
+      <!-- 2.2.1 Video sort by duration -->
       <div class="sidebar-block" id="videoSortBlock">
-        <h3 class="sidebar-title">Сортировка видео</h3>
+        <h3 class="sidebar-title" data-i18n="sidebar.videoSort">Сортировка видео</h3>
         <div class="video-sort-toggle" id="videoSortGroup">
-          <button class="video-sort-pill active" data-sort="none" title="Без сортировки по длительности">Обычная</button>
-          <button class="video-sort-pill" data-sort="longest" title="Сначала самые длинные видео">Длинные</button>
-          <button class="video-sort-pill" data-sort="shortest" title="Сначала короткие клипы">Короткие</button>
+          <button class="video-sort-pill active" data-sort="none" title="Без сортировки по длительности" data-i18n-title="sidebar.videoSortNone.title"><span data-i18n="sidebar.videoSortNone">Обычная</span></button>
+          <button class="video-sort-pill" data-sort="longest" title="Сначала самые длинные видео" data-i18n-title="sidebar.videoSortLong.title"><span data-i18n="sidebar.videoSortLong">Длинные</span></button>
+          <button class="video-sort-pill" data-sort="shortest" title="Сначала короткие клипы" data-i18n-title="sidebar.videoSortShort.title"><span data-i18n="sidebar.videoSortShort">Короткие</span></button>
         </div>
       </div>
 
-      <!-- 2.3 Фильтр типажа / форм -->
+      <!-- 2.3 Body type / build filter -->
       <div class="sidebar-block">
-        <h3 class="sidebar-title">Формы / Типаж</h3>
+        <h3 class="sidebar-title" data-i18n="sidebar.shapes">Формы / Типаж</h3>
         <div class="age-filter-toggle" id="ageFilterGroup">
-          <button class="age-pill active" data-age="all" title="Все типажи и комплекции">Все</button>
-          <button class="age-pill" data-age="adult" title="Пышные формы, зрелые, MILF, высокие, большая грудь">Пышные</button>
-          <button class="age-pill" data-age="young" title="Миниатюрные, невысокие, petite, flat chest, лоли">Миниатюрные</button>
+          <button class="age-pill active" data-age="all" title="Все типажи и комплекции" data-i18n-title="sidebar.shapesAll.title"><span data-i18n="sidebar.shapesAll">Все</span></button>
+          <button class="age-pill" data-age="adult" title="Пышные формы, зрелые, MILF, высокие, большая грудь" data-i18n-title="sidebar.shapesAdult.title"><span data-i18n="sidebar.shapesAdult">Пышные</span></button>
+          <button class="age-pill" data-age="young" title="Миниатюрные, невысокие, petite, flat chest, лоли" data-i18n-title="sidebar.shapesYoung.title"><span data-i18n="sidebar.shapesYoung">Миниатюрные</span></button>
         </div>
       </div>
 
-      <!-- 3. Контентные фильтры (Фурри, Беременные, ЛГБТ) -->
+      <!-- 3. Content filters (furry, pregnancy, LGBT) -->
       <div class="sidebar-block">
-        <h3 class="sidebar-title">Скрытие контента</h3>
+        <h3 class="sidebar-title" data-i18n="sidebar.hiding">Скрытие контента</h3>
         <div class="toggles-list">
-          <label class="toggle-row" title="Скрыть фурри, антропоморфных персонажей и животных">
+          <label class="toggle-row" title="Скрыть фурри, антропоморфных персонажей и животных" data-i18n-title="sidebar.hideFurry.title">
             <input type="checkbox" id="checkHideFurry" checked>
             <span class="toggle-slider"></span>
-            <span class="toggle-name">Скрыть фурри и антро</span>
+            <span class="toggle-name" data-i18n="sidebar.hideFurry">Скрыть фурри и антро</span>
           </label>
-          <label class="toggle-row" title="Скрыть беременность, инфляцию и экспансию живота">
+          <label class="toggle-row" title="Скрыть беременность, инфляцию и экспансию живота" data-i18n-title="sidebar.hidePregnant.title">
             <input type="checkbox" id="checkHidePregnant" checked>
             <span class="toggle-slider"></span>
-            <span class="toggle-name">Скрыть беременность</span>
+            <span class="toggle-name" data-i18n="sidebar.hidePregnant">Скрыть беременность</span>
           </label>
-          <label class="toggle-row" title="Скрыть яой, бара, футанари, трап, фембой и ЛГБТ контент">
+          <label class="toggle-row" title="Скрыть яой, бара, футанари, трап, фембой и ЛГБТ контент" data-i18n-title="sidebar.hideLgbt.title">
             <input type="checkbox" id="checkHideLgbt">
             <span class="toggle-slider"></span>
-            <span class="toggle-name">Скрыть ЛГБТ</span>
+            <span class="toggle-name" data-i18n="sidebar.hideLgbt">Скрыть ЛГБТ</span>
           </label>
         </div>
       </div>
 
-      <!-- 4. Booru-источники (для десктопа) -->
+      <!-- 4. Booru sources (desktop) -->
       <div class="sidebar-block desktop-only">
-        <h3 class="sidebar-title">Booru Источники</h3>
+        <h3 class="sidebar-title" data-i18n="sidebar.sources">Booru Источники</h3>
         <div class="sources-vertical-list" id="sourcesList">
-          <!-- Рендерятся через JS -->
+          <!-- Rendered by JS -->
         </div>
       </div>
 
-      <!-- 5. Динамические теги на странице -->
+      <!-- 5. Dynamic tags from the page -->
       <div class="sidebar-block" id="pageTagsBlock">
         <h3 class="sidebar-title">
-          <span>Теги на странице</span>
+          <span data-i18n="sidebar.pageTags">Теги на странице</span>
           <span class="tags-sidebar-count" id="sidebarTagsCount">0</span>
         </h3>
         <div class="sidebar-tags-tree" id="sidebarTagsList">
-          <span class="empty-tags-hint">Загрузка тегов...</span>
+          <span class="empty-tags-hint" data-i18n="sidebar.loadingTags">Загрузка тегов...</span>
         </div>
       </div>
     </aside>
 
-    <!-- Основная рабочая область с галереей -->
+    <!-- Main work area with the gallery -->
     <main class="main-content">
-      <!-- Полноэкранный блок профиля пользователя (TikTok style) -->
+      <!-- Fullscreen user profile block (TikTok style) -->
       <section class="user-profile-section" id="userProfileSection" style="display: none;">
-        <!-- Карточка шапки профиля -->
+        <!-- Profile header card -->
         <div class="profile-card">
           <div class="profile-banner">
-            <button type="button" class="btn-profile-settings mobile-only" id="btnProfileSettings" title="Настройки приложения">
+            <button type="button" class="btn-profile-settings mobile-only" id="btnProfileSettings" title="Настройки приложения" data-i18n-title="header.settings.title">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
             </button>
           </div>
@@ -318,145 +318,110 @@
             </div>
 
             <div class="profile-header-actions" id="profileHeaderActions">
-              <!-- Заполняется JS (кнопки Войти / Регистрация или Настройки / Выйти) -->
+              <!-- Filled by JS (Log in / Sign up or Settings / Log out buttons) -->
             </div>
           </div>
 
-          <!-- Счетчики статистики -->
+          <!-- Statistics counters -->
           <div class="profile-stats-bar">
-            <div class="profile-stat-item" id="statLikesItem" title="Понравившиеся посты">
+            <div class="profile-stat-item" id="statLikesItem" title="Понравившиеся посты" data-i18n-title="profile.statsLikes.title">
               <span class="profile-stat-value" id="statLikesCount">0</span>
               <span class="profile-stat-label">
-                <span class="profile-stat-emoji">❤️</span>
-                <span>Лайки</span>
+                <span class="profile-stat-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>
+                <span data-i18n="profile.statsLikes">Лайки</span>
               </span>
             </div>
             <div class="profile-stat-divider"></div>
-            <div class="profile-stat-item" id="statFavsItem" title="Сохраненное в закладки">
+            <div class="profile-stat-item" id="statFavsItem" title="Сохраненное в закладки" data-i18n-title="profile.statsFavs.title">
               <span class="profile-stat-value" id="statFavsCount">0</span>
               <span class="profile-stat-label">
-                <span class="profile-stat-emoji">🔖</span>
-                <span>Избранное</span>
+                <span class="profile-stat-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span>
+                <span data-i18n="profile.statsFavs">Избранное</span>
               </span>
             </div>
             <div class="profile-stat-divider"></div>
-            <div class="profile-stat-item" id="statAuthorsItem" title="Отслеживаемые авторы">
+            <div class="profile-stat-item" id="statAuthorsItem" title="Отслеживаемые авторы" data-i18n-title="profile.statsAuthors.title">
               <span class="profile-stat-value" id="statAuthorsCount">0</span>
               <span class="profile-stat-label">
-                <span class="profile-stat-emoji">🎨</span>
-                <span>Подписки</span>
+                <span class="profile-stat-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></span>
+                <span data-i18n="profile.statsAuthors">Подписки</span>
               </span>
             </div>
             <div class="profile-stat-divider"></div>
-            <div class="profile-stat-item" id="statViewsItem" title="Изучено постов">
+            <div class="profile-stat-item" id="statViewsItem" title="Изучено постов" data-i18n-title="profile.statsViews.title">
               <span class="profile-stat-value" id="statViewsCount">0</span>
               <span class="profile-stat-label">
-                <span class="profile-stat-emoji">👁️</span>
-                <span>Просмотры</span>
+                <span class="profile-stat-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+                <span data-i18n="profile.statsViews">Просмотры</span>
               </span>
             </div>
           </div>
 
-          <!-- Под-вкладки профиля (TikTok-style Tabs) -->
+          <!-- Profile sub-tabs (TikTok-style tabs) -->
           <div class="profile-tabs-nav">
             <button class="profile-tab-btn active" data-profile-tab="likes" id="btnProfileTabLikes">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
-              <span>Лайки</span>
+              <span data-i18n="profile.tabLikes">Лайки</span>
             </button>
             <button class="profile-tab-btn" data-profile-tab="favorites" id="btnProfileTabFavs">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
-              <span>Закладки</span>
+              <span data-i18n="profile.tabFavs">Закладки</span>
             </button>
             <button class="profile-tab-btn" data-profile-tab="authors" id="btnProfileTabAuthors">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-              <span>Подписки</span>
-            </button>
-            <button class="profile-tab-btn" data-profile-tab="searches" id="btnProfileTabSearches">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-              <span>Поиски</span>
+              <span data-i18n="profile.tabAuthors">Подписки</span>
             </button>
             <button class="profile-tab-btn" data-profile-tab="analytics" id="btnProfileTabAnalytics">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
-              <span>Интересы</span>
+              <span data-i18n="profile.tabAnalytics">Интересы</span>
             </button>
           </div>
 
-          <!-- Панель управления авторами в профиле -->
+          <!-- Author management toolbar in the profile -->
           <div class="profile-authors-toolbar" id="profileAuthorsToolbar" style="display: none;">
             <div class="fav-authors-search-box">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input type="text" id="profileAuthorsSearchInput" class="fav-authors-search-input" placeholder="Поиск среди подписок..." autocomplete="off">
+              <input type="text" id="profileAuthorsSearchInput" class="fav-authors-search-input" placeholder="Поиск среди подписок..." data-i18n-placeholder="profile.authorsSearch.placeholder" autocomplete="off">
             </div>
-            <button type="button" class="btn-action-primary btn-add-author" id="btnProfileAddAuthor" title="Добавить автора в любимые вручную">
+            <button type="button" class="btn-action-primary btn-add-author" id="btnProfileAddAuthor" title="Добавить автора в любимые вручную" data-i18n-title="profile.addAuthor.title">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span>Добавить автора</span>
+              <span data-i18n="profile.addAuthor">Добавить автора</span>
             </button>
           </div>
         </div>
 
-        <!-- Контейнер для вкладки сохраненных поисков (тег-подписки) -->
-        <div class="profile-searches-pane" id="profileSearchesPane" style="display: none;">
-          <div class="analytics-card">
-            <div class="analytics-header">
-              <div class="analytics-header-content">
-                <h3 class="analytics-title">Сохраненные поиски</h3>
-                <p class="analytics-desc">Следите за новыми постами по тегам: сервер проверяет подписки каждые 15 минут и присылает push-уведомления.</p>
-              </div>
-              <button type="button" class="btn-icon btn-toggle-push" id="btnTogglePushNotifications" title="Включить push-уведомления о новых постах">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              </button>
-            </div>
-
-            <div class="subscription-add-row">
-              <input type="text" id="subscriptionQueryInput" class="subscription-query-input" placeholder="Запрос, например: genshin_impact или artist:name" autocomplete="off" spellcheck="false">
-              <select id="subscriptionSiteSelect" class="subscription-site-select" title="Источник для проверки"></select>
-              <button type="button" class="btn-action-primary subscription-create-btn" id="btnCreateSubscription">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                <span>Сохранить</span>
-              </button>
-            </div>
-            <button type="button" class="btn-restore-interests subscription-save-current" id="btnSaveCurrentSearch">
-              Сохранить текущий поиск
-            </button>
-
-            <div class="subscriptions-list" id="subscriptionsList">
-              <!-- Заполняется через JS -->
-            </div>
-          </div>
-        </div>
-
-        <!-- Контейнер для вкладки аналитики интересов -->
+        <!-- Container for the interests analytics tab -->
         <div class="profile-analytics-pane" id="profileAnalyticsPane" style="display: none;">
           <div class="analytics-card">
             <div class="analytics-header">
               <div class="analytics-header-content">
-                <h3 class="analytics-title">Карта ваших вкусов и интересов</h3>
-                <p class="analytics-desc">На основе этих тегов формируется ваша персональная лента «Для вас».</p>
+                <h3 class="analytics-title" data-i18n="profile.analyticsTitle">Карта ваших вкусов и интересов</h3>
+                <p class="analytics-desc" data-i18n="profile.analyticsDesc">На основе этих тегов формируется ваша персональная лента «Для вас».</p>
               </div>
-              <button type="button" class="btn-icon btn-edit-interests" id="btnEditInterests" title="Редактировать интересы">
+              <button type="button" class="btn-icon btn-edit-interests" id="btnEditInterests" title="Редактировать интересы" data-i18n-title="profile.editInterests.title">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
               </button>
             </div>
             <div class="interests-cloud" id="profileInterestsCloud">
-              <!-- Теги и веса генерируются через JS -->
+              <!-- Tags and weights generated by JS -->
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Сетка галереи (Masonry) -->
+      <!-- Gallery grid (Masonry) -->
       <div class="gallery-container">
-        <!-- Панель переключения под-вкладок Избранного (Посты / Авторы) -->
+        <!-- Favorites sub-tab switcher (Posts / Authors) -->
         <div class="favorites-header-bar" id="favoritesHeaderBar" style="display: none;">
           <div class="favorites-subnav">
-            <button class="favorites-subnav-btn active" data-subtab="posts" id="btnFavSubPosts" title="Сохраненные посты">
+            <button class="favorites-subnav-btn active" data-subtab="posts" id="btnFavSubPosts" title="Сохраненные посты" data-i18n-title="favs.barPosts.title">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              <span>Сохраненные посты</span>
+              <span data-i18n="favs.barPosts">Сохраненные посты</span>
               <span class="fav-sub-badge" id="favPostsCountBadge">0</span>
             </button>
-            <button class="favorites-subnav-btn" data-subtab="authors" id="btnFavSubAuthors" title="Любимые авторы">
+            <button class="favorites-subnav-btn" data-subtab="authors" id="btnFavSubAuthors" title="Любимые авторы" data-i18n-title="favs.barAuthors.title">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-              <span>Любимые авторы</span>
+              <span data-i18n="favs.barAuthors">Любимые авторы</span>
               <span class="fav-sub-badge" id="favAuthorsCountBadge">0</span>
             </button>
           </div>
@@ -464,23 +429,23 @@
           <div class="favorites-authors-actions" id="favAuthorsActions" style="display: none;">
             <div class="fav-authors-search-box">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-              <input type="text" id="favAuthorsSearchInput" class="fav-authors-search-input" placeholder="Поиск автора..." autocomplete="off">
+              <input type="text" id="favAuthorsSearchInput" class="fav-authors-search-input" placeholder="Поиск автора..." data-i18n-placeholder="favs.authorSearch.placeholder" autocomplete="off">
             </div>
-            <button class="btn-action-primary btn-add-author" id="btnAddAuthorModalOpen" title="Добавить автора в избранное">
+            <button class="btn-action-primary btn-add-author" id="btnAddAuthorModalOpen" title="Добавить автора в избранное" data-i18n-title="favs.addAuthor.title">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span>Добавить автора</span>
+              <span data-i18n="favs.addAuthor">Добавить автора</span>
             </button>
           </div>
         </div>
 
         <div class="gallery-grid" id="galleryGrid">
-          <!-- Карточки постов будут добавлены сюда через JS -->
+          <!-- Post cards will be added here by JS -->
         </div>
 
-        <!-- Состояния: Загрузка и Пусто -->
+        <!-- States: loading and empty -->
         <div class="state-container" id="loadingSpinner">
           <div class="spinner"></div>
-          <p class="state-text">Загрузка медиаматериалов...</p>
+          <p class="state-text" data-i18n="gallery.loading">Загрузка медиаматериалов...</p>
         </div>
 
         <div class="state-container" id="emptyState" style="display: none;">
@@ -491,71 +456,71 @@
           <p class="state-desc">Попробуйте изменить теги поиска или переключить Booru-источник.</p>
         </div>
 
-        <!-- Кнопка «Загрузить еще» -->
+        <!-- Load-more button -->
         <div class="load-more-container" id="loadMoreContainer" style="display: none;">
-          <button class="btn-load-more" id="btnLoadMore" title="Загрузить следующую страницу">
+          <button class="btn-load-more" id="btnLoadMore" title="Загрузить следующую страницу" data-i18n-title="gallery.loadMore.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
               <path d="M12 5v14M5 12l7 7 7-7"/>
             </svg>
-            <span class="btn-load-more-text">Загрузить еще материалы</span>
+            <span class="btn-load-more-text" data-i18n="gallery.loadMore">Загрузить еще материалы</span>
             <span class="btn-load-more-spinner mini-spinner" style="display: none;"></span>
           </button>
         </div>
 
-        <!-- Элемент-триггер для бесконечной прокрутки (Infinite Scroll) -->
+        <!-- Infinite scroll trigger element -->
         <div class="infinite-scroll-trigger" id="infiniteScrollTrigger">
           <div class="scroll-loader" id="scrollLoader" style="display: none;">
             <div class="mini-spinner"></div>
-            <span>Подгрузка материалов...</span>
+            <span data-i18n="gallery.scrollLoading">Подгрузка материалов...</span>
           </div>
         </div>
       </div>
     </main>
   </div>
 
-  <!-- Плавающая кнопка «Наверх» -->
-  <button class="btn-scroll-top" id="btnScrollToTop" title="Наверх">
+  <!-- Floating scroll-to-top button -->
+  <button class="btn-scroll-top" id="btnScrollToTop" title="Наверх" data-i18n-title="scrollTop.title">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
   </button>
 
-  <!-- Мобильная нижняя панель навигации (Bottom Navigation Bar) -->
+  <!-- Mobile bottom navigation bar -->
   <nav class="mobile-bottom-nav mobile-only" id="mobileBottomNav">
-    <button class="mobile-nav-item active" id="btnNavFeed" data-nav="feed" title="Лента и разделы">
+    <button class="mobile-nav-item active" id="btnNavFeed" data-nav="feed" title="Лента и разделы" data-i18n-title="mobileNav.feed.title">
       <div class="nav-icon-box">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       </div>
-      <span class="nav-label" id="mobileNavFeedLabel">Новое</span>
+      <span class="nav-label" id="mobileNavFeedLabel" data-i18n="mobileNav.feed">Новое</span>
     </button>
 
-    <button class="mobile-nav-item" id="btnNavFilters" data-nav="filters" title="Поиск и фильтры">
+    <button class="mobile-nav-item" id="btnNavFilters" data-nav="filters" title="Поиск и фильтры" data-i18n-title="mobileNav.filters.title">
       <div class="nav-icon-box">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         <span class="nav-badge-dot" id="filterActiveDot" style="display: none;"></span>
       </div>
-      <span class="nav-label">Поиск</span>
+      <span class="nav-label" data-i18n="mobileNav.filters">Поиск</span>
     </button>
 
-    <button class="mobile-nav-item" id="btnNavSources" data-nav="sources" title="Booru Источники">
+    <button class="mobile-nav-item" id="btnNavSources" data-nav="sources" title="Booru Источники" data-i18n-title="mobileNav.sources.title">
       <div class="nav-icon-box">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
       </div>
-      <span class="nav-label">Сайты</span>
+      <span class="nav-label" data-i18n="mobileNav.sources">Сайты</span>
     </button>
 
-    <button class="mobile-nav-item" id="btnNavProfile" data-nav="profile" title="Профиль">
+    <button class="mobile-nav-item" id="btnNavProfile" data-nav="profile" title="Профиль" data-i18n-title="mobileNav.profile.title">
       <div class="nav-icon-box">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
       </div>
-      <span class="nav-label" id="mobileNavProfileLabel">Профиль</span>
+      <span class="nav-label" id="mobileNavProfileLabel" data-i18n="mobileNav.profile">Профиль</span>
     </button>
   </nav>
 
-  <!-- Мобильная шторка выбора категорий ленты -->
+  <!-- Mobile sheet for picking feed categories -->
   <div class="bottom-sheet" id="categoriesSheet">
     <div class="bottom-sheet-header">
       <div class="sheet-handle"></div>
       <div class="sheet-title-row">
-        <h3 class="sheet-title">Разделы ленты</h3>
+        <h3 class="sheet-title" data-i18n="sheet.categories">Разделы ленты</h3>
         <button class="btn-icon sheet-close" id="btnCloseCategoriesSheet">✕</button>
       </div>
     </div>
@@ -566,8 +531,8 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           </div>
           <div class="category-info">
-            <span class="category-name">Свежие</span>
-            <span class="category-desc">Свежие публикации</span>
+            <span class="category-name" data-i18n="sheet.catFresh.name">Свежие</span>
+            <span class="category-desc" data-i18n="sheet.catFresh.desc">Свежие публикации</span>
           </div>
         </button>
         <button class="category-card" data-category="views">
@@ -575,8 +540,8 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
           </div>
           <div class="category-info">
-            <span class="category-name">Просматриваемые</span>
-            <span class="category-desc">По просмотрам и интересу</span>
+            <span class="category-name" data-i18n="sheet.catViews.name">Просматриваемые</span>
+            <span class="category-desc" data-i18n="sheet.catViews.desc">По просмотрам и интересу</span>
           </div>
         </button>
         <button class="category-card" data-category="top">
@@ -584,8 +549,8 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </div>
           <div class="category-info">
-            <span class="category-name">По рейтингу</span>
-            <span class="category-desc">Лучшее по оценкам пользователей</span>
+            <span class="category-name" data-i18n="sheet.catTop.name">По рейтингу</span>
+            <span class="category-desc" data-i18n="sheet.catTop.desc">Лучшее по оценкам пользователей</span>
           </div>
         </button>
         <button class="category-card" data-category="recommended">
@@ -593,8 +558,8 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>
           </div>
           <div class="category-info">
-            <span class="category-name">Для вас</span>
-            <span class="category-desc">Рекомендации по вкусам</span>
+            <span class="category-name" data-i18n="sheet.catRecommended.name">Для вас</span>
+            <span class="category-desc" data-i18n="sheet.catRecommended.desc">Рекомендации по вкусам</span>
           </div>
         </button>
         <button class="category-card" data-category="random">
@@ -602,31 +567,31 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/></svg>
           </div>
           <div class="category-info">
-            <span class="category-name">Случайно</span>
-            <span class="category-desc">Случайная подборка</span>
+            <span class="category-name" data-i18n="sheet.catRandom.name">Случайно</span>
+            <span class="category-desc" data-i18n="sheet.catRandom.desc">Случайная подборка</span>
           </div>
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Мобильная шторка Booru Источников -->
+  <!-- Mobile Booru sources sheet -->
   <div class="bottom-sheet" id="sourcesSheet">
     <div class="bottom-sheet-header">
       <div class="sheet-handle"></div>
       <div class="sheet-title-row">
-        <h3 class="sheet-title">Booru Источники</h3>
+        <h3 class="sheet-title" data-i18n="sheet.sources">Booru Источники</h3>
         <button class="btn-icon sheet-close" id="btnCloseSourcesSheet">✕</button>
       </div>
     </div>
     <div class="bottom-sheet-content">
       <div class="sources-grid-mobile" id="sourcesListMobile">
-        <!-- Рендерятся через JS -->
+        <!-- Rendered by JS -->
       </div>
     </div>
   </div>
 
-  <!-- Модальное окно полного просмотра (Media Viewer) -->
+  <!-- Full media viewer modal -->
   <div class="viewer-modal" id="viewerModal" style="display: none;">
     <div class="viewer-backdrop" id="viewerBackdrop"></div>
     
@@ -634,135 +599,135 @@
       <div class="viewer-header">
         <div class="viewer-meta">
           <span class="viewer-site-badge" id="viewerSiteBadge">Danbooru</span>
-          <span class="viewer-album-badge" id="viewerAlbumBadge" style="display: none;" title="Страница альбома / сета">
+          <span class="viewer-album-badge" id="viewerAlbumBadge" style="display: none;" title="Страница альбома / сета" data-i18n-title="viewer.albumBadge.title">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></svg>
             <span id="viewerAlbumPageText">1 / 1</span>
           </span>
           <span class="viewer-res" id="viewerResolution">1920 × 1080</span>
           <span class="viewer-ext-badge" id="viewerExtBadge">MP4</span>
-          <button class="viewer-author-badge" id="viewerAuthorBadge" style="display: none;" title="Автор / Создатель (нажмите для поиска всех работ)">
+          <button class="viewer-author-badge" id="viewerAuthorBadge" style="display: none;" title="Автор / Создатель (нажмите для поиска всех работ)" data-i18n-title="viewer.author.title">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
             <span id="viewerAuthorText">Автор</span>
           </button>
-          <button class="viewer-fav-author-btn" id="viewerFavAuthorBtn" style="display: none;" title="Добавить/удалить автора из избранных">
+          <button class="viewer-fav-author-btn" id="viewerFavAuthorBtn" style="display: none;" title="Добавить/удалить автора из избранных" data-i18n-title="viewer.favAuthor.title">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
         </div>
         <div class="viewer-top-actions">
-          <!-- Не интересно (Скрыть из рекомендаций) -->
-          <button class="viewer-btn" id="btnDislikeModal" title="Не интересно (скрыть и меньше рекомендовать)">
+          <!-- Not interested (hide from recommendations) -->
+          <button class="viewer-btn" id="btnDislikeModal" title="Не интересно (скрыть и меньше рекомендовать)" data-i18n-title="viewer.dislike.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
           </button>
-          <!-- Лайк (Обучение рекомендаций и Booru API) -->
-          <button class="viewer-btn" id="btnLikeModal" title="Нравится (обучает рекомендации и синхронизирует с API)">
+          <!-- Like (trains recommendations and syncs with the Booru API) -->
+          <button class="viewer-btn" id="btnLikeModal" title="Нравится (обучает рекомендации и синхронизирует с API)" data-i18n-title="viewer.like.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>
           </button>
-          <!-- Избранное (TikTok Закладка-флажок) -->
-          <button class="viewer-btn" id="btnFavModal" title="Сохранить в закладки (Избранное)">
+          <!-- Favorites (TikTok-style bookmark flag) -->
+          <button class="viewer-btn" id="btnFavModal" title="Сохранить в закладки (Избранное)" data-i18n-title="viewer.fav.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
           </button>
-          <button class="viewer-btn mobile-only" id="btnViewerTagsToggle" title="Теги и информация">
+          <button class="viewer-btn mobile-only" id="btnViewerTagsToggle" title="Теги и информация" data-i18n-title="viewer.tagsToggle.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
             <span class="viewer-tags-badge" id="viewerTagsBadgeCount">0</span>
           </button>
-          <!-- Скачать текущий медиафайл -->
-          <button class="viewer-btn" id="btnDownload" title="Скачать изображение прямо на устройство">
+          <!-- Download the current media file -->
+          <button class="viewer-btn" id="btnDownload" title="Скачать изображение прямо на устройство" data-i18n-title="viewer.download.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           </button>
-          <!-- Скачать весь альбом (пак) -->
-          <button class="viewer-btn" id="btnDownloadAlbum" style="display: none;" title="Скачать все изображения сета (альбом)">
+          <!-- Download the whole album (pack) -->
+          <button class="viewer-btn" id="btnDownloadAlbum" style="display: none;" title="Скачать все изображения сета (альбом)" data-i18n-title="viewer.downloadAlbum.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><line x1="4" y1="4" x2="20" y2="4"/></svg>
           </button>
-          <button class="viewer-btn" id="btnCopyLink" title="Скопировать ссылку">
+          <button class="viewer-btn" id="btnCopyLink" title="Скопировать ссылку" data-i18n-title="viewer.copyLink.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           </button>
-          <button class="viewer-btn viewer-close" id="btnCloseViewer" title="Закрыть (Esc или свайп вниз)">
+          <button class="viewer-btn viewer-close" id="btnCloseViewer" title="Закрыть (Esc или свайп вниз)" data-i18n-title="viewer.close.title">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
       </div>
 
       <div class="viewer-body">
-        <button class="viewer-nav-btn nav-prev desktop-only" id="btnViewerPrev" title="Предыдущий (← или свайп)">
+        <button class="viewer-nav-btn nav-prev desktop-only" id="btnViewerPrev" title="Предыдущий (← или свайп)" data-i18n-title="viewer.prev.title">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
 
         <div class="viewer-media-wrapper" id="viewerMediaWrapper"></div>
 
-        <button class="viewer-nav-btn nav-next desktop-only" id="btnViewerNext" title="Следующий (→ или свайп)">
+        <button class="viewer-nav-btn nav-next desktop-only" id="btnViewerNext" title="Следующий (→ или свайп)" data-i18n-title="viewer.next.title">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
 
-        <!-- Лента миниатюр страниц альбома (Filmstrip) -->
+        <!-- Album page thumbnail filmstrip -->
         <div class="viewer-album-filmstrip" id="viewerAlbumFilmstrip" style="display: none;">
           <div class="album-filmstrip-inner" id="albumFilmstripInner"></div>
         </div>
 
-        <!-- Сайдбар / Шторка информации и тегов -->
+        <!-- Info and tags sidebar / sheet -->
         <aside class="viewer-sidebar" id="viewerSidebar">
           <div class="viewer-sheet-handle mobile-only"></div>
           <div class="viewer-sidebar-header mobile-only">
-            <span class="viewer-sidebar-title">Теги и информация</span>
-            <button class="btn-icon" id="btnCloseViewerTags" title="Скрыть">
+            <span class="viewer-sidebar-title" data-i18n="viewer.sidebarTitle">Теги и информация</span>
+            <button class="btn-icon" id="btnCloseViewerTags" title="Скрыть" data-i18n-title="viewer.sidebarClose.title">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
 
           <div class="sidebar-section">
-            <h4 class="sidebar-heading">Информация</h4>
+            <h4 class="sidebar-heading" data-i18n="viewer.infoHeading">Информация</h4>
             <div class="info-grid">
               <div class="info-item">
-                <span class="info-label">Источник:</span>
+                <span class="info-label" data-i18n="viewer.labelSite">Источник:</span>
                 <span class="info-val" id="infoSite">Danbooru</span>
               </div>
               <div class="info-item" id="infoAlbumRow" style="display: none;">
-                <span class="info-label">Сет / Серия:</span>
+                <span class="info-label" data-i18n="viewer.labelSeries">Сет / Серия:</span>
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1;">
-                  <button class="btn-album-fetch" id="btnFetchFullAlbum" title="Найти все слайды и изображения серии">
+                  <button class="btn-album-fetch" id="btnFetchFullAlbum" title="Найти все слайды и изображения серии" data-i18n-title="viewer.findFullSet.title">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><rect width="10" height="10" x="6" y="6" rx="1.5"/></svg>
-                    <span id="btnFetchFullAlbumText">Найти весь сет</span>
+                    <span id="btnFetchFullAlbumText" data-i18n="viewer.findFullSet">Найти весь сет</span>
                   </button>
-                  <button class="btn-album-fetch btn-album-download-zip" id="btnDownloadAlbumSidebar" title="Скачать все изображения серии" style="display: none;">
+                  <button class="btn-album-fetch btn-album-download-zip" id="btnDownloadAlbumSidebar" title="Скачать все изображения серии" style="display: none;" data-i18n-title="viewer.downloadSet.title">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/><line x1="4" y1="4" x2="20" y2="4"/></svg>
-                    <span id="btnDownloadAlbumSidebarText">Скачать весь сет</span>
+                    <span id="btnDownloadAlbumSidebarText" data-i18n="viewer.downloadSet">Скачать весь сет</span>
                   </button>
                 </div>
               </div>
               <div class="info-item" id="infoAuthorRow" style="display: none;">
-                <span class="info-label">Автор:</span>
+                <span class="info-label" data-i18n="viewer.labelAuthor">Автор:</span>
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1;">
-                  <span class="info-val info-val-author" id="infoAuthor">Не указан</span>
-                  <button class="btn-fav-author-inline" id="btnFavAuthorSidebar" title="Добавить автора в избранное">
+                  <span class="info-val info-val-author" id="infoAuthor" data-i18n="viewer.noAuthor">Не указан</span>
+                  <button class="btn-fav-author-inline" id="btnFavAuthorSidebar" title="Добавить автора в избранное" data-i18n-title="viewer.favAuthor.title">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    <span id="btnFavAuthorSidebarText">В избранное</span>
+                    <span id="btnFavAuthorSidebarText" data-i18n="viewer.favAuthorInline">В избранное</span>
                   </button>
-                  <button class="btn-fav-author-inline btn-cover-author-inline" id="btnSetAuthorCoverSidebar" title="Сделать этот арт обложкой автора" style="display: none;">
+                  <button class="btn-fav-author-inline btn-cover-author-inline" id="btnSetAuthorCoverSidebar" title="Сделать этот арт обложкой автора" style="display: none;" data-i18n-title="viewer.makeCover.title">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                    <span>Сделать обложкой</span>
+                    <span data-i18n="viewer.makeCover">Сделать обложкой</span>
                   </button>
                 </div>
               </div>
               <div class="info-item" id="infoDurationRow" style="display: none;">
-                <span class="info-label">Длительность:</span>
+                <span class="info-label" data-i18n="viewer.labelDuration">Длительность:</span>
                 <span class="info-val" id="infoDuration">0:00</span>
               </div>
               <div class="info-item">
-                <span class="info-label">Рейтинг:</span>
+                <span class="info-label" data-i18n="viewer.labelRating">Рейтинг:</span>
                 <span class="info-val" id="infoRating">Explicit</span>
               </div>
               <div class="info-item">
-                <span class="info-label">Оценка:</span>
+                <span class="info-label" data-i18n="viewer.labelScore">Оценка:</span>
                 <span class="info-val" id="infoScore">★ 142</span>
               </div>
               <div class="info-item" id="infoAiContainer">
-                <span class="info-label">ИИ:</span>
+                <span class="info-label" data-i18n="viewer.labelAi">ИИ:</span>
                 <span class="info-val" id="infoAi">Нет</span>
               </div>
               <div class="info-item" id="infoDislikeRow">
-                <span class="info-label">Рекомендации:</span>
-                <button class="btn-dislike-sidebar" id="btnDislikeSidebar" title="Не интересно (скрыть и меньше рекомендовать)">
+                <span class="info-label" data-i18n="viewer.labelRecs">Рекомендации:</span>
+                <button class="btn-dislike-sidebar" id="btnDislikeSidebar" title="Не интересно (скрыть и меньше рекомендовать)" data-i18n-title="viewer.hideFromFeed.title">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  <span id="btnDislikeSidebarText">Скрыть из ленты</span>
+                  <span id="btnDislikeSidebarText" data-i18n="viewer.hideFromFeed">Скрыть из ленты</span>
                 </button>
               </div>
             </div>
@@ -770,8 +735,8 @@
 
           <div class="sidebar-section">
             <div class="section-header-flex">
-              <h4 class="sidebar-heading">Теги (<span id="tagsCountTotal">0</span>)</h4>
-              <button class="btn-text" id="btnCopyAllTags">Скопировать все</button>
+              <h4 class="sidebar-heading"><span data-i18n="viewer.tagsHeading">Теги</span> (<span id="tagsCountTotal">0</span>)</h4>
+              <button class="btn-text" id="btnCopyAllTags" data-i18n="viewer.copyAll">Скопировать все</button>
             </div>
             <div class="tags-cloud" id="viewerTagsCloud"></div>
           </div>
@@ -780,76 +745,90 @@
     </div>
   </div>
 
-  <!-- Модальное окно Настроек -->
+  <!-- Settings modal -->
   <div class="settings-modal" id="settingsModal" style="display: none;">
     <div class="settings-backdrop" id="settingsBackdrop"></div>
     <div class="settings-dialog">
       <div class="settings-header">
         <div class="settings-header-title-row">
-          <h3 class="settings-title">Настройки и фильтры</h3>
+          <h3 class="settings-title" data-i18n="settings.title">Настройки и фильтры</h3>
         </div>
-        <button class="btn-icon" id="btnCloseSettings" title="Закрыть">
+        <button class="btn-icon" id="btnCloseSettings" title="Закрыть" data-i18n-title="modal.close.title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
-      <!-- Вкладки категорий настроек -->
+      <!-- Settings category tabs -->
       <div class="settings-nav-tabs">
-        <button type="button" class="settings-nav-tab active" data-tab="general" title="Общие параметры интерфейса и тем">
-          <span class="tab-label">Общие</span>
+        <button type="button" class="settings-nav-tab active" data-tab="general" title="Общие параметры интерфейса и тем" data-i18n-title="settings.tabGeneral.title">
+          <span class="tab-label" data-i18n="settings.tabGeneral">Общие</span>
         </button>
-        <button type="button" class="settings-nav-tab" data-tab="filters" title="Черный список, ИИ и слова-триггеры для фильтров">
-          <span class="tab-label">Фильтры</span>
+        <button type="button" class="settings-nav-tab" data-tab="filters" title="Черный список, ИИ и слова-триггеры для фильтров" data-i18n-title="settings.tabFilters.title">
+          <span class="tab-label" data-i18n="settings.tabFilters">Фильтры</span>
         </button>
-        <button type="button" class="settings-nav-tab" data-tab="apikeys" title="API ключи для Booru">
-          <span class="tab-label">API Ключи</span>
+        <button type="button" class="settings-nav-tab" data-tab="apikeys" title="API ключи для Booru" data-i18n-title="settings.tabApikeys.title">
+          <span class="tab-label" data-i18n="settings.tabApikeys">API Ключи</span>
         </button>
-        <button type="button" class="settings-nav-tab" data-tab="proxy" title="Настройки проксирования и сети">
-          <span class="tab-label">Прокси</span>
+        <button type="button" class="settings-nav-tab" data-tab="proxy" title="Настройки проксирования и сети" data-i18n-title="settings.tabProxy.title">
+          <span class="tab-label" data-i18n="settings.tabProxy">Прокси</span>
         </button>
-        <button type="button" class="settings-nav-tab" data-tab="storage" title="Кэш, память и перенос данных">
-          <span class="tab-label">Память</span>
+        <button type="button" class="settings-nav-tab" data-tab="storage" title="Кэш, память и перенос данных" data-i18n-title="settings.tabStorage.title">
+          <span class="tab-label" data-i18n="settings.tabStorage">Память</span>
         </button>
       </div>
 
       <div class="settings-content">
-        <!-- 1. ВКЛАДКА: ОБЩИЕ -->
+        <!-- 1. TAB: GENERAL -->
         <div class="settings-tab-pane active" id="tabPane-general">
-          <!-- Тема оформления -->
+
+          <!-- Interface language -->
           <div class="settings-group">
-            <label class="settings-label">Цветовая тема:</label>
+            <label class="settings-label" data-i18n="settings.language">Язык интерфейса:</label>
+            <div class="theme-options" id="langOptions">
+              <button type="button" class="btn-theme active" data-lang-val="ru">
+                <span data-i18n="settings.langRu">Русский</span>
+              </button>
+              <button type="button" class="btn-theme" data-lang-val="en">
+                <span data-i18n="settings.langEn">English</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Appearance theme -->
+          <div class="settings-group">
+            <label class="settings-label" data-i18n="settings.theme">Цветовая тема:</label>
             <div class="theme-options">
-              <button class="btn-theme active" data-theme-val="kotobox" title="Фирменный тёплый эспрессо и крафтовый янтарь">
+              <button class="btn-theme active" data-theme-val="kotobox" title="Фирменный тёплый эспрессо и крафтовый янтарь" data-i18n-title="settings.themeKotobox.title">
                 <span class="theme-preview-dot theme-preview-kotobox"></span>
-                <span>Котобокс</span>
+                <span data-i18n="settings.themeKotobox">Котобокс</span>
               </button>
               <button class="btn-theme" data-theme-val="tokyo-night" title="Индиго-ноктюрн и неоновый коралл">
                 <span class="theme-preview-dot theme-preview-tokyo"></span>
                 <span>Токио</span>
               </button>
-              <button class="btn-theme" data-theme-val="warm-paper" title="Тёплая бумага и янтарный акцент">
+              <button class="btn-theme" data-theme-val="warm-paper" title="Тёплая бумага и янтарный акцент" data-i18n-title="settings.themePaper.title">
                 <span class="theme-preview-dot theme-preview-paper"></span>
-                <span>Манускрипт</span>
+                <span data-i18n="settings.themePaper">Манускрипт</span>
               </button>
             </div>
           </div>
 
-          <!-- Количество постов -->
+          <!-- Number of posts -->
           <div class="settings-group">
-            <label class="settings-label" for="selectItemsPerPage">Количество постов за один прокрут (порция):</label>
-            <p class="settings-hint">Сколько постов запрашивать с сайтов за один шаг прокрутки ленты.</p>
+            <label class="settings-label" for="selectItemsPerPage" data-i18n="settings.itemsPerPage">Количество постов за один прокрут (порция):</label>
+            <p class="settings-hint" data-i18n="settings.itemsPerPageHint">Сколько постов запрашивать с сайтов за один шаг прокрутки ленты.</p>
             <select id="selectItemsPerPage" class="input-setting">
-              <option value="20">20 постов</option>
-              <option value="40">40 постов</option>
-              <option value="60">60 постов</option>
-              <option value="80">80 постов</option>
-              <option value="100" selected>100 постов (Рекомендуется)</option>
-              <option value="150">150 постов</option>
-              <option value="200">200 постов (Максимум)</option>
+              <option value="20" data-i18n="settings.items20">20 постов</option>
+              <option value="40" data-i18n="settings.items40">40 постов</option>
+              <option value="60" data-i18n="settings.items60">60 постов</option>
+              <option value="80" data-i18n="settings.items80">80 постов</option>
+              <option value="100" selected data-i18n="settings.items100">100 постов (Рекомендуется)</option>
+              <option value="150" data-i18n="settings.items150">150 постов</option>
+              <option value="200" data-i18n="settings.items200">200 постов (Максимум)</option>
             </select>
           </div>
 
-          <!-- Качество превью в ленте -->
+          <!-- Feed preview quality -->
           <div class="settings-group">
             <label class="settings-label" for="selectPreviewQuality">Качество превью в галерее:</label>
             <p class="settings-hint">Выберите баланс между качеством картинок в ленте и скоростью загрузки.</p>
@@ -861,148 +840,148 @@
             </select>
           </div>
 
-          <!-- Воспроизведение видео -->
+          <!-- Video playback -->
           <div class="settings-group">
-            <label class="settings-label">Воспроизведение и автоплей видео:</label>
+            <label class="settings-label" data-i18n="settings.playback">Воспроизведение и автоплей видео:</label>
             <div class="toggles-list">
-              <label class="toggle-row" title="Воспроизводить превью видео при наведении курсора мыши в галерее">
+              <label class="toggle-row" title="Воспроизводить превью видео при наведении курсора мыши в галерее" data-i18n-title="settings.autoplayHover.title">
                 <input type="checkbox" id="checkVideoAutoplayHover" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Автовоспроизведение в ленте при наведении (ПК)</span>
+                <span class="toggle-name" data-i18n="settings.autoplayHover">Автовоспроизведение в ленте при наведении (ПК)</span>
               </label>
-              <label class="toggle-row" title="Автоматически запускать видео без звука при прокрутке ленты в фокус на смартфонах">
+              <label class="toggle-row" title="Автоматически запускать видео без звука при прокрутке ленты в фокус на смартфонах" data-i18n-title="settings.autoplayMobile.title">
                 <input type="checkbox" id="checkVideoAutoplayMobile" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Автовоспроизведение в ленте при прокрутке (Смартфоны)</span>
+                <span class="toggle-name" data-i18n="settings.autoplayMobile">Автовоспроизведение в ленте при прокрутке (Смартфоны)</span>
               </label>
-              <label class="toggle-row" title="Автоматически начинать проигрывание видео при открытии в полноэкранном просмотрщике">
+              <label class="toggle-row" title="Автоматически начинать проигрывание видео при открытии в полноэкранном просмотрщике" data-i18n-title="settings.autoplayViewer.title">
                 <input type="checkbox" id="checkVideoAutoplayViewer" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Автовоспроизведение при открытии в просмотрщике</span>
+                <span class="toggle-name" data-i18n="settings.autoplayViewer">Автовоспроизведение при открытии в просмотрщике</span>
               </label>
-              <label class="toggle-row" title="Показывать информационную плашку с кнопками кеширования в память, FFmpeg и прокси в просмотрщике">
+              <label class="toggle-row" title="Показывать информационную плашку с кнопками кеширования в память, FFmpeg и прокси в просмотрщике" data-i18n-title="settings.showStatusBanner.title">
                 <input type="checkbox" id="checkShowVideoStatusBanner" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Показывать статусную плашку видео (кэш, прокси, транскодер)</span>
+                <span class="toggle-name" data-i18n="settings.showStatusBanner">Показывать статусную плашку видео (кэш, прокси, транскодер)</span>
               </label>
             </div>
           </div>
 
-          <!-- PWA Приложение для смартфона/ПК -->
+          <!-- PWA app for smartphone/desktop -->
           <div class="settings-group" id="pwaInstallGroup" style="display: none; background: var(--accent-primary-subtle); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-medium);">
-            <label class="settings-label" style="color: var(--accent-primary);">Мобильное PWA-приложение:</label>
-            <p class="settings-hint" style="margin-bottom: 10px;">Установите Booru Explorer как отдельное быстрое приложение на рабочий стол смартфона или ПК.</p>
+            <label class="settings-label" style="color: var(--accent-primary);" data-i18n="settings.pwaLabel">Мобильное PWA-приложение:</label>
+            <p class="settings-hint" style="margin-bottom: 10px;" data-i18n="settings.pwaHint">Установите Booru Explorer как отдельное быстрое приложение на рабочий стол смартфона или ПК.</p>
             <button type="button" class="btn-primary" id="btnInstallPwa" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span>Установить Booru Explorer</span>
+              <span data-i18n="settings.pwaInstall">Установить Booru Explorer</span>
             </button>
           </div>
         </div>
 
-        <!-- 2. ВКЛАДКА: ФИЛЬТРЫ И ТЕГИ -->
+        <!-- 2. TAB: FILTERS AND TAGS -->
         <div class="settings-tab-pane" id="tabPane-filters" style="display: none;">
-          <!-- Черный список тегов -->
+          <!-- Tag blacklist -->
           <div class="settings-group">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="blacklistInput">Черный список тегов (Blacklist):</label>
-              <button type="button" class="btn-text" id="btnResetBlacklist" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+              <label class="settings-label" for="blacklistInput" data-i18n="settings.blacklist">Черный список тегов (Blacklist):</label>
+              <button type="button" class="btn-text" id="btnResetBlacklist" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.reset">По умолчанию</button>
             </div>
-            <p class="settings-hint">Посты с этими тегами будут скрыты из всех результатов поиска.</p>
+            <p class="settings-hint" data-i18n="settings.blacklistHint">Посты с этими тегами будут скрыты из всех результатов поиска.</p>
             <div class="tags-input-box" id="blacklistWrapper">
-              <input type="text" id="blacklistInput" placeholder="Введите тег и нажмите Enter..." spellcheck="false">
+              <input type="text" id="blacklistInput" placeholder="Введите тег и нажмите Enter..." data-i18n-placeholder="settings.blacklist.placeholder" spellcheck="false">
             </div>
           </div>
 
-          <!-- Список тегов распознавания ИИ -->
+          <!-- AI detection tag list -->
           <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="aiTagsInput">Список тегов ИИ (AI Detector):</label>
-              <button type="button" class="btn-text" id="btnResetAiTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+              <label class="settings-label" for="aiTagsInput" data-i18n="settings.aiTagsList">Список тегов ИИ (AI Detector):</label>
+              <button type="button" class="btn-text" id="btnResetAiTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.reset">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, по которым система определяет искусственно сгенерированные работы.</p>
+            <p class="settings-hint" data-i18n="settings.aiTagsHint">Теги, по которым система определяет искусственно сгенерированные работы.</p>
             <div class="tags-input-box" id="aiTagsWrapper">
-              <input type="text" id="aiTagsInput" placeholder="Добавить AI тег..." spellcheck="false">
+              <input type="text" id="aiTagsInput" placeholder="Добавить AI тег..." data-i18n-placeholder="settings.aiTags.placeholder" spellcheck="false">
             </div>
           </div>
 
-          <!-- Разделитель: Слова-триггеры переключателей -->
+          <!-- Divider: toggle trigger words -->
           <div class="settings-section-header" style="margin-top: 18px; margin-bottom: 6px; padding-top: 14px; border-top: 1px solid var(--border-subtle);">
-            <span class="settings-section-title" style="font-weight: 600; font-size: 13px; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.5px;">Слова-триггеры для переключателей</span>
+            <span class="settings-section-title" style="font-weight: 600; font-size: 13px; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.triggerWords">Слова-триггеры для переключателей</span>
           </div>
 
-          <!-- 1. Пышные / Мамочки -->
+          <!-- 1. Curvy / Mature -->
           <div class="settings-group">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="curvyTagsInput">Слова для «Пышные / Мамочки» (Curvy / Mature):</label>
-              <button type="button" class="btn-text" id="btnResetCurvyTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+              <label class="settings-label" for="curvyTagsInput" data-i18n="settings.curvyWords">Слова для «Пышные / Мамочки» (Curvy / Mature):</label>
+              <button type="button" class="btn-text" id="btnResetCurvyTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.reset">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, используемые фильтром для отбора зрелых и пышных персонажей.</p>
+            <p class="settings-hint" data-i18n="settings.curvyHint">Теги, используемые фильтром для отбора зрелых и пышных персонажей.</p>
             <div class="tags-input-box" id="curvyTagsWrapper">
-              <input type="text" id="curvyTagsInput" placeholder="Добавить тег (например: milf, mature)..." spellcheck="false">
+              <input type="text" id="curvyTagsInput" placeholder="Добавить тег (например: milf, mature)..." data-i18n-placeholder="settings.curvy.placeholder" spellcheck="false">
             </div>
           </div>
 
-          <!-- 2. Миниатюрные / Лоли -->
+          <!-- 2. Petite / Loli -->
           <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="petiteTagsInput">Слова для «Миниатюрные / Лоли» (Petite / Loli):</label>
-              <button type="button" class="btn-text" id="btnResetPetiteTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+              <label class="settings-label" for="petiteTagsInput" data-i18n="settings.petiteWords">Слова для «Миниатюрные / Лоли» (Petite / Loli):</label>
+              <button type="button" class="btn-text" id="btnResetPetiteTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.reset">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, используемые фильтром для отбора миниатюрных персонажей.</p>
+            <p class="settings-hint" data-i18n="settings.petiteHint">Теги, используемые фильтром для отбора миниатюрных персонажей.</p>
             <div class="tags-input-box" id="petiteTagsWrapper">
-              <input type="text" id="petiteTagsInput" placeholder="Добавить тег (например: loli, petite)..." spellcheck="false">
+              <input type="text" id="petiteTagsInput" placeholder="Добавить тег (например: loli, petite)..." data-i18n-placeholder="settings.petite.placeholder" spellcheck="false">
             </div>
           </div>
 
-          <!-- 3. Фурри и антро -->
+          <!-- 3. Furry and anthro -->
           <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="furryTagsInput">Слова для «Скрыть фурри и антро» (Furry / Anthro):</label>
-              <button type="button" class="btn-text" id="btnResetFurryTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+              <label class="settings-label" for="furryTagsInput" data-i18n="settings.furryWords">Слова для «Скрыть фурри и антро» (Furry / Anthro):</label>
+              <button type="button" class="btn-text" id="btnResetFurryTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.reset">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, отсекаемые при включении переключателя «Скрыть фурри и антро».</p>
+            <p class="settings-hint" data-i18n="settings.furryHint">Теги, отсекаемые при включении переключателя «Скрыть фурри и антро».</p>
             <div class="tags-input-box" id="furryTagsWrapper">
-              <input type="text" id="furryTagsInput" placeholder="Добавить тег (например: furry, anthro)..." spellcheck="false">
+              <input type="text" id="furryTagsInput" placeholder="Добавить тег (например: furry, anthro)..." data-i18n-placeholder="settings.furry.placeholder" spellcheck="false">
             </div>
           </div>
 
-          <!-- 4. Беременность -->
+          <!-- 4. Pregnancy -->
           <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="pregnantTagsInput">Слова для «Скрыть беременность» (Pregnant / Inflation):</label>
-              <button type="button" class="btn-text" id="btnResetPregnantTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+              <label class="settings-label" for="pregnantTagsInput" data-i18n="settings.pregnantWords">Слова для «Скрыть беременность» (Pregnant / Inflation):</label>
+              <button type="button" class="btn-text" id="btnResetPregnantTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.reset">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, отсекаемые при включении переключателя «Скрыть беременность».</p>
+            <p class="settings-hint" data-i18n="settings.pregnantHint">Теги, отсекаемые при включении переключателя «Скрыть беременность».</p>
             <div class="tags-input-box" id="pregnantTagsWrapper">
-              <input type="text" id="pregnantTagsInput" placeholder="Добавить тег (например: pregnant, pregnancy)..." spellcheck="false">
+              <input type="text" id="pregnantTagsInput" placeholder="Добавить тег (например: pregnant, pregnancy)..." data-i18n-placeholder="settings.pregnant.placeholder" spellcheck="false">
             </div>
           </div>
 
-          <!-- 5. ЛГБТ -->
+          <!-- 5. LGBT -->
           <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-              <label class="settings-label" for="lgbtTagsInput">Слова для «Скрыть ЛГБТ» (LGBT / Yaoi / Futanari):</label>
-              <button type="button" class="btn-text" id="btnResetLgbtTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;">По умолчанию</button>
+              <label class="settings-label" for="lgbtTagsInput" data-i18n="settings.lgbtWords">Слова для «Скрыть ЛГБТ» (LGBT / Yaoi / Futanari):</label>
+              <button type="button" class="btn-text" id="btnResetLgbtTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.reset">По умолчанию</button>
             </div>
-            <p class="settings-hint">Теги, отсекаемые при включении переключателя «Скрыть ЛГБТ».</p>
+            <p class="settings-hint" data-i18n="settings.lgbtHint">Теги, отсекаемые при включении переключателя «Скрыть ЛГБТ».</p>
             <div class="tags-input-box" id="lgbtTagsWrapper">
-              <input type="text" id="lgbtTagsInput" placeholder="Добавить тег (например: yaoi, gay, futanari)..." spellcheck="false">
+              <input type="text" id="lgbtTagsInput" placeholder="Добавить тег (например: yaoi, gay, futanari)..." data-i18n-placeholder="settings.lgbt.placeholder" spellcheck="false">
             </div>
           </div>
         </div>
 
-        <!-- 4. ВКЛАДКА: API КЛЮЧИ -->
+        <!-- 4. TAB: API KEYS -->
         <div class="settings-tab-pane" id="tabPane-apikeys" style="display: none;">
           <div class="settings-group">
-            <label class="settings-label">Персональные API Ключи (Booru):</label>
-            <p class="settings-hint">Необязательно. Бесплатные ключи снимают ограничения поиска, повышают лимиты и ускоряют выдачу.</p>
+            <label class="settings-label" data-i18n="settings.apiKeys">Персональные API Ключи (Booru):</label>
+            <p class="settings-hint" data-i18n="settings.apiKeysHint">Необязательно. Бесплатные ключи снимают ограничения поиска, повышают лимиты и ускоряют выдачу.</p>
             
             <div class="api-keys-container">
               <!-- 1. Rule34.xxx -->
               <div class="api-key-card">
                 <div class="api-key-card-header">
                   <span class="api-key-site-badge site-r34">Rule34.xxx</span>
-                  <a href="https://rule34.xxx/index.php?page=account&s=home" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в профиле Rule34">Где взять? ↗</a>
+                  <a href="https://rule34.xxx/index.php?page=account&s=home" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в профиле Rule34" data-i18n="settings.whereGet">Где взять? ↗</a>
                 </div>
                 <div class="api-keys-grid">
                   <input type="text" id="inputRule34ApiKey" class="input-setting" placeholder="Rule34 API Key" autocomplete="off" spellcheck="false">
@@ -1014,7 +993,7 @@
               <div class="api-key-card">
                 <div class="api-key-card-header">
                   <span class="api-key-site-badge site-gelbooru">Gelbooru.com</span>
-                  <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в настройках Gelbooru">Где взять? ↗</a>
+                  <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в настройках Gelbooru" data-i18n="settings.whereGet">Где взять? ↗</a>
                 </div>
                 <div class="api-keys-grid">
                   <input type="text" id="inputGelbooruApiKey" class="input-setting" placeholder="Gelbooru API Key" autocomplete="off" spellcheck="false">
@@ -1026,7 +1005,7 @@
               <div class="api-key-card">
                 <div class="api-key-card-header">
                   <span class="api-key-site-badge site-danbooru">Danbooru</span>
-                  <a href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener" class="api-key-link" title="Получить API Key в профиле Danbooru">Где взять? ↗</a>
+                  <a href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener" class="api-key-link" title="Получить API Key в профиле Danbooru" data-i18n="settings.whereGet">Где взять? ↗</a>
                 </div>
                 <div class="api-keys-grid">
                   <input type="text" id="inputDanbooruApiKey" class="input-setting" placeholder="Danbooru API Key" autocomplete="off" spellcheck="false">
@@ -1037,91 +1016,91 @@
           </div>
         </div>
 
-        <!-- 5. ВКЛАДКА: ПРОКСИ & СЕТЬ -->
+        <!-- 5. TAB: PROXY & NETWORK -->
         <div class="settings-tab-pane" id="tabPane-proxy" style="display: none;">
           <div class="settings-group">
-            <label class="settings-label">Проксирование и экономия трафика сервера:</label>
-            <p class="settings-hint">Отключайте проксирование для прямой загрузки с CDN. Если CDN борды блокирует доступ, приложение автоматически подключит прокси (Fallback).</p>
+            <label class="settings-label" data-i18n="settings.proxyMain">Проксирование и экономия трафика сервера:</label>
+            <p class="settings-hint" data-i18n="settings.proxyMainHint">Отключайте проксирование для прямой загрузки с CDN. Если CDN борды блокирует доступ, приложение автоматически подключит прокси (Fallback).</p>
             <div class="toggles-list" style="margin-top: 6px;">
-              <label class="toggle-row" id="rowProxyThumbnails" title="Загружать превью и миниатюры через серверный прокси с сохранением в локальный дисковый кэш">
+              <label class="toggle-row" id="rowProxyThumbnails" title="Загружать превью и миниатюры через серверный прокси с сохранением в локальный дисковый кэш" data-i18n-title="settings.proxyThumbs.title">
                 <input type="checkbox" id="checkProxyThumbnails" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Проксировать превью в ленте (кэширование на сервере)</span>
+                <span class="toggle-name" data-i18n="settings.proxyThumbs">Проксировать превью в ленте (кэширование на сервере)</span>
               </label>
               <div id="proxyThumbnailsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-                Прокси превью недоступен на Live Demo (для экономии Fast Origin Transfer)
+                <span data-i18n="settings.proxyNotice">Прокси превью недоступен на Live Demo (для экономии Fast Origin Transfer)</span>
               </div>
-              <label class="toggle-row" id="rowProxyFullImages" title="Загружать полноразмерные оригиналы артов через серверный прокси в просмотрщике">
+              <label class="toggle-row" id="rowProxyFullImages" title="Загружать полноразмерные оригиналы артов через серверный прокси в просмотрщике" data-i18n-title="settings.proxyFull.title">
                 <input type="checkbox" id="checkProxyFullImages" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Проксировать полноразмерные изображения (просмотрщик)</span>
+                <span class="toggle-name" data-i18n="settings.proxyFull">Проксировать полноразмерные изображения (просмотрщик)</span>
               </label>
               <div id="proxyFullImagesVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-                Прокси изображений недоступен на Live Demo (для экономии Fast Origin Transfer)
+                <span data-i18n="settings.proxyFullNotice">Прокси изображений недоступен на Live Demo (для экономии Fast Origin Transfer)</span>
               </div>
-              <label class="toggle-row" id="rowProxyVideos" title="Загружать видеопотоки через локальный прокси для мгновенного запуска и обхода CDN-ограничений">
+              <label class="toggle-row" id="rowProxyVideos" title="Загружать видеопотоки через локальный прокси для мгновенного запуска и обхода CDN-ограничений" data-i18n-title="settings.proxyVideos.title">
                 <input type="checkbox" id="checkProxyVideos" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Проксировать видеопотоки (лента и полноэкранный плеер)</span>
+                <span class="toggle-name" data-i18n="settings.proxyVideos">Проксировать видеопотоки (лента и полноэкранный плеер)</span>
               </label>
               <div id="proxyVideosVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-                Прокси видео недоступен на Live Demo (для экономии Fast Origin Transfer)
+                <span data-i18n="settings.proxyVideosNotice">Прокси видео недоступен на Live Demo (для экономии Fast Origin Transfer)</span>
               </div>
-              <label class="toggle-row" id="rowProxyDownloads" title="Скачивать файлы через серверный прокси для гарантированного сохранения с оригинальным именем">
+              <label class="toggle-row" id="rowProxyDownloads" title="Скачивать файлы через серверный прокси для гарантированного сохранения с оригинальным именем" data-i18n-title="settings.proxyDownloads.title">
                 <input type="checkbox" id="checkProxyDownloads" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Проксировать скачивание файлов на устройство</span>
+                <span class="toggle-name" data-i18n="settings.proxyDownloads">Проксировать скачивание файлов на устройство</span>
               </label>
               <div id="proxyDownloadsVercelNotice" style="display: none; font-size: 11px; color: var(--text-muted); margin: -4px 0 6px 36px; line-height: 1.3;">
-                Прокси скачивания недоступен на Live Demo (для экономии Fast Origin Transfer)
+                <span data-i18n="settings.proxyDownloadsNotice">Прокси скачивания недоступен на Live Demo (для экономии Fast Origin Transfer)</span>
               </div>
             </div>
           </div>
 
           <div class="settings-group">
-            <label class="settings-label" for="selectDeepFetchPages">Глубина глубокого поиска (страниц на запрос):</label>
-            <p class="settings-hint">Сколько скрытых страниц опрашивать вглубь на всех сайтах (Danbooru, Rule34, Gelbooru и др.) для заполнения ленты при строгой фильтрации (лоли/мамочки, ИИ, черные списки).</p>
+            <label class="settings-label" for="selectDeepFetchPages" data-i18n="settings.deepFetch">Глубина глубокого поиска (страниц на запрос):</label>
+            <p class="settings-hint" data-i18n="settings.deepFetchHint">Сколько скрытых страниц опрашивать вглубь на всех сайтах (Danbooru, Rule34, Gelbooru и др.) для заполнения ленты при строгой фильтрации (лоли/мамочки, ИИ, черные списки).</p>
             <select id="selectDeepFetchPages" class="input-setting">
-              <option value="1">1 страница (быстро)</option>
-              <option value="2" selected>2 страницы (по умолчанию)</option>
-              <option value="3">3 страницы (глубокий)</option>
-              <option value="4">4 страницы (очень глубокий)</option>
-              <option value="5">5 страниц (максимальный)</option>
+              <option value="1" data-i18n="settings.deep1">1 страница (быстро)</option>
+              <option value="2" selected data-i18n="settings.deep2">2 страницы (по умолчанию)</option>
+              <option value="3" data-i18n="settings.deep3">3 страницы (глубокий)</option>
+              <option value="4" data-i18n="settings.deep4">4 страницы (очень глубокий)</option>
+              <option value="5" data-i18n="settings.deep5">5 страниц (максимальный)</option>
             </select>
           </div>
 
           <div class="settings-group">
-            <label class="settings-label">Специфичные настройки поиска:</label>
+            <label class="settings-label" data-i18n="settings.specific">Специфичные настройки поиска:</label>
             <div class="toggles-list" style="margin-top: 6px;">
-              <label class="toggle-row" title="Мгновенное воспроизведение проблемных видео прямо в браузере через MediaSource. При отключении плеер сразу использует серверный FFmpeg транскодер.">
+              <label class="toggle-row" title="Мгновенное воспроизведение проблемных видео прямо в браузере через MediaSource. При отключении плеер сразу использует серверный FFmpeg транскодер." data-i18n-title="settings.jsDemux.title">
                 <input type="checkbox" id="checkEnableJsDemuxing" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Клиентский MP4Box демуксинг (выключите для прямого перехода на FFmpeg)</span>
+                <span class="toggle-name" data-i18n="settings.jsDemux">Клиентский MP4Box демуксинг (выключите для прямого перехода на FFmpeg)</span>
               </label>
-              <label class="toggle-row" title="Ручные теги (например 'petite') будут иметь приоритет над сортировкой 'Популярное' и 'Видео' при поиске на Danbooru">
+              <label class="toggle-row" title="Ручные теги (например 'petite') будут иметь приоритет над сортировкой 'Популярное' и 'Видео' при поиске на Danbooru" data-i18n-title="settings.prioritizeTags.title">
                 <input type="checkbox" id="checkPrioritizeUserTags">
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Отдавать приоритет ручным тегам перед системными фильтрами (Danbooru)</span>
+                <span class="toggle-name" data-i18n="settings.prioritizeTags">Отдавать приоритет ручным тегам перед системными фильтрами (Danbooru)</span>
               </label>
-              <label class="toggle-row" title="Использовать открытую базу Rule34 Paheal (rule34.paheal.net) при отсутствии или сбое API ключа Rule34.xxx">
+              <label class="toggle-row" title="Использовать открытую базу Rule34 Paheal (rule34.paheal.net) при отсутствии или сбое API ключа Rule34.xxx" data-i18n-title="settings.paheal.title">
                 <input type="checkbox" id="checkEnablePaheal" checked>
                 <span class="toggle-slider"></span>
-                <span class="toggle-name">Использовать Rule34 через Paheal (открытый источник без API ключа)</span>
+                <span class="toggle-name" data-i18n="settings.paheal">Использовать Rule34 через Paheal (открытый источник без API ключа)</span>
               </label>
             </div>
           </div>
         </div>
 
-        <!-- 6. ВКЛАДКА: ПАМЯТЬ & БЭКАП -->
+        <!-- 6. TAB: STORAGE & BACKUP -->
         <div class="settings-tab-pane" id="tabPane-storage" style="display: none;">
-          <!-- Управление локальным хранилищем и кэшем устройства -->
+          <!-- Local device storage and cache controls -->
           <div class="settings-group storage-settings-group">
             <div class="storage-header-row">
               <div>
-                <label class="settings-label">Кэш и память устройства:</label>
-                <p class="settings-hint">Закэшированные медиа-файлы и запросы для мгновенной работы офлайн/онлайн.</p>
+                <label class="settings-label" data-i18n="settings.storageHeading">Кэш и память устройства:</label>
+                <p class="settings-hint" data-i18n="settings.storageHint">Закэшированные медиа-файлы и запросы для мгновенной работы офлайн/онлайн.</p>
               </div>
-              <button type="button" class="btn-refresh-storage" id="btnRefreshStorage" title="Обновить расчет памяти">
+              <button type="button" class="btn-refresh-storage" id="btnRefreshStorage" title="Обновить расчет памяти" data-i18n-title="settings.refreshStorage">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                   <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
                 </svg>
@@ -1131,11 +1110,11 @@
             <div class="storage-card">
               <div class="storage-info-row">
                 <div class="storage-stat">
-                  <span class="storage-stat-label">Занято на устройстве:</span>
+                  <span class="storage-stat-label" data-i18n="settings.usedOnDevice">Занято на устройстве:</span>
                   <span class="storage-stat-value" id="storageUsageText">0.0 МБ</span>
                 </div>
                 <div class="storage-stat text-right">
-                  <span class="storage-stat-label">Доступная квота:</span>
+                  <span class="storage-stat-label" data-i18n="settings.quotaAvailable">Доступная квота:</span>
                   <span class="storage-stat-quota" id="storageQuotaText">-- ГБ</span>
                 </div>
               </div>
@@ -1147,33 +1126,33 @@
               <div class="storage-breakdown" id="storageBreakdown">
                 <div class="storage-breakdown-item">
                   <span class="storage-dot dot-cache"></span>
-                  <span class="storage-breakdown-label">Кэш PWA / Медиа:</span>
+                  <span class="storage-breakdown-label" data-i18n="settings.mediaCache">Кэш PWA / Медиа:</span>
                   <span class="storage-breakdown-val" id="storageMediaCacheText">0.0 МБ</span>
                 </div>
                 <div class="storage-breakdown-item">
                   <span class="storage-dot dot-server"></span>
-                  <span class="storage-breakdown-label">Серверный кэш:</span>
+                  <span class="storage-breakdown-label" data-i18n="settings.serverCache">Серверный кэш:</span>
                   <span class="storage-breakdown-val" id="storageServerCacheText">0.0 МБ</span>
                 </div>
               </div>
 
-              <!-- Настройка лимита дискового кэша сервера -->
+              <!-- Server disk cache limit setting -->
               <div class="storage-limit-control" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border-color);">
                 <div class="settings-sublabel-row" style="margin-bottom: 6px;">
-                  <label class="settings-sublabel" for="selectMaxServerCache" style="font-weight: 600;">Лимит дискового кэша на сервере:</label>
+                  <label class="settings-sublabel" for="selectMaxServerCache" style="font-weight: 600;" data-i18n="settings.cacheLimit">Лимит дискового кэша на сервере:</label>
                   <span class="storage-limit-badge" id="storageLimitBadge" style="font-size: 11px; color: var(--accent-primary);">1.5 ГБ</span>
                 </div>
                 <select id="selectMaxServerCache" class="settings-select" style="width: 100%;">
-                  <option value="250">250 МБ (Минимальный)</option>
-                  <option value="500">500 МБ</option>
-                  <option value="1000">1 ГБ</option>
-                  <option value="1500" selected>1.5 ГБ (Рекомендуется)</option>
-                  <option value="2000">2 ГБ</option>
-                  <option value="5000">5 ГБ (Просторный)</option>
-                  <option value="10000">10 ГБ</option>
-                  <option value="0">Без ограничений</option>
+                  <option value="250" data-i18n="settings.cache250">250 МБ (Минимальный)</option>
+                  <option value="500" data-i18n="settings.cache500">500 МБ</option>
+                  <option value="1000" data-i18n="settings.cache1000">1 ГБ</option>
+                  <option value="1500" selected data-i18n="settings.cache1500">1.5 ГБ (Рекомендуется)</option>
+                  <option value="2000" data-i18n="settings.cache2000">2 ГБ</option>
+                  <option value="5000" data-i18n="settings.cache5000">5 ГБ (Просторный)</option>
+                  <option value="10000" data-i18n="settings.cache10000">10 ГБ</option>
+                  <option value="0" data-i18n="settings.cacheUnlimited">Без ограничений</option>
                 </select>
-                <p class="settings-hint" style="margin-top: 6px; font-size: 11.5px; opacity: 0.8;">При превышении лимита сервер автоматически очищает старые превью и видео (LRU автоочистка).</p>
+                <p class="settings-hint" style="margin-top: 6px; font-size: 11.5px; opacity: 0.8;" data-i18n="settings.cacheLimitHint">При превышении лимита сервер автоматически очищает старые превью и видео (LRU автоочистка).</p>
               </div>
 
               <div class="storage-actions-row">
@@ -1183,17 +1162,17 @@
                     <line x1="10" y1="11" x2="10" y2="17"/>
                     <line x1="14" y1="11" x2="14" y2="17"/>
                   </svg>
-                  <span>Очистить кэш медиа</span>
+                  <span data-i18n="settings.clearMediaCache">Очистить кэш медиа</span>
                 </button>
                 <span id="storageClearStatus" class="storage-clear-status"></span>
               </div>
             </div>
           </div>
 
-          <!-- Резервное копирование и перенос данных -->
+          <!-- Backup and data migration -->
           <div class="settings-group backup-settings-group">
-            <label class="settings-label">Резервное копирование и перенос данных:</label>
-            <p class="settings-hint">Выгрузите свои настройки, слова типажей, API-ключи, закладки, лайки и список любимых авторов в файл или перенесите на другое устройство.</p>
+            <label class="settings-label" data-i18n="settings.backupHeading">Резервное копирование и перенос данных:</label>
+            <p class="settings-hint" data-i18n="settings.backupHint">Выгрузите свои настройки, слова типажей, API-ключи, закладки, лайки и список любимых авторов в файл или перенесите на другое устройство.</p>
             
             <div class="backup-actions-grid">
               <button type="button" class="btn-backup btn-export" id="btnExportData">
@@ -1202,7 +1181,7 @@
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span>Экспорт в файл (JSON)</span>
+                <span data-i18n="settings.exportJson">Экспорт в файл (JSON)</span>
               </button>
 
               <button type="button" class="btn-backup btn-import" id="btnImportData">
@@ -1211,13 +1190,13 @@
                   <polyline points="17 8 12 3 7 8"/>
                   <line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
-                <span>Импорт из файла</span>
+                <span data-i18n="settings.importFile">Импорт из файла</span>
               </button>
               <input type="file" id="inputImportFile" accept=".json" style="display: none;">
             </div>
           </div>
 
-          <!-- Автобэкап в Telegram -->
+          <!-- Telegram auto-backup -->
           <div class="settings-group telegram-backup-group">
             <div class="settings-group-header-row">
               <label class="settings-label" for="checkTelegramBackupEnabled">
@@ -1225,7 +1204,7 @@
                   <path d="M21.5 2L2 9.5l7 3.5 3.5 7L21.5 2z"/>
                   <path d="M9 13l5.5-5.5"/>
                 </svg>
-                <span>Автобэкап в Telegram</span>
+                <span data-i18n="settings.telegramHeading">Автобэкап в Telegram</span>
               </label>
               <label class="toggle-switch">
                 <input type="checkbox" id="checkTelegramBackupEnabled">
@@ -1239,32 +1218,32 @@
             <div class="telegram-backup-form" id="telegramBackupForm">
               <div class="settings-input-row">
                 <div class="settings-sublabel-row">
-                  <label class="settings-sublabel" for="inputTelegramBotToken">Токен бота (Bot Token):</label>
-                  <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" class="tg-helper-link">Получить в @BotFather ↗</a>
+                  <label class="settings-sublabel" for="inputTelegramBotToken" data-i18n="settings.tgToken">Токен бота (Bot Token):</label>
+                  <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" class="tg-helper-link" data-i18n="settings.tgGetBotFather">Получить в @BotFather ↗</a>
                 </div>
                 <input type="password" id="inputTelegramBotToken" class="settings-input" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..." autocomplete="off">
               </div>
 
               <div class="settings-input-row">
                 <div class="settings-sublabel-row">
-                  <label class="settings-sublabel" for="inputTelegramChatId">ID чата (Chat ID):</label>
-                  <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" class="tg-helper-link">Узнать в @userinfobot ↗</a>
+                  <label class="settings-sublabel" for="inputTelegramChatId" data-i18n="settings.tgChatId">ID чата (Chat ID):</label>
+                  <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" class="tg-helper-link" data-i18n="settings.tgGetUserId">Узнать в @userinfobot ↗</a>
                 </div>
                 <input type="text" id="inputTelegramChatId" class="settings-input" placeholder="Например: 123456789" autocomplete="off">
               </div>
 
               <div class="settings-input-row">
-                <label class="settings-sublabel" for="selectTelegramBackupInterval">Периодичность автобэкапа:</label>
+                <label class="settings-sublabel" for="selectTelegramBackupInterval" data-i18n="settings.tgInterval">Периодичность автобэкапа:</label>
                 <select id="selectTelegramBackupInterval" class="settings-select">
-                  <option value="daily">Каждые 24 часа (Раз в сутки)</option>
-                  <option value="every_3_days">Каждые 3 дня</option>
-                  <option value="weekly">Раз в неделю (Каждые 7 дней)</option>
+                  <option value="daily" data-i18n="settings.tgDaily">Каждые 24 часа (Раз в сутки)</option>
+                  <option value="every_3_days" data-i18n="settings.tg3days">Каждые 3 дня</option>
+                  <option value="weekly" data-i18n="settings.tgWeekly">Раз в неделю (Каждые 7 дней)</option>
                 </select>
               </div>
 
               <div class="telegram-backup-status-bar" id="telegramBackupStatusBar">
                 <span class="tg-status-dot" id="telegramStatusDot"></span>
-                <span class="tg-status-text" id="telegramStatusText">Последний бэкап: нет данных</span>
+                <span class="tg-status-text" id="telegramStatusText" data-i18n="settings.tgLastBackup">Последний бэкап: нет данных</span>
               </div>
 
               <div class="telegram-actions-grid">
@@ -1273,7 +1252,7 @@
                     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
                     <polyline points="22 4 12 14.01 9 11.01"/>
                   </svg>
-                  <span>Проверить связь</span>
+                  <span data-i18n="settings.tgTest">Проверить связь</span>
                 </button>
 
                 <button type="button" class="btn-backup btn-tg-send" id="btnSendTelegramBackup">
@@ -1281,7 +1260,7 @@
                     <line x1="22" y1="2" x2="11" y2="13"/>
                     <polygon points="22 2 15 22 11 13 2 9 22 2"/>
                   </svg>
-                  <span>Отправить бэкап сейчас</span>
+                  <span data-i18n="settings.tgSendNow">Отправить бэкап сейчас</span>
                 </button>
               </div>
             </div>
@@ -1290,29 +1269,29 @@
       </div>
 
       <div class="settings-footer">
-        <button class="btn-secondary" id="btnResetSettings">Сбросить по умолчанию</button>
-        <button class="btn-primary" id="btnSaveSettings">Сохранить</button>
+        <button class="btn-secondary" id="btnResetSettings" data-i18n="settings.resetAll">Сбросить по умолчанию</button>
+        <button class="btn-primary" id="btnSaveSettings" data-i18n="modal.save">Сохранить</button>
       </div>
     </div>
   </div>
 
-  <!-- Модальное окно добавления автора в избранное -->
+  <!-- Add-author-to-favorites modal -->
   <div class="modal-backdrop" id="modalAddAuthorBackdrop" style="display: none;">
     <div class="modal-dialog modal-dialog-sm">
       <div class="modal-header">
-        <h3 class="modal-title">Добавить автора в избранное</h3>
-        <button class="btn-icon btn-modal-close" id="btnCloseAddAuthorModal" title="Закрыть">
+        <h3 class="modal-title" data-i18n="addAuthor.title">Добавить автора в избранное</h3>
+        <button class="btn-icon btn-modal-close" id="btnCloseAddAuthorModal" title="Закрыть" data-i18n-title="modal.close.title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <form id="formAddAuthor" class="modal-body modal-form">
         <div class="form-group">
-          <label for="inputAuthorName" class="form-label">Имя автора / Тег артиста:</label>
-          <input type="text" id="inputAuthorName" class="form-input" placeholder="например: ciloru, wlop, sakimichan..." required autocomplete="off" spellcheck="false">
-          <span class="form-hint">Укажите имя художника (как в тегах Danbooru, Gelbooru или Rule34).</span>
+          <label for="inputAuthorName" class="form-label" data-i18n="addAuthor.nameLabel">Имя автора / Тег артиста:</label>
+          <input type="text" id="inputAuthorName" class="form-input" placeholder="например: ciloru, wlop, sakimichan..." data-i18n-placeholder="addAuthor.name.placeholder" required autocomplete="off" spellcheck="false">
+          <span class="form-hint" data-i18n="addAuthor.nameHint">Укажите имя художника (как в тегах Danbooru, Gelbooru или Rule34).</span>
         </div>
         <div class="form-group">
-          <label for="selectAuthorSite" class="form-label">Предпочитаемый Booru-источник:</label>
+          <label for="selectAuthorSite" class="form-label" data-i18n="addAuthor.siteLabel">Предпочитаемый Booru-источник:</label>
           <select id="selectAuthorSite" class="form-select">
             <option value="danbooru">Danbooru</option>
             <option value="gelbooru">Gelbooru</option>
@@ -1327,22 +1306,22 @@
           </select>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" id="btnCancelAddAuthor">Отмена</button>
-          <button type="submit" class="btn-primary" id="btnSaveAddAuthor">Сохранить</button>
+          <button type="button" class="btn-secondary" id="btnCancelAddAuthor" data-i18n="modal.cancel">Отмена</button>
+          <button type="submit" class="btn-primary" id="btnSaveAddAuthor" data-i18n="modal.save">Сохранить</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Модальное окно выбора обложки автора из его постов -->
+  <!-- Author cover picker modal (from the author's own posts) -->
   <div class="modal-backdrop" id="modalPickAuthorCoverBackdrop" style="display: none;">
     <div class="modal-dialog modal-dialog-cover-picker">
       <div class="modal-header">
         <div class="modal-title-wrap">
-          <h3 class="modal-title" id="pickAuthorCoverTitle">Выбор обложки автора</h3>
-          <span class="modal-subtitle" id="pickAuthorCoverSubtitle">Нажмите на любой арт, чтобы сделать его превью автора</span>
+          <h3 class="modal-title" id="pickAuthorCoverTitle" data-i18n="coverPicker.title">Выбор обложки автора</h3>
+          <span class="modal-subtitle" id="pickAuthorCoverSubtitle" data-i18n="coverPicker.subtitle">Нажмите на любой арт, чтобы сделать его превью автора</span>
         </div>
-        <button class="btn-icon btn-modal-close" id="btnClosePickAuthorCoverModal" title="Закрыть">
+        <button class="btn-icon btn-modal-close" id="btnClosePickAuthorCoverModal" title="Закрыть" data-i18n-title="modal.close.title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
@@ -1350,7 +1329,7 @@
       <div class="modal-body cover-picker-body">
         <div class="cover-picker-toolbar">
           <div class="cover-picker-site-box">
-            <label for="selectCoverPickerSite" class="form-label" style="margin: 0; font-size: 12px;">Источник:</label>
+            <label for="selectCoverPickerSite" class="form-label" style="margin: 0; font-size: 12px;" data-i18n="coverPicker.source">Источник:</label>
             <select id="selectCoverPickerSite" class="form-select cover-picker-site-select">
               <option value="danbooru">Danbooru</option>
               <option value="gelbooru">Gelbooru</option>
@@ -1364,112 +1343,112 @@
               <option value="tbib">TBIB</option>
             </select>
           </div>
-          <button type="button" class="btn-secondary btn-sm" id="btnRefreshCoverPicker" title="Обновить список работ">
+          <button type="button" class="btn-secondary btn-sm" id="btnRefreshCoverPicker" title="Обновить список работ" data-i18n-title="coverPicker.refresh.title">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-            <span>Обновить</span>
+            <span data-i18n="coverPicker.refresh">Обновить</span>
           </button>
         </div>
 
         <div class="cover-picker-status" id="coverPickerStatus" style="display: none;">
           <div class="loading-spinner" style="width: 24px; height: 24px;"></div>
-          <span>Загрузка работ художника...</span>
+          <span data-i18n="coverPicker.loading">Загрузка работ художника...</span>
         </div>
 
         <div class="cover-picker-empty" id="coverPickerEmpty" style="display: none;">
-          <p>Не удалось найти работы этого автора на выбранном источнике. Попробуйте переключить Booru-сайт выше.</p>
+          <p data-i18n="coverPicker.empty">Не удалось найти работы этого автора на выбранном источнике. Попробуйте переключить Booru-сайт выше.</p>
         </div>
 
         <div class="cover-picker-grid" id="coverPickerGrid">
-          <!-- Карточки миниатюр постов заполняются через JS -->
+          <!-- Post thumbnail cards populated by JS -->
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Модальное окно Авторизации и Регистрации аккаунтов -->
+  <!-- Account login and registration modal -->
   <div class="modal-backdrop" id="modalAuthBackdrop" style="display: none;">
     <div class="modal-dialog modal-dialog-auth">
       <div class="modal-header">
         <div class="auth-modal-header-tabs">
-          <button type="button" class="auth-header-tab active" id="btnAuthTabLogin">Вход</button>
-          <button type="button" class="auth-header-tab" id="btnAuthTabRegister">Регистрация</button>
+          <button type="button" class="auth-header-tab active" id="btnAuthTabLogin" data-i18n="auth.loginTab">Вход</button>
+          <button type="button" class="auth-header-tab" id="btnAuthTabRegister" data-i18n="auth.registerTab">Регистрация</button>
         </div>
-        <button class="btn-icon btn-modal-close" id="btnCloseAuthModal" title="Закрыть">
+        <button class="btn-icon btn-modal-close" id="btnCloseAuthModal" title="Закрыть" data-i18n-title="modal.close.title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
 
-      <!-- Форма Входа -->
+      <!-- Login form -->
       <form id="formLogin" class="modal-body modal-form">
         <div class="form-group">
-          <label for="inputLoginUsername" class="form-label">Логин / Имя пользователя:</label>
-          <input type="text" id="inputLoginUsername" class="form-input" placeholder="Введите имя..." required autocomplete="username" spellcheck="false">
+          <label for="inputLoginUsername" class="form-label" data-i18n="auth.loginName">Логин / Имя пользователя:</label>
+          <input type="text" id="inputLoginUsername" class="form-input" placeholder="Введите имя..." data-i18n-placeholder="auth.loginName.placeholder" required autocomplete="username" spellcheck="false">
         </div>
         <div class="form-group">
-          <label for="inputLoginPassword" class="form-label">Пароль:</label>
-          <input type="password" id="inputLoginPassword" class="form-input" placeholder="Введите пароль..." required autocomplete="current-password">
+          <label for="inputLoginPassword" class="form-label" data-i18n="auth.loginPassword">Пароль:</label>
+          <input type="password" id="inputLoginPassword" class="form-input" placeholder="Введите пароль..." data-i18n-placeholder="auth.loginPassword.placeholder" required autocomplete="current-password">
         </div>
         <div class="auth-error-msg" id="loginErrorMsg" style="display: none;"></div>
         <div class="modal-footer auth-footer">
-          <button type="submit" class="btn-primary btn-auth-submit" id="btnSubmitLogin">Войти в аккаунт</button>
+          <button type="submit" class="btn-primary btn-auth-submit" id="btnSubmitLogin" data-i18n="auth.loginSubmit">Войти в аккаунт</button>
         </div>
       </form>
 
-      <!-- Форма Регистрации -->
+      <!-- Registration form -->
       <form id="formRegister" class="modal-body modal-form" style="display: none;">
         <div class="form-group">
-          <label for="inputRegUsername" class="form-label">Придумайте логин:</label>
-          <input type="text" id="inputRegUsername" class="form-input" placeholder="От 3 до 30 символов..." required autocomplete="username" spellcheck="false">
+          <label for="inputRegUsername" class="form-label" data-i18n="auth.regName">Придумайте логин:</label>
+          <input type="text" id="inputRegUsername" class="form-input" placeholder="От 3 до 30 символов..." data-i18n-placeholder="auth.regName.placeholder" required autocomplete="username" spellcheck="false">
         </div>
         <div class="form-group">
-          <label for="inputRegPassword" class="form-label">Придумайте пароль:</label>
-          <input type="password" id="inputRegPassword" class="form-input" placeholder="Не менее 4 символов..." required autocomplete="new-password">
+          <label for="inputRegPassword" class="form-label" data-i18n="auth.regPassword">Придумайте пароль:</label>
+          <input type="password" id="inputRegPassword" class="form-input" placeholder="Не менее 4 символов..." data-i18n-placeholder="auth.regPassword.placeholder" required autocomplete="new-password">
         </div>
         <div class="form-group">
-          <label for="inputRegPasswordConfirm" class="form-label">Повторите пароль:</label>
-          <input type="password" id="inputRegPasswordConfirm" class="form-input" placeholder="Повторите пароль..." required autocomplete="new-password">
+          <label for="inputRegPasswordConfirm" class="form-label" data-i18n="auth.regConfirm">Повторите пароль:</label>
+          <input type="password" id="inputRegPasswordConfirm" class="form-input" placeholder="Повторите пароль..." data-i18n-placeholder="auth.regConfirm.placeholder" required autocomplete="new-password">
         </div>
 
         <div class="form-group-checkbox">
           <label class="toggle-switch">
             <input type="checkbox" id="checkMigrateLocalData" checked>
             <span class="toggle-slider"></span>
-            <span class="toggle-name">Перенести текущие закладки, лайки и настройки в новый аккаунт</span>
+            <span class="toggle-name" data-i18n="auth.migrate">Перенести текущие закладки, лайки и настройки в новый аккаунт</span>
           </label>
         </div>
 
         <div class="auth-error-msg" id="regErrorMsg" style="display: none;"></div>
         <div class="modal-footer auth-footer">
-          <button type="submit" class="btn-primary btn-auth-submit" id="btnSubmitRegister">Создать аккаунт</button>
+          <button type="submit" class="btn-primary btn-auth-submit" id="btnSubmitRegister" data-i18n="auth.registerSubmit">Создать аккаунт</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Модальное окно Настройки своей подборки Booru -->
+  <!-- Custom Booru source selection modal -->
   <div class="modal-backdrop" id="modalCustomSourcesBackdrop" style="display: none;">
     <div class="modal-dialog modal-dialog-custom-sources">
       <div class="modal-header">
         <div class="modal-title-wrap">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/><line x1="10.88" y1="21.94" x2="15.46" y2="14"/></svg>
-          <h3 class="modal-title">Своя подборка источников</h3>
+          <h3 class="modal-title" data-i18n="customSources.title">Своя подборка источников</h3>
         </div>
-        <button class="btn-icon btn-modal-close" id="btnCloseCustomSourcesModal" title="Закрыть">
+        <button class="btn-icon btn-modal-close" id="btnCloseCustomSourcesModal" title="Закрыть" data-i18n-title="modal.close.title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
       <div class="modal-body custom-sources-modal-body">
-        <p class="modal-desc-hint">Отметьте нужные Booru-сайты, посты из которых будут параллельно собираться и перемешиваться в ленте.</p>
+        <p class="modal-desc-hint" data-i18n="customSources.hint">Отметьте нужные Booru-сайты, посты из которых будут параллельно собираться и перемешиваться в ленте.</p>
         <div class="custom-sources-checkbox-grid" id="customSourcesCheckboxGrid">
-          <!-- Генерируется через JS -->
+          <!-- Generated by JS -->
         </div>
       </div>
       <div class="modal-footer custom-sources-modal-footer">
         <div class="custom-sources-footer-left">
-          <button type="button" class="btn-secondary btn-sm" id="btnCustomSourcesToggleAll">Выбрать все</button>
+          <button type="button" class="btn-secondary btn-sm" id="btnCustomSourcesToggleAll" data-i18n="customSources.selectAll">Выбрать все</button>
         </div>
         <div class="custom-sources-footer-right">
-          <button type="button" class="btn-primary" id="btnApplyCustomSources">Применить и искать</button>
+          <button type="button" class="btn-primary" id="btnApplyCustomSources" data-i18n="customSources.apply">Применить и искать</button>
         </div>
       </div>
     </div>
@@ -1477,6 +1456,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=7.2"></script>
+  <script type="module" src="js/app.js?v=8.1"></script>
 </body>
 </html>

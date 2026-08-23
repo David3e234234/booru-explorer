@@ -17,7 +17,7 @@ export class MemoryCache {
       this.cache.delete(key);
       return null;
     }
-    // LRU сдвиг
+    // LRU shift
     this.cache.delete(key);
     this.cache.set(key, entry);
     return entry.value;
@@ -51,8 +51,8 @@ export class MemoryCache {
   }
 }
 
-export const apiPostsCache = new MemoryCache(400, 6 * 60 * 1000); // 6 минут кэш постов
-export const tagAutocompleteCache = new MemoryCache(600, 30 * 60 * 1000); // 30 минут кэш тегов
+export const apiPostsCache = new MemoryCache(400, 6 * 60 * 1000); // posts cached for 6 minutes
+export const tagAutocompleteCache = new MemoryCache(600, 30 * 60 * 1000); // tags cached for 30 minutes
 
 export async function getDirectoryStats(dirPath) {
   let totalBytes = 0;
@@ -83,7 +83,7 @@ export async function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
         const settings = getSettings();
         const mb = Number(settings?.maxServerCacheMb);
         if (mb === 0) {
-          return; // 0 = без ограничений
+          return; // 0 = unlimited
         }
         if (mb > 0) {
           maxBytes = mb * 1024 * 1024;
@@ -120,5 +120,5 @@ export async function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
   }
 }
 
-// Периодическая проверка раз в 30 минут
+// Periodic check every 30 minutes
 setInterval(() => cleanDiskCacheIfNeeded(), 30 * 60 * 1000);

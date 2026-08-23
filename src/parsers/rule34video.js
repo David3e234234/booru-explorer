@@ -5,7 +5,7 @@ import { logError } from '../utils/logger.js';
 const resolvedAuthorCache = new Map();
 
 /**
- * Разрешает имя автора/художника/модели в Rule34Video ID (model_ids, channels, members)
+ * Resolves an author/artist/model name to Rule34Video IDs (model_ids, channels, members)
  */
 export async function resolveRule34VideoAuthor(authorQuery) {
   if (!authorQuery) return null;
@@ -16,7 +16,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
   
   if (!clean) return null;
 
-  // Если это уже числовой ID с типом
+  // Already a numeric ID with a type
   const directModelIdMatch = authorQuery.match(/^(?:model|artist|author):(\d+)$/i);
   if (directModelIdMatch) {
     return { type: 'model', id: directModelIdMatch[1], slug: '', name: directModelIdMatch[1] };
@@ -36,7 +36,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
   }
 
   try {
-    // 1. Официальный JSON API поиска моделей/авторов Rule34Video
+    // 1. Official Rule34Video JSON API for model/author search
     const modelJsonUrl = `https://rule34video.com/models_json.php?advanced_search=true&q=${encodeURIComponent(clean)}`;
     const resModelJson = await fetchSafe(modelJsonUrl, {
       headers: {
@@ -49,7 +49,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
     if (resModelJson.ok) {
       const data = await resModelJson.json();
       if (data && Array.isArray(data.items) && data.items.length > 0) {
-        // Ищем точное или наиболее подходящее совпадение
+        // Look for an exact or the closest match
         const cleanNoSpace = clean.toLowerCase().replace(/[\s_]+/g, '');
         const exact = data.items.find(i => (i.title || '').toLowerCase().replace(/[\s_]+/g, '') === cleanNoSpace) || data.items[0];
         if (exact && exact.id) {
@@ -65,7 +65,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
       }
     }
 
-    // 2. Поиск по Каналам (Channels)
+    // 2. Search channels
     const channelUrl = `https://rule34video.com/channels/?mode=async&function=get_block&block_id=custom_list_channels_common_channels_list&q=${encodeURIComponent(clean)}&from=1`;
     const resChannel = await fetchSafe(channelUrl, {
       headers: {
@@ -89,7 +89,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
       }
     }
 
-    // 3. Поиск по Участникам/Загрузчикам (Members)
+    // 3. Search members/uploaders
     const memberUrl = `https://rule34video.com/members/?mode=async&function=get_block&block_id=custom_list_members_common_members_list&q=${encodeURIComponent(clean)}&from=1`;
     const resMember = await fetchSafe(memberUrl, {
       headers: {
@@ -153,7 +153,7 @@ export async function fetchRule34Video(params, aiTagsList) {
     authorTarget = await resolveRule34VideoAuthor(extractedAuthor);
   }
 
-  // Поисковый запрос для KVS search
+  // Search query for KVS search
   let cleanQuery = '';
   if (authorTarget && cleanGeneralQuery) {
     cleanQuery = cleanGeneralQuery;
@@ -216,7 +216,7 @@ export async function fetchRule34Video(params, aiTagsList) {
   const fetchPromises = pageNumbers.map(async (p) => {
     let url = '';
     if (authorTarget) {
-      // Поиск видео автора по его Rule34Video ID (model_ids, channel или member)
+      // Find an author's videos by their Rule34Video ID (model_ids, channel, or member)
       if (authorTarget.type === 'model') {
         url = `https://rule34video.com/search/?mode=async&function=get_block&block_id=custom_list_videos_videos_list_search&model_ids=${authorTarget.id}${sortByParam}${timeParam}&from_videos=${p}`;
       } else if (authorTarget.type === 'channel') {
@@ -237,7 +237,7 @@ export async function fetchRule34Video(params, aiTagsList) {
     } else if (category === 'random') {
       url = `https://rule34video.com/most-popular/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&sort_by=random&from=${p}`;
     } else if (rawTags) {
-      // Если запрос был передан пользователем, но не сформировал URL, НЕ возвращаем случайные видео!
+      // If the user supplied a query but it produced no URL, do NOT return random videos!
       return [];
     } else {
       url = `https://rule34video.com/latest-updates/?mode=async&function=get_block&block_id=custom_list_videos_latest_videos_list${timeParam}&from=${p}`;
@@ -271,7 +271,7 @@ export async function fetchRule34Video(params, aiTagsList) {
         const thumb = thumbMatch ? thumbMatch[1] : '';
         const previewMp4 = previewMatch ? previewMatch[1] : '';
 
-        // 1. Извлечение автора из аккаунта / канала / загрузчика в HTML блока
+        // 1. Extract the author from the account/channel/uploader link in the block HTML
         let author = '';
         const channelMatch = block.match(/href="[^"]*\/channels\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
         const memberMatch = block.match(/href="[^"]*\/members\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
@@ -285,9 +285,9 @@ export async function fetchRule34Video(params, aiTagsList) {
           author = uploaderMatch[1].trim();
         }
 
-        // 2. Если в блоке нет ссылки на аккаунт, глубокий поиск автора в названии
+        // 2. No account link in the block - deep-search the title for the author
         if (!author) {
-          // а) Конструкция 'by Author'
+          // a) 'by Author' pattern
           const authorByMatch = title.match(/\bby\s+@?([a-zA-Z0-9_\- ]+?)(?:\s*\[|\s*\(|\s*\||\s*-\s*|$)/i);
           if (authorByMatch) {
             const candidate = authorByMatch[1].trim();
@@ -296,7 +296,7 @@ export async function fetchRule34Video(params, aiTagsList) {
             }
           }
 
-          // б) Первые квадратные скобки [Author] в начале названия: e.g. [Misfitbite] Depraved Diva
+          // b) Leading square brackets [Author]: e.g. [Misfitbite] Depraved Diva
           if (!author) {
             const startBracketMatch = title.match(/^\[([^\]]+)\]/);
             if (startBracketMatch) {
@@ -311,7 +311,7 @@ export async function fetchRule34Video(params, aiTagsList) {
             }
           }
 
-          // в) Разделитель pipe: 'Title | Author'
+          // c) Pipe separator: 'Title | Author'
           if (!author) {
             const authorPipeMatch = title.match(/\|\s*([a-zA-Z0-9_\- ]+)$/);
             if (authorPipeMatch) {
@@ -322,7 +322,7 @@ export async function fetchRule34Video(params, aiTagsList) {
             }
           }
 
-          // г) Поиск в остальных квадратных скобках [Author]
+          // d) Search the remaining square brackets for [Author]
           if (!author) {
             const brackets = [...title.matchAll(/\[([^\]]+)\]/g)];
             for (const b of brackets) {
@@ -339,14 +339,14 @@ export async function fetchRule34Video(params, aiTagsList) {
           }
         }
 
-        // 3. Fallback на найденного автора / канал из запроса
+        // 3. Fall back to the author/channel found in the query
         if (authorTarget) {
           author = authorTarget.name || author;
         } else if (!author && extractedAuthor) {
           author = extractedAuthor;
         }
 
-        // Фильтрация по автору только если автор НЕ был разрешен в точный ID модели/канала (текстовый поиск)
+        // Filter by author only when it was NOT resolved to an exact model/channel ID (text search)
         if (!authorTarget && extractedAuthor && authorTokens.length > 0) {
           const cleanRequestedAuthor = extractedAuthor.toLowerCase().replace(/[\s_]+/g, '');
           const postAuthorClean = (author || '').toLowerCase().replace(/[\s_]+/g, '');
@@ -357,11 +357,11 @@ export async function fetchRule34Video(params, aiTagsList) {
                                 titleClean.includes(cleanRequestedAuthor) ||
                                 slugClean.includes(cleanRequestedAuthor);
           if (!matchesAuthor) {
-            continue; // Пропускаем ролики других авторов
+            continue; // Skip clips by other authors
           }
         }
 
-        // Фильтрация по общим тегам, если заданы (например zenless_zone_zero)
+        // Filter by shared tags when set (e.g. zenless_zone_zero)
         if (generalTokens.length > 0) {
           const titleAndSlug = `${title.toLowerCase()} ${slug.toLowerCase()}`;
           const allGeneralMatch = generalTokens.every(gt => {
@@ -405,7 +405,7 @@ export async function fetchRule34Video(params, aiTagsList) {
           }
         }
 
-        // Парсинг просмотров
+        // Parse the view count
         let views = 0;
         let viewsText = '';
         const viewsMatch = block.match(/class="[^"]*views[^"]*"[^>]*>[\s\S]*?<\/svg>\s*([^<]+)<\/div>/i) ||
@@ -423,7 +423,7 @@ export async function fetchRule34Video(params, aiTagsList) {
           }
         }
 
-        // Парсинг рейтинга / оценок
+        // Parse the rating / score
         let score = 0;
         const ratingMatch = block.match(/class="[^"]*rating[^"]*"[^>]*>[\s\S]*?<\/svg>\s*([^<]+)<\/div>/i) ||
                             block.match(/class="[^"]*rating[^"]*"[^>]*>([^<]+)<\/div>/i);
@@ -438,7 +438,7 @@ export async function fetchRule34Video(params, aiTagsList) {
           }
         }
 
-        // Парсинг относительной даты добавления
+        // Parse the relative upload date
         let createdAt = '';
         const addedMatch = block.match(/class="[^"]*added[^"]*"[^>]*>[\s\S]*?<\/svg>\s*([^<]+)<\/div>/i) ||
                            block.match(/class="[^"]*added[^"]*"[^>]*>([^<]+)<\/div>/i);
@@ -508,7 +508,7 @@ export async function fetchRule34Video(params, aiTagsList) {
     }
   }
 
-  // Параллельно пред-разрешаем полные оригинальные HD-видео со звуком и точными метаданными для первой партии постов (по 8 за раз)
+  // Pre-resolve full original HD videos with sound and exact metadata for the first batch of posts in parallel (8 at a time)
   const resolveQueue = allPosts.slice(0, 30);
   const concurrency = 8;
   for (let i = 0; i < resolveQueue.length; i += concurrency) {
@@ -561,7 +561,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
 
     const candidateUrls = [];
     
-    // 1. Поиск ссылок в flashvars и js-объектах плеера KVS
+    // 1. Find links in flashvars and the KVS player JS objects
     const jsMatches = html.matchAll(/(?:video_url|video_alt_url\d*|flashvars\.video_\w+)\s*[:=]\s*['"]([^'"]+)['"]/gi);
     for (const m of jsMatches) {
       if (m[1] && !m[1].includes('preview') && (m[1].includes('/get_file/') || m[1].includes('.mp4'))) {
@@ -569,7 +569,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
       }
     }
 
-    // 2. Поиск ссылок в <source> и <a href="..."> тегах скачивания
+    // 2. Find links in <source> and download <a href="..."> tags
     const tagMatches = html.matchAll(/(?:src|href)=['"]([^'"]*\/get_file\/[^'"]+|\bhttps?:\/\/[^'"]+\.mp4[^'"]*)['"]/gi);
     for (const m of tagMatches) {
       if (m[1] && !m[1].includes('preview')) {
@@ -600,7 +600,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
       }
     }
 
-    // 3. Извлечение автора / художника (Artist / Models)
+    // 3. Extract the artist (Artist / Models)
     let artist = '';
     const flashModelMatch = html.match(/video_models\s*:\s*'([^']*)'/i);
     if (flashModelMatch && flashModelMatch[1].trim()) {
@@ -614,7 +614,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
       }
     }
 
-    // 4. Извлечение загрузчика (Uploader / Member)
+    // 4. Extract the uploader (Uploader / Member)
     let uploaderName = '';
     const uploaderSectionMatch = html.match(/<div class="label">Uploaded by<\/div>[\s\S]*?<a[^>]*href="[^"]*\/members\/(\d+)\/?"[^>]*>([\s\S]*?)<\/a>/i);
     if (uploaderSectionMatch) {
@@ -628,7 +628,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
       }
     }
 
-    // 5. Извлечение канала (Channel)
+    // 5. Extract the channel (Channel)
     let channelName = '';
     const channelMatch = html.match(/href="https?:\/\/rule34video\.com\/channels\/(\d+)(?:\/([^"/?#]+))?\/?(?:\?|")[^>]*>([\s\S]*?)<\/a>/i) ||
                          html.match(/href="\/channels\/(\d+)(?:\/([^"/?#]+))?\/?(?:\?|")[^>]*>([\s\S]*?)<\/a>/i);
@@ -636,7 +636,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
       channelName = (channelMatch[3] || channelMatch[2] || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
-    // 6. Извлечение из ссылок описания (Patreon, Twitter/X, Newgrounds и т.д.)
+    // 6. Extract from description links (Patreon, Twitter/X, Newgrounds, etc.)
     let sourceAuthor = '';
     const patreonMatch = html.match(/patreon\.com\/([a-zA-Z0-9_\-]+)/i);
     const twitterMatch = html.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_\-]+)/i);
@@ -651,7 +651,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
 
     const finalAuthor = artist || channelName || uploaderName || sourceAuthor || '';
 
-    // 7. Теги и категории со страницы видео
+    // 7. Tags and categories from the video page
     const flashTagsMatch = html.match(/video_tags\s*:\s*'([^']*)'/i);
     const flashCatMatch = html.match(/video_categories\s*:\s*'([^']*)'/i);
 
@@ -686,7 +686,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
       return result;
     }
 
-    // Если видео не нашли, но есть автор/аккаунт — вернуть результат с метаданными
+    // No video found but author/account known - return a result with metadata
     if (finalAuthor) {
       const result = {
         success: false,

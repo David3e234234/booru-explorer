@@ -3,6 +3,7 @@ import { closeAllDrawers } from './drawers.js';
 import { fetchSites } from '../api.js';
 import { persistSettings } from './settingsModal.js';
 import { showToast } from './uiUtils.js';
+import { t } from '../i18n.js';
 
 let customSourcesCallbacks = null;
 
@@ -19,10 +20,10 @@ export function updateCurrentSiteLabel() {
   if (!currentSiteLabel) return;
 
   if (state.currentSite === 'all') {
-    currentSiteLabel.textContent = 'Все сразу';
+    currentSiteLabel.textContent = t('navui.allSites', 'Все сразу');
   } else if (state.currentSite === 'custom') {
     const list = getCustomSourcesList();
-    currentSiteLabel.textContent = `Своя (${list.length})`;
+    currentSiteLabel.textContent = t('navui.customCount', 'Своя ({n})').replace('{n}', list.length);
   } else {
     const siteObj = (state.sites || []).find(s => s.id === state.currentSite);
     currentSiteLabel.textContent = siteObj ? siteObj.name : state.currentSite;
@@ -34,27 +35,27 @@ export function renderSitesBar({ onSelectSite }) {
   if (!sourcesList) return;
   sourcesList.innerHTML = '';
 
-  // 1. Все сразу (ALL)
+  // 1. All sites at once (ALL)
   const allItem = document.createElement('div');
   allItem.className = `source-item ${state.currentSite === 'all' ? 'active' : ''}`;
   allItem.innerHTML = `
     <span class="source-dot" style="background-color: var(--accent-primary)"></span>
-    <span>⚡ Все сразу</span>
+    <span>${t('navui.allSites', 'Все сразу')}</span>
   `;
   allItem.addEventListener('click', () => onSelectSite('all'));
   sourcesList.appendChild(allItem);
 
-  // 2. Своя подборка (CUSTOM)
+  // 2. Custom selection (CUSTOM)
   const customList = getCustomSourcesList();
   const customItem = document.createElement('div');
   customItem.className = `source-item source-item-custom ${state.currentSite === 'custom' ? 'active' : ''}`;
   customItem.innerHTML = `
     <div class="source-item-left">
       <span class="source-dot" style="background: linear-gradient(135deg, #f59e0b, #ec4899)"></span>
-      <span class="source-item-title">Свой выбор</span>
+      <span class="source-item-title">${t('navui.customChoice', 'Свой выбор')}</span>
       <span class="source-custom-badge">${customList.length}</span>
     </div>
-    <button type="button" class="btn-source-gear" title="Настроить выбранные сайты">
+    <button type="button" class="btn-source-gear" title="${t('navui.configureSources.title', 'Настроить выбранные сайты')}">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
   `;
@@ -70,7 +71,7 @@ export function renderSitesBar({ onSelectSite }) {
 
   sourcesList.appendChild(customItem);
 
-  // 3. Отдельные сайты
+  // 3. Individual sites
   (state.sites || []).forEach(site => {
     const item = document.createElement('div');
     item.className = `source-item ${state.currentSite === site.id ? 'active' : ''}`;
@@ -90,13 +91,13 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
   if (!sourcesListMobile) return;
   sourcesListMobile.innerHTML = '';
 
-  // 1. Все сразу
+  // 1. All sites at once
   const allCard = document.createElement('div');
   allCard.className = `source-mobile-card ${state.currentSite === 'all' ? 'active' : ''}`;
   allCard.innerHTML = `
     <div class="source-mobile-title-wrap">
       <span class="source-dot" style="background-color: var(--accent-primary)"></span>
-      <span class="source-mobile-name">⚡ Все сразу</span>
+      <span class="source-mobile-name">${t('navui.allSites', 'Все сразу')}</span>
     </div>
     <span class="source-mobile-badge">ALL</span>
   `;
@@ -106,18 +107,18 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
   });
   sourcesListMobile.appendChild(allCard);
 
-  // 2. Свой выбор
+  // 2. Custom selection
   const customList = getCustomSourcesList();
   const customCard = document.createElement('div');
   customCard.className = `source-mobile-card source-mobile-card-custom ${state.currentSite === 'custom' ? 'active' : ''}`;
   customCard.innerHTML = `
     <div class="source-mobile-title-wrap">
       <span class="source-dot" style="background: linear-gradient(135deg, #f59e0b, #ec4899)"></span>
-      <span class="source-mobile-name">Свой выбор</span>
+      <span class="source-mobile-name">${t('navui.customChoice', 'Свой выбор')}</span>
     </div>
     <div class="source-mobile-actions">
       <span class="source-custom-badge">${customList.length}</span>
-      <button type="button" class="btn-source-gear-mobile" title="Настроить список">
+      <button type="button" class="btn-source-gear-mobile" title="${t('navui.configureList.title', 'Настроить список')}">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
       </button>
     </div>
@@ -135,7 +136,7 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
   });
   sourcesListMobile.appendChild(customCard);
 
-  // 3. Отдельные сайты
+  // 3. Individual sites
   (state.sites || []).forEach(site => {
     const card = document.createElement('div');
     card.className = `source-mobile-card ${state.currentSite === site.id ? 'active' : ''}`;
@@ -228,10 +229,10 @@ export function initCustomSourcesModal({ onApply }) {
       const allIds = (state.sites || []).map(s => s.id);
       if (tempCustomSources.length === allIds.length) {
         tempCustomSources = ['danbooru'];
-        btnToggleAll.textContent = 'Выбрать все';
+        btnToggleAll.textContent = t('navui.resetAll', 'Сбросить все');
       } else {
         tempCustomSources = [...allIds];
-        btnToggleAll.textContent = 'Сбросить все';
+        btnToggleAll.textContent = t('customSources.selectAll', 'Выбрать все');
       }
       renderCustomSourcesCheckboxes();
     });
@@ -240,7 +241,7 @@ export function initCustomSourcesModal({ onApply }) {
   if (btnApply) {
     btnApply.addEventListener('click', () => {
       if (tempCustomSources.length === 0) {
-        showToast('Выберите хотя бы один источник');
+        showToast(t('navui.selectAtLeastOne', 'Выберите хотя бы один источник'));
         return;
       }
 
@@ -248,7 +249,7 @@ export function initCustomSourcesModal({ onApply }) {
       persistSettings({ customSources: state.settings.customSources });
 
       closeCustomSourcesModal();
-      showToast(`Выбрано источников: ${tempCustomSources.length}`);
+      showToast(t('navui.selectedCount', 'Выбрано источников: {n}').replace('{n}', tempCustomSources.length));
 
       if (customSourcesCallbacks && typeof customSourcesCallbacks.onApply === 'function') {
         customSourcesCallbacks.onApply(state.settings.customSources);

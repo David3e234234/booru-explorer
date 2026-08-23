@@ -1,6 +1,7 @@
 import { state, addSearchTag, setFavoriteAuthors } from '../state.js';
 import { deleteFavoriteAuthor, toggleFavoriteAuthor, fetchFavoriteAuthors, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchPosts, getProxiedUrl } from '../api.js';
 import { showToast, haptic } from './uiUtils.js';
+import { t } from '../i18n.js';
 
 let currentPickerAuthor = null;
 let onCoverUpdatedCallback = null;
@@ -47,11 +48,11 @@ export function renderFavoriteAuthorsList(galleryInstance, { onExploreAuthor, on
           setFavoriteAuthors(updatedList);
           if (onUpdateBadge) onUpdateBadge();
           renderFavoriteAuthorsList(galleryInstance, { onExploreAuthor, onUpdateBadge });
-          showToast(`Автор ${author.displayName || author.name} удален из любимых`);
+          showToast(t('fav.authorRemoved', 'Автор {name} удален из любимых').replace('{name}', author.displayName || author.name));
         }
       } catch (err) {
         console.error('Ошибка удаления автора:', err);
-        showToast('Не удалось удалить автора');
+        showToast(t('fav.authorDeleteFailed', 'Не удалось удалить автора'));
       }
     }
   });
@@ -65,8 +66,8 @@ export function openCoverPickerModal(author) {
   const subtitle = document.getElementById('pickAuthorCoverSubtitle');
   const selectSite = document.getElementById('selectCoverPickerSite');
 
-  if (title) title.textContent = `Выбор обложки: ${author.displayName || author.name}`;
-  if (subtitle) subtitle.textContent = `Выберите арт художника, чтобы сделать его превью автора`;
+  if (title) title.textContent = t('fav.coverPickerTitle', 'Выбор обложки: {name}').replace('{name}', author.displayName || author.name);
+  if (subtitle) subtitle.textContent = t('coverPicker.subtitle', 'Выберите арт художника, чтобы сделать его превью автора');
   if (selectSite) selectSite.value = author.site || state.currentSite || 'danbooru';
   if (modalBackdrop) modalBackdrop.style.display = 'flex';
 
@@ -148,12 +149,12 @@ function renderCoverPickerPosts(posts, author, site) {
 
     const item = document.createElement('div');
     item.className = `cover-picker-item ${isCurrent ? 'active' : ''}`;
-    item.title = post.isVideo ? 'Сделать видеопревью обложкой автора' : 'Сделать этот арт обложкой автора';
+    item.title = post.isVideo ? t('fav.coverVideoTitle', 'Сделать видеопревью обложкой автора') : t('fav.coverImageTitle', 'Сделать этот арт обложкой автора');
 
     item.innerHTML = `
       <img class="cover-picker-thumb" src="${finalThumbUrl}" alt="" loading="lazy" decoding="async">
-      <div class="cover-picker-overlay">${post.isVideo ? 'Видеообложка' : 'Сделать обложкой'}</div>
-      ${isCurrent ? `<span class="cover-picker-badge-current">Текущая</span>` : ''}
+      <div class="cover-picker-overlay">${post.isVideo ? t('fav.coverOverlayVideo', 'Видеообложка') : t('viewer.makeCover', 'Сделать обложкой')}</div>
+      ${isCurrent ? `<span class="cover-picker-badge-current">${t('fav.coverCurrent', 'Текущая')}</span>` : ''}
     `;
 
     item.addEventListener('click', async () => {
@@ -181,7 +182,7 @@ async function handleSelectAuthorCover(author, post, site) {
   const thumb360 = post.thumb360 || '';
   const thumb720 = post.thumb720 || '';
 
-  // 1. Оптимистично обновляем в локальном состоянии state.favoriteAuthors
+  // 1. Optimistically update local state.favoriteAuthors
   const cleanName = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
   const target = state.favoriteAuthors.find(a => 
     (a.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_') === cleanName ||
@@ -209,10 +210,10 @@ async function handleSelectAuthorCover(author, post, site) {
 
   setFavoriteAuthors([...state.favoriteAuthors]);
   closeCoverPickerModal();
-  showToast(`Обложка автора ${author.displayName || author.name} обновлена!`);
+  showToast(t('fav.coverUpdated', 'Обложка автора {name} обновлена!').replace('{name}', author.displayName || author.name));
   if (onCoverUpdatedCallback) onCoverUpdatedCallback();
 
-  // 2. Отправляем обновление на сервер
+  // 2. Send the update to the server
   try {
     await updateFavoriteAuthorPreview(author.name, chosenUrl, site, { sampleUrl, fileUrl, thumb180, thumb360, thumb720 });
     await syncFavoriteAuthors(state.favoriteAuthors);
@@ -291,7 +292,7 @@ export function initAddAuthorModal({ onAuthorSaved }) {
     });
   }
 
-  // Делегирование клика для динамических кнопок добавления автора
+  // Click delegation for dynamically created add-author buttons
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('#btnAddAuthorEmpty, .btn-add-author-action, [data-action="open-add-author"]');
     if (btn) {
@@ -331,14 +332,14 @@ export function initAddAuthorModal({ onAuthorSaved }) {
             setFavoriteAuthors(authData.authors);
           }
           closeAddAuthorModal();
-          showToast(`Автор ${rawName} сохранён в любимые`);
+          showToast(t('fav.authorSaved', 'Автор {name} сохранён в любимые').replace('{name}', rawName));
           if (onAuthorSaved) onAuthorSaved();
         } else {
-          showToast(res.message || 'Ошибка сохранения автора');
+          showToast(res.message || t('fav.authorSaveFailed', 'Ошибка сохранения автора'));
         }
       } catch (err) {
         console.error('Ошибка добавления автора:', err);
-        showToast('Ошибка сохранения автора');
+        showToast(t('fav.authorSaveFailed', 'Ошибка сохранения автора'));
       }
     });
   }

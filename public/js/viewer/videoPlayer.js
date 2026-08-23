@@ -1,3 +1,5 @@
+import { t } from '../i18n.js';
+
 export function makeBannerDraggable(bannerEl) {
   if (!bannerEl) return;
   let isDraggingBanner = false;
@@ -202,7 +204,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   let proxyMedia = getProxiedUrl(directMedia);
   let transcodeMedia = `/api/transcode-video?url=${encodeURIComponent(directMedia)}`;
 
-  // Ссылки Rule34Video одноразовые: после обновления токена пересобираем все варианты источника
+  // Rule34Video links are one-time use: after a token refresh, rebuild every source variant
   const rebuildMediaUrls = () => {
     directMedia = currentPost.fileUrl || currentPost.sampleUrl;
     proxyMedia = getProxiedUrl(directMedia);
@@ -215,11 +217,11 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const statusBanner = document.createElement('div');
   statusBanner.className = 'video-status-banner';
   statusBanner.innerHTML = `
-    <div class="video-status-drag-handle" title="Потяните, чтобы переместить"></div>
+    <div class="video-status-drag-handle" title="${t('vp.dragHandle.title', 'Потяните, чтобы переместить')}"></div>
     <div class="video-status-top-row">
       <div class="video-status-left">
         <div class="video-status-spinner"></div>
-        <span class="video-status-text">Инициализация видеопотока...</span>
+        <span class="video-status-text">${t('vp.initStream', 'Инициализация видеопотока...')}</span>
       </div>
       <span class="video-progress-percent">0%</span>
     </div>
@@ -227,9 +229,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       <div class="video-progress-fill" style="width: 0%;"></div>
     </div>
     <div class="video-status-actions">
-      <button class="btn-cache-toggle" title="Полностью закэшировать видео в память для просмотра без лагов">⚡ Кэш в память</button>
-      <button class="btn-transcode" title="Перекодировать видео в совместимый браузерный формат H.264/AAC через FFmpeg">🔄 FFmpeg фикс</button>
-      <button class="btn-switch-source" title="Переключить между прямым источником и прокси">🛡️ Прокси</button>
+      <button class="btn-cache-toggle" title="${t('vp.cacheBtn.title', 'Полностью закэшировать видео в память для просмотра без лагов')}">${t('vp.cacheBtn', 'Кэш в память')}</button>
+      <button class="btn-transcode" title="${t('vp.transcodeBtn.title', 'Перекодировать видео в совместимый браузерный формат H.264/AAC через FFmpeg')}">${t('vp.transcodeBtn', 'FFmpeg фикс')}</button>
+      <button class="btn-switch-source" title="${t('vp.switchSourceBtn.title', 'Переключить между прямым источником и прокси')}">${t('vp.proxyBtn', 'Прокси')}</button>
     </div>
   `;
 
@@ -250,7 +252,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   video.playsInline = true;
   video.preload = shouldAutoplay ? 'auto' : 'metadata';
 
-  // Восстановление сохраненного уровня громкости и mute-состояния
+  // Restore the saved volume level and mute state
   try {
     const savedVolume = parseFloat(localStorage.getItem('booru_video_volume') ?? '1');
     const savedMuted = localStorage.getItem('booru_video_muted') === 'true';
@@ -270,15 +272,15 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     video.style.aspectRatio = `${currentPost.width} / ${currentPost.height}`;
   }
 
-  // Кнопка включения звука при ограничении браузерной Autoplay Policy
+  // Unmute button for when the browser's Autoplay Policy blocks sound
   const unmuteBtn = document.createElement('button');
   unmuteBtn.className = 'btn-video-unmute';
   unmuteBtn.style.display = 'none';
   unmuteBtn.innerHTML = `
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-    <span>Включить звук</span>
+    <span>${t('vp.unmute', 'Включить звук')}</span>
   `;
-  unmuteBtn.title = 'Включить звук (кликните для снятия ограничения браузера)';
+  unmuteBtn.title = t('vp.unmute.title', 'Включить звук (кликните для снятия ограничения браузера)');
 
   unmuteBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -303,7 +305,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     const playPromise = video.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
-        // Если браузер ограничил автоплей из-за звука (NotAllowedError)
+        // Browser blocked autoplay with sound (NotAllowedError)
         if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
           console.warn('[Video Autoplay] Автоплей со звуком ограничен браузером, переход на muted fallback');
           video.muted = true;
@@ -352,8 +354,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     abortRef.current = new AbortController();
     isPreCaching = true;
     btnCache.classList.add('active');
-    btnCache.textContent = '⚡ Кэширование...';
-    setProgress(0, 'Кэширование в память...', true);
+    btnCache.textContent = t('vp.caching', 'Кэширование...');
+    setProgress(0, t('vp.cachingToMemory', 'Кэширование в память...'), true);
 
     try {
       const res = await fetch(targetUrl, { signal: abortRef.current.signal });
@@ -372,7 +374,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         const pct = total > 0 ? (loaded / total) * 100 : Math.min(95, (loaded / 5000000) * 100);
         const mbText = (loaded / (1024 * 1024)).toFixed(1);
         const totalMbText = total > 0 ? ` / ${(total / (1024 * 1024)).toFixed(1)} MB` : ' MB';
-        setProgress(pct, `Кэширование: ${mbText}${totalMbText}`, true);
+        setProgress(pct, t('vp.cachingProgress', 'Кэширование: {d}').replace('{d}', `${mbText}${totalMbText}`), true);
       }
 
       const contentType = res.headers.get('content-type') || (targetUrl.includes('.webm') ? 'video/webm' : 'video/mp4');
@@ -383,14 +385,14 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
       video.src = blobRef.current;
       safePlay();
-      setProgress(100, 'Закэшировано в память! ⚡', false);
-      btnCache.textContent = '⚡ В памяти (OK)';
+      setProgress(100, t('vp.cachedInMemory', 'Закэшировано в память!'), false);
+      btnCache.textContent = t('vp.inMemoryOk', 'В памяти (OK)');
       setTimeout(hideStatus, 1200);
     } catch (err) {
       if (err.name === 'AbortError') return;
       console.warn('[PreCache Error]', err);
       btnCache.classList.remove('active');
-      btnCache.textContent = '⚡ Кэш в память';
+      btnCache.textContent = t('vp.cacheBtn', 'Кэш в память');
       isPreCaching = false;
       handleVideoError();
     }
@@ -410,7 +412,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     currentSource = 'transcode';
     if (btnTranscode) {
       btnTranscode.classList.add('active');
-      btnTranscode.textContent = '🔄 FFmpeg фикс';
+      btnTranscode.textContent = t('vp.transcodeBtn', 'FFmpeg фикс');
     }
     setProgress(0, message, true);
     video.src = transcodeMedia;
@@ -425,9 +427,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     currentSource = 'remux';
     if (btnTranscode) {
       btnTranscode.classList.add('active');
-      btnTranscode.textContent = '🚀 JS Ремукс...';
+      btnTranscode.textContent = t('vp.jsRemuxing', 'JS Ремукс...');
     }
-    setProgress(0, '🚀 Клиентский JS-демуксинг (MSE)...', true);
+    setProgress(0, t('vp.jsDemuxing', 'Клиентский JS-демуксинг (MSE)...'), true);
 
     let internalAbortReason = null;
     try {
@@ -447,8 +449,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
       const mp4boxfile = window.MP4Box.createFile();
 
-      // Очередь сегментов на каждый трек: appendBuffer нельзя вызывать, пока SourceBuffer
-      // занят предыдущим. Раньше такие сегменты просто выбрасывались и ломали поток
+      // Per-track segment queue: appendBuffer can't be called while the SourceBuffer
+      // is still busy with the previous one. Previously such segments were dropped and broke the stream
       const trackPipes = [];
       const pumpTrack = (id) => {
         const pipe = trackPipes.find(p => p.id === id);
@@ -516,7 +518,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
       mp4boxfile.onSegment = (id, user, buffer) => enqueueSegment(id, buffer);
 
-      // Если MP4-структура не распознана (например, пришел HTML-ответ), не висим вечно
+      // If the MP4 structure wasn't recognized (e.g. an HTML response arrived), don't hang forever
       const readyWatchdog = setTimeout(() => {
         if (!readySettled) {
           console.warn('[Client Remux] MP4-метаданные не распознаны, отмена');
@@ -549,7 +551,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         mp4boxfile.flush();
 
         const pct = total > 0 ? (loaded / total) * 100 : Math.min(95, (loaded / 5000000) * 100);
-        setProgress(pct, `🚀 JS Ремукс: ${(loaded / (1024 * 1024)).toFixed(1)} MB`, true);
+        setProgress(pct, t('vp.jsRemuxProgress', 'JS Ремукс: {d} MB').replace('{d}', (loaded / (1024 * 1024)).toFixed(1)), true);
       }
 
       if (total > 0 && loaded < total * 0.98) {
@@ -561,18 +563,18 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
       isPreCaching = false;
       if (btnTranscode) {
-        btnTranscode.textContent = '🚀 JS Ремукс (OK)';
+        btnTranscode.textContent = t('vp.jsRemuxOk', 'JS Ремукс (OK)');
       }
-      setProgress(100, '🚀 JS Ремукс готов!', false);
+      setProgress(100, t('vp.jsRemuxDone', 'JS Ремукс готов'), false);
       safePlay();
       setTimeout(hideStatus, 1200);
     } catch (err) {
-      // Отмена пользователем или при переключении источника не должна уводить на FFmpeg
+      // User-initiated aborts or source switches must not fall through to FFmpeg
       if (err.name === 'AbortError' && !internalAbortReason) return;
       clearTimeout(loadTimeout);
       console.warn('[Client Remux Error]', err);
       isPreCaching = false;
-      switchToTranscode('🔄 Аппаратный кодек не подошел. Переход на FFmpeg (H.264/AAC)...');
+      switchToTranscode(t('vp.hwCodecFailed', 'Аппаратный кодек не подошел. Переход на FFmpeg (H.264/AAC)...'));
     }
   };
 
@@ -580,15 +582,15 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (state.settings?.enableJsDemuxing !== false) {
       startClientRemux(proxyMedia);
     } else {
-      switchToTranscode('🔄 Перекодирование через серверный FFmpeg (H.264/AAC)...');
+      switchToTranscode(t('vp.transcodingFfmpeg', 'Перекодирование через серверный FFmpeg (H.264/AAC)...'));
     }
   };
 
   const handleProxySourceFailure = () => {
-    // Одноразовые ссылки Rule34Video быстро протухают: до ремукса пробуем свежий токен
+    // Rule34Video links are one-shot: try a fresh token before remuxing
     if (currentPost.site === 'rule34video' && !reresolvedOnce) {
       reresolvedOnce = true;
-      setProgress(0, 'Ссылка источника устарела, обновляем...', true);
+      setProgress(0, t('vp.linkExpired', 'Ссылка источника устарела, обновляем...'), true);
       fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
         .then(r => r.json())
         .then(data => {
@@ -596,7 +598,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
             currentPost.fileUrl = data.fullVideoUrl;
             currentPost.hasSound = true;
             rebuildMediaUrls();
-            setProgress(0, 'Повторное подключение через прокси...', true);
+            setProgress(0, t('vp.reconnectingProxy', 'Повторное подключение через прокси...'), true);
             video.src = proxyMedia;
             safePlay();
           } else {
@@ -611,23 +613,23 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   const handleVideoError = () => {
     if (isPreCaching) return;
-    // Ошибки прилетают пачкой на одно переключение: гасим дребезг, чтобы не молотить источник
+    // Errors arrive in bursts per single switch: debounce so we don't hammer the source
     const now = Date.now();
     if (now - lastFallbackTime < 1200) return;
     lastFallbackTime = now;
 
     if (currentSource === 'direct') {
       currentSource = 'proxy';
-      if (switchBtn) switchBtn.textContent = '⚡ Прямой CDN';
-      setProgress(0, 'Подключение через прокси...', true);
+      if (switchBtn) switchBtn.textContent = t('vp.directCdn', 'Прямой CDN');
+      setProgress(0, t('vp.connectingProxy', 'Подключение через прокси...'), true);
       video.src = proxyMedia;
       safePlay();
     } else if (currentSource === 'proxy') {
       handleProxySourceFailure();
     } else if (currentSource === 'remux') {
-      switchToTranscode('🔄 Авто-исправление кодека через FFmpeg (H.264/AAC)...');
+      switchToTranscode(t('vp.autoFixFfmpeg', 'Авто-исправление кодека через FFmpeg (H.264/AAC)...'));
     } else {
-      setProgress(0, 'Не удалось воспроизвести видео (ошибка исходного файла)', false, true);
+      setProgress(0, t('vp.playbackFailed', 'Не удалось воспроизвести видео (ошибка исходного файла)'), false, true);
     }
   };
 
@@ -638,37 +640,37 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         abortRef.current.abort();
         isPreCaching = false;
         btnCache.classList.remove('active');
-        btnCache.textContent = '⚡ Кэш в память';
+        btnCache.textContent = t('vp.cacheBtn', 'Кэш в память');
       }
       if (state.settings?.enableJsDemuxing !== false) {
         startClientRemux(proxyMedia);
       } else {
-        switchToTranscode('🔄 Перекодирование через серверный FFmpeg (H.264/AAC)...');
+        switchToTranscode(t('vp.transcodingFfmpeg', 'Перекодирование через серверный FFmpeg (H.264/AAC)...'));
       }
     });
   }
 
   if (switchBtn) {
-    switchBtn.textContent = currentSource === 'proxy' ? '⚡ Прямой CDN' : '🛡️ Прокси';
+    switchBtn.textContent = currentSource === 'proxy' ? t('vp.directCdn', 'Прямой CDN') : t('vp.proxyBtn', 'Прокси');
     switchBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (isPreCaching && abortRef.current) {
         abortRef.current.abort();
         isPreCaching = false;
         btnCache.classList.remove('active');
-        btnCache.textContent = '⚡ Кэш в память';
+        btnCache.textContent = t('vp.cacheBtn', 'Кэш в память');
       }
       if (btnTranscode) btnTranscode.classList.remove('active');
 
       if (currentSource === 'direct') {
         currentSource = 'proxy';
-        switchBtn.textContent = '⚡ Прямой CDN';
-        setProgress(0, 'Загрузка через локальный сервер...', true);
+        switchBtn.textContent = t('vp.directCdn', 'Прямой CDN');
+        setProgress(0, t('vp.loadingViaServer', 'Загрузка через локальный сервер...'), true);
         video.src = proxyMedia;
       } else {
         currentSource = 'direct';
-        switchBtn.textContent = '🛡️ Прокси';
-        setProgress(0, 'Загрузка напрямую с CDN...', true);
+        switchBtn.textContent = t('vp.proxyBtn', 'Прокси');
+        setProgress(0, t('vp.loadingDirectCdn', 'Загрузка напрямую с CDN...'), true);
         video.src = directMedia;
       }
       safePlay();
@@ -678,8 +680,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   video.addEventListener('loadstart', () => {
     if (!isPreCaching) {
       const statusText = currentSource === 'transcode' 
-        ? '🔄 Подготовка FFmpeg H.264/AAC видео...' 
-        : (currentSource === 'proxy' ? 'Подключение через локальный прокси...' : 'Инициализация видеопотока CDN...');
+        ? t('vp.preparingFfmpeg', 'Подготовка FFmpeg H.264/AAC видео...') 
+        : (currentSource === 'proxy' ? t('vp.connectingLocalProxy', 'Подключение через локальный прокси...') : t('vp.initCdnStream', 'Инициализация видеопотока CDN...'));
       setProgress(0, statusText, true);
     }
     clearTimeout(loadTimeout);
@@ -696,7 +698,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (video.duration > 0 && video.buffered.length > 0) {
       const bufferedEnd = video.buffered.end(video.buffered.length - 1);
       const pct = (bufferedEnd / video.duration) * 100;
-      setProgress(pct, 'Буферизация...', true);
+      setProgress(pct, t('vp.buffering', 'Буферизация...'), true);
       if (pct >= 99) {
         setTimeout(hideStatus, 800);
       }
@@ -705,7 +707,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   video.addEventListener('waiting', () => {
     if (!isPreCaching) {
-      setProgress(null, 'Буферизация видео...', true);
+      setProgress(null, t('vp.bufferingVideo', 'Буферизация видео...'), true);
     }
   });
 
@@ -723,7 +725,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   });
 
-  // Автоматическое разрешение полного HD видео со звуком для Rule34Video
+  // Automatically resolve full HD video with sound for Rule34Video
   if (currentPost.site === 'rule34video') {
     fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
       .then(r => r.json())
@@ -758,7 +760,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
               if (!isPaused) safePlay();
             }, { once: true });
             safePlay();
-            setProgress(100, `🎬 HD Видео (${data.quality || '1080p'}) со звуком подключено`, false);
+            setProgress(100, t('vp.hdConnected', 'HD Видео ({q}) со звуком подключено').replace('{q}', data.quality || '1080p'), false);
             setTimeout(hideStatus, 1500);
           }
         }
@@ -788,7 +790,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   videoContainer.appendChild(video);
   videoContainer.appendChild(unmuteBtn);
 
-  // Запуск автоплея с безопасным перехватом Autoplay Policy
+  // Start autoplay with safe Autoplay Policy handling
   safePlay();
 
   return {

@@ -10,14 +10,14 @@ export function initAutocomplete({ onSearch }) {
   let debounceTimer = null;
   let activeIndex = -1;
   let currentSuggestions = [];
-  const suggestionsCache = new Map(); // Быстрый клиентский кэш подсказок
+  const suggestionsCache = new Map(); // Fast client-side suggestion cache
 
   function renderTagsChips() {
-    // Удаляем старые чипсы
+    // Remove old chips
     const existingChips = tagsWrapper.querySelectorAll('.tag-chip');
     existingChips.forEach(c => c.remove());
 
-    // Вставляем актуальные перед инпутом
+    // Insert current ones before the input
     state.searchTags.forEach(tag => {
       const chip = document.createElement('div');
       chip.className = 'tag-chip';

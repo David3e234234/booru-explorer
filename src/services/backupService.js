@@ -12,7 +12,7 @@ import { logInfo, logError, logWarn } from '../utils/logger.js';
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
 
 /**
- * Проверка соединения с Telegram-ботом и отправка тестового сообщения
+ * Check connectivity to the Telegram bot and send a test message
  */
 export async function testTelegramBot(botToken, chatId) {
   const token = (botToken || '').trim();
@@ -25,7 +25,7 @@ export async function testTelegramBot(botToken, chatId) {
     throw new Error('Chat ID не указан');
   }
 
-  // 1. Проверяем валидность токена через getMe
+  // 1. Verify the token via getMe
   let meRes;
   try {
     meRes = await fetch(`${TELEGRAM_API_BASE}/bot${token}/getMe`, {
@@ -46,7 +46,7 @@ export async function testTelegramBot(botToken, chatId) {
 
   const botName = meData.result?.first_name || meData.result?.username || 'Бот';
 
-  // 2. Отправляем тестовое сообщение в чат
+  // 2. Send a test message to the chat
   const text = `🐾 *Booru Explorer* — Тест связи!\n\n✅ Бот *${botName}* успешно подключен к вашему серверу Booru Explorer.\nАвтоматические бэкапы будут отправляться в этот диалог.`;
 
   let msgRes;
@@ -82,7 +82,7 @@ export async function testTelegramBot(botToken, chatId) {
 }
 
 /**
- * Отправка файла документа в Telegram через multipart/form-data
+ * Send a document file to Telegram via multipart/form-data
  */
 export async function sendTelegramDocument(botToken, chatId, fileBuffer, fileName, caption = '') {
   const token = (botToken || '').trim();
@@ -126,7 +126,7 @@ export async function sendTelegramDocument(botToken, chatId, fileBuffer, fileNam
 }
 
 /**
- * Формирование полного объекта резервной копии
+ * Build the complete backup object
  */
 export function buildBackupPayload(userId = null) {
   const settings = getSettings(userId);
@@ -159,7 +159,7 @@ export function buildBackupPayload(userId = null) {
 }
 
 /**
- * Выполнение резервного копирования и отправка в Telegram
+ * Run the backup and send it to Telegram
  */
 export async function performTelegramBackup(userId = null, isManual = false) {
   const settings = getSettings(userId);
@@ -201,7 +201,7 @@ export async function performTelegramBackup(userId = null, isManual = false) {
 
   await sendTelegramDocument(token, chatId, buffer, fileName, caption);
 
-  // Фиксируем время успешного бэкапа
+  // Record the time of the successful backup
   const updatedSettings = updateSettings({ telegramLastBackupAt: now.toISOString() }, userId);
 
   logInfo('Backup', `Бэкап успешно доставлен в Telegram (User: ${userId || 'default'})`);
@@ -215,7 +215,7 @@ export async function performTelegramBackup(userId = null, isManual = false) {
 }
 
 /**
- * Проверка необходимости автобэкапа для конкретного пользователя/настроек
+ * Check whether an auto-backup is due for a given user/settings pair
  */
 async function checkAndRunBackupForUser(userId = null) {
   try {
@@ -241,7 +241,7 @@ async function checkAndRunBackupForUser(userId = null) {
 }
 
 /**
- * Инициализация фонового планировщика резервного копирования
+ * Initialize the background backup scheduler
  */
 let schedulerIntervalId = null;
 
@@ -250,22 +250,22 @@ export function initBackupScheduler() {
 
   logInfo('Backup', 'Фоновый сервис автобэкапа в Telegram инициализирован');
 
-  // Первая проверка через 1 минуту после запуска сервера
+  // First check 1 minute after server startup
   setTimeout(async () => {
     await runSchedulerCheck();
   }, 60 * 1000);
 
-  // Регулярная проверка каждые 30 минут
+  // Recurring check every 30 minutes
   schedulerIntervalId = setInterval(async () => {
     await runSchedulerCheck();
   }, 30 * 60 * 1000);
 }
 
 async function runSchedulerCheck() {
-  // 1. Проверяем глобального пользователя (single-user)
+  // 1. Check the global user (single-user)
   await checkAndRunBackupForUser(null);
 
-  // 2. Проверяем зарегистрированных пользователей
+  // 2. Check registered users
   try {
     const users = getUsersList();
     if (Array.isArray(users)) {

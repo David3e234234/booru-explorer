@@ -121,7 +121,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
         lists.push(res.value);
       }
     });
-    // Чередование (Round-Robin) постов с разных сайтов для равномерного разнообразия
+    // Round-robin posts across sites for even variety
     const combined = [];
     const maxLength = Math.max(0, ...lists.map(l => l.length));
     for (let i = 0; i < maxLength; i++) {
@@ -178,8 +178,8 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   const pageMultiplier = Math.max(1, deepFetchPagesSetting);
   const startRemotePage = (page - 1) * pageMultiplier + 1;
   const maxIterations = shouldDeepFetch ? Math.max(deepFetchPagesSetting * 2, 6) : 1;
-  // Раньше лимит всегда раздувался до >=100, даже в режиме «все сайты» с perSiteLimit=25.
-  // Теперь уважаем запрошенный лимит (в пределах разумного), а глубину добираем страницами.
+  // Previously the limit was always inflated to >=100, even in all-sites mode with perSiteLimit=25.
+  // Now we respect the requested limit (within reason) and make up depth with extra pages.
   const batchLimit = Math.min(200, Math.max(targetLimit, 25));
 
   logInfo(site, `Глубокий поиск: tags="${params.tags || ''}", page=${page} (remote: ${startRemotePage}), limit=${targetLimit}, deepFetch=${shouldDeepFetch ? maxIterations + ' макс. стр.' : 'выкл'}`);
@@ -187,7 +187,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   const accumulatedPosts = [];
   const seenIds = new Set();
 
-  // Пайплайн: следующая страница запрашивается, пока обрабатывается текущая
+  // Pipeline: fetch the next page while the current one is still being processed
   const launchPage = (remotePage) =>
     withDeadline(fetchSingleSiteBatch(site, { ...params, page: remotePage, limit: batchLimit }, aiTagsList, settings))
       .catch(() => []);
@@ -211,7 +211,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
       break;
     }
 
-    // Если сайт вернул меньше 15 постов в сырой пачке, скорее всего результаты закончились
+    // If a site returned fewer than 15 posts in a raw batch, its results are most likely exhausted
     if (batch.length < 15) {
       break;
     }

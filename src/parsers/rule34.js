@@ -19,9 +19,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
   
   let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
 
-  // Сортировка по категориям для Rule34:
+  // Category sorting for Rule34:
   if (category === 'top') {
-    // Топ за всё время
+    // All-time top
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
@@ -30,7 +30,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
       searchTags = searchTags ? `${searchTags} sort:views:desc` : 'sort:views:desc';
     }
   } else if (category === 'popular') {
-    // Тренды / Популярное за последнее время:
+    // Trending / recently popular:
     if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('score:')) {
       searchTags = searchTags ? `${searchTags} score:>=5` : 'score:>=5';
     }
@@ -44,7 +44,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
     }
   }
 
-  // Фильтр рейтинга
+  // Rating filter
   if (ratingFilter === 'nsfw') {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:explicit` : 'rating:explicit';
   } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
@@ -76,7 +76,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
   const pid = Math.max(0, page - 1);
 
-  // 1. Попытка через официальный DAPI если есть API ключ
+  // 1. Try the official DAPI when an API key is available
   if (settings?.rule34ApiKey && settings?.rule34UserId) {
     let dapiTags = searchTags
       .replace(/\bsort:score:desc\b/gi, 'order:score')
@@ -165,7 +165,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
     }
   }
 
-  // 2. Универсальный веб-парсер Rule34.xxx (открытая выдача без API ключа)
+  // 2. Universal web parser for Rule34.xxx (public feed without an API key)
   const htmlFormattedTags = searchTags
     .replace(/\border:score_desc\b/gi, 'sort:score:desc')
     .replace(/\border:score\b/gi, 'sort:score:desc')
@@ -188,7 +188,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
     if (res.ok) {
       const html = await res.text();
       let posts = [];
-      // Универсальный поиск блоков превью: <span class="thumb" id="s123"> или <span id="s123" class="thumb">
+      // Universal match for preview blocks: <span class="thumb" id="s123"> or <span id="s123" class="thumb">
       const spanRegex = /<span\b[^>]*?(?:class="[^"]*\bthumb\b[^"]*"[^>]*?id="s?(\d+)"|id="s?(\d+)"[^>]*?class="[^"]*\bthumb\b[^"]*")[^>]*>([\s\S]*?)<\/span>/gi;
       const rawParsedItems = [];
       let match;
@@ -322,7 +322,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         }));
       }
 
-      // Fallback: поиск по тегам <img title="..." id="p..."> если span с классом thumb не найден
+      // Fallback: match <img title="..." id="p..."> tags when no span.thumb is found
       if (posts.length === 0 && html.includes('id="p')) {
         const altImgRegex = /<a[^>]*id="p(\d+)"[^>]*href="[^"]*id=(\d+)"[^>]*>[\s\S]*?<img[^>]+(?:src|data-src)="([^"]+)"[^>]*title="([^"]*)"/gi;
         const altItems = [];
@@ -437,7 +437,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
     logError('Rule34.xxx HTML', 'Ошибка веб-парсинга Rule34.xxx', err);
   }
 
-  // 3. Fallback: Открытый Paheal API
+  // 3. Fallback: public Paheal API
   if (settings && settings.enablePaheal === false) {
     return [];
   }
@@ -460,7 +460,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
       pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
     }
   } else if (category === 'popular') {
-    // Paheal: запрашиваем свежие посты и сортируем локально по score
+    // Paheal: request recent posts and sort locally by score
     if (!pahealSearchTags.includes('order:')) {
       pahealSearchTags = pahealSearchTags ? `order:id_desc ${pahealSearchTags}` : 'order:id_desc';
     }
@@ -539,7 +539,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
   try {
     let posts = await parsePahealXml(pahealSearchTags);
     
-    // Если по snake_case тегам ничего не найдено на Paheal, пробуем Capitalized вариант (например Hu_Tao)
+    // If snake_case tags found nothing on Paheal, try the capitalized variant (e.g. Hu_Tao)
     if (posts.length === 0 && pahealSearchTags && !pahealSearchTags.includes(':')) {
       const capitalizedTags = pahealSearchTags.split(/\s+/).map(t => {
         return t.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('_');

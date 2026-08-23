@@ -4,6 +4,7 @@ import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/u
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
 import { renderSidebarTags, formatRating } from './viewerSidebar.js';
+import { t } from '../i18n.js';
 
 function isVideoUrl(url) {
   if (!url) return false;
@@ -65,7 +66,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let currentZoomInstance = null;
   let currentVideoInstance = null;
 
-  // Сенсорные переменные для жестов
+  // Touch state variables for gestures
   let touchStartX = 0;
   let touchStartY = 0;
   let touchStartTime = 0;
@@ -87,7 +88,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (modal) modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
-    // Для видео Rule34Video обновляем полные метаданные (автора, теги, HD поток)
+    // For Rule34Video videos, refresh full metadata (author, tags, HD stream)
     if (currentPost?.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
       const targetPostId = currentPost.id;
       fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
@@ -177,14 +178,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         currentPost.albumItems.forEach((item, idx) => {
           const itemDiv = document.createElement('div');
           itemDiv.className = `album-filmstrip-item ${idx === currentAlbumIndex ? 'active' : ''}`;
-          itemDiv.title = `Изображение ${idx + 1} из ${currentPost.albumItems.length}`;
+          itemDiv.title = t('vw.albumImageTitle', 'Изображение {n} из {total}').replace('{n}', idx + 1).replace('{total}', currentPost.albumItems.length);
 
           const thumbUrl = item.thumb180 || item.thumb360 || item.previewUrl || item.sampleUrl || item.fileUrl || '';
           const needsThumbProxy = (item.site === 'danbooru' || thumbUrl.includes('donmai.us')) ? true : (state.settings?.proxyThumbnails !== false);
           const thumbSrc = thumbUrl ? (thumbUrl.startsWith('/api/') ? thumbUrl : (needsThumbProxy ? getProxiedUrl(thumbUrl) : thumbUrl)) : '';
 
           itemDiv.innerHTML = `
-            <img class="album-filmstrip-img" src="${thumbSrc}" alt="Слайд ${idx + 1}" loading="lazy" referrerpolicy="no-referrer">
+            <img class="album-filmstrip-img" src="${thumbSrc}" alt="${t('vw.slideAlt', 'Слайд {n}').replace('{n}', idx + 1)}" loading="lazy" referrerpolicy="no-referrer">
             <span class="album-filmstrip-page">${idx + 1}</span>
           `;
 
@@ -197,7 +198,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           albumFilmstripInner.appendChild(itemDiv);
         });
 
-        // Скроллим активный элемент в видимую область
+        // Scroll the active item into view
         const activeThumb = albumFilmstripInner.children[currentAlbumIndex];
         if (activeThumb) {
           activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -210,15 +211,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (btnDownloadAlbumSidebar) btnDownloadAlbumSidebar.style.display = 'none';
       }
 
-      // Наличие серии для дозагрузки в сайдбаре
+      // Whether a series exists for lazy loading in the sidebar
       if (infoAlbumRow) {
         const canFetch = Boolean(currentPost?.canFetchAlbum || currentPost?.hasChildren || currentPost?.parentId || currentPost?.seriesKey);
         infoAlbumRow.style.display = canFetch ? 'flex' : 'none';
         if (btnFetchFullAlbumText) {
           if (isAlbum) {
-            btnFetchFullAlbumText.textContent = `Обновить сет (${currentPost.albumItems.length} фото)`;
+            btnFetchFullAlbumText.textContent = t('vw.refreshSet', 'Обновить сет ({n} фото)').replace('{n}', currentPost.albumItems.length);
           } else {
-            btnFetchFullAlbumText.textContent = 'Найти все части сета';
+            btnFetchFullAlbumText.textContent = t('viewer.findFullSet', 'Найти все части сета');
           }
         }
       }
@@ -228,12 +229,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (!currentPost?.albumItems || idx < 0 || idx >= currentPost.albumItems.length) return;
       currentAlbumIndex = idx;
 
-      // Обновляем бейдж страницы
+      // Update the page badge
       if (viewerAlbumPageText) {
         viewerAlbumPageText.textContent = `${currentAlbumIndex + 1} / ${currentPost.albumItems.length}`;
       }
 
-      // Обновляем активный класс в ленте миниатюр
+      // Update the active class in the thumbnail filmstrip
       if (albumFilmstripInner) {
         Array.from(albumFilmstripInner.children).forEach((child, i) => {
           child.classList.toggle('active', i === currentAlbumIndex);
@@ -245,7 +246,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
 
       const activeItem = currentPost.albumItems[currentAlbumIndex];
-      if (resBadge) resBadge.textContent = (activeItem.width && activeItem.height) ? `${activeItem.width} × ${activeItem.height}` : 'Оригинал';
+      if (resBadge) resBadge.textContent = (activeItem.width && activeItem.height) ? `${activeItem.width} × ${activeItem.height}` : t('vw.original', 'Оригинал');
       if (extBadge) extBadge.textContent = (activeItem.fileExt || 'JPG').toUpperCase();
 
       loadMediaItem(activeItem);
@@ -271,7 +272,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
       const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
       if (!directMedia) {
-        showToast('Ссылка на медиа недоступна');
+        showToast(t('vw.mediaUnavailable', 'Ссылка на медиа недоступна'));
         return;
       }
 
@@ -314,7 +315,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             console.warn('[Viewer Image Fallback] Переключение на previewUrl');
             this.src = getProxiedUrl(item.previewUrl);
           } else {
-            showToast('Не удалось загрузить полноразмерное фото');
+            showToast(t('vw.fullImgFailed', 'Не удалось загрузить полноразмерное фото'));
           }
         });
 
@@ -331,10 +332,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     if (siteBadge) siteBadge.textContent = currentPost.siteName || currentPost.site;
-    if (resBadge) resBadge.textContent = (currentPost.width && currentPost.height) ? `${currentPost.width} × ${currentPost.height}` : 'Оригинал';
+    if (resBadge) resBadge.textContent = (currentPost.width && currentPost.height) ? `${currentPost.width} × ${currentPost.height}` : t('vw.original', 'Оригинал');
     if (extBadge) extBadge.textContent = (currentPost.fileExt || 'JPG').toUpperCase();
 
-    // Отображение Автора
+    // Author display
     const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
     const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
     if (authorName && authorName.trim()) {
@@ -356,7 +357,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (viewerFavAuthorBtn) {
         viewerFavAuthorBtn.style.display = 'inline-flex';
         viewerFavAuthorBtn.classList.toggle('active', isFavAuthor);
-        viewerFavAuthorBtn.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+        viewerFavAuthorBtn.title = isFavAuthor
+          ? t('vw.authorRemoveTitle', 'Удалить автора "{name}" из любимых').replace('{name}', cleanAuthorTag)
+          : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
       }
       if (infoAuthorRow && infoAuthor) {
         infoAuthor.textContent = authorName;
@@ -371,8 +374,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
       if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
         btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
-        btnFavAuthorSidebarText.textContent = isFavAuthor ? 'В избранном' : 'В избранное';
-        btnFavAuthorSidebar.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+        btnFavAuthorSidebarText.textContent = isFavAuthor ? t('vw.authorFavOn', 'В избранном') : t('viewer.favAuthorInline', 'В избранное');
+        btnFavAuthorSidebar.title = isFavAuthor
+          ? t('vw.authorRemoveTitle', 'Удалить автора "{name}" из любимых').replace('{name}', cleanAuthorTag)
+          : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
       }
       if (btnSetAuthorCoverSidebar) {
         btnSetAuthorCoverSidebar.style.display = isFavAuthor ? 'inline-flex' : 'none';
@@ -401,7 +406,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             target.site = currentPost.site || target.site || 'danbooru';
           }
           setFavoriteAuthors([...state.favoriteAuthors]);
-          showToast(`Этот арт установлен обложкой автора ${authorName}!`);
+          showToast(t('vw.coverSetForAuthor', 'Этот арт установлен обложкой автора {name}!').replace('{name}', authorName));
           if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
 
           try {
@@ -438,7 +443,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (btnDislikeSidebar) {
       btnDislikeSidebar.classList.toggle('active', isDisliked);
       if (btnDislikeSidebarText) {
-        btnDislikeSidebarText.textContent = isDisliked ? 'Скрыто из ленты' : 'Скрыть из ленты';
+        btnDislikeSidebarText.textContent = isDisliked ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
       }
     }
 
@@ -456,7 +461,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const siteName = currentPost.siteName || currentPost.site;
       const postPageUrl = getPostSiteUrl(currentPost);
       if (postPageUrl) {
-        infoSite.innerHTML = `<a href="${postPageUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="Открыть страницу на сайте ${siteName}">${siteName} <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
+        infoSite.innerHTML = `<a href="${postPageUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="${t('vw.openOnSite', 'Открыть страницу на сайте {name}').replace('{name}', siteName)}">${siteName} <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
       } else {
         infoSite.textContent = siteName;
       }
@@ -464,17 +469,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (infoRating) infoRating.textContent = formatRating(currentPost.rating);
     let scoreText = `★ ${currentPost.score || 0}`;
     if (currentPost.views > 0 || currentPost.viewsText) {
-      scoreText += `  •  👁️ ${currentPost.viewsText || currentPost.views}`;
+      scoreText += ` · ${t('vw.viewsShort', '{n} просм.').replace('{n}', currentPost.viewsText || currentPost.views)}`;
     } else if (currentPost.favCount > 0) {
-      scoreText += `  •  🔖 ${currentPost.favCount}`;
+      scoreText += ` · ${t('vw.favsShort', '{n} в избранном').replace('{n}', currentPost.favCount)}`;
     }
     if (infoScore) infoScore.textContent = scoreText;
     if (infoAi) {
-      infoAi.textContent = currentPost.isAi ? 'Да (ИИ-арт)' : 'Нет (Авторский)';
+      infoAi.textContent = currentPost.isAi ? t('vw.aiYes', 'Да (ИИ-арт)') : t('vw.aiNo', 'Нет (Авторский)');
       infoAi.style.color = currentPost.isAi ? 'var(--accent-warning)' : 'var(--text-primary)';
     }
 
-    // Рендер тегов в сайдбаре
+    // Render tags into the sidebar
     renderSidebarTags(currentPost, {
       onTagSelect: (t) => {
         if (onTagSelect) onTagSelect(t);
@@ -490,14 +495,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
   }
 
-  // Загрузка всех частей серии по кнопке в сайдбаре
+  // Load all series parts via the sidebar button
   if (btnFetchFullAlbum) {
     btnFetchFullAlbum.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (!currentPost) return;
       haptic(15);
       btnFetchFullAlbum.disabled = true;
-      if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = 'Поиск серии...';
+      if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = t('vw.searchingSeries', 'Поиск серии...');
 
       try {
         const res = await fetchAlbumPosts({
@@ -513,7 +518,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           currentPost.albumCount = res.albumItems.length;
           currentAlbumIndex = 0;
 
-          // Синхронизируем обновленный альбом в глобальном состоянии галереи
+          // Sync the updated album back into global gallery state
           const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
           if (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length) {
             list[state.currentViewerIndex] = currentPost;
@@ -525,7 +530,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             }
           }
 
-          // Обновляем бейдж карточки в DOM галереи
+          // Update the card badge in the gallery DOM
           const cardEl = document.querySelector(`.post-card[data-id="${currentPost.id}"]`);
           if (cardEl) {
             cardEl.classList.add('is-album-card');
@@ -541,26 +546,26 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           }
 
           renderViewerPost();
-          showToast(`Найдено ${res.albumItems.length} изображений серии!`);
+          showToast(t('vw.seriesFound', 'Найдено {n} изображений серии!').replace('{n}', res.albumItems.length));
         } else {
-          showToast('Дополнительные части серии не найдены');
-          if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = 'Части серии не найдены';
+          showToast(t('vw.seriesNone', 'Дополнительные части серии не найдены'));
+          if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = t('vw.seriesPartsNone', 'Части серии не найдены');
         }
       } catch (err) {
         console.error('Ошибка поиска альбома:', err);
-        showToast('Не удалось выполнить поиск частей серии');
+        showToast(t('vw.seriesSearchFailed', 'Не удалось выполнить поиск частей серии'));
       } finally {
         btnFetchFullAlbum.disabled = false;
       }
     });
   }
 
-  // Скачивание всех изображений альбома
+  // Download all album images
   async function downloadFullAlbum(e) {
     if (e) e.preventDefault();
     if (!currentPost || !currentPost.isAlbum || !Array.isArray(currentPost.albumItems) || currentPost.albumItems.length === 0) return;
     haptic(20);
-    showToast(`Начато скачивание альбома (${currentPost.albumItems.length} файлов)...`);
+    showToast(t('vw.albumDownloadStart', 'Начато скачивание альбома ({n} файлов)...').replace('{n}', currentPost.albumItems.length));
 
     for (let i = 0; i < currentPost.albumItems.length; i++) {
       const item = currentPost.albumItems[i];
@@ -586,10 +591,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       } catch (err) {
         console.warn(`[Album download err on page ${i + 1}]`, err);
       }
-      // Небольшая задержка между скачиваниями
+      // Small delay between downloads
       await new Promise(r => setTimeout(r, 350));
     }
-    showToast('Все изображения альбома загружены');
+    showToast(t('vw.albumDownloaded', 'Все изображения альбома загружены'));
   }
 
   if (btnDownloadAlbum) {
@@ -599,7 +604,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     btnDownloadAlbumSidebar.addEventListener('click', downloadFullAlbum);
   }
 
-  // Переключение шторки тегов на мобильных
+  // Toggle the tags drawer on mobile
   if (btnViewerTagsToggle) {
     btnViewerTagsToggle.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -622,10 +627,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (btnDislikeSidebar) {
       btnDislikeSidebar.classList.toggle('active', isDislikedNow);
       if (btnDislikeSidebarText) {
-        btnDislikeSidebarText.textContent = isDislikedNow ? 'Скрыто из ленты' : 'Скрыть из ленты';
+        btnDislikeSidebarText.textContent = isDislikedNow ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
       }
     }
-    showToast(isDislikedNow ? 'Пост скрыт (рекомендации обновлены)' : 'Скрытие отменено');
+    showToast(isDislikedNow ? t('vw.postHiddenToast', 'Пост скрыт (рекомендации обновлены)') : t('vw.unhiddenToast', 'Скрытие отменено'));
     try {
       await toggleDislikeApi(currentPost);
     } catch (e) {}
@@ -645,7 +650,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const isLikedNow = toggleLikeLocally(currentPost);
       btnLikeModal.classList.toggle('active', isLikedNow);
       btnLikeModal.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'currentColor' : 'none');
-      showToast(isLikedNow ? 'Понравилось (рекомендации обновлены)' : 'Лайк удален');
+      showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
       try {
         await toggleLikePost(currentPost);
       } catch (e) {}
@@ -665,13 +670,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             state.favorites.unshift(currentPost);
             btnFavModal.classList.add('active');
             btnFavModal.querySelector('svg')?.setAttribute('fill', 'currentColor');
-            showToast('Сохранено в закладки');
+            showToast(t('vw.savedToFavs', 'Сохранено в закладки'));
           } else {
             state.favoriteIds.delete(currentPost.id);
             state.favorites = state.favorites.filter(f => f.id !== currentPost.id);
             btnFavModal.classList.remove('active');
             btnFavModal.querySelector('svg')?.setAttribute('fill', 'none');
-            showToast('Удалено из закладок');
+            showToast(t('vw.removedFromFavs', 'Удалено из закладок'));
           }
           if (onFavoriteToggle) onFavoriteToggle();
         }
@@ -689,16 +694,16 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const urlToCopy = siteUrl || activeItem.fileUrl || activeItem.sampleUrl || currentPost.fileUrl || currentPost.sampleUrl;
       
       if (!urlToCopy) {
-        showToast('Ссылка недоступна');
+        showToast(t('vw.linkUnavailable', 'Ссылка недоступна'));
         return;
       }
       
       haptic(15);
       const success = await copyToClipboard(urlToCopy);
       if (success) {
-        showToast('Ссылка на пост скопирована');
+        showToast(t('vw.linkCopied', 'Ссылка на пост скопирована'));
       } else {
-        showToast('Не удалось скопировать ссылку');
+        showToast(t('vw.linkCopyFailed', 'Не удалось скопировать ссылку'));
       }
     });
   }
@@ -710,11 +715,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
       const downloadTarget = activeItem.fileUrl || activeItem.sampleUrl || activeItem.previewUrl;
       if (!downloadTarget) {
-        showToast('Ссылка на файл недоступна');
+        showToast(t('vw.fileLinkUnavailable', 'Ссылка на файл недоступна'));
         return;
       }
 
-      showToast('Начата загрузка на устройство...');
+      showToast(t('vw.downloadStarted', 'Начата загрузка на устройство...'));
       
       const getExtensionFromMime = (mimeType, fallbackExt) => {
         if (!mimeType) return fallbackExt || 'jpg';
@@ -745,7 +750,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             a.click();
             a.remove();
             setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-            showToast('Файл сохранён напрямую с CDN');
+            showToast(t('vw.savedFromCdn', 'Файл сохранён напрямую с CDN'));
             return;
           }
         } catch (directErr) {
@@ -769,10 +774,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-        showToast('Файл сохранён в память устройства');
+        showToast(t('vw.savedToDevice', 'Файл сохранён в память устройства'));
       } catch (err) {
         console.warn('[Download error]', err);
-        showToast('Не удалось загрузить файл для сохранения');
+        showToast(t('vw.downloadFailed', 'Не удалось загрузить файл для сохранения'));
       }
     });
   }
@@ -819,9 +824,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       haptic(15);
       const success = await copyToClipboard(currentPost.tags.join(' '));
       if (success) {
-        showToast('Все теги поста скопированы');
+        showToast(t('vw.tagsCopied', 'Все теги поста скопированы'));
       } else {
-        showToast('Не удалось скопировать теги');
+        showToast(t('vw.tagsCopyFailed', 'Не удалось скопировать теги'));
       }
     });
   }
@@ -854,22 +859,26 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             site: currentPost.site || 'danbooru',
             createdAt: new Date().toISOString()
           });
-          showToast(`Автор ${authorName} добавлен в любимые`);
+          showToast(t('vw.authorAdded', 'Автор {name} добавлен в любимые').replace('{name}', authorName));
         } else {
           state.favoriteAuthorNames.delete(cleanAuthorTag.toLowerCase());
           state.favoriteAuthors = state.favoriteAuthors.filter(a => (a.name || '').toLowerCase() !== cleanAuthorTag.toLowerCase());
-          showToast(`Автор ${authorName} удален из любимых`);
+          showToast(t('vw.authorRemoved', 'Автор {name} удален из любимых').replace('{name}', authorName));
         }
 
         const isFavAuthor = res.isFavorite;
         if (viewerFavAuthorBtn) {
           viewerFavAuthorBtn.classList.toggle('active', isFavAuthor);
-          viewerFavAuthorBtn.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+          viewerFavAuthorBtn.title = isFavAuthor
+            ? t('vw.authorRemoveTitle', 'Удалить автора "{name}" из любимых').replace('{name}', cleanAuthorTag)
+            : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
         }
         if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
           btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
-          btnFavAuthorSidebarText.textContent = isFavAuthor ? 'В избранном' : 'В избранное';
-          btnFavAuthorSidebar.title = isFavAuthor ? `Удалить автора "${cleanAuthorTag}" из любимых` : `Добавить автора "${cleanAuthorTag}" в любимые`;
+          btnFavAuthorSidebarText.textContent = isFavAuthor ? t('vw.authorFavOn', 'В избранном') : t('viewer.favAuthorInline', 'В избранное');
+          btnFavAuthorSidebar.title = isFavAuthor
+            ? t('vw.authorRemoveTitle', 'Удалить автора "{name}" из любимых').replace('{name}', cleanAuthorTag)
+            : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
         }
         if (btnSetAuthorCoverSidebar) {
           btnSetAuthorCoverSidebar.style.display = isFavAuthor ? 'inline-flex' : 'none';
@@ -879,7 +888,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     } catch (err) {
       console.error('Ошибка добавления автора в любимые:', err);
-      showToast('Не удалось обновить избранного автора');
+      showToast(t('vw.authorUpdateFailed', 'Не удалось обновить избранного автора'));
     }
   }
 
@@ -900,7 +909,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   if (btnClose) btnClose.addEventListener('click', closeViewer);
   if (backdrop) backdrop.addEventListener('click', closeViewer);
 
-  // Проверка касания по интерактивным элементам (плашка видео, лента альбома, сайдбар, кнопки)
+  // Check for touches on interactive elements (video banner, album filmstrip, sidebar, buttons)
   function isInteractiveTouchTarget(target) {
     if (!target) return false;
     return Boolean(
@@ -915,7 +924,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     );
   }
 
-  // Сенсорные жесты
+  // Touch gestures
   if (mediaWrapper) {
     mediaWrapper.addEventListener('touchstart', (e) => {
       if (isInteractiveTouchTarget(e.target)) {

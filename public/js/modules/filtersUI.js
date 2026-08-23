@@ -1,4 +1,5 @@
 import { state } from '../state.js';
+import { t } from '../i18n.js';
 
 export function updateAiFilterUI() {
   document.querySelectorAll('.ai-pill').forEach(btn => {
@@ -30,23 +31,23 @@ export function updateAgeFilterUI() {
 
 export function updateDateFilterUI() {
   const dateMap = {
-    'all': 'За всё время',
-    '24h': 'За 24 часа',
-    '1d': 'За 24 часа',
-    '2d': 'За 2 дня',
-    '7d': 'За неделю',
-    'week': 'За неделю',
-    '30d': 'За месяц',
-    'month': 'За месяц',
-    '90d': 'За 3 месяца',
-    '3months': 'За 3 месяца',
-    '365d': 'За год',
-    'year': 'За год'
+    'all': t('date.all', 'За всё время'),
+    '24h': t('date.24h', 'За 24 часа'),
+    '1d': t('date.24h', 'За 24 часа'),
+    '2d': t('date.2d', 'За 2 дня'),
+    '7d': t('date.7d', 'За неделю'),
+    'week': t('date.7d', 'За неделю'),
+    '30d': t('date.30d', 'За месяц'),
+    'month': t('date.30d', 'За месяц'),
+    '90d': t('date.90d', 'За 3 месяца'),
+    '3months': t('date.90d', 'За 3 месяца'),
+    '365d': t('date.365d', 'За год'),
+    'year': t('date.365d', 'За год')
   };
 
   const dateFilterLabel = document.getElementById('dateFilterLabel');
   if (dateFilterLabel) {
-    dateFilterLabel.textContent = dateMap[state.dateFilter] || 'За всё время';
+    dateFilterLabel.textContent = dateMap[state.dateFilter] || t('date.all', 'За всё время');
   }
 
   document.querySelectorAll('#dateFilterMenu .dropdown-item').forEach(item => {
@@ -116,16 +117,16 @@ export function updateCategoryTabsUI() {
   const mobileNavFeedLabel = document.getElementById('mobileNavFeedLabel');
   if (mobileNavFeedLabel) {
     const catMap = {
-      'new': 'Свежие',
-      'views': 'Просматриваемые',
-      'top': 'По рейтингу',
-      'popular': 'Популярное',
-      'recommended': 'Для вас',
-      'random': 'Случайно',
-      'favorites': 'Избранное'
+      'new': t('cat.new', 'Свежие'),
+      'views': t('cat.views', 'Просматриваемые'),
+      'top': t('cat.top', 'По рейтингу'),
+      'popular': t('cat.popular', 'Популярное'),
+      'recommended': t('cat.recommended', 'Для вас'),
+      'random': t('cat.random', 'Случайно'),
+      'favorites': t('cat.favorites', 'Избранное')
     };
     if (state.currentCategory !== 'profile') {
-      mobileNavFeedLabel.textContent = catMap[state.currentCategory] || 'Лента';
+      mobileNavFeedLabel.textContent = catMap[state.currentCategory] || t('cat.feed', 'Лента');
     }
   }
 }

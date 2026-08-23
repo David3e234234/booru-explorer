@@ -6,10 +6,10 @@ export const ROOT_DIR = process.cwd();
 
 export const PORT = process.env.PORT || 3000;
 
-// Определение Serverless окружения (Vercel, AWS Lambda)
+// Detect the serverless environment (Vercel, AWS Lambda)
 export const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
 
-// Директории хранилища и кэша
+// Storage and cache directories
 export const DATA_DIR = isServerless ? path.join(os.tmpdir(), 'booru_data') : path.join(ROOT_DIR, 'data');
 export const CACHE_DIR = path.join(DATA_DIR, 'cache');
 export const THUMBS_DIR = path.join(CACHE_DIR, 'thumbnails');
@@ -20,14 +20,9 @@ export const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json'
 export const LIKES_FILE = path.join(DATA_DIR, 'likes.json');
 export const DISLIKES_FILE = path.join(DATA_DIR, 'dislikes.json');
 export const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
-export const SUBSCRIPTIONS_FILE = path.join(DATA_DIR, 'subscriptions.json');
-export const PUSH_SUBSCRIPTIONS_FILE = path.join(DATA_DIR, 'push_subscriptions.json');
 
-// Состояние проверки любимых авторов для уведомлений (ключ site:name -> knownIds/newIds)
+// Favorite-author check state (key site:name -> knownIds/newIds)
 export const AUTHOR_FEED_STATE_FILE = path.join(DATA_DIR, 'author_feed_state.json');
-
-// Ключи VAPID для веб-пушей: env -> файл data/.vapid_keys.json (генерируется при первом запуске)
-export const VAPID_KEYS_FILE = path.join(DATA_DIR, '.vapid_keys.json');
 
 export const DEFAULT_AI_TAGS = [
   'ai_generated',
@@ -82,7 +77,7 @@ export const PREGNANT_TAGS = [
   'oviposition'
 ];
 
-// Словари телосложения и типажей
+// Body type and archetype dictionaries
 export const CURVY_INCLUDE_TAGS = [
   'milf',
   'mature_female',
@@ -204,7 +199,7 @@ export const DEFAULT_SETTINGS = {
   theme: 'kotobox',
   gridColumns: 'auto',
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
-  ratingFilter: 'all', // 'all', 'nsfw' (18+), 'questionable' (16+), 'sfw' (безопасно)
+  ratingFilter: 'all', // 'all', 'nsfw' (18+), 'questionable' (16+), 'sfw' (safe)
   typeFilter: 'all', // 'all', 'video', 'image'
   ageFilter: 'all', // 'all', 'adult', 'young'
   hideFurry: true,

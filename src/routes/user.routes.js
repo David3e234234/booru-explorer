@@ -15,18 +15,8 @@ import {
   getDislikes, 
   saveDislikes, 
   clearDislikes, 
-  sendBooruLike,
-  getSubscriptions,
-  saveSubscriptions,
-  getPushSubscriptions,
-  savePushSubscriptions
+  sendBooruLike
 } from '../services/storageService.js';
-import {
-  runSubscriptionCheck,
-  markSubscriptionSeen,
-  sendPushToUser,
-  getVapidPublicKey
-} from '../services/subscriptionService.js';
 import { 
   apiPostsCache, 
   tagAutocompleteCache, 
@@ -40,11 +30,11 @@ import { testTelegramBot, performTelegramBackup } from '../services/backupServic
 
 const router = express.Router();
 
-// Middleware аутентификации для всех маршрутов пользователя
+// Authentication middleware for all user routes
 router.use(authMiddleware);
 
-// Храним минимум: альбомные вложения — это полные копии постов (огромный раздув JSON),
-// а дублирующие ключи серий пересчитываются при рендере
+// Store the minimum: album items are full post copies (huge JSON bloat),
+// and duplicate series keys are recomputed at render time
 function sanitizeStoredPost(post) {
   if (!post || typeof post !== 'object') return post;
   const clean = { ...post };
@@ -53,7 +43,7 @@ function sanitizeStoredPost(post) {
   return clean;
 }
 
-// GET & POST /api/git-pull (Deploy hook для Alwaysdata / серверов)
+// GET & POST /api/git-pull (deploy hook for Alwaysdata / servers)
 router.all('/git-pull', (req, res) => {
   exec('git reset --hard origin/main && git pull origin main', { cwd: ROOT_DIR }, (err, stdout, stderr) => {
     if (err) {
@@ -66,7 +56,7 @@ router.all('/git-pull', (req, res) => {
     } catch {}
     res.json({ success: true, stdout, stderr, time: new Date().toISOString() });
 
-    // Перезапуск процесса для немедленной загрузки нового кода в память
+    // Restart the process to load the new code into memory immediately
     setTimeout(() => {
       process.exit(0);
     }, 500);
@@ -225,7 +215,7 @@ router.post('/favorite-authors/preview', (req, res) => {
   const userId = req.user?.id || null;
   const authors = getFavoriteAuthors(userId);
 
-  // Ищем по name, id или displayName
+  // Match by name, id, or displayName
   let target = authors.find(a => 
     (a.name || '').toLowerCase() === cleanName ||
     (a.id || '').toLowerCase() === cleanName ||
@@ -289,7 +279,7 @@ router.post('/like', async (req, res) => {
     isLiked = true;
   }
 
-  // Фоновая отправка в Booru API
+  // Background push to the Booru API
   sendBooruLike(post.site || 'danbooru', post.id, isLiked, settings).catch(() => {});
 
   return res.json({ success: true, isLiked, count: likes.length });
@@ -410,7 +400,7 @@ router.post('/cache-clear', async (req, res) => {
   }
 });
 
-// Туннель Localtunnel
+// Localtunnel tunnel
 let tunnelProcess = null;
 let tunnelUrl = '';
 
@@ -461,7 +451,7 @@ router.get('/tunnel', (req, res) => {
   });
 });
 
-// POST /api/backup/telegram/test - Проверка связи с ботом
+// POST /api/backup/telegram/test - check bot connectivity
 router.post('/backup/telegram/test', async (req, res) => {
   try {
     const { token, chatId } = req.body || {};
@@ -485,7 +475,7 @@ router.post('/backup/telegram/test', async (req, res) => {
   }
 });
 
-// POST /api/backup/telegram/send - Отправка бэкапа в Telegram
+// POST /api/backup/telegram/send - send a backup to Telegram
 router.post('/backup/telegram/send', async (req, res) => {
   try {
     const userId = req.user?.id || null;
@@ -501,7 +491,7 @@ router.post('/backup/telegram/send', async (req, res) => {
   }
 });
 
-// GET /api/backup/telegram/status - Статус последнего бэкапа
+// GET /api/backup/telegram/status - status of the last backup
 router.get('/backup/telegram/status', (req, res) => {
   const userId = req.user?.id || null;
   const settings = getSettings(userId);
@@ -513,151 +503,6 @@ router.get('/backup/telegram/status', (req, res) => {
     interval: settings.telegramBackupInterval || 'daily',
     lastBackupAt: settings.telegramLastBackupAt || null
   });
-});
-
-// ── Сохраненные поиски / тег-подписки ──
-
-// GET /api/subscriptions
-router.get('/subscriptions', (req, res) => {
-  const userId = req.user?.id || null;
-  const subscriptions = getSubscriptions(userId).map(({ knownIds, ...pub }) => pub);
-  res.json({ success: true, subscriptions });
-});
-
-// POST /api/subscriptions { query, site }
-router.post('/subscriptions', async (req, res) => {
-  const { query, site } = req.body || {};
-  const cleanQuery = String(query || '').trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!cleanQuery) {
-    return res.status(400).json({ success: false, message: 'Укажите поисковый запрос' });
-  }
-
-  const userId = req.user?.id || null;
-  const subscriptions = getSubscriptions(userId);
-
-  if (subscriptions.some(s => (s.query || '') === cleanQuery && (s.site || 'all') === (site || 'all'))) {
-    return res.status(400).json({ success: false, message: 'Такой запрос уже сохранен' });
-  }
-  if (subscriptions.length >= 30) {
-    return res.status(400).json({ success: false, message: 'Максимум 30 сохраненных поисков' });
-  }
-
-  const sub = {
-    id: 's_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    query: cleanQuery,
-    site: site || 'all',
-    createdAt: new Date().toISOString(),
-    lastCheckedAt: null,
-    newIds: []
-  };
-  subscriptions.unshift(sub);
-  saveSubscriptions(subscriptions, userId);
-
-  // Первый запуск: запоминаем текущую выдачу как «прочитанную», чтобы бейдж
-  // не показывал весь существующий контент как новинки
-  try {
-    await runSubscriptionCheck(userId, sub.id);
-  } catch (err) {
-    logError('Subscriptions', 'Ошибка первичной проверки подписки:', err);
-  }
-
-  const saved = getSubscriptions(userId).find(s => s.id === sub.id) || sub;
-  const { knownIds, ...pub } = saved;
-  res.json({ success: true, subscription: pub });
-});
-
-// DELETE /api/subscriptions/:id
-router.delete('/subscriptions/:id', (req, res) => {
-  const userId = req.user?.id || null;
-  const subscriptions = getSubscriptions(userId);
-  const filtered = subscriptions.filter(s => s.id !== req.params.id);
-  saveSubscriptions(filtered, userId);
-  res.json({ success: true, count: filtered.length });
-});
-
-// POST /api/subscriptions/:id/check - ручная проверка новых постов
-router.post('/subscriptions/:id/check', async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const { subscription } = await runSubscriptionCheck(userId, req.params.id);
-    const { knownIds, ...pub } = subscription;
-    res.json({ success: true, subscription: pub });
-  } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
-  }
-});
-
-// POST /api/subscriptions/:id/seen - сбросить счетчик непрочитанных
-router.post('/subscriptions/:id/seen', (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const sub = markSubscriptionSeen(userId, req.params.id);
-    const { knownIds, ...pub } = sub;
-    res.json({ success: true, subscription: pub });
-  } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
-  }
-});
-
-// ── Web Push уведомления ──
-
-// GET /api/push/public-key
-router.get('/push/public-key', (req, res) => {
-  const key = getVapidPublicKey();
-  if (!key) return res.status(500).json({ success: false, message: 'Пуш-сервис недоступен' });
-  res.json({ success: true, publicKey: key });
-});
-
-// GET /api/push/status
-router.get('/push/status', (req, res) => {
-  const userId = req.user?.id || null;
-  res.json({
-    success: true,
-    endpoints: getPushSubscriptions(userId).length
-  });
-});
-
-// POST /api/push/subscribe { subscription }
-router.post('/push/subscribe', (req, res) => {
-  const sub = req.body?.subscription;
-  if (!sub || !sub.endpoint || !sub.keys || !sub.keys.p256dh || !sub.keys.auth) {
-    return res.status(400).json({ success: false, message: 'Некорректная push-подписка' });
-  }
-  const userId = req.user?.id || null;
-  const endpoints = getPushSubscriptions(userId);
-  if (!endpoints.some(ep => ep.endpoint === sub.endpoint)) {
-    endpoints.push({ ...sub, createdAt: new Date().toISOString() });
-    savePushSubscriptions(endpoints, userId);
-  }
-  res.json({ success: true, count: endpoints.length });
-});
-
-// POST /api/push/unsubscribe { endpoint }
-router.post('/push/unsubscribe', (req, res) => {
-  const endpoint = req.body?.endpoint;
-  if (!endpoint) return res.status(400).json({ success: false, message: 'Не указан endpoint' });
-  const userId = req.user?.id || null;
-  const filtered = getPushSubscriptions(userId).filter(ep => ep.endpoint !== endpoint);
-  savePushSubscriptions(filtered, userId);
-  res.json({ success: true, count: filtered.length });
-});
-
-// POST /api/push/test
-router.post('/push/test', async (req, res) => {
-  try {
-    const userId = req.user?.id || null;
-    const result = await sendPushToUser(userId, {
-      title: 'Booru Explorer',
-      body: 'Проверка push-уведомлений: всё работает!',
-      url: '/'
-    });
-    if (result.sent === 0) {
-      return res.status(400).json({ success: false, message: 'Нет активных устройств для отправки' });
-    }
-    res.json({ success: true, sent: result.sent });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
 });
 
 export default router;

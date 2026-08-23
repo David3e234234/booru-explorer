@@ -1,6 +1,7 @@
 import { state, clearLocalAuth, getUserInterestTags, excludeInterestTag, restoreInterestTag, resetExcludedInterestTags, saveLocalSettings, clearDislikesLocally } from '../state.js';
 import { apiLogout, saveSettings, clearDislikesApi } from '../api.js';
 import { showToast } from './uiUtils.js';
+import { t } from '../i18n.js';
 
 export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   const profileSection = document.getElementById('userProfileSection');
@@ -22,10 +23,8 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   const btnTabLikes = document.getElementById('btnProfileTabLikes');
   const btnTabFavs = document.getElementById('btnProfileTabFavs');
   const btnTabAuthors = document.getElementById('btnProfileTabAuthors');
-  const btnTabSearches = document.getElementById('btnProfileTabSearches');
   const btnTabAnalytics = document.getElementById('btnProfileTabAnalytics');
   const analyticsPane = document.getElementById('profileAnalyticsPane');
-  const searchesPane = document.getElementById('profileSearchesPane');
   const btnEditInterests = document.getElementById('btnEditInterests');
 
   let isEditingInterests = false;
@@ -33,7 +32,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   btnEditInterests?.addEventListener('click', () => {
     isEditingInterests = !isEditingInterests;
     btnEditInterests.classList.toggle('active', isEditingInterests);
-    btnEditInterests.setAttribute('title', isEditingInterests ? 'Завершить редактирование' : 'Редактировать интересы');
+    btnEditInterests.setAttribute('title', isEditingInterests ? t('prof.editDone.title', 'Завершить редактирование') : t('profile.editInterests.title', 'Редактировать интересы'));
     renderInterestsCloud();
   });
 
@@ -42,11 +41,11 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
     const user = state.currentUser;
 
     if (profileUsername) {
-      profileUsername.textContent = isAuth ? `@${user.username}` : 'Гостевой режим';
+      profileUsername.textContent = isAuth ? `@${user.username}` : t('prof.guestMode', 'Гостевой режим');
     }
 
     if (profileBadgeStatus) {
-      profileBadgeStatus.textContent = isAuth ? 'Авторизован' : 'Локальный гость';
+      profileBadgeStatus.textContent = isAuth ? t('prof.authorized', 'Авторизован') : t('prof.localGuest', 'Локальный гость');
       profileBadgeStatus.className = `profile-badge ${isAuth ? 'badge-auth' : 'badge-guest'}`;
     }
 
@@ -54,12 +53,12 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       if (isAuth && user.createdAt) {
         try {
           const date = new Date(user.createdAt);
-          profileJoinedDate.textContent = `В клубе с ${date.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}`;
+          profileJoinedDate.textContent = t('prof.memberSince', 'В клубе с {date}').replace('{date}', date.toLocaleDateString(document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU', { month: 'long', year: 'numeric' }));
         } catch {
-          profileJoinedDate.textContent = 'В клубе';
+          profileJoinedDate.textContent = t('prof.member', 'В клубе');
         }
       } else {
-        profileJoinedDate.textContent = 'Данные сохраняются локально в вашем браузере';
+        profileJoinedDate.textContent = t('prof.localDataHint', 'Данные сохраняются локально в вашем браузере');
       }
     }
 
@@ -74,9 +73,9 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
     if (profileHeaderActions) {
       if (isAuth) {
         profileHeaderActions.innerHTML = `
-          <button type="button" class="btn-profile-logout" id="btnProfileLogout" title="Выйти из текущего аккаунта">
+          <button type="button" class="btn-profile-logout" id="btnProfileLogout" title="${t('prof.logout.title', 'Выйти из текущего аккаунта')}">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            <span>Выйти</span>
+            <span>${t('prof.logout', 'Выйти')}</span>
           </button>
         `;
         document.getElementById('btnProfileLogout')?.addEventListener('click', handleLogout);
@@ -84,7 +83,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
         profileHeaderActions.innerHTML = `
           <button type="button" class="btn-primary btn-profile-login" id="btnProfileLoginAction">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-            <span>Войти / Регистрация</span>
+            <span>${t('prof.loginOrRegister', 'Войти / Регистрация')}</span>
           </button>
         `;
         document.getElementById('btnProfileLoginAction')?.addEventListener('click', () => {
@@ -93,7 +92,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       }
     }
 
-    // Обновление счетчиков
+    // Update counters
     const likesCount = state.likes?.length || 0;
     const favsCount = state.favorites?.length || 0;
     const authorsCount = state.favoriteAuthors?.length || 0;
@@ -127,11 +126,11 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       cloud.innerHTML = `
         <div style="display: flex; flex-direction: column; gap: 8px; align-items: flex-start;">
           <span style="color: var(--text-muted); font-size: 13px;">
-            ${excludedCount > 0 ? 'Все основные теги исключены из карты.' : 'Оценивайте работы лайками, чтобы сформировать карту интересов для персональных рекомендаций.'}
+            ${excludedCount > 0 ? t('prof.interestsAllExcluded', 'Все основные теги исключены из карты.') : t('prof.interestsHint', 'Оценивайте работы лайками, чтобы сформировать карту интересов для персональных рекомендаций.')}
           </span>
           ${excludedCount > 0 ? `
             <button type="button" class="btn-restore-interests" id="btnRestoreInterests">
-              Восстановить исключенные теги (${excludedCount})
+              ${t('prof.restoreExcluded', 'Восстановить исключенные теги ({n})').replace('{n}', excludedCount)}
             </button>
           ` : ''}
         </div>
@@ -140,7 +139,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
         resetExcludedInterestTags();
         saveSettings(state.settings).catch(() => {});
         saveLocalSettings(state.settings);
-        showToast('Исключенные теги восстановлены', 'info');
+        showToast(t('prof.excludedRestored', 'Исключенные теги восстановлены'), 'info');
         renderInterestsCloud();
       });
       return;
@@ -155,7 +154,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
               <span class="interest-tag-name">${item.tag}</span>
               ${displayScore ? `<span class="interest-tag-weight">${displayScore}</span>` : ''}
               ${isEditingInterests ? `
-                <button type="button" class="btn-chip-delete" data-tag="${item.tag}" title="Удалить тег из интересов">
+                <button type="button" class="btn-chip-delete" data-tag="${item.tag}" title="${t('prof.removeTag.title', 'Удалить тег из интересов')}">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               ` : ''}
@@ -166,12 +165,12 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;">
         ${(isEditingInterests && excludedCount > 0) ? `
           <button type="button" class="btn-restore-interests" id="btnRestoreInterests">
-            Восстановить удаленные теги (${excludedCount})
+            ${t('prof.restoreDeleted', 'Восстановить удаленные теги ({n})').replace('{n}', excludedCount)}
           </button>
         ` : ''}
         ${(state.dislikes && state.dislikes.length > 0) ? `
-          <button type="button" class="btn-restore-interests" id="btnClearDislikesProfile" title="Сбросить список скрытых постов и вернуть их в рекомендации">
-            Сбросить скрытые посты (${state.dislikes.length})
+          <button type="button" class="btn-restore-interests" id="btnClearDislikesProfile" title="${t('prof.clearDislikes.title', 'Сбросить список скрытых постов и вернуть их в рекомендации')}">
+            ${t('prof.clearDislikes', 'Сбросить скрытые посты ({n})').replace('{n}', state.dislikes.length)}
           </button>
         ` : ''}
       </div>
@@ -187,7 +186,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
           excludeInterestTag(tag);
           saveSettings(state.settings).catch(() => {});
           saveLocalSettings(state.settings);
-          showToast(`Тег "${tag}" удален из интересов`, 'info');
+          showToast(t('prof.tagRemoved', 'Тег "{tag}" удален из интересов').replace('{tag}', tag), 'info');
           renderInterestsCloud();
         } else {
           if (typeof onTabChange === 'function') {
@@ -201,7 +200,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       resetExcludedInterestTags();
       saveSettings(state.settings).catch(() => {});
       saveLocalSettings(state.settings);
-      showToast('Удаленные теги восстановлены', 'info');
+      showToast(t('prof.deletedRestored', 'Удаленные теги восстановлены'), 'info');
       renderInterestsCloud();
     });
 
@@ -210,7 +209,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       try {
         await clearDislikesApi();
       } catch (err) {}
-      showToast('Список скрытых постов сброшен', 'info');
+      showToast(t('prof.dislikesCleared', 'Список скрытых постов сброшен'), 'info');
       renderInterestsCloud();
     });
   }
@@ -218,21 +217,18 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   async function handleLogout() {
     await apiLogout();
     clearLocalAuth();
-    showToast('Вы вышли из аккаунта', 'info');
+    showToast(t('prof.loggedOut', 'Вы вышли из аккаунта'), 'info');
     if (typeof onReloadState === 'function') onReloadState();
   }
 
   function setProfileSubTab(subTab) {
     state.profileSubTab = subTab;
-    [btnTabLikes, btnTabFavs, btnTabAuthors, btnTabSearches, btnTabAnalytics].forEach(btn => btn?.classList.remove('active'));
-    
+    [btnTabLikes, btnTabFavs, btnTabAuthors, btnTabAnalytics].forEach(btn => btn?.classList.remove('active'));
+
     const profileAuthorsToolbar = document.getElementById('profileAuthorsToolbar');
     if (profileAuthorsToolbar) {
       profileAuthorsToolbar.style.display = subTab === 'authors' ? 'flex' : 'none';
     }
-
-    const showSearchesPane = subTab === 'searches';
-    if (searchesPane) searchesPane.style.display = showSearchesPane ? 'block' : 'none';
 
     if (subTab === 'likes') {
       btnTabLikes?.classList.add('active');
@@ -242,9 +238,6 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       if (analyticsPane) analyticsPane.style.display = 'none';
     } else if (subTab === 'authors') {
       btnTabAuthors?.classList.add('active');
-      if (analyticsPane) analyticsPane.style.display = 'none';
-    } else if (subTab === 'searches') {
-      btnTabSearches?.classList.add('active');
       if (analyticsPane) analyticsPane.style.display = 'none';
     } else if (subTab === 'analytics') {
       btnTabAnalytics?.classList.add('active');
@@ -268,7 +261,6 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   btnTabLikes?.addEventListener('click', () => setProfileSubTab('likes'));
   btnTabFavs?.addEventListener('click', () => setProfileSubTab('favorites'));
   btnTabAuthors?.addEventListener('click', () => setProfileSubTab('authors'));
-  btnTabSearches?.addEventListener('click', () => setProfileSubTab('searches'));
   btnTabAnalytics?.addEventListener('click', () => setProfileSubTab('analytics'));
 
   document.getElementById('statLikesItem')?.addEventListener('click', () => setProfileSubTab('likes'));

@@ -17,6 +17,7 @@ import {
   fetchTelegramBackupStatus
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
+import { t, getLang } from '../i18n.js';
 import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI } from './filtersUI.js';
 
 export const DEFAULT_AI_TAGS = [
@@ -281,7 +282,7 @@ export function applySettingsToUIAndState(s) {
     selectMaxServerCache.value = String(s.maxServerCacheMb);
   }
 
-  // Telegram автобэкап
+  // Telegram auto-backup
   const checkTelegramBackupEnabled = document.getElementById('checkTelegramBackupEnabled');
   const inputTelegramBotToken = document.getElementById('inputTelegramBotToken');
   const inputTelegramChatId = document.getElementById('inputTelegramChatId');
@@ -318,10 +319,10 @@ export function updateTelegramBackupStatusUI(s = state.settings) {
 
   if (!hasConfig) {
     statusDot.className = 'tg-status-dot dot-idle';
-    statusText.textContent = 'Бот не настроен (введите Token и Chat ID)';
+    statusText.textContent = t('set.tgNotConfigured', 'Бот не настроен (введите Token и Chat ID)');
   } else if (!isEnabled) {
     statusDot.className = 'tg-status-dot dot-paused';
-    statusText.textContent = 'Автобэкап выключен (доступна ручная отправка)';
+    statusText.textContent = t('set.tgDisabled', 'Автобэкап выключен (доступна ручная отправка)');
   } else {
     statusDot.className = 'tg-status-dot dot-active';
     if (lastBackup) {
@@ -333,9 +334,9 @@ export function updateTelegramBackupStatusUI(s = state.settings) {
         hour: '2-digit',
         minute: '2-digit'
       });
-      statusText.textContent = `Активен. Последний бэкап: ${dateStr}`;
+      statusText.textContent = t('set.tgActiveLast', 'Активен. Последний бэкап: {d}').replace('{d}', dateStr);
     } else {
-      statusText.textContent = 'Активен. Ожидание первого автобэкапа';
+      statusText.textContent = t('set.tgActiveWaiting', 'Активен. Ожидание первого автобэкапа');
     }
   }
 }
@@ -477,7 +478,7 @@ export async function updateStorageUsageInfo() {
 
   if (storageUsageText) storageUsageText.textContent = formatBytes(clientTotalBytes);
   if (storageQuotaText) {
-    storageQuotaText.textContent = quotaBytes > 0 ? formatBytes(quotaBytes) : '-- ГБ';
+    storageQuotaText.textContent = quotaBytes > 0 ? formatBytes(quotaBytes) : t('set.quotaUnknown', '-- ГБ');
   }
 
   if (storageProgressBar && quotaBytes > 0) {
@@ -488,16 +489,16 @@ export async function updateStorageUsageInfo() {
   if (storageMediaCacheText) storageMediaCacheText.textContent = formatBytes(pwaCacheBytes || localBytes);
   if (storageServerCacheText) {
     const formattedLimit = maxServerCacheMb > 0 
-      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ГБ' : maxServerCacheMb + ' МБ')
+      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ' + t('unit.gb', 'ГБ') : maxServerCacheMb + ' ' + t('unit.mb', 'МБ'))
       : null;
-    const limitLabel = formattedLimit ? ` / ${formattedLimit}` : ' (Без лимита)';
+    const limitLabel = formattedLimit ? ` / ${formattedLimit}` : ` (${t('settings.cacheUnlimited', 'Без лимита')})`;
     storageServerCacheText.textContent = `${formatBytes(serverCacheBytes)}${limitLabel}`;
   }
   const storageLimitBadge = document.getElementById('storageLimitBadge');
   if (storageLimitBadge) {
     storageLimitBadge.textContent = maxServerCacheMb > 0 
-      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ГБ' : maxServerCacheMb + ' МБ')
-      : 'Без лимита';
+      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ' + t('unit.gb', 'ГБ') : maxServerCacheMb + ' ' + t('unit.mb', 'МБ'))
+      : t('settings.cacheUnlimited', 'Без лимита');
   }
 }
 
@@ -506,7 +507,7 @@ export async function handleClearStorageCache() {
   const statusEl = document.getElementById('storageClearStatus');
 
   if (btn) btn.disabled = true;
-  if (statusEl) statusEl.textContent = 'Очистка...';
+  if (statusEl) statusEl.textContent = t('set.clearing', 'Очистка...');
 
   try {
     const keysToRemove = [];
@@ -533,13 +534,13 @@ export async function handleClearStorageCache() {
 
     await updateStorageUsageInfo();
     if (statusEl) {
-      statusEl.textContent = 'Кэш очищен';
+      statusEl.textContent = t('set.cacheCleared', 'Кэш очищен');
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
     }
-    showToast('Кэш медиа успешно очищен');
+    showToast(t('set.mediaCacheCleared', 'Кэш медиа успешно очищен'));
   } catch (err) {
-    if (statusEl) statusEl.textContent = 'Ошибка очистки';
-    showToast('Не удалось полностью очистить кэш');
+    if (statusEl) statusEl.textContent = t('set.clearFailed', 'Ошибка очистки');
+    showToast(t('set.cacheClearIncomplete', 'Не удалось полностью очистить кэш'));
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -646,7 +647,7 @@ export function openSettingsModal() {
     b.classList.toggle('active', b.dataset.themeVal === currentTheme);
   });
 
-  // По умолчанию открываем вкладку Общие
+  // Open the General tab by default
   switchSettingsTab('general');
 
   if (settingsModal) settingsModal.style.display = 'flex';
@@ -679,7 +680,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   const btnImportData = document.getElementById('btnImportData');
   const inputImportFile = document.getElementById('inputImportFile');
 
-  // Переключение вкладок
+  // Tab switching
   document.querySelectorAll('.settings-nav-tab').forEach(tabBtn => {
     tabBtn.addEventListener('click', () => {
       const tabId = tabBtn.dataset.tab;
@@ -693,7 +694,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
   if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
 
-  // Универсальный обработчик ввода тегов для групп
+  // Generic tag input handler for tag groups
   const setupTagInput = (inputId, wrapperId, getList, setList) => {
     const input = document.getElementById(inputId);
     const wrapper = document.getElementById(wrapperId);
@@ -744,13 +745,13 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   setupTagInput('pregnantTagsInput', 'pregnantTagsWrapper', () => tempPregnantTags, (l) => { tempPregnantTags = l; });
   setupTagInput('lgbtTagsInput', 'lgbtTagsWrapper', () => tempLgbtTags, (l) => { tempLgbtTags = l; });
 
-  // Кнопки сброса к значениям по умолчанию
+  // Reset-to-defaults buttons
   const btnResetBlacklist = document.getElementById('btnResetBlacklist');
   if (btnResetBlacklist) {
     btnResetBlacklist.addEventListener('click', () => {
       tempBlacklist = [...DEFAULT_BLACKLIST];
       renderSettingsChips();
-      showToast('Черный список сброшен к стандартному');
+      showToast(t('set.blacklistReset', 'Черный список сброшен к стандартному'));
     });
   }
 
@@ -759,7 +760,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     btnResetAiTags.addEventListener('click', () => {
       tempAiTags = [...DEFAULT_AI_TAGS];
       renderSettingsChips();
-      showToast('Теги ИИ сброшены к стандартным');
+      showToast(t('set.aiTagsReset', 'Теги ИИ сброшены к стандартным'));
     });
   }
 
@@ -767,7 +768,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     btnResetCurvyTags.addEventListener('click', () => {
       tempCurvyTags = [...DEFAULT_CURVY_TAGS];
       renderSettingsChips();
-      showToast('Слова для «Пышные» сброшены к стандартным');
+      showToast(t('set.curvyReset', 'Слова для «Пышные» сброшены к стандартным'));
     });
   }
 
@@ -775,7 +776,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     btnResetPetiteTags.addEventListener('click', () => {
       tempPetiteTags = [...DEFAULT_PETITE_TAGS];
       renderSettingsChips();
-      showToast('Слова для «Миниатюрные» сброшены к стандартным');
+      showToast(t('set.petiteReset', 'Слова для «Миниатюрные» сброшены к стандартным'));
     });
   }
 
@@ -784,7 +785,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     btnResetFurryTags.addEventListener('click', () => {
       tempFurryTags = [...DEFAULT_FURRY_TAGS];
       renderSettingsChips();
-      showToast('Слова для «Фурри» сброшены к стандартным');
+      showToast(t('set.furryReset', 'Слова для «Фурри» сброшены к стандартным'));
     });
   }
 
@@ -793,7 +794,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     btnResetPregnantTags.addEventListener('click', () => {
       tempPregnantTags = [...DEFAULT_PREGNANT_TAGS];
       renderSettingsChips();
-      showToast('Слова для «Беременность» сброшены к стандартным');
+      showToast(t('set.pregnantReset', 'Слова для «Беременность» сброшены к стандартным'));
     });
   }
 
@@ -802,7 +803,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     btnResetLgbtTags.addEventListener('click', () => {
       tempLgbtTags = [...DEFAULT_LGBT_TAGS];
       renderSettingsChips();
-      showToast('Слова для «ЛГБТ» сброшены к стандартным');
+      showToast(t('set.lgbtReset', 'Слова для «ЛГБТ» сброшены к стандартным'));
     });
   }
 
@@ -816,7 +817,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       state.settings.maxServerCacheMb = val;
       persistSettings({ maxServerCacheMb: val });
       updateStorageUsageInfo();
-      showToast(`Лимит серверного кэша: ${val > 0 ? (val >= 1000 ? (val / 1000).toFixed(1) + ' ГБ' : val + ' МБ') : 'Без ограничений'}`);
+      showToast(t('set.cacheLimitChanged', 'Лимит серверного кэша: {v}').replace('{v}',
+        val > 0 ? (val >= 1000 ? (val / 1000).toFixed(1) + ' ' + t('unit.gb', 'ГБ') : val + ' ' + t('unit.mb', 'МБ')) : t('settings.cacheUnlimited', 'Без ограничений')
+      ));
     });
   }
 
@@ -836,9 +839,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast('Резервная копия скачана');
+        showToast(t('set.backupDownloaded', 'Резервная копия скачана'));
       } catch (err) {
-        showToast('Ошибка при экспорте данных');
+        showToast(t('set.exportFailed', 'Ошибка при экспорте данных'));
       }
     });
   }
@@ -896,15 +899,16 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         tempPetiteTags = state.settings.petiteTags || [...DEFAULT_PETITE_TAGS];
         renderSettingsChips();
 
-        showToast(`Данные загружены: настройки, ${counts.favorites} закладок, ${counts.favoriteAuthors} авторов`);
+        showToast(t('set.importDone', 'Данные загружены: настройки, {favs} закладок, {authors} авторов')
+          .replace('{favs}', counts.favorites).replace('{authors}', counts.favoriteAuthors));
         if (onDataImported) onDataImported();
       } catch (err) {
-        showToast('Ошибка импорта: неверный JSON файл');
+        showToast(t('set.importFailed', 'Ошибка импорта: неверный JSON файл'));
       }
     });
   }
 
-  // Telegram Автобэкап события
+  // Telegram auto-backup events
   const checkTelegramBackupEnabled = document.getElementById('checkTelegramBackupEnabled');
   const telegramBackupForm = document.getElementById('telegramBackupForm');
   const btnTestTelegram = document.getElementById('btnTestTelegram');
@@ -930,19 +934,19 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const chatId = chatInput ? chatInput.value.trim() : '';
 
       if (!token || !chatId) {
-        showToast('Укажите токен бота и Chat ID для проверки связи');
+        showToast(t('set.tgTestNeedsCreds', 'Укажите токен бота и Chat ID для проверки связи'));
         return;
       }
 
       const originalHtml = btnTestTelegram.innerHTML;
       btnTestTelegram.disabled = true;
       btnTestTelegram.classList.add('is-loading');
-      btnTestTelegram.innerHTML = '<span>Проверка...</span>';
+      btnTestTelegram.innerHTML = `<span>${t('set.tgTesting', 'Проверка...')}</span>`;
 
       try {
         const res = await testTelegramConnection(token, chatId);
         if (res.success) {
-          showToast(res.message || 'Связь с ботом успешно установлена!');
+          showToast(res.message || t('set.tgTestOk', 'Связь с ботом успешно установлена!'));
           updateTelegramBackupStatusUI({ 
             ...state.settings, 
             telegramBotToken: token, 
@@ -950,10 +954,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
             telegramBackupEnabled: checkTelegramBackupEnabled ? checkTelegramBackupEnabled.checked : true 
           });
         } else {
-          showToast(`Ошибка: ${res.message || 'Сбой проверки'}`);
+          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || t('set.tgTestFail', 'Сбой проверки')));
         }
       } catch (err) {
-        showToast(`Ошибка: ${err.message || 'Не удалось связаться с сервером'}`);
+        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.serverUnreachable', 'Не удалось связаться с сервером')));
       } finally {
         btnTestTelegram.disabled = false;
         btnTestTelegram.classList.remove('is-loading');
@@ -973,11 +977,11 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const chatId = chatInput ? chatInput.value.trim() : '';
 
       if (!token || !chatId) {
-        showToast('Сначала введите токен бота и Chat ID');
+        showToast(t('set.tgSendNeedsCreds', 'Сначала введите токен бота и Chat ID'));
         return;
       }
 
-      // Сохраняем текущие введенные настройки перед отправкой
+      // Save the currently entered settings before submitting
       const currentSettings = {
         ...state.settings,
         telegramBackupEnabled: enabledCheck ? enabledCheck.checked : false,
@@ -992,22 +996,22 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const originalHtml = btnSendTelegramBackup.innerHTML;
       btnSendTelegramBackup.disabled = true;
       btnSendTelegramBackup.classList.add('is-loading');
-      btnSendTelegramBackup.innerHTML = '<span>Отправка...</span>';
+      btnSendTelegramBackup.innerHTML = `<span>${t('set.tgSending', 'Отправка...')}</span>`;
 
       try {
         const res = await sendTelegramBackupNow();
         if (res.success) {
-          showToast('Резервная копия доставлена в Telegram!');
+          showToast(t('set.tgBackupSent', 'Резервная копия доставлена в Telegram!'));
           if (res.result?.lastBackupAt) {
             state.settings.telegramLastBackupAt = res.result.lastBackupAt;
             saveLocalSettings(state.settings);
             updateTelegramBackupStatusUI(state.settings);
           }
         } else {
-          showToast(`Ошибка: ${res.message || 'Сбой отправки бэкапа'}`);
+          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || t('set.tgSendFail', 'Сбой отправки бэкапа')));
         }
       } catch (err) {
-        showToast(`Ошибка: ${err.message || 'Сбой соединения'}`);
+        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.connLost', 'Сбой соединения')));
       } finally {
         btnSendTelegramBackup.disabled = false;
         btnSendTelegramBackup.classList.remove('is-loading');
@@ -1016,9 +1020,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     });
   }
 
-  document.querySelectorAll('.btn-theme').forEach(btn => {
+  document.querySelectorAll('.btn-theme[data-theme-val]').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.btn-theme').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.btn-theme[data-theme-val]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const themeVal = btn.dataset.themeVal || 'kotobox';
       document.documentElement.setAttribute('data-theme', themeVal);
@@ -1027,9 +1031,22 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     });
   });
 
+  // Language switcher: applies instantly and persists in localStorage (i18n.setLang)
+  document.querySelectorAll('#langOptions .btn-theme').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const langVal = btn.dataset.langVal === 'en' ? 'en' : 'ru';
+      setLang(langVal);
+      document.querySelectorAll('#langOptions .btn-theme').forEach(b => b.classList.toggle('active', b.dataset.langVal === langVal));
+    });
+  });
+  // Reflect the saved language in the switcher on open
+  document.querySelectorAll('#langOptions .btn-theme').forEach(b => {
+    b.classList.toggle('active', (b.dataset.langVal === 'en') === (getLang() === 'en'));
+  });
+
   if (btnSaveSettings) {
     btnSaveSettings.addEventListener('click', async () => {
-      const activeThemeBtn = document.querySelector('.btn-theme.active');
+      const activeThemeBtn = document.querySelector('.btn-theme[data-theme-val].active');
       const theme = activeThemeBtn ? activeThemeBtn.dataset.themeVal : 'kotobox';
 
       const selectItemsPerPage = document.getElementById('selectItemsPerPage');
@@ -1130,14 +1147,14 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
           state.limit = itemsPerPageVal;
           saveLocalSettings(state.settings);
           closeSettingsModal();
-          showToast('Настройки сохранены');
+          showToast(t('set.saved', 'Настройки сохранены'));
           if (onSettingsChanged) onSettingsChanged();
         }
       } catch (err) {
         state.settings = updated;
         state.limit = itemsPerPageVal;
         closeSettingsModal();
-        showToast('Настройки сохранены в браузере');
+        showToast(t('set.savedLocally', 'Настройки сохранены в браузере'));
         if (onSettingsChanged) onSettingsChanged();
       }
     });
@@ -1219,7 +1236,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         telegramLastBackupAt: null,
         enableJsDemuxing: true
       });
-      showToast('Значения сброшены к стандартным');
+      showToast(t('set.allReset', 'Значения сброшены к стандартным'));
     });
   }
 }

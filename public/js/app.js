@@ -69,7 +69,7 @@ import {
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initProfileUI } from './modules/profileUI.js';
-import { initSubscriptionsUI } from './modules/subscriptionsUI.js';
+import { t, applyStaticTranslations } from './i18n.js';
 
 export { isMyLiveDemoHost, isVercelHost, showToast, openDrawer, closeAllDrawers };
 
@@ -78,16 +78,18 @@ let galleryInstance = null;
 let viewerInstance = null;
 let authModalInstance = null;
 let profileUIInstance = null;
-let subscriptionsInstance = null;
 let deferredInstallPrompt = null;
 
 async function init() {
+  // Apply the saved language to all static markup before anything renders
+  applyStaticTranslations();
+
   setDrawerCallbacks({
     onCategoryUIUpdate: updateCategoryTabsUI,
     onCloseSettingsModal: closeSettingsModal
   });
 
-  // 1. Инициализация подсистем и валидация токена
+  // 1. Initialize subsystems and validate the token
   loadLocalAuth();
   if (state.authToken) {
     try {
@@ -109,7 +111,6 @@ async function init() {
       updateHeaderAuthUI();
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
-      subscriptionsInstance?.load();
       selectCategory('profile');
     },
     onLogout: async () => {
@@ -134,9 +135,6 @@ async function init() {
       } else if (type === 'profile-subtab') {
         if (val === 'authors') {
           renderFavoriteAuthors();
-        } else if (val === 'searches') {
-          subscriptionsInstance?.load();
-          performSearch(true);
         } else {
           performSearch(true);
         }
@@ -148,13 +146,8 @@ async function init() {
       updateHeaderAuthUI();
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
-      subscriptionsInstance?.load();
       selectCategory('new');
     }
-  });
-
-  subscriptionsInstance = initSubscriptionsUI({
-    onRunSearch: runSubscriptionSearch
   });
 
   autocompleteInstance = initAutocomplete({
@@ -243,10 +236,10 @@ async function init() {
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
 
-  // 2. Настройка слушателей кнопок
+  // 2. Set up button listeners
   setupEventListeners();
 
-  // 3. Загрузка настроек, избранного, лайков и сайтов параллельно
+  // 3. Load settings, favorites, likes, and sites in parallel
   await Promise.allSettled([
     loadUserSettings(),
     loadFavorites(),
@@ -259,7 +252,7 @@ async function init() {
   updateCategoryTabsUI();
   updateDateFilterUI();
 
-  // 4. Первичный поиск
+  // 4. Initial search
   await performSearch(true);
 }
 
@@ -304,23 +297,7 @@ function handleExploreAuthor(author) {
     autocompleteInstance.renderTagsChips();
   }
   selectCategory('new');
-  showToast(`Поиск работ автора: ${author.displayName || author.name}`);
-}
-
-function runSubscriptionSearch(sub) {
-  if (!sub || !sub.query) return;
-
-  if (sub.site && sub.site !== 'all' && state.sites.some(s => s.id === sub.site)) {
-    state.currentSite = sub.site;
-    updateCurrentSiteLabel();
-    renderSitesBar({ onSelectSite: selectSite });
-    renderMobileSourcesSheet({ onSelectSite: selectSite });
-  }
-
-  state.searchTags = sub.query.split(/\s+/).filter(Boolean);
-  if (autocompleteInstance) autocompleteInstance.renderTagsChips();
-  selectCategory('new');
-  showToast(`Поиск по подписке: ${sub.query}`);
+  showToast(`${t('app.authorSearch', 'Поиск работ автора:')} ${author.displayName || author.name}`);
 }
 
 function selectSite(siteId) {
@@ -522,7 +499,7 @@ async function performSearch(reset = false, options = {}) {
     galleryInstance.showLoading();
   }
 
-  // 👤 Раздел «Профиль» (TikTok style)
+  // 👤 Profile section (TikTok style)
   if (state.currentCategory === 'profile') {
     if (profileUIInstance) profileUIInstance.renderProfile();
     
@@ -531,9 +508,7 @@ async function performSearch(reset = false, options = {}) {
       return;
     }
 
-    if (state.profileSubTab === 'searches') {
-      state.posts = [];
-    } else if (state.profileSubTab === 'favorites') {
+    if (state.profileSubTab === 'favorites') {
       state.posts = [...state.favorites];
     } else if (state.profileSubTab === 'likes') {
       state.posts = [...state.likes];
@@ -572,7 +547,7 @@ async function performSearch(reset = false, options = {}) {
     return;
   }
 
-  // ✨ Раздел рекомендаций «Для вас»
+  // "For you" recommendations section
   if (state.currentCategory === 'recommended') {
     try {
       state.isLoading = true;
@@ -609,10 +584,10 @@ async function performSearch(reset = false, options = {}) {
         if (userInterests.length > 0) {
           const selectedSeeds = [];
 
-          // 1. Сначала берем лучшие парные сид-связки (Автор + Персонаж / Персонаж + Франшиза)
+          // 1. First take the best pair seed combos (Author + Character / Character + Franchise)
           const seedPairs = getUserInterestSeedPairs(8);
           if (seedPairs.length > 0) {
-            // Перемешиваем топ-связки для свежести выдачи
+            // Shuffle top pairs for fresher results
             const shuffledPairs = [...seedPairs].sort(() => Math.random() - 0.5);
             for (const pair of shuffledPairs) {
               if (selectedSeeds.length >= 2) break;
@@ -620,7 +595,7 @@ async function performSearch(reset = false, options = {}) {
             }
           }
 
-          // 2. Дополняем одиночными топ-интересами (топ-15)
+          // 2. Top up with single top interests (top 15)
           const topInterests = userInterests.slice(0, 15);
           const shuffledTop = [...topInterests].sort(() => Math.random() - 0.5);
           for (const item of shuffledTop) {
@@ -859,6 +834,7 @@ async function performSearch(reset = false, options = {}) {
     });
 
     if (res.success && Array.isArray(res.posts)) {
+      state.lastSearchFailed = false;
       if (reset) {
         state.posts = res.posts;
       } else {
@@ -876,7 +852,10 @@ async function performSearch(reset = false, options = {}) {
     renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
   } catch (err) {
     console.error('Ошибка поиска:', err);
-    if (reset) state.posts = [];
+    if (reset) {
+      state.posts = [];
+      state.lastSearchFailed = true;
+    }
     galleryInstance.renderGallery(false);
   } finally {
     state.isLoading = false;
@@ -893,7 +872,7 @@ function setupEventListeners() {
     });
   });
 
-  // Фильтр ИИ
+  // AI filter
   document.querySelectorAll('.ai-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       const filter = pill.dataset.ai;
@@ -904,7 +883,7 @@ function setupEventListeners() {
     });
   });
 
-  // Фильтр Возрастного Рейтинга (SFW / NSFW)
+  // Age rating filter (SFW / NSFW)
   document.querySelectorAll('.rating-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       const rating = pill.dataset.rating;
@@ -915,7 +894,7 @@ function setupEventListeners() {
     });
   });
 
-  // Переключатель Типа контента (Все / Видео / Фото)
+  // Content type switch (All / Video / Photo)
   document.querySelectorAll('.type-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       const type = pill.dataset.type;
@@ -926,7 +905,7 @@ function setupEventListeners() {
     });
   });
 
-  // Фильтр Возраста (Все / Взрослые / Молодые)
+  // Age filter (All / Adult / Young)
   document.querySelectorAll('.age-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       const age = pill.dataset.age;
@@ -937,7 +916,7 @@ function setupEventListeners() {
     });
   });
 
-  // Выпадающий список фильтра по дате
+  // Date filter dropdown
   const dateFilterDropdown = document.getElementById('dateFilterDropdown');
   const btnDateFilterToggle = document.getElementById('btnDateFilterToggle');
   if (btnDateFilterToggle && dateFilterDropdown) {
@@ -980,7 +959,7 @@ function setupEventListeners() {
     });
   }
 
-  // Сортировка видео по длительности
+  // Video duration sorting
   document.querySelectorAll('.video-sort-pill').forEach(pill => {
     pill.addEventListener('click', () => {
       const sort = pill.dataset.sort;
@@ -1020,7 +999,7 @@ function setupEventListeners() {
     });
   }
 
-  // Кнопка «Искать» в сайдбаре
+  // "Search" button in the sidebar
   const btnApplySearch = document.getElementById('btnApplySearch');
   if (btnApplySearch) {
     btnApplySearch.addEventListener('click', () => {
@@ -1033,7 +1012,7 @@ function setupEventListeners() {
     });
   }
 
-  // Логотип
+  // Logo
   const btnLogo = document.getElementById('btnLogo');
   if (btnLogo) {
     btnLogo.addEventListener('click', () => {
@@ -1047,7 +1026,7 @@ function setupEventListeners() {
     });
   }
 
-  // Кнопка Обновить поиск
+  // Refresh search button
   const btnRefreshSearch = document.getElementById('btnRefreshSearch');
   if (btnRefreshSearch) {
     btnRefreshSearch.addEventListener('click', async () => {
@@ -1056,9 +1035,9 @@ function setupEventListeners() {
       try {
         window.scrollTo({ top: 0, behavior: 'smooth' });
         await performSearch(true, { bustCache: true });
-        showToast('Поиск обновлен');
+        showToast(t('app.searchRefreshed', 'Поиск обновлен'));
       } catch (e) {
-        showToast('Ошибка при обновлении поиска');
+        showToast(t('app.searchRefreshFailed', 'Ошибка при обновлении поиска'));
       } finally {
         setTimeout(() => {
           btnRefreshSearch.classList.remove('refreshing');
@@ -1067,12 +1046,12 @@ function setupEventListeners() {
     });
   }
 
-  // Кнопка Перемешать
+  // Shuffle button
   const btnShuffleGallery = document.getElementById('btnShuffleGallery');
   if (btnShuffleGallery) {
     btnShuffleGallery.addEventListener('click', () => {
       if (!state.posts || state.posts.length <= 1) {
-        showToast('Недостаточно постов для перемешивания');
+        showToast(t('app.shuffleNotEnough', 'Недостаточно постов для перемешивания'));
         return;
       }
       for (let i = state.posts.length - 1; i > 0; i--) {
@@ -1081,11 +1060,11 @@ function setupEventListeners() {
       }
       galleryInstance.renderGallery(false, { preserveScroll: true });
       renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
-      showToast('Лента перемешана');
+      showToast(t('app.feedShuffled', 'Лента перемешана'));
     });
   }
 
-  // Подвкладки Избранного
+  // Favorites sub-tabs
   const btnFavSubPosts = document.getElementById('btnFavSubPosts');
   const btnFavSubAuthors = document.getElementById('btnFavSubAuthors');
   const favAuthorsSearchInput = document.getElementById('favAuthorsSearchInput');
@@ -1110,7 +1089,7 @@ function setupEventListeners() {
     });
   }
 
-  // Управление мобильными шторками и сайдбаром
+  // Mobile drawers and sidebar controls
   const drawerBackdrop = document.getElementById('drawerBackdrop');
   const btnCloseSidebar = document.getElementById('btnCloseSidebar');
   const btnCloseCategoriesSheet = document.getElementById('btnCloseCategoriesSheet');
@@ -1196,7 +1175,7 @@ function setupEventListeners() {
     });
   });
 
-  // Мобильный переключатель сетки (1 или 2 колонки)
+  // Mobile grid toggle (1 or 2 columns)
   const btnMobileGridToggle = document.getElementById('btnMobileGridToggle');
   const galleryGrid = document.getElementById('galleryGrid');
   let isMobile1Col = localStorage.getItem('booru_grid_mobile') === '1col';
@@ -1207,13 +1186,13 @@ function setupEventListeners() {
       galleryGrid.classList.add('grid-1col');
       if (btnMobileGridToggle) {
         btnMobileGridToggle.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>`;
-        btnMobileGridToggle.title = 'Режим 1 колонка (нажмите для 2 колонок)';
+        btnMobileGridToggle.title = t('app.gridMode1.title', 'Режим 1 колонка (нажмите для 2 колонок)');
       }
     } else {
       galleryGrid.classList.remove('grid-1col');
       if (btnMobileGridToggle) {
         btnMobileGridToggle.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>`;
-        btnMobileGridToggle.title = 'Режим 2 колонки (нажмите для 1 колонки)';
+        btnMobileGridToggle.title = t('app.gridMode2.title', 'Режим 2 колонки (нажмите для 1 колонки)');
       }
     }
   }
@@ -1226,11 +1205,11 @@ function setupEventListeners() {
       isMobile1Col = !isMobile1Col;
       localStorage.setItem('booru_grid_mobile', isMobile1Col ? '1col' : '2col');
       applyMobileGrid();
-      showToast(isMobile1Col ? 'Сетка: 1 колонка (крупная лента)' : 'Сетка: 2 колонки (компактно)');
+      showToast(isMobile1Col ? t('app.gridMode1.toast', 'Сетка: 1 колонка (крупная лента)') : t('app.gridMode2.toast', 'Сетка: 2 колонки (компактно)'));
     });
   }
 
-  // Десктопный переключатель размера колонок сетки
+  // Desktop grid column size selector
   const desktopGridButtons = document.querySelectorAll('#desktopGridSizeSelector .btn-size');
   let savedDesktopGrid = localStorage.getItem('booru_grid_desktop') || 'medium';
 
@@ -1257,7 +1236,7 @@ function setupEventListeners() {
     });
   }
 
-  // Кнопка «Наверх»
+  // "Scroll to top" button
   const btnScrollToTop = document.getElementById('btnScrollToTop');
   if (btnScrollToTop) {
     window.addEventListener('scroll', () => {
@@ -1273,7 +1252,7 @@ function setupEventListeners() {
     });
   }
 
-  // PWA Установка приложения
+  // PWA app installation
   const pwaInstallGroup = document.getElementById('pwaInstallGroup');
   const btnInstallPwa = document.getElementById('btnInstallPwa');
 
@@ -1289,17 +1268,17 @@ function setupEventListeners() {
         deferredInstallPrompt.prompt();
         const { outcome } = await deferredInstallPrompt.userChoice;
         if (outcome === 'accepted') {
-          showToast('Приложение Booru Explorer устанавливается! 🚀');
+          showToast(t('app.pwaInstalling', 'Приложение Booru Explorer устанавливается'));
           if (pwaInstallGroup) pwaInstallGroup.style.display = 'none';
         }
         deferredInstallPrompt = null;
       } else {
-        showToast('Для установки нажмите «На экран "Домой"» в меню браузера 📱');
+        showToast(t('app.pwaManualInstall', 'Для установки нажмите «На экран "Домой"» в меню браузера'));
       }
     });
   }
 
-  // Регистрация Service Worker для PWA
+  // Service Worker registration for PWA
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js').then((reg) => {
@@ -1331,7 +1310,7 @@ function setupEventListeners() {
     });
   }
 
-  // Закрытие модальных окон по Escape
+  // Close modals on Escape
   const settingsModal = document.getElementById('settingsModal');
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {

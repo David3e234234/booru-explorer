@@ -1,3 +1,5 @@
+import { t } from '../i18n.js';
+
 export const isMyLiveDemoHost = false;
 export const isVercelHost = false;
 
@@ -112,17 +114,17 @@ export function getPostSiteUrl(post) {
 }
 
 export function formatBytes(bytes, decimals = 1) {
-  if (!bytes || isNaN(bytes) || bytes <= 0) return '0 Б';
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '0 ' + t('unit.b', 'Б');
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Б', 'КБ', 'МБ', 'ГБ', 'ТБ'];
+  const sizes = [t('unit.b', 'Б'), t('unit.kb', 'КБ'), t('unit.mb', 'МБ'), t('unit.gb', 'ГБ'), t('unit.tb', 'ТБ')];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   if (i >= sizes.length) return (bytes / Math.pow(k, sizes.length - 1)).toFixed(dm) + ' ' + sizes[sizes.length - 1];
   const val = (bytes / Math.pow(k, i)).toFixed(dm);
   return (val.endsWith('.0') ? val.slice(0, -2) : val) + ' ' + sizes[i];
 }
 
-// Единая проверка видео-расширения (раньше дублировалась в gallery.js, network.js и др.)
+// Single video-extension check (previously duplicated in gallery.js, network.js, etc.)
 export function isVideoMediaUrl(url) {
   if (!url) return false;
   const clean = url.split('?')[0].toLowerCase();

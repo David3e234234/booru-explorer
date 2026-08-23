@@ -19,7 +19,7 @@ export function openDrawer(drawerEl) {
     drawerEl.classList.add('open');
     if (drawerBackdrop) drawerBackdrop.classList.add('active');
 
-    // Подсветка соответствующей вкладки в нижнем баре
+    // Highlight the matching tab in the bottom bar
     document.querySelectorAll('.mobile-nav-item').forEach(item => {
       if (drawerEl === categoriesSheet) item.classList.toggle('active', item.dataset.nav === 'feed');
       else if (drawerEl === sidebarSearch) item.classList.toggle('active', item.dataset.nav === 'filters');

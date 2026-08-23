@@ -1,15 +1,15 @@
 /**
- * Модуль группировки связанных постов (мульти-изображений, Pixiv сетов,
- * вариаций, комиксов и Parent/Child отношений) в единые альбомы.
+ * Module grouping related posts (multi-image sets, Pixiv galleries,
+ * variations, comics, and Parent/Child relations) into unified albums.
  */
 
 import { logInfo, logError } from './logger.js';
 
 /**
- * Извлекает ВСЕ возможные ключи серии/альбома из метаданных поста
- * @param {Object} post - Нормализованный или сырой объект поста
- * @param {string} site - Идентификатор Booru-сайта
- * @returns {Array<string>} Массив ключей связей (Pixiv, Twitter, Parent/Child, Pool, etc.)
+ * Extracts ALL possible series/album keys from post metadata
+ * @param {Object} post - Normalized or raw post object
+ * @param {string} site - Booru site identifier
+ * @returns {Array<string>} Array of relation keys (Pixiv, Twitter, Parent/Child, Pool, etc.)
  */
 export function extractAllSeriesKeys(post, site = '') {
   if (!post) return [];
@@ -18,7 +18,7 @@ export function extractAllSeriesKeys(post, site = '') {
   const source = (post.source || '').trim();
   const tags = Array.isArray(post.tags) ? post.tags : (typeof post.tag_string === 'string' ? post.tag_string.split(/\s+/) : []);
 
-  // 1. Pixiv ID (поиск в source и в тегах)
+  // 1. Pixiv ID (looked up in source and tags)
   const pixivPatterns = [
     /pixiv\.net\/(?:en\/)?artworks\/(\d+)/i,
     /pixiv\.net\/member_illust\.php\?.*illust_id=(\d+)/i,
@@ -56,20 +56,20 @@ export function extractAllSeriesKeys(post, site = '') {
   const patreonMatch = source.match(/patreon\.com\/posts\/(?:[\w-]+-)?(\d+)/i);
   if (patreonMatch && patreonMatch[1]) keys.add(`patreon:${patreonMatch[1]}`);
 
-  // 5. Parent / Child связь Booru (надежный мост между разными источниками)
+  // 5. Booru Parent/Child relation (a reliable bridge between different sources)
   const rawParentId = post.parentId || post.parent_id;
   if (rawParentId && String(rawParentId) !== '0' && String(rawParentId) !== 'null') {
     keys.add(`parent:${siteId}:${String(rawParentId)}`);
   }
 
-  // Если сам пост имеет дочерние элементы
+  // When the post itself has children
   const hasChildren = Boolean(post.hasChildren || post.has_children || post.has_active_children);
   if (hasChildren && (post.originalId || post.id)) {
     const rootId = String(post.originalId || post.id).replace(/^[a-z0-9_]+_/, '');
     keys.add(`parent:${siteId}:${rootId}`);
   }
 
-  // 6. Пул (Pool) - серии/главы
+  // 6. Pool - series/chapters
   const poolId = post.poolId || post.pool_id;
   if (poolId) {
     keys.add(`pool:${siteId}:${String(poolId)}`);
@@ -79,12 +79,12 @@ export function extractAllSeriesKeys(post, site = '') {
 }
 
 /**
- * Извлекает основной нормализованный ключ серии для одиночного поста
+ * Extracts the primary normalized series key for a single post
  */
 export function extractSeriesKey(post, site = '') {
   const keys = extractAllSeriesKeys(post, site);
   if (keys.length === 0) return null;
-  // Приоритеты: pixiv -> parent -> twitter -> остальные
+  // Priority: pixiv -> parent -> twitter -> others
   const pixivKey = keys.find(k => k.startsWith('pixiv:'));
   if (pixivKey) return pixivKey;
   const parentKey = keys.find(k => k.startsWith('parent:'));
@@ -93,17 +93,17 @@ export function extractSeriesKey(post, site = '') {
 }
 
 /**
- * Сортировка страниц внутри сета (по номеру _p0, _p1, родитель на первом месте или по ID)
+ * Sort pages within a set (by _p0/_p1 page number, parent placed first, or by ID)
  */
 function sortAlbumItems(items) {
   return [...items].sort((a, b) => {
-    // 1. Родительский пост всегда идет первым, если у него нет номера страницы
+    // 1. The parent post always goes first unless it has a page number
     const aIsParent = Boolean(a.hasChildren && !a.parentId);
     const bIsParent = Boolean(b.hasChildren && !b.parentId);
     if (aIsParent && !bIsParent) return -1;
     if (!aIsParent && bIsParent) return 1;
 
-    // 2. Проверка явного номера страницы в URL (например, 12345_p0.jpg, 12345_p1.jpg)
+    // 2. Check for an explicit page number in the URL (e.g. 12345_p0.jpg, 12345_p1.jpg)
     const getPageNum = (item) => {
       const target = item.fileUrl || item.sampleUrl || item.previewUrl || item.source || '';
       const pMatch = target.match(/_p(\d+)\./i) || target.match(/page_?(\d+)/i);
@@ -118,7 +118,7 @@ function sortAlbumItems(items) {
       return pageA - pageB;
     }
 
-    // 3. Если нет _p0, сортируем по ID по возрастанию
+    // 3. With no _p0, sort by ascending ID
     const idA = parseInt(String(a.originalId || a.id).replace(/\D/g, ''), 10) || 0;
     const idB = parseInt(String(b.originalId || b.id).replace(/\D/g, ''), 10) || 0;
     return idA - idB;
@@ -126,10 +126,10 @@ function sortAlbumItems(items) {
 }
 
 /**
- * Группирует массив постов в мульти-посты (альбомы) через мульти-ключевой Union-Find
- * @param {Array} posts - Исходный массив постов
- * @param {Object} options - Опции группировки
- * @returns {Array} Массив постов со свернутыми альбомами
+ * Groups an array of posts into multiposts (albums) via a multi-key union-find
+ * @param {Array} posts - Source array of posts
+ * @param {Object} options - Grouping options
+ * @returns {Array} Array of posts with albums collapsed
  */
 export function groupPostsIntoAlbums(posts, options = {}) {
   if (!Array.isArray(posts) || posts.length === 0) return [];
@@ -159,7 +159,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
   const keyToPostIdx = new Map();
   const postKeysList = [];
 
-  // 1. Извлекаем все ключи связей для каждого поста и объединяем связанные посты
+  // 1. Collect all relation keys for each post and union related posts
   posts.forEach((post, idx) => {
     const keys = extractAllSeriesKeys(post, post.site);
     postKeysList[idx] = keys;
@@ -173,7 +173,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
     });
   });
 
-  // 2. Группируем посты по корневым индексам
+  // 2. Group posts by root index
   const clusters = new Map();
   posts.forEach((post, idx) => {
     const root = find(idx);
@@ -186,25 +186,25 @@ export function groupPostsIntoAlbums(posts, options = {}) {
     clusters.get(root).items.push(post);
   });
 
-  // 3. Формируем итоговый список постов
+  // 3. Build the final post list
   const resultMap = new Map();
 
   clusters.forEach((cluster, rootIndex) => {
     const { items } = cluster;
 
     if (items.length > 1) {
-      // Это полноценный альбом из 2+ связанных слайдов
+      // A real album of 2+ linked slides
       const sortedItems = sortAlbumItems(items);
       const rootPost = sortedItems[0];
 
-      // Очищаем вложенные элементы от циклических ссылок
+      // Strip circular references from nested items
       const cleanItems = sortedItems.map(item => {
         const copy = { ...item };
         delete copy.albumItems;
         return copy;
       });
 
-      // Собираем все теги и ключи
+      // Collect all tags and keys
       const allTagsSet = new Set();
       const allKeysSet = new Set();
 
@@ -240,7 +240,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
 
       resultMap.set(rootIndex, albumPost);
     } else {
-      // Одиночный пост
+      // Single post
       const singlePost = { ...items[0] };
       delete singlePost.albumItems;
 
@@ -259,7 +259,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
     }
   });
 
-  // 4. Восстанавливаем порядок
+  // 4. Restore order
   const sortedIndices = Array.from(resultMap.keys()).sort((a, b) => a - b);
   return sortedIndices.map(idx => resultMap.get(idx));
 }

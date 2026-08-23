@@ -41,7 +41,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     }
   }
 
-  // Фильтр рейтинга
+  // Rating filter
   if (ratingFilter === 'nsfw') {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:explicit` : 'rating:explicit';
   } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
@@ -73,7 +73,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
 
   const pid = Math.max(0, page - 1);
 
-  // 1. Попытка через официальный DAPI если есть ключ
+  // 1. Try the official DAPI when an API key is available
   if (settings?.gelbooruApiKey && settings?.gelbooruUserId) {
     const url = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.gelbooruApiKey)}&user_id=${encodeURIComponent(settings.gelbooruUserId)}`;
     try {
@@ -136,7 +136,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     }
   }
 
-  // 2. Универсальный fallback через открытую веб-выдачу Gelbooru HTML
+  // 2. Universal fallback via the public Gelbooru HTML feed
   const htmlUrl = `https://gelbooru.com/index.php?page=post&s=list&tags=${encodeURIComponent(searchTags)}&pid=${pid * 42}`;
   try {
     const res = await fetchSafe(htmlUrl);

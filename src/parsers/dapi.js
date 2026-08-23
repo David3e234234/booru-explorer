@@ -40,7 +40,7 @@ export async function fetchXbooru(params, aiTagsList) {
     }
   }
 
-  // Фильтр рейтинга
+  // Rating filter
   if (ratingFilter === 'nsfw') {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
   } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
@@ -159,7 +159,7 @@ export async function fetchHypnohub(params, aiTagsList) {
     }
   }
 
-  // Фильтр рейтинга
+  // Rating filter
   if (ratingFilter === 'nsfw') {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
   } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
@@ -250,7 +250,7 @@ export async function fetchHypnohub(params, aiTagsList) {
   }
 }
 
-// Нормализация рейтинга TBIB: JSON API возвращает полные слова (safe/questionable/explicit)
+// Normalize TBIB ratings: the JSON API returns full words (safe/questionable/explicit)
 function normalizeTbibRating(raw) {
   const r = String(raw || '').toLowerCase();
   if (r === 'safe' || r === 's') return 's';
@@ -262,7 +262,7 @@ export async function fetchTbib(params, aiTagsList) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('tbib', tags, ageFilter, typeFilter);
-  // TBIB не поддерживает метатеги date:* — вырезаем, иначе выдача пустая
+  // TBIB does not support date:* metatags - strip them or results come back empty
   searchTags = searchTags.replace(/\bdate:\S+/gi, '').trim();
 
   if (category === 'top' || category === 'views' || category === 'recommended') {
@@ -270,7 +270,7 @@ export async function fetchTbib(params, aiTagsList) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
   } else if (category === 'popular') {
-    // Без поддержки date:* «популярное за месяц» сводится к сортировке по скору
+    // Without date:* support, popular-this-month degrades to score sorting
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
@@ -280,7 +280,7 @@ export async function fetchTbib(params, aiTagsList) {
     }
   }
 
-  // Фильтр рейтинга: TBIB принимает только полные слова (rating:safe и т.п.)
+  // Rating filter: TBIB only accepts full words (rating:safe etc.)
   if (ratingFilter === 'nsfw') {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:explicit` : 'rating:explicit';
   } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {

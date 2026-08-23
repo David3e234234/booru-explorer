@@ -1,6 +1,7 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, toggleDislikeLocally, isPostDisliked } from './state.js';
 import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
 import { showToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
+import { t } from './i18n.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh }) {
   const galleryGrid = document.getElementById('galleryGrid');
@@ -91,7 +92,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
   }
 
-  // Бесшовная бесконечная прокрутка
+  // Seamless infinite scrolling
   if ('IntersectionObserver' in window) {
     observer = new IntersectionObserver((entries) => {
       const first = entries[0];
@@ -105,7 +106,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     });
     observer.observe(infiniteScrollTrigger);
 
-    // Мобильный автоплей видео без звука при прокрутке в фокус
+    // Mobile autoplay of muted videos when scrolled into focus
     mobileVideoObserver = new IntersectionObserver((entries) => {
       if (window.innerWidth > 800) return;
       if (state.settings?.videoAutoplayMobile === false) return;
@@ -144,7 +145,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       threshold: 0.5
     });
 
-    // Наблюдатель для определения длительности видео без автоплея
+    // Observer for detecting video duration without autoplay
     videoMetadataObserver = new IntersectionObserver((entries, obs) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
@@ -189,12 +190,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     });
   }
 
-  // ── Виртуализация бесконечной ленты ──
-  // Посты разбиваются на чанки; вне зоны просмотра вместо карточек стоят
-  // легковесные заглушки той же высоты, поэтому скроллбар и позиции стабильны.
+  // ── Infinite feed virtualization ──
+  // Posts are split into chunks; outside the viewport, cards are replaced by
+  // lightweight placeholders of the same height, so the scrollbar and positions stay stable.
   const VIRT_CHUNK_SIZE = 24;
-  const VIRT_MOUNT_MARGIN = 1.5;   // во сколько раз высоты экрана монтируем вперед
-  const VIRT_UNMOUNT_MARGIN = 4;   // гистерезис: размонтируем дальше, чем монтируем
+  const VIRT_MOUNT_MARGIN = 1.5;   // how many screen heights to mount ahead
+  const VIRT_UNMOUNT_MARGIN = 4;   // hysteresis: unmount farther than we mount
   let virtChunks = [];             // [{ els: [], mounted }]
   let virtTotal = 0;
   let virtUpdateScheduled = false;
@@ -343,9 +344,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       btnLoadMore.classList.remove('loading');
     }
 
-    // При активной сортировке и дозагрузке (append=true) необходимо полностью
-    // перерендерить список: новые посты вставляются в середину отсортированного
-    // массива, поэтому нельзя просто добавить их в конец DOM
+    // With active sorting and appending more posts (append=true), the list must be
+    // fully re-rendered: new posts are inserted into the middle of the sorted
+    // array, so they can't just be appended to the end of the DOM
     if (append && state.videoDurationSort && state.videoDurationSort !== 'none') {
       append = false;
     }
@@ -354,9 +355,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     scrollLoader.style.display = 'none';
 
     if (state.currentCategory === 'favorites') {
-      currentSiteLabel.textContent = 'Избранное';
+      currentSiteLabel.textContent = t('gal.labelFavorites', 'Избранное');
     } else if (state.currentCategory === 'profile') {
-      currentSiteLabel.textContent = 'Профиль';
+      currentSiteLabel.textContent = t('gal.labelProfile', 'Профиль');
     } else {
       const siteObj = state.sites.find(s => s.id === state.currentSite);
       currentSiteLabel.textContent = siteObj ? siteObj.name : state.currentSite;
@@ -370,29 +371,30 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       const emptyTitle = emptyState.querySelector('.state-title');
       const emptyDesc = emptyState.querySelector('.state-desc');
 
-      if (state.currentCategory === 'profile') {
+      if (state.lastSearchFailed && state.currentCategory !== 'profile' && state.currentCategory !== 'favorites') {
+        state.lastSearchFailed = false;
+        if (emptyTitle) emptyTitle.textContent = t('gal.errorTitle', 'Не удалось загрузить посты');
+        if (emptyDesc) emptyDesc.textContent = t('gal.errorDesc', 'Проверьте подключение к сети и попробуйте еще раз: нажмите «Искать» или кнопку обновления рядом с ним.');
+      } else if (state.currentCategory === 'profile') {
         if (state.profileSubTab === 'likes') {
-          if (emptyTitle) emptyTitle.textContent = 'Нет понравившихся постов';
-          if (emptyDesc) emptyDesc.textContent = 'Оценивайте посты сердечком в галерее или просмотрщике, чтобы собрать коллекцию.';
+          if (emptyTitle) emptyTitle.textContent = t('gal.emptyLikesTitle', 'Нет понравившихся постов');
+          if (emptyDesc) emptyDesc.textContent = t('gal.emptyLikesDesc', 'Оценивайте посты сердечком в галерее или просмотрщике, чтобы собрать коллекцию.');
         } else if (state.profileSubTab === 'favorites') {
-          if (emptyTitle) emptyTitle.textContent = 'В закладках пока пусто';
-          if (emptyDesc) emptyDesc.textContent = 'Сохраняйте работы в закладки, чтобы быстро возвращаться к ним в любое время.';
+          if (emptyTitle) emptyTitle.textContent = t('gal.emptyFavsTitle', 'В закладках пока пусто');
+          if (emptyDesc) emptyDesc.textContent = t('gal.emptyFavsDesc', 'Сохраняйте работы в закладки, чтобы быстро возвращаться к ним в любое время.');
         } else if (state.profileSubTab === 'authors') {
-          if (emptyTitle) emptyTitle.textContent = 'Нет отслеживаемых авторов';
-          if (emptyDesc) emptyDesc.textContent = 'Добавляйте художников в любимые, чтобы отслеживать их новые работы.';
-        } else if (state.profileSubTab === 'searches') {
-          if (emptyTitle) emptyTitle.textContent = 'Сохраненные поиски';
-          if (emptyDesc) emptyDesc.textContent = 'Настройте подписки на теги в панели выше: новые посты будут отмечаться счетчиком.';
+          if (emptyTitle) emptyTitle.textContent = t('gal.emptyAuthorsTitle', 'Нет отслеживаемых авторов');
+          if (emptyDesc) emptyDesc.textContent = t('gal.emptyAuthorsDesc', 'Добавляйте художников в любимые, чтобы отслеживать их новые работы.');
         }
       } else if (state.currentCategory === 'favorites') {
-        if (emptyTitle) emptyTitle.textContent = 'В избранном пока пусто';
-        if (emptyDesc) emptyDesc.textContent = 'Нажмите на значок закладки на любой карточке, чтобы сохранить пост.';
+        if (emptyTitle) emptyTitle.textContent = t('gal.emptyFavoritesTitle', 'В избранном пока пусто');
+        if (emptyDesc) emptyDesc.textContent = t('gal.emptyFavoritesDesc', 'Нажмите на значок закладки на любой карточке, чтобы сохранить пост.');
       } else {
-        if (emptyTitle) emptyTitle.textContent = 'Ничего не найдено';
-        if (emptyDesc) emptyDesc.textContent = 'Попробуйте изменить теги поиска или переключить Booru-источник.';
+        if (emptyTitle) emptyTitle.textContent = t('gal.noResultsTitle', 'Ничего не найдено');
+        if (emptyDesc) emptyDesc.textContent = t('gal.noResultsDesc', 'Попробуйте изменить теги поиска или переключить Booru-источник.');
       }
 
-      resultsCount.textContent = '0 постов';
+      resultsCount.textContent = t('gal.countPosts', '{n} постов').replace('{n}', '0');
       if (loadMoreContainer) loadMoreContainer.style.display = 'none';
       stopHoverPreview();
       resetVirtualization();
@@ -401,9 +403,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
 
     emptyState.style.display = 'none';
-    resultsCount.textContent = `Загружено: ${postsToDisplay.length} постов`;
+    resultsCount.textContent = t('gal.loadedCount', 'Загружено: {n} постов').replace('{n}', postsToDisplay.length);
 
-    // Отображение кнопки «Загрузить еще»
+    // Show the "Load more" button
     if (loadMoreContainer) {
       if (state.hasMore && state.currentCategory !== 'favorites' && state.currentCategory !== 'profile' && postsToDisplay.length >= 10) {
         loadMoreContainer.style.display = 'flex';
@@ -415,8 +417,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const prevScrollTop = mainContent ? mainContent.scrollTop : 0;
 
     if (!append) {
-      // Полный ререндер: сначала заглушки на все посты (стабильная высота ленты),
-      // затем восстановление прокрутки и монтаж чанков вокруг видимой зоны
+      // Full re-render: first placeholders for all posts (stable feed height),
+      // then restore scroll and mount chunks around the visible area
       stopHoverPreview();
       virtChunks.forEach(chunk => {
         if (!chunk.mounted) return;
@@ -437,7 +439,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
       updateVisibleChunks();
     } else {
-      // Дозагрузка: новые посты получают заглушки, видимые смонтируются сами
+      // Append: new posts get placeholders, visible ones mount themselves
       const startIndex = Math.min(virtTotal, postsToDisplay.length);
       if (startIndex < postsToDisplay.length) {
         buildPlaceholderRange(startIndex, postsToDisplay.length);
@@ -450,7 +452,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    // Авто-дозагрузка: если постов так мало, что нет скроллбара
+    // Auto-load: if there are so few posts that there's no scrollbar
     setTimeout(() => {
       if (state.hasMore && !state.isLoading && state.posts.length > 0 && state.currentCategory !== 'favorites') {
         const hasScrollbar = document.body.scrollHeight > window.innerHeight + 100;
@@ -471,7 +473,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     const isVideoExt = isVideoMediaUrl;
 
-    // Выбор источника превью в соответствии с настройкой качества: 'low', 'medium', 'high', 'original'
+    // Pick the preview source based on the quality setting: 'low', 'medium', 'high', 'original'
     const quality = state.settings?.previewQuality || 'medium';
     let directThumb = '';
 
@@ -503,27 +505,27 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         }
       }
     } else {
-      // Статичные изображения
+      // Static images
       if (quality === 'low') {
-        // Danbooru: 180x180 эскиз, остальные: previewUrl
+        // Danbooru: 180x180 thumbnail, others: previewUrl
         directThumb = (post.site === 'danbooru' && post.thumb180) ? post.thumb180
           : ((!isVideoExt(post.previewUrl) && post.previewUrl) || post.sampleUrl || post.fileUrl || '');
       } else if (quality === 'medium') {
-        // Danbooru: 360x360 вариант напрямую из поля
+        // Danbooru: 360x360 variant straight from the field
         if (post.site === 'danbooru') {
           directThumb = post.thumb360 || post.thumb180 || post.previewUrl || '';
         } else {
           directThumb = (!isVideoExt(post.sampleUrl) && post.sampleUrl) || (!isVideoExt(post.previewUrl) && post.previewUrl) || post.fileUrl || '';
         }
       } else if (quality === 'high') {
-        // Danbooru: 720x720 WebP вариант напрямую из поля
+        // Danbooru: 720x720 WebP variant straight from the field
         if (post.site === 'danbooru') {
           directThumb = post.thumb720 || post.thumbSample || post.thumb360 || post.previewUrl || '';
         } else {
           directThumb = (!isVideoExt(post.sampleUrl) && post.sampleUrl) || post.fileUrl || post.previewUrl || '';
         }
       } else if (quality === 'original') {
-        // Danbooru: полный оригинал напрямую из поля
+        // Danbooru: full original straight from the field
         if (post.site === 'danbooru') {
           directThumb = (!isVideoExt(post.thumbOriginal) && post.thumbOriginal) || post.thumb720 || post.fileUrl || '';
         } else {
@@ -549,9 +551,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     let formatBadge = '';
     if (post.isVideo) {
       if (post.hasSound) {
-        formatBadge = `<span class="badge-format video" style="background-color: var(--accent-primary);">Звук</span>`;
+        formatBadge = `<span class="badge-format video" style="background-color: var(--accent-primary);">${t('gal.badgeSound', 'Звук')}</span>`;
       } else {
-        formatBadge = `<span class="badge-format video">Видео</span>`;
+        formatBadge = `<span class="badge-format video">${t('gal.badgeVideo', 'Видео')}</span>`;
       }
     } else if (post.isGif) {
       formatBadge = `<span class="badge-format gif">GIF</span>`;
@@ -565,7 +567,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    const aiBadge = post.isAi ? `<span class="badge-ai" title="Работа создана с помощью ИИ">ИИ</span>` : '';
+    const aiBadge = post.isAi ? `<span class="badge-ai" title="${t('gal.badgeAi.title', 'Работа создана с помощью ИИ')}">${t('gal.badgeAi', 'ИИ')}</span>` : '';
 
     let ratingBadge = '';
     const r = (post.rating || '').toLowerCase();
@@ -573,16 +575,16 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       ratingBadge = `<span class="badge-format" style="background-color: rgba(244,63,94,0.85);">18+</span>`;
     }
 
-    // Очищаем автора от мусорных суффиксов, но отображаем полное имя автора
+    // Strip junk suffixes from the author but display the full author name
     const rawAuthor = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
     let cleanAuthor = rawAuthor.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
     cleanAuthor = cleanAuthor.replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').replace(/\([^)]*\)$/, '').trim();
-    const authorBadge = cleanAuthor ? `<span class="badge-format author" title="Автор: ${cleanAuthor} (нажмите для поиска)">${cleanAuthor}</span>` : '';
+    const authorBadge = cleanAuthor ? `<span class="badge-format author" title="${t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor)}">${cleanAuthor}</span>` : '';
 
     let durationBadge = '';
     if (post.isVideo && (post.durationText || post.duration > 0)) {
       const durLabel = post.durationText || `${Math.floor(post.duration / 60)}:${Math.floor(post.duration % 60) < 10 ? '0' : ''}${Math.floor(post.duration % 60)}`;
-      durationBadge = `<span class="badge-format badge-duration" title="Длительность: ${durLabel}">${durLabel}</span>`;
+      durationBadge = `<span class="badge-format badge-duration" title="${t('gal.durationBadge.title', 'Длительность: {d}').replace('{d}', durLabel)}">${durLabel}</span>`;
     }
 
     let dateBadge = '';
@@ -594,7 +596,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           const month = String(d.getMonth() + 1).padStart(2, '0');
           const year = String(d.getFullYear()).slice(-2);
           const shortDate = `${day}.${month}.${year}`;
-          dateBadge = `<span class="badge-format badge-date" title="Дата: ${d.toLocaleString('ru-RU')}">${shortDate}</span>`;
+          dateBadge = `<span class="badge-format badge-date" title="${t('gal.dateBadge.title', 'Дата: {d}').replace('{d}', d.toLocaleString(document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU'))}">${shortDate}</span>`;
         }
       } catch (e) {}
     }
@@ -602,15 +604,15 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     let matchBadge = '';
     if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
       const matchedInfo = (Array.isArray(post.matchedTags) && post.matchedTags.length > 0)
-        ? `&#10;💡 Совпало: ${post.matchedTags.join(', ')}`
+        ? `&#10;${t('gal.matchTagsInfo', 'Совпало: {tags}').replace('{tags}', post.matchedTags.join(', '))}`
         : '';
-      matchBadge = `<span class="badge-format match-percent" title="Совпадение со вкусами: ${post.matchPercent}%${matchedInfo}">${post.matchPercent}%</span>`;
+      matchBadge = `<span class="badge-format match-percent" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%</span>`;
     }
 
     let albumBadge = '';
     if (post.isAlbum && post.albumCount > 1) {
       card.classList.add('is-album-card');
-      albumBadge = `<span class="badge-format badge-album" title="Альбом: ${post.albumCount} изображений"><svg width="10" height="10" viewBox="0 0 24 24"><use href="#ic-album"/></svg> <span>${post.albumCount}</span></span>`;
+      albumBadge = `<span class="badge-format badge-album" title="${t('gal.albumBadge.title', 'Альбом: {n} изображений').replace('{n}', post.albumCount)}"><svg width="10" height="10" viewBox="0 0 24 24"><use href="#ic-album"/></svg> <span>${post.albumCount}</span></span>`;
     }
 
     const formatCompactNumber = (num) => {
@@ -662,30 +664,30 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
         <div class="card-overlay-bottom">
           <div class="card-meta-indicators">
-            <div class="card-score" title="Оценка / Рейтинг: ${post.score || 0}">
+            <div class="card-score" title="${t('gal.scoreBadge.title', 'Оценка / Рейтинг: {n}').replace('{n}', post.score || 0)}">
               <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-star-filled"/></svg>
               <span>${post.score || 0}</span>
             </div>
             ${(post.views > 0 || post.viewsText) ? `
-              <div class="card-views" title="Просмотры: ${post.viewsText || post.views}">
+              <div class="card-views" title="${t('gal.viewsBadge.title', 'Просмотры: {n}').replace('{n}', post.viewsText || post.views)}">
                 <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-eye"/></svg>
                 <span>${post.viewsText || formatCompactNumber(post.views)}</span>
               </div>
             ` : (post.favCount > 0 ? `
-              <div class="card-views card-favs" title="В закладках: ${post.favCount}">
+              <div class="card-views card-favs" title="${t('gal.favsBadge.title', 'В закладках: {n}').replace('{n}', post.favCount)}">
                 <svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-bookmark-filled"/></svg>
                 <span>${formatCompactNumber(post.favCount)}</span>
               </div>
             ` : '')}
           </div>
           <div class="card-action-btns">
-            <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="Не интересно (скрыть и меньше рекомендовать)">
+            <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="${t('viewer.dislike.title', 'Не интересно (скрыть и меньше рекомендовать)')}">
               <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-dislike"/></svg>
             </button>
-            <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? 'Убрать лайк' : 'Нравится'}">
+            <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? t('gal.unlike.title', 'Убрать лайк') : t('gal.like.title', 'Нравится')}">
               <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isLiked ? '#ic-heart-filled' : '#ic-heart'}"/></svg>
             </button>
-            <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? 'Удалить из закладок' : 'Сохранить в закладки'}">
+            <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? t('gal.unfav.title', 'Удалить из закладок') : t('gal.fav.title', 'Сохранить в закладки')}">
               <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isFav ? '#ic-bookmark-filled' : '#ic-bookmark'}"/></svg>
             </button>
           </div>
@@ -707,12 +709,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         } else if (post.isVideo && !this.src.includes('/api/video-thumbnail')) {
           this.src = `/api/video-thumbnail?url=${encodeURIComponent(post.sampleUrl || post.fileUrl)}&quality=low`;
         } else {
-          this.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' fill='%231a202e'><rect width='200' height='200'/><text x='50%' y='50%' fill='%2364748b' text-anchor='middle' font-size='12'>🎬 Видео</text></svg>`;
+          this.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' fill='%231a202e'><rect width='200' height='200'/><text x='50%' y='50%' fill='%2364748b' text-anchor='middle' font-size='12'>${t('gal.badgeVideo', 'Видео')}</text></svg>`;
         }
       });
     }
 
-    // Клик-логика обрабатывается делегированием на galleryGrid (см. initGallery)
+    // Click logic is handled via delegation on galleryGrid (see initGallery)
 
     if (post.isVideo) {
       const videoEl = card.querySelector('.hover-video-preview');
@@ -730,11 +732,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
               if (topGroup) {
                 durBadge = document.createElement('span');
                 durBadge.className = 'badge-format badge-duration';
-                durBadge.style.cssText = 'background-color: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
+                durBadge.style.cssText = 'background-color: rgba(12, 9, 6, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
                 topGroup.appendChild(durBadge);
               }
             }
-            if (durBadge) durBadge.textContent = `⏱️ ${post.durationText}`;
+            if (durBadge) durBadge.textContent = post.durationText;
           }
         }, { once: true });
 
@@ -766,7 +768,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     return card;
   }
 
-  // ── Делегирование событий на сетке: один слушатель вместо тысяч на карточках ──
+  // ── Event delegation on the grid: one listener instead of thousands on cards ──
 
   galleryGrid.addEventListener('click', (e) => {
     const card = e.target.closest('.media-card');
@@ -808,7 +810,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     onOpenViewer(parseInt(card.dataset.index, 10));
   });
 
-  // Hover-превью видео через делегирование mouseover/mouseout
+  // Hover video previews via mouseover/mouseout delegation
   let hoverState = { card: null, timer: null, videoEl: null };
 
   function stopHoverPreview() {
@@ -837,7 +839,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (state.settings?.videoAutoplayHover === false) return;
     if (checkHoverPreview && !checkHoverPreview.checked) return;
 
-    // Умная задержка (150 мс), чтобы не перегружать сеть при быстром скролле
+    // Smart delay (150 ms) to avoid hammering the network during fast scrolling
     hoverState = { card, timer: null, videoEl };
     hoverState.timer = setTimeout(() => {
       if (!videoEl.src) {
@@ -870,16 +872,16 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
   async function handleDislikeClick(post, card) {
     toggleDislikeLocally(post);
-    showToast('Пост скрыт из рекомендаций', 'info');
+    showToast(t('gal.postHidden', 'Пост скрыт из рекомендаций'), 'info');
 
-    // Плавное схлопывание карточки
+    // Smoothly collapse the card
     card.classList.add('card-hiding');
     setTimeout(() => {
       state.posts = state.posts.filter(p => p.id !== post.id);
       removeCardFromVirtualFlow(card);
       card.remove();
       const resultsCountEl = document.getElementById('resultsCount');
-      if (resultsCountEl) resultsCountEl.textContent = `${state.posts.length} постов`;
+      if (resultsCountEl) resultsCountEl.textContent = t('gal.countPosts', '{n} постов').replace('{n}', state.posts.length);
     }, 280);
 
     try {
@@ -945,21 +947,21 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     loadingSpinner.style.display = 'none';
     scrollLoader.style.display = 'none';
 
-    currentSiteLabel.textContent = 'Любимые авторы';
+    currentSiteLabel.textContent = t('gal.labelAuthors', 'Любимые авторы');
 
     const stateTitle = emptyState.querySelector('.state-title');
     const stateDesc = emptyState.querySelector('.state-desc');
 
     if (!authorsList || authorsList.length === 0) {
       emptyState.style.display = 'flex';
-      if (stateTitle) stateTitle.textContent = 'Нет сохраненных авторов';
+      if (stateTitle) stateTitle.textContent = t('gal.noSavedAuthors', 'Нет сохраненных авторов');
       if (stateDesc) {
         stateDesc.innerHTML = `
-          <span>У вас пока нет сохраненных авторов в подписках.</span>
+          <span>${t('gal.noAuthorsHint', 'У вас пока нет любимых авторов.')}</span>
           <div style="margin-top: 14px;">
             <button type="button" class="btn-action-primary btn-add-author" id="btnAddAuthorEmpty" style="padding: 9px 18px; font-size: 13px;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              <span>Добавить автора вручную</span>
+              <span>${t('gal.addAuthorManually', 'Добавить автора вручную')}</span>
             </button>
           </div>
         `;
@@ -968,15 +970,15 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           btnEmptyAdd.addEventListener('click', onAddAuthor);
         }
       }
-      resultsCount.textContent = '0 авторов';
+      resultsCount.textContent = t('gal.countAuthors', '{n} авторов').replace('{n}', '0');
       return;
     }
 
     emptyState.style.display = 'none';
-    if (stateTitle) stateTitle.textContent = 'Ничего не найдено';
-    if (stateDesc) stateDesc.textContent = 'Попробуйте изменить теги поиска или переключить Booru-источник.';
+    if (stateTitle) stateTitle.textContent = t('gal.noResultsTitle', 'Ничего не найдено');
+    if (stateDesc) stateDesc.textContent = t('gal.noResultsDesc', 'Попробуйте изменить теги поиска или переключить Booru-источник.');
 
-    resultsCount.textContent = `Авторов в избранном: ${authorsList.length}`;
+    resultsCount.textContent = t('gal.authorsCount', 'Авторов в избранном: {n}').replace('{n}', authorsList.length);
 
     const fragment = document.createDocumentFragment();
     authorsList.forEach(author => {
@@ -992,7 +994,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (!author) return '';
     const quality = state.settings?.previewQuality || 'medium';
 
-    // 1. Ищем подходящую статичную ссылку в соответствии с выбранным качеством
+    // 1. Look for a suitable static URL matching the selected quality
     let candidate = '';
 
     if (quality === 'low') {
@@ -1017,7 +1019,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
                   (!isVideoUrl(author.previewUrl) && author.previewUrl) || '';
     }
 
-    // 2. Если все прямые ссылки пустые или видео, проверяем raw previewUrl
+    // 2. If all direct URLs are empty or videos, check the raw previewUrl
     if (!candidate) {
       const raw = author.previewUrl || author.sampleUrl || author.fileUrl || '';
       if (!raw) return '';
@@ -1028,12 +1030,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       candidate = raw;
     }
 
-    // Если candidate это видео ссылка, транскодируем в /api/video-thumbnail
+    // If the candidate is a video URL, transcode it via /api/video-thumbnail
     if (isVideoUrl(candidate)) {
       return `/api/video-thumbnail?url=${encodeURIComponent(candidate)}&quality=${quality}`;
     }
 
-    // 3. Адаптивное преобразование для Danbooru CDN
+    // 3. Adaptive transformation for the Danbooru CDN
     if (candidate.includes('donmai.us') || (candidate.includes('danbooru') && candidate.includes('/180x180/'))) {
       if (quality === 'low') return candidate.replace(/\/(360x360|720x720|original|sample)\//g, '/180x180/');
       if (quality === 'medium') return candidate.replace(/\/(180x180|720x720|original)\//g, '/360x360/');
@@ -1059,7 +1061,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (author.createdAt) {
       try {
         const d = new Date(author.createdAt);
-        if (!isNaN(d.getTime())) formattedDate = d.toLocaleDateString('ru-RU');
+        if (!isNaN(d.getTime())) formattedDate = d.toLocaleDateString(document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU');
       } catch (e) {}
     }
 
@@ -1069,9 +1071,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         <div class="author-cover-placeholder" style="${preview ? 'display: none;' : ''}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>
         <div class="author-card-gradient"></div>
         <span class="author-card-site-badge">${siteName}</span>
-        <button type="button" class="btn-author-change-cover" title="Сменить обложку автора">
+        <button type="button" class="btn-author-change-cover" title="${t('gal.changeCover.title', 'Сменить обложку автора')}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          <span class="change-cover-text">Обложка</span>
+          <span class="change-cover-text">${t('gal.coverText', 'Обложка')}</span>
         </button>
       </div>
       <div class="author-card-body">
@@ -1083,11 +1085,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           <span>${author.name}</span>
         </div>
         <div class="author-card-actions">
-          <button class="btn-author-explore" title="Открыть работы автора ${author.name}">
+          <button class="btn-author-explore" title="${t('gal.exploreAuthor.title', 'Открыть работы автора {name}').replace('{name}', author.name)}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <span>Смотреть работы</span>
+            <span>${t('gal.viewWorks', 'Смотреть работы')}</span>
           </button>
-          <button class="btn-author-delete" title="Удалить из избранных">
+          <button class="btn-author-delete" title="${t('gal.removeAuthor.title', 'Удалить из избранных')}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
           </button>
         </div>
@@ -1139,11 +1141,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       loadingSpinner.style.display = 'flex';
       emptyState.style.display = 'none';
       scrollLoader.style.display = 'none';
-      resultsCount.textContent = 'Идёт поиск...';
+      resultsCount.textContent = t('gal.searching', 'Идёт поиск...');
     },
     showScrollLoading: () => {
       scrollLoader.style.display = 'flex';
-      resultsCount.textContent = `Загрузка следующих постов...`;
+      resultsCount.textContent = t('gal.loadingMore', 'Загрузка следующих постов...');
     }
   };
 }

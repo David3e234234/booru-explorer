@@ -1,19 +1,20 @@
 import { showToast, copyToClipboard, haptic } from '../modules/uiUtils.js';
+import { t } from '../i18n.js';
 
 export function formatRating(r) {
   const raw = String(r || '').toLowerCase();
   const map = {
-    'g': 'Safe (Безопасный 0+)',
-    'general': 'Safe (Безопасный 0+)',
-    'safe': 'Safe (Безопасный 0+)',
-    's': 'Sensitive (Пикантный 16+)',
-    'sensitive': 'Sensitive (Пикантный 16+)',
-    'q': 'Questionable (Эротика 16+)',
-    'questionable': 'Questionable (Эротика 16+)',
-    'e': 'Explicit (Для взрослых 18+)',
-    'explicit': 'Explicit (Для взрослых 18+)'
+    'g': t('vsb.ratingSafe', 'Safe (Безопасный 0+)'),
+    'general': t('vsb.ratingSafe', 'Safe (Безопасный 0+)'),
+    'safe': t('vsb.ratingSafe', 'Safe (Безопасный 0+)'),
+    's': t('vsb.ratingSensitive', 'Sensitive (Пикантный 16+)'),
+    'sensitive': t('vsb.ratingSensitive', 'Sensitive (Пикантный 16+)'),
+    'q': t('vsb.ratingQuestionable', 'Questionable (Эротика 16+)'),
+    'questionable': t('vsb.ratingQuestionable', 'Questionable (Эротика 16+)'),
+    'e': t('vsb.ratingExplicit', 'Explicit (Для взрослых 18+)'),
+    'explicit': t('vsb.ratingExplicit', 'Explicit (Для взрослых 18+)')
   };
-  return map[raw] || 'Safe (Безопасный 0+)';
+  return map[raw] || t('vsb.ratingSafe', 'Safe (Безопасный 0+)');
 }
 
 export const CATEGORY_ORDER = ['artist', 'copyright', 'character', 'general', 'meta'];
@@ -21,36 +22,31 @@ export const CATEGORY_ORDER = ['artist', 'copyright', 'character', 'general', 'm
 export const CATEGORY_CONFIG = {
   artist: {
     key: 'artist',
-    label: 'Artist',
-    labelRu: 'Художник',
+    label: t('vsb.groupArtist', 'Художник'),
     colorClass: 'category-artist',
     tagClass: 'tag-artist'
   },
   copyright: {
     key: 'copyright',
-    label: 'Copyright',
-    labelRu: 'Серия / Франшиза',
+    label: t('vsb.groupSeries', 'Серия / Франшиза'),
     colorClass: 'category-copyright',
     tagClass: 'tag-copyright'
   },
   character: {
     key: 'character',
-    label: 'Character',
-    labelRu: 'Персонаж',
+    label: t('vsb.groupCharacter', 'Персонаж'),
     colorClass: 'category-character',
     tagClass: 'tag-character'
   },
   general: {
     key: 'general',
-    label: 'General',
-    labelRu: 'Общие теги',
+    label: t('vsb.groupGeneral', 'Общие теги'),
     colorClass: 'category-general',
     tagClass: 'tag-general'
   },
   meta: {
     key: 'meta',
-    label: 'Meta',
-    labelRu: 'Мета-теги',
+    label: t('vsb.groupMeta', 'Мета-теги'),
     colorClass: 'category-meta',
     tagClass: 'tag-meta'
   }
@@ -127,11 +123,11 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
   if (viewerTagsBadgeCount) viewerTagsBadgeCount.textContent = String(validTags.length);
 
   if (validTags.length === 0) {
-    tagsCloud.innerHTML = '<span class="empty-tags-hint">Теги отсутствуют</span>';
+    tagsCloud.innerHTML = `<span class="empty-tags-hint">${t('vsb.noTags', 'Теги отсутствуют')}</span>`;
     return;
   }
 
-  // Группировка тегов по 5 категориям в заданном порядке
+  // Group tags into 5 categories in the given order
   const groups = {
     artist: [],
     copyright: [],
@@ -165,7 +161,7 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
     const groupEl = document.createElement('div');
     groupEl.className = `viewer-tag-group group-${catKey}`;
 
-    // Заголовок категории (Artist, Copyright, Character, General, Meta)
+    // Category header (Artist, Copyright, Character, General, Meta)
     const headerEl = document.createElement('div');
     headerEl.className = 'viewer-tag-group-header';
     headerEl.innerHTML = `
@@ -176,7 +172,7 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
     `;
     groupEl.appendChild(headerEl);
 
-    // Список тегов категории
+    // Category tag list
     const listEl = document.createElement('div');
     listEl.className = 'viewer-tag-group-list';
 
@@ -184,11 +180,11 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
       const rowEl = document.createElement('div');
       rowEl.className = `viewer-tag-row ${config.colorClass}`;
 
-      // 1. Ссылка/название тега (поиск в галерее)
+      // 1. Tag link/name (search in the gallery)
       const tagBtn = document.createElement('button');
       tagBtn.type = 'button';
       tagBtn.className = `viewer-tag-link ${config.colorClass}`;
-      tagBtn.title = `Искать по тегу: ${tag}`;
+      tagBtn.title = t('vsb.searchTagTitle', 'Искать по тегу: {tag}').replace('{tag}', tag);
       tagBtn.innerHTML = `<span class="viewer-tag-text">${tag.replace(/_/g, ' ')}</span>`;
 
       tagBtn.addEventListener('click', (e) => {
@@ -198,12 +194,12 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
         if (onTagSelect) onTagSelect(tag);
       });
 
-      // 2. Кнопка копирования тега справа
+      // 2. Tag copy button on the right
       const copyBtn = document.createElement('button');
       copyBtn.type = 'button';
       copyBtn.className = 'viewer-tag-copy';
-      copyBtn.title = `Скопировать тег "${tag}"`;
-      copyBtn.setAttribute('aria-label', `Скопировать тег ${tag}`);
+      copyBtn.title = t('vsb.copyTagTitle', 'Скопировать тег "{tag}"').replace('{tag}', tag);
+      copyBtn.setAttribute('aria-label', t('vsb.copyTagAria', 'Скопировать тег {tag}').replace('{tag}', tag));
       copyBtn.innerHTML = `
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -217,7 +213,7 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
         haptic(15);
         const copied = await copyToClipboard(tag);
         if (copied) {
-          showToast(`Тег скопирован: ${tag.replace(/_/g, ' ')}`);
+          showToast(t('vsb.tagCopied', 'Тег скопирован: {tag}').replace('{tag}', tag.replace(/_/g, ' ')));
         }
       });
 

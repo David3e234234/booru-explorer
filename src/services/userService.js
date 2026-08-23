@@ -8,7 +8,7 @@ import { logInfo, logError } from '../utils/logger.js';
 export const USERS_DIR = path.join(DATA_DIR, 'users');
 export const USERS_INDEX_FILE = path.join(DATA_DIR, 'users.json');
 
-// Обеспечиваем наличие директории пользователей
+// Ensure the users directory exists
 if (!fs.existsSync(USERS_DIR)) {
   try {
     fs.mkdirSync(USERS_DIR, { recursive: true });
@@ -17,7 +17,7 @@ if (!fs.existsSync(USERS_DIR)) {
   }
 }
 
-// Секретный ключ для подписи токенов (персистентный при перезапусках сервера)
+// Secret key for signing tokens (persists across server restarts)
 function getSessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
   const secretFile = path.join(DATA_DIR, '.session_secret');
@@ -36,7 +36,7 @@ function getSessionSecret() {
 const JWT_SECRET = getSessionSecret();
 
 /**
- * Хэширование пароля через crypto.scryptSync
+ * Hash a password via crypto.scryptSync
  */
 export function hashPassword(password, salt = null) {
   const generatedSalt = salt || crypto.randomBytes(16).toString('hex');
@@ -45,7 +45,7 @@ export function hashPassword(password, salt = null) {
 }
 
 /**
- * Проверка пароля
+ * Verify a password
  */
 export function verifyPassword(password, hash, salt) {
   try {
@@ -57,7 +57,7 @@ export function verifyPassword(password, hash, salt) {
 }
 
 /**
- * Генерация токена авторизации (HMAC-SHA256)
+ * Generate an auth token (HMAC-SHA256)
  */
 export function generateToken(payload, expiresInDays = 30) {
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -74,7 +74,7 @@ export function generateToken(payload, expiresInDays = 30) {
 }
 
 /**
- * Валидация и расшифровка токена
+ * Validate and decode a token
  */
 export function verifyToken(token) {
   try {
@@ -92,7 +92,7 @@ export function verifyToken(token) {
     
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8'));
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return null; // Истек срок действия
+      return null; // expired
     }
     return payload;
   } catch (err) {
@@ -101,21 +101,21 @@ export function verifyToken(token) {
 }
 
 /**
- * Получение списка всех пользователей (индекс)
+ * Get the list of all users (index)
  */
 export function getUsersList() {
   return readJsonFile(USERS_INDEX_FILE, []);
 }
 
 /**
- * Сохранение списка пользователей
+ * Save the user list
  */
 export function saveUsersList(users) {
   return writeJsonFile(USERS_INDEX_FILE, users);
 }
 
 /**
- * Получение пути к персональной папке пользователя
+ * Get the path to a user's personal folder
  */
 export function getUserDataDir(userId) {
   if (!userId) return null;
@@ -129,7 +129,7 @@ export function getUserDataDir(userId) {
 }
 
 /**
- * Поиск пользователя по username (регистронезависимо)
+ * Find a user by username (case-insensitive)
  */
 export function findUserByUsername(username) {
   if (!username) return null;
@@ -139,7 +139,7 @@ export function findUserByUsername(username) {
 }
 
 /**
- * Поиск пользователя по ID
+ * Find a user by ID
  */
 export function findUserById(userId) {
   if (!userId) return null;
@@ -148,7 +148,7 @@ export function findUserById(userId) {
 }
 
 /**
- * Регистрация нового пользователя
+ * Register a new user
  */
 export function registerUser(username, password, initialData = {}) {
   const cleanUsername = (username || '').trim();
@@ -183,7 +183,7 @@ export function registerUser(username, password, initialData = {}) {
   users.push(user);
   saveUsersList(users);
 
-  // Создаем изолированные файлы данных для нового пользователя
+  // Create isolated data files for the new user
   const userDir = getUserDataDir(userId);
   const userSettings = { ...DEFAULT_SETTINGS, ...(initialData.settings || {}) };
   const userFavorites = Array.isArray(initialData.favorites) ? initialData.favorites : [];
@@ -196,8 +196,6 @@ export function registerUser(username, password, initialData = {}) {
   writeJsonFile(path.join(userDir, 'likes.json'), userLikes);
   writeJsonFile(path.join(userDir, 'dislikes.json'), userDislikes);
   writeJsonFile(path.join(userDir, 'favorite_authors.json'), userFavoriteAuthors);
-  writeJsonFile(path.join(userDir, 'subscriptions.json'), []);
-  writeJsonFile(path.join(userDir, 'push_subscriptions.json'), []);
   writeJsonFile(path.join(userDir, 'author_feed_state.json'), {});
   logInfo('Auth', `Зарегистрирован новый пользователь: ${cleanUsername} (ID: ${userId})`);
 
@@ -207,7 +205,7 @@ export function registerUser(username, password, initialData = {}) {
 }
 
 /**
- * Авторизация пользователя
+ * Log a user in
  */
 export function loginUser(username, password) {
   const cleanUsername = (username || '').trim();
@@ -235,7 +233,7 @@ export function loginUser(username, password) {
 }
 
 /**
- * Получение профиля пользователя
+ * Get a user profile
  */
 export function getUserProfile(userId) {
   const user = findUserById(userId);
@@ -245,7 +243,7 @@ export function getUserProfile(userId) {
 }
 
 /**
- * Middleware для аутентификации Express
+ * Express authentication middleware
  */
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'];

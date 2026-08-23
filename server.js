@@ -20,16 +20,15 @@ import mediaRoutes from './src/routes/media.routes.js';
 import userRoutes from './src/routes/user.routes.js';
 import authRoutes from './src/routes/auth.routes.js';
 import { initBackupScheduler } from './src/services/backupService.js';
-import { initSubscriptionScheduler } from './src/services/subscriptionService.js';
 
-// Принудительный выбор IPv4 в первую очередь для надежных сетевых запросов к зарубежным Booru
+// Force IPv4 first for reliable network requests to overseas Booru sites
 if (dns.setDefaultResultOrder) {
   dns.setDefaultResultOrder('ipv4first');
 }
 
 const app = express();
 
-// Защита от аварийного падения сервера при разрывах сетевых потоков
+// Keep the server alive when network streams tear down
 process.on('uncaughtException', (err) => {
   if (err.code === 'ECONNRESET' || err.message?.includes('terminated') || err.message?.includes('aborted')) {
     return;
@@ -41,7 +40,7 @@ process.on('unhandledRejection', (reason) => {
   console.error('[Process UnhandledRejection]', reason);
 });
 
-// Инициализация директорий хранилища и кэша
+// Initialize storage and cache directories
 [DATA_DIR, CACHE_DIR, THUMBS_DIR, VIDEOS_DIR].forEach(dir => {
   try {
     if (!fs.existsSync(dir)) {
@@ -52,12 +51,12 @@ process.on('unhandledRejection', (reason) => {
   }
 });
 
-// Глобальные middleware
+// Global middleware
 app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Отключение кэширования только для API (статика кэшируется браузером)
+// Disable caching for the API only (static assets are cached by the browser)
 app.use('/api', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -65,8 +64,8 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Статика фронтенда: etag + час кэша (раньше был полный запрет кэша —
-// браузер заново скачивал все бандлы при каждом визите)
+// Frontend static assets: etag + one hour of caching (caching used to be fully disabled,
+// so the browser re-downloaded every bundle on each visit)
 const publicDir = path.join(ROOT_DIR, 'public');
 app.use(express.static(publicDir, {
   etag: true,
@@ -78,20 +77,20 @@ app.use(express.static(publicDir, {
   }
 }));
 
-// Подключение модульных роутеров API
+// Mount modular API routers
 app.use('/api/auth', authRoutes);
 app.use('/api', postsRoutes);
 app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);
 
-// SPA Fallback: отдача index.html для всех не-API страниц
+// SPA fallback: serve index.html for all non-API routes
 let spaIndexPath = null;
 
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
     return res.status(404).json({ error: 'Endpoint not found' });
   }
-  // Путь резолвится один раз, а не четырьмя existsSync на каждый запрос
+  // Resolve the path once instead of four existsSync calls per request
   if (spaIndexPath === null) {
     const candidates = [
       path.join(process.cwd(), 'public', 'index.html'),
@@ -106,7 +105,7 @@ app.get('*', (req, res) => {
   res.status(404).send(`index.html not found. CWD: ${process.cwd()}`);
 });
 
-// Запуск HTTP-сервера для локального запуска
+// Start the HTTP server for local runs
 function startServer(port) {
   const srv = app.listen(port, async () => {
     const url = `http://localhost:${port}`;
@@ -136,7 +135,6 @@ function startServer(port) {
 
 if (!isServerless) {
   initBackupScheduler();
-  initSubscriptionScheduler();
   startServer(Number(PORT));
 }
 

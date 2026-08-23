@@ -1,6 +1,7 @@
 import { state } from '../state.js';
 import { getTagCategory, CATEGORY_ORDER, CATEGORY_CONFIG } from '../viewer/viewerSidebar.js';
 import { showToast, copyToClipboard, haptic } from './uiUtils.js';
+import { t } from '../i18n.js';
 
 export function renderSidebarPageTags({ onTagSelect }) {
   const sidebarTagsList = document.getElementById('sidebarTagsList');
@@ -8,7 +9,7 @@ export function renderSidebarPageTags({ onTagSelect }) {
   if (!sidebarTagsList) return;
 
   if (!state.posts || state.posts.length === 0) {
-    sidebarTagsList.innerHTML = '<span class="empty-tags-hint">Теги отсутствуют</span>';
+    sidebarTagsList.innerHTML = `<span class="empty-tags-hint">${t('sbt.noTags', 'Теги отсутствуют')}</span>`;
     if (sidebarTagsCount) sidebarTagsCount.textContent = '0';
     return;
   }
@@ -36,11 +37,11 @@ export function renderSidebarPageTags({ onTagSelect }) {
   sidebarTagsList.innerHTML = '';
 
   if (sortedTags.length === 0) {
-    sidebarTagsList.innerHTML = '<span class="empty-tags-hint">Теги отсутствуют</span>';
+    sidebarTagsList.innerHTML = `<span class="empty-tags-hint">${t('sbt.noTags', 'Теги отсутствуют')}</span>`;
     return;
   }
 
-  // Группируем теги по категориям: Artist -> Copyright -> Character -> General -> Meta
+  // Group tags by category: Artist -> Copyright -> Character -> General -> Meta
   const groups = {
     artist: [],
     copyright: [],
@@ -83,14 +84,14 @@ export function renderSidebarPageTags({ onTagSelect }) {
     items.forEach(({ tag, count }) => {
       const tagEl = document.createElement('div');
       tagEl.className = `sidebar-tag-item ${config.colorClass}`;
-      tagEl.title = `Искать по тегу: ${tag} (${count})`;
+      tagEl.title = t('sbt.searchTag.title', 'Искать по тегу: {tag} ({n})').replace('{tag}', tag).replace('{n}', count);
 
-      // Название тега
+      // Tag name
       const nameEl = document.createElement('span');
       nameEl.className = `s-tag-name ${config.colorClass}`;
       nameEl.textContent = tag.replace(/_/g, ' ');
 
-      // Счетчик
+      // Count
       const countEl = document.createElement('span');
       countEl.className = 's-tag-count';
       countEl.textContent = String(count);

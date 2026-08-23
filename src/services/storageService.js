@@ -5,10 +5,8 @@ import {
   SETTINGS_FILE, 
   FAVORITES_FILE, 
   FAVORITE_AUTHORS_FILE, 
-  LIKES_FILE, 
-  DISLIKES_FILE, 
-  SUBSCRIPTIONS_FILE,
-  PUSH_SUBSCRIPTIONS_FILE,
+  LIKES_FILE,
+  DISLIKES_FILE,
   AUTHOR_FEED_STATE_FILE,
   BROWSER_USER_AGENT,
   DATA_DIR 
@@ -81,8 +79,8 @@ function getUserFilePath(userId, defaultFile, filename) {
   return path.join(userDir, filename);
 }
 
-// Переменные окружения не меняются в рантайме — считываем один раз,
-// а не при каждом вызове getSettings() (он происходит на каждый запрос прокси)
+// Environment variables never change at runtime - read them once,
+// not on every getSettings() call (it runs on every proxy request)
 const ENV_OVERRIDES = (() => {
   const envOverrides = {};
   if (process.env.RULE34_API_KEY) envOverrides.rule34ApiKey = process.env.RULE34_API_KEY;
@@ -163,31 +161,7 @@ export function clearDislikes(userId = null) {
   writeJsonFileAsync(filePath, []);
 }
 
-// Сохраненные поиски / тег-подписки
-export function getSubscriptions(userId = null) {
-  const filePath = getUserFilePath(userId, SUBSCRIPTIONS_FILE, 'subscriptions.json');
-  const data = readJsonFile(filePath, []);
-  return Array.isArray(data) ? data : [];
-}
-
-export function saveSubscriptions(subscriptions, userId = null) {
-  const filePath = getUserFilePath(userId, SUBSCRIPTIONS_FILE, 'subscriptions.json');
-  writeJsonFileAsync(filePath, subscriptions);
-}
-
-// Push-подписки браузеров (endpoints) для отправки уведомлений
-export function getPushSubscriptions(userId = null) {
-  const filePath = getUserFilePath(userId, PUSH_SUBSCRIPTIONS_FILE, 'push_subscriptions.json');
-  const data = readJsonFile(filePath, []);
-  return Array.isArray(data) ? data : [];
-}
-
-export function savePushSubscriptions(subscriptions, userId = null) {
-  const filePath = getUserFilePath(userId, PUSH_SUBSCRIPTIONS_FILE, 'push_subscriptions.json');
-  writeJsonFileAsync(filePath, subscriptions);
-}
-
-// Состояние проверки авторов: { "site:name": { lastCheckedAt, knownIds, newIds } }
+// Author-check state: { "site:name": { lastCheckedAt, knownIds, newIds } }
 export function getAuthorFeedState(userId = null) {
   const filePath = getUserFilePath(userId, AUTHOR_FEED_STATE_FILE, 'author_feed_state.json');
   const data = readJsonFile(filePath, {});

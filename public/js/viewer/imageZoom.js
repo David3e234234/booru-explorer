@@ -51,7 +51,7 @@ export function setupImageZoom(img, { showToast } = {}) {
     const curW = imgNaturalW * zoomLevel;
     const curH = imgNaturalH * zoomLevel;
 
-    // Максимально допустимое панорамирование (половина видимого превышения) + мягкий запас 40px
+    // Maximum allowed panning (half of the visible overflow) + soft 40px margin
     const maxPanX = Math.max(0, (curW - contRect.width) / 2) + 40;
     const maxPanY = Math.max(0, (curH - contRect.height) / 2) + 40;
 
@@ -113,14 +113,14 @@ export function setupImageZoom(img, { showToast } = {}) {
     updateTransform(false);
   }
 
-  // Зум колесиком мыши с фокусом на курсоре
+  // Mouse wheel zoom focused on the cursor
   const onWheel = (e) => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.25 : 0.8;
     zoomToPoint(zoomLevel * factor, e.clientX, e.clientY, true);
   };
 
-  // Перетаскивание мышью
+  // Mouse dragging
   const onMouseDown = (e) => {
     if (zoomLevel > 1.02 && e.button === 0) {
       isMouseDragging = true;
@@ -152,7 +152,7 @@ export function setupImageZoom(img, { showToast } = {}) {
     toggleDoubleTapZoom(e.clientX, e.clientY);
   };
 
-  // Сенсорные события для панорамирования и pinch-зума
+  // Touch events for panning and pinch zoom
   const onTouchStart = (e) => {
     if (e.touches.length === 1 && zoomLevel > 1.05) {
       isTouchDragging = true;

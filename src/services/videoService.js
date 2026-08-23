@@ -25,8 +25,8 @@ export async function handleVideoThumbnailRequest(req, res) {
       return res.sendFile(thumbPath);
     }
 
-    // Дедупликация: галерея запрашивает одно превью несколькими параллельными запросами.
-    // Без этого на каждую карточку видео spawn'ится отдельный FFmpeg-процесс.
+    // Dedupe: the gallery requests one thumbnail via several parallel requests.
+    // Without this, every video card spawns its own FFmpeg process.
     if (activeThumbnails.has(hash)) {
       const ok = await activeThumbnails.get(hash).catch(() => false);
       if (ok && fs.existsSync(thumbPath)) {
@@ -166,7 +166,7 @@ export async function handleTranscodeVideoRequest(req, res) {
 
       const proc = spawn('ffmpeg', args);
 
-      // Хвост stderr нужен, чтобы отличить недоступный источник от нашей поломки
+      // The stderr tail tells an unavailable source apart from a failure on our side
       let stderrTail = '';
       proc.stderr?.on('data', (chunk) => {
         stderrTail = `${stderrTail}${chunk}`.slice(-500);
@@ -209,7 +209,7 @@ export async function handleTranscodeVideoRequest(req, res) {
       await transcodePromise;
       return res.sendFile(videoPath, { acceptRanges: true });
     } finally {
-      // Раньше при ошибке запись оставалась в Map навсегда (утечка отклонённых промисов)
+      // Previously an errored entry stayed in the Map forever (leaked rejected promises)
       if (activeTranscodes.get(hash) === transcodePromise) {
         activeTranscodes.delete(hash);
       }
@@ -217,7 +217,7 @@ export async function handleTranscodeVideoRequest(req, res) {
   } catch (err) {
     logError('FFmpeg', `Ошибка транскодирования ${targetUrl}`, err);
     if (!res.headersSent) {
-      // Недоступный источник (троттлинг, протухшая ссылка) это 503, а не наша ошибка
+      // An unavailable source (throttling, stale link) is a 503, not our error
       const upstreamIssue = /\b(?:HTTP error|Server returned)\s+\d{3}\b|\b429\b|Connection (?:refused|timed out)|Failed to resolve|Invalid data found/.test(String(err.message));
       if (upstreamIssue) {
         return res.status(503).send('Источник видео недоступен (лимит запросов или истекшая ссылка), попробуйте позже');
