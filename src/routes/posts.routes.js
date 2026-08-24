@@ -12,7 +12,7 @@ import {
 import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js';
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
-import { getCreatorsDirectory } from '../parsers/pawchive.js';
+import { getCreatorsDirectory, fetchPawchivePostById } from '../parsers/pawchive.js';
 import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
 import { fetchSafe } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
@@ -214,6 +214,25 @@ router.get('/posts/album', async (req, res) => {
     if (seriesKey.startsWith('pixiv:') && foundPostsMap.size === 0) {
       const pixivId = seriesKey.replace('pixiv:', '');
       await fetchAndCollect(`pixiv_id:${pixivId}`);
+    }
+
+    if ((site === 'pawchive' || seriesKey.startsWith('pawchive:')) && foundPostsMap.size === 0) {
+      const pawchiveMatch = seriesKey.match(/^pawchive:([^:]+):([^:]+):(\d+)$/) ||
+        (req.query.postUrl || '').match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
+      const targetPostId = pawchiveMatch ? pawchiveMatch[3] : (originalId || parentId || '').replace(/^pawchive_/, '').split('_')[0];
+      const targetService = pawchiveMatch ? pawchiveMatch[1] : null;
+      const targetUser = pawchiveMatch ? pawchiveMatch[2] : null;
+
+      const pPost = await fetchPawchivePostById(targetPostId, targetService, targetUser, aiTagsList, settings);
+      if (pPost && Array.isArray(pPost.albumItems) && pPost.albumItems.length > 0) {
+        pPost.albumItems.forEach(item => {
+          if (item && item.id && !foundPostsMap.has(item.id)) {
+            const clean = { ...item };
+            delete clean.albumItems;
+            foundPostsMap.set(item.id, clean);
+          }
+        });
+      }
     }
 
     let items = Array.from(foundPostsMap.values());

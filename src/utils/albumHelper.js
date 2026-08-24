@@ -46,15 +46,26 @@ export function extractAllSeriesKeys(post, site = '') {
     keys.add(`bsky:${bskyMatch[1]}`);
   }
 
-  // 4. Fanbox / Fantia / Patreon
-  const fanboxMatch = source.match(/fanbox\.cc\/(?:@[\w-]+|[\w-]+)\/posts\/(\d+)/i);
+  // 4. Fanbox / Fantia / Patreon / Pawchive
+  const fanboxMatch = source.match(/(?:fanbox\.cc\/(?:@[\w-]+|[\w-]+)\/posts\/|fanbox\/user\/\d+\/post\/)(\d+)/i);
   if (fanboxMatch && fanboxMatch[1]) keys.add(`fanbox:${fanboxMatch[1]}`);
 
-  const fantiaMatch = source.match(/fantia\.jp\/posts\/(\d+)/i);
+  const fantiaMatch = source.match(/(?:fantia\.jp\/posts\/|fantia\/user\/\d+\/post\/)(\d+)/i);
   if (fantiaMatch && fantiaMatch[1]) keys.add(`fantia:${fantiaMatch[1]}`);
 
-  const patreonMatch = source.match(/patreon\.com\/posts\/(?:[\w-]+-)?(\d+)/i);
+  const patreonMatch = source.match(/(?:patreon\.com\/posts\/(?:[\w-]+-)?|patreon\/user\/\d+\/post\/)(\d+)/i);
   if (patreonMatch && patreonMatch[1]) keys.add(`patreon:${patreonMatch[1]}`);
+
+  const pawchiveMatch = source.match(/pawchive\.pw\/([a-z0-9_-]+)\/user\/(\d+)\/post\/(\d+)/i);
+  if (pawchiveMatch) {
+    keys.add(`pawchive:${pawchiveMatch[1]}:${pawchiveMatch[2]}:${pawchiveMatch[3]}`);
+    keys.add(`${pawchiveMatch[1]}:${pawchiveMatch[3]}`);
+  }
+
+  if (post.seriesKey) keys.add(post.seriesKey);
+  if (Array.isArray(post.allSeriesKeys)) {
+    post.allSeriesKeys.forEach(k => { if (k) keys.add(k); });
+  }
 
   // 5. Booru Parent/Child relation (a reliable bridge between different sources)
   const rawParentId = post.parentId || post.parent_id;
@@ -84,11 +95,13 @@ export function extractAllSeriesKeys(post, site = '') {
 export function extractSeriesKey(post, site = '') {
   const keys = extractAllSeriesKeys(post, site);
   if (keys.length === 0) return null;
-  // Priority: pixiv -> parent -> twitter -> others
+  // Priority: pixiv -> parent -> pawchive -> twitter -> others
   const pixivKey = keys.find(k => k.startsWith('pixiv:'));
   if (pixivKey) return pixivKey;
   const parentKey = keys.find(k => k.startsWith('parent:'));
   if (parentKey) return parentKey;
+  const pawchiveKey = keys.find(k => k.startsWith('pawchive:'));
+  if (pawchiveKey) return pawchiveKey;
   return keys[0];
 }
 
@@ -193,8 +206,17 @@ export function groupPostsIntoAlbums(posts, options = {}) {
     const { items } = cluster;
 
     if (items.length > 1) {
-      // A real album of 2+ linked slides
-      const sortedItems = sortAlbumItems(items);
+      // Multiple items clustered together
+      const flattenedItems = [];
+      items.forEach(item => {
+        if (item.isAlbum && Array.isArray(item.albumItems) && item.albumItems.length > 0) {
+          flattenedItems.push(...item.albumItems);
+        } else {
+          flattenedItems.push(item);
+        }
+      });
+
+      const sortedItems = sortAlbumItems(flattenedItems);
       const rootPost = sortedItems[0];
 
       // Strip circular references from nested items
@@ -222,6 +244,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
 
       const primaryKey = Array.from(allKeysSet).find(k => k.startsWith('pixiv:')) ||
                          Array.from(allKeysSet).find(k => k.startsWith('parent:')) ||
+                         Array.from(allKeysSet).find(k => k.startsWith('pawchive:')) ||
                          Array.from(allKeysSet)[0] || '';
 
       const albumPost = {
@@ -242,18 +265,26 @@ export function groupPostsIntoAlbums(posts, options = {}) {
     } else {
       // Single post
       const singlePost = { ...items[0] };
-      delete singlePost.albumItems;
-
       const keys = postKeysList[rootIndex] || [];
       const hasChildren = Boolean(singlePost.hasChildren || singlePost.has_children || singlePost.has_active_children);
       const hasParent = Boolean(singlePost.parentId && String(singlePost.parentId) !== '0');
-      const hasExternalSet = keys.some(k => k.startsWith('pixiv:') || k.startsWith('twitter:') || k.startsWith('fanbox:'));
+      const hasExternalSet = keys.some(k => k.startsWith('pixiv:') || k.startsWith('twitter:') || k.startsWith('fanbox:') || k.startsWith('pawchive:'));
 
-      singlePost.isAlbum = false;
-      singlePost.albumCount = 1;
-      singlePost.seriesKey = keys[0] || null;
-      singlePost.allSeriesKeys = keys;
-      singlePost.canFetchAlbum = Boolean(hasChildren || hasParent || hasExternalSet);
+      if (singlePost.isAlbum && Array.isArray(singlePost.albumItems) && singlePost.albumItems.length > 1) {
+        // Already an album (e.g. multi-media post from parser)
+        singlePost.isAlbum = true;
+        singlePost.albumCount = singlePost.albumItems.length;
+        singlePost.seriesKey = singlePost.seriesKey || keys[0] || null;
+        singlePost.allSeriesKeys = (Array.isArray(singlePost.allSeriesKeys) && singlePost.allSeriesKeys.length > 0) ? singlePost.allSeriesKeys : keys;
+        singlePost.canFetchAlbum = true;
+      } else {
+        delete singlePost.albumItems;
+        singlePost.isAlbum = false;
+        singlePost.albumCount = 1;
+        singlePost.seriesKey = keys[0] || null;
+        singlePost.allSeriesKeys = keys;
+        singlePost.canFetchAlbum = Boolean(hasChildren || hasParent || hasExternalSet);
+      }
 
       resultMap.set(rootIndex, singlePost);
     }

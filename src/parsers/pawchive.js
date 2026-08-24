@@ -8,6 +8,21 @@ let creatorsCache = null;
 let creatorsCacheTime = 0;
 const CREATORS_CACHE_TTL = 3600 * 1000; // 1 hour
 
+const PAWCHIVE_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif']);
+const PAWCHIVE_VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v']);
+
+function isPawchiveVisualMedia(nameOrPath) {
+  if (!nameOrPath) return false;
+  const ext = nameOrPath.split('?')[0].split('.').pop()?.toLowerCase();
+  return PAWCHIVE_IMAGE_EXTS.has(ext) || PAWCHIVE_VIDEO_EXTS.has(ext);
+}
+
+const STOP_TITLE_WORDS = new Set([
+  'psd', 'clip', 'sai', 'c4d', 'blend', 'zip', 'rar', '7z', 'tar', 'r18', 'nsfw', 'sfw', 
+  'reward', 'pack', 'tier', 'wip', 'sketch', 'vol', 'part', 'set', 'ver', 'version', 
+  'alt', 'the', 'and', 'for', 'with', 'from', 'free', 'fanbox', 'patreon', 'fantia', 'boosty'
+]);
+
 /**
  * Fetches and caches creator directory from Pawchive
  */
@@ -77,6 +92,204 @@ export async function resolvePawchiveAuthor(authorQuery) {
 }
 
 /**
+ * Normalizes a single Pawchive post item into standard BooruExp post structure
+ */
+export async function normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList = []) {
+  if (!item || !item.id) return null;
+
+  // Filter attachments to valid visual media (exclude zips, psds, etc.)
+  const validAttachments = Array.isArray(item.attachments)
+    ? item.attachments.filter(a => a && a.path && isPawchiveVisualMedia(a.name || a.path))
+    : [];
+
+  const mediaFiles = [];
+  if (item.file && item.file.path) {
+    const isCoverMedia = isPawchiveVisualMedia(item.file.name || item.file.path) || Boolean(item.file.preview_only || item.has_full === false);
+    if (isCoverMedia) {
+      mediaFiles.push(item.file);
+    }
+  }
+
+  for (const att of validAttachments) {
+    if (!mediaFiles.some(m => m.path === att.path)) {
+      mediaFiles.push(att);
+    }
+  }
+
+  // Fallback if no media matched regex but file/attachments exist
+  if (mediaFiles.length === 0) {
+    if (item.file && item.file.path) {
+      mediaFiles.push(item.file);
+    } else if (validAttachments.length > 0) {
+      mediaFiles.push(...validAttachments);
+    } else if (Array.isArray(item.attachments) && item.attachments.length > 0 && item.attachments[0]?.path) {
+      mediaFiles.push(item.attachments[0]);
+    } else {
+      return null;
+    }
+  }
+
+  const creatorInfo = creatorMap ? creatorMap.get(`${item.service}:${item.user}`) : null;
+  const authorName = creatorInfo ? creatorInfo.name : (resolvedCreator?.name || `user_${item.user}`);
+  const authorTag = authorName.toLowerCase().replace(/[\s_.-]+/g, '_');
+  const postUrl = `https://pawchive.pw/${item.service}/user/${item.user}/post/${item.id}`;
+
+  // Extract tags from service, creator name, and words in title
+  const extractedTags = [
+    item.service || 'pawchive',
+    `user_${item.user}`,
+    `artist:${authorTag}`
+  ];
+  if (authorTag && !extractedTags.includes(authorTag)) {
+    extractedTags.push(authorTag);
+  }
+
+  if (item.title) {
+    const titleWords = item.title
+      .replace(/[^\p{L}\p{N}_]+/gu, ' ')
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !STOP_TITLE_WORDS.has(w));
+    for (const w of titleWords.slice(0, 10)) {
+      if (!extractedTags.includes(w)) extractedTags.push(w);
+    }
+  }
+
+  const isAi = checkIsAi(extractedTags, aiTagsList);
+  const { tagDetails } = await classifyPostTags(extractedTags, postUrl, authorName);
+  tagDetails.artist = [authorName];
+  const createdAt = normalizeDate(item.published || item.added);
+
+  const seriesKey = `pawchive:${item.service}:${item.user}:${item.id}`;
+  const allSeriesKeys = [seriesKey, `${item.service}:${item.id}`];
+
+  // Build complete albumItems array for all visual slides
+  const albumItems = mediaFiles.map((m, idx) => {
+    const rawFileName = m.name || `file_${idx + 1}`;
+    const isVid = isVideoMediaUrl(rawFileName) || /\.(mp4|webm|mov|m4v)$/i.test(rawFileName || m.path);
+    const isGif = (rawFileName || m.path || '').toLowerCase().endsWith('.gif');
+    const isPrevOnly = Boolean(m.preview_only || item.has_full === false);
+    const fileExt = (rawFileName || m.path || '').split('.').pop()?.toLowerCase() || (isVid ? 'mp4' : 'jpg');
+    const fileUrl = isPrevOnly
+      ? `https://img.pawchive.pw/thumbnail/data${m.path}`
+      : `https://file.pawchive.pw/data${m.path}?f=${encodeURIComponent(rawFileName)}`;
+    const previewUrlRaw = `https://img.pawchive.pw/thumbnail/data${m.path}`;
+    const sampleUrl = isPrevOnly ? previewUrlRaw : fileUrl;
+    const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVid);
+
+    return {
+      id: `pawchive_${item.id}_${idx + 1}`,
+      originalId: `${item.id}_${idx + 1}`,
+      site: 'pawchive',
+      siteName: 'Pawchive',
+      previewUrl,
+      sampleUrl,
+      fileUrl,
+      thumb180: previewUrl,
+      thumb360: previewUrl,
+      thumb720: previewUrl,
+      fileExt,
+      isVideo: isVid,
+      isGif,
+      hasSound: false,
+      author: authorName,
+      title: item.title || '',
+      tags: extractedTags,
+      tagDetails,
+      score: 0,
+      rating: 'e',
+      width: 0,
+      height: 0,
+      source: postUrl,
+      postUrl,
+      parentId: `pawchive_${item.id}`,
+      createdAt,
+      isAi
+    };
+  });
+
+  const mainMedia = albumItems[0];
+  const hasMultiple = albumItems.length > 1;
+
+  return {
+    id: `pawchive_${item.id}`,
+    originalId: String(item.id),
+    site: 'pawchive',
+    siteName: 'Pawchive',
+    previewUrl: mainMedia.previewUrl,
+    sampleUrl: mainMedia.sampleUrl,
+    fileUrl: mainMedia.fileUrl,
+    thumb180: mainMedia.thumb180,
+    thumb360: mainMedia.thumb360,
+    thumb720: mainMedia.thumb720,
+    fileExt: mainMedia.fileExt,
+    isVideo: mainMedia.isVideo,
+    isGif: mainMedia.isGif,
+    hasSound: mainMedia.hasSound,
+    author: authorName,
+    title: item.title || '',
+    tags: extractedTags,
+    tagDetails,
+    score: 0,
+    rating: 'e',
+    width: 0,
+    height: 0,
+    source: postUrl,
+    postUrl,
+    parentId: null,
+    hasChildren: hasMultiple,
+    isAlbum: hasMultiple,
+    albumCount: albumItems.length,
+    albumItems: hasMultiple ? albumItems : undefined,
+    seriesKey: hasMultiple ? seriesKey : (allSeriesKeys[0] || null),
+    allSeriesKeys,
+    canFetchAlbum: hasMultiple,
+    createdAt,
+    isAi
+  };
+}
+
+/**
+ * Fetches single Pawchive post by ID and service/user
+ */
+export async function fetchPawchivePostById(postId, service, user, aiTagsList = [], settings = {}) {
+  if (!postId) return null;
+  try {
+    let targetService = service;
+    let targetUser = user;
+
+    if (!targetService || !targetUser) {
+      const { list } = await getCreatorsDirectory();
+      // If service or user missing, try searching
+      const resSearch = await fetchSafe(`https://pawchive.pw/api/v1/posts?q=${encodeURIComponent(postId)}`, { timeout: 10000 });
+      if (resSearch.ok) {
+        const found = await resSearch.json();
+        const p = Array.isArray(found) ? found.find(x => String(x.id) === String(postId)) : null;
+        if (p) {
+          targetService = p.service;
+          targetUser = p.user;
+        }
+      }
+    }
+
+    if (!targetService || !targetUser) return null;
+
+    const url = `https://pawchive.pw/api/v1/${targetService}/user/${targetUser}/post/${postId}`;
+    const res = await fetchSafe(url, { timeout: 10000 });
+    if (!res.ok) return null;
+    const item = await res.json();
+    if (!item || !item.id) return null;
+
+    const { map: creatorMap } = await getCreatorsDirectory();
+    return await normalizePawchivePost(item, creatorMap, null, aiTagsList);
+  } catch (err) {
+    logError('Pawchive', `Failed to fetch post ${postId}`, err);
+    return null;
+  }
+}
+
+/**
  * Fetches posts from Pawchive API
  */
 export async function fetchPawchive(params, aiTagsList, settings) {
@@ -143,125 +356,7 @@ export async function fetchPawchive(params, aiTagsList, settings) {
     const { map: creatorMap } = await getCreatorsDirectory();
 
     const results = await Promise.all(items.map(async item => {
-      if (!item || !item.id) return null;
-
-      // Extract main media file or first image/video attachment
-      let mainFile = item.file && item.file.path ? item.file : null;
-      if (!mainFile && Array.isArray(item.attachments) && item.attachments.length > 0) {
-        mainFile = item.attachments.find(a => a && a.path && /\.(jpe?g|png|webp|gif|mp4|webm|mov)$/i.test(a.name || a.path)) || item.attachments[0];
-      }
-
-      if (!mainFile || !mainFile.path) {
-        return null;
-      }
-
-      const rawFileName = mainFile.name || 'file';
-      const isMainPreviewOnly = Boolean(mainFile.preview_only || item.has_full === false);
-      const fileUrl = isMainPreviewOnly
-        ? `https://img.pawchive.pw/thumbnail/data${mainFile.path}`
-        : `https://file.pawchive.pw/data${mainFile.path}?f=${encodeURIComponent(rawFileName)}`;
-      const previewUrlRaw = `https://img.pawchive.pw/thumbnail/data${mainFile.path}`;
-      const sampleUrl = `https://img.pawchive.pw/thumbnail/data${mainFile.path}`;
-
-      const creatorInfo = creatorMap ? creatorMap.get(`${item.service}:${item.user}`) : null;
-      const authorName = creatorInfo ? creatorInfo.name : (resolvedCreator?.name || `user_${item.user}`);
-      const authorTag = authorName.toLowerCase().replace(/[\s_.-]+/g, '_');
-      const postUrl = `https://pawchive.pw/${item.service}/user/${item.user}/post/${item.id}`;
-
-      // Extract tags from service, creator name, and words in title
-      const extractedTags = [
-        item.service || 'pawchive',
-        `user_${item.user}`,
-        `artist:${authorTag}`
-      ];
-      if (authorTag && !extractedTags.includes(authorTag)) {
-        extractedTags.push(authorTag);
-      }
-
-      const STOP_TITLE_WORDS = new Set([
-        'psd', 'clip', 'sai', 'c4d', 'blend', 'zip', 'rar', '7z', 'tar', 'r18', 'nsfw', 'sfw', 
-        'reward', 'pack', 'tier', 'wip', 'sketch', 'vol', 'part', 'set', 'ver', 'version', 
-        'alt', 'the', 'and', 'for', 'with', 'from', 'free', 'fanbox', 'patreon', 'fantia', 'boosty'
-      ]);
-
-      if (item.title) {
-        const titleWords = item.title
-          .replace(/[^\p{L}\p{N}_]+/gu, ' ')
-          .trim()
-          .toLowerCase()
-          .split(/\s+/)
-          .filter(w => w.length > 2 && !STOP_TITLE_WORDS.has(w));
-        for (const w of titleWords.slice(0, 10)) {
-          if (!extractedTags.includes(w)) extractedTags.push(w);
-        }
-      }
-
-      const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', extractedTags);
-      const isPostVideo = isVideo || isVideoMediaUrl(rawFileName);
-      const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isPostVideo);
-      const isAi = checkIsAi(extractedTags, aiTagsList);
-      const { tagDetails } = await classifyPostTags(extractedTags, postUrl, authorName);
-      tagDetails.artist = [authorName];
-      const createdAt = normalizeDate(item.published || item.added);
-
-      // Build albumItems if multiple media items exist in the post
-      const albumItems = [];
-      if (item.file && item.file.path) {
-        const isVid = isVideoMediaUrl(item.file.name);
-        const isCoverPreviewOnly = Boolean(item.file.preview_only || item.has_full === false);
-        albumItems.push({
-          fileUrl: isCoverPreviewOnly
-            ? `https://img.pawchive.pw/thumbnail/data${item.file.path}`
-            : `https://file.pawchive.pw/data${item.file.path}?f=${encodeURIComponent(item.file.name || 'file')}`,
-          previewUrl: `https://img.pawchive.pw/thumbnail/data${item.file.path}`,
-          name: item.file.name || 'Cover',
-          isVideo: isVid
-        });
-      }
-      if (Array.isArray(item.attachments)) {
-        for (const att of item.attachments) {
-          if (!att || !att.path) continue;
-          const isVid = isVideoMediaUrl(att.name);
-          const isAttPreviewOnly = Boolean(att.preview_only || item.has_full === false);
-          albumItems.push({
-            fileUrl: isAttPreviewOnly
-              ? `https://img.pawchive.pw/thumbnail/data${att.path}`
-              : `https://file.pawchive.pw/data${att.path}?f=${encodeURIComponent(att.name || 'file')}`,
-            previewUrl: `https://img.pawchive.pw/thumbnail/data${att.path}`,
-            name: att.name || 'Attachment',
-            isVideo: isVid
-          });
-        }
-      }
-
-      return {
-        id: `pawchive_${item.id}`,
-        originalId: String(item.id),
-        site: 'pawchive',
-        siteName: 'Pawchive',
-        previewUrl,
-        sampleUrl,
-        fileUrl,
-        fileExt,
-        isVideo: isPostVideo,
-        isGif,
-        hasSound: isPostVideo && hasSound,
-        author: authorName,
-        title: item.title || '',
-        tags: extractedTags,
-        tagDetails,
-        score: 0,
-        rating: 'e',
-        width: 0,
-        height: 0,
-        source: postUrl,
-        postUrl,
-        parentId: null,
-        hasChildren: albumItems.length > 1,
-        albumItems: albumItems.length > 1 ? albumItems : undefined,
-        createdAt,
-        isAi
-      };
+      return await normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList);
     }));
 
     let validPosts = results.filter(Boolean);
