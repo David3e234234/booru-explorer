@@ -487,6 +487,8 @@ Object.assign(en, {
   'gal.unfav.title': 'Remove from bookmarks',
   'gal.fav.title': 'Save to bookmarks',
   'gal.postHidden': 'Post hidden from recommendations',
+  'gal.undoHide': 'Undo',
+  'gal.hideUndone': 'Hidden restored',
   'gal.labelAuthors': 'Favorite authors',
   'gal.noSavedAuthors': 'No saved authors',
   'gal.noAuthorsHint': 'You don\u2019t have favorite authors yet.',

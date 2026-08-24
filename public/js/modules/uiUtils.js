@@ -27,6 +27,33 @@ export function showToast(message) {
   }, 2400);
 }
 
+export function showActionToast(message, actionLabel, onAction, duration = 6000) {
+  const toastContainer = document.getElementById('toastContainer');
+  if (!toastContainer) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.innerHTML = `
+    <span>${message}</span>
+    <button type="button" class="toast-action-btn">${actionLabel}</button>
+  `;
+  let dismissed = false;
+  const dismiss = () => {
+    if (dismissed) return;
+    dismissed = true;
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    toast.style.transition = 'all 0.2s ease-out';
+    setTimeout(() => toast.remove(), 200);
+  };
+  const timer = setTimeout(dismiss, duration);
+  toast.querySelector('.toast-action-btn').addEventListener('click', () => {
+    clearTimeout(timer);
+    dismiss();
+    if (typeof onAction === 'function') onAction();
+  });
+  toastContainer.appendChild(toast);
+}
+
 export function copyToClipboard(text) {
   if (!text) return Promise.resolve(false);
   if (navigator.clipboard && window.isSecureContext) {

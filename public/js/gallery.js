@@ -1,6 +1,6 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, toggleDislikeLocally, isPostDisliked } from './state.js';
 import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
-import { showToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
+import { showToast, showActionToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
 import { t } from './i18n.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh }) {
@@ -770,6 +770,22 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
   // ── Event delegation on the grid: one listener instead of thousands on cards ──
 
+  // Touch intent tracking: a tap whose finger drifted between press and release
+  // is likely a mis-tap during scrolling, so like/fav/hide actions skip it.
+  let touchStartPoint = null;
+  const TOUCH_DRIFT_TOLERANCE_PX = 10;
+  galleryGrid.addEventListener('touchstart', (e) => {
+    const firstTouch = e.touches[0];
+    touchStartPoint = firstTouch ? { x: firstTouch.clientX, y: firstTouch.clientY } : null;
+  }, { passive: true });
+
+  function isDriftedTouch(e) {
+    if (!touchStartPoint) return false;
+    const dx = e.clientX - touchStartPoint.x;
+    const dy = e.clientY - touchStartPoint.y;
+    return (dx * dx + dy * dy) > TOUCH_DRIFT_TOLERANCE_PX * TOUCH_DRIFT_TOLERANCE_PX;
+  }
+
   galleryGrid.addEventListener('click', (e) => {
     const card = e.target.closest('.media-card');
     if (!card || !galleryGrid.contains(card)) return;
@@ -779,22 +795,28 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const dislikeBtn = e.target.closest('.btn-card-dislike');
     if (dislikeBtn) {
       e.stopPropagation();
-      haptic(20);
-      handleDislikeClick(post, card);
+      if (!isDriftedTouch(e)) {
+        haptic(20);
+        handleDislikeClick(post, card);
+      }
       return;
     }
     const likeBtn = e.target.closest('.btn-card-like');
     if (likeBtn) {
       e.stopPropagation();
-      haptic([15, 20]);
-      handleLikeClick(post, likeBtn);
+      if (!isDriftedTouch(e)) {
+        haptic([15, 20]);
+        handleLikeClick(post, likeBtn);
+      }
       return;
     }
     const favBtn = e.target.closest('.btn-card-fav');
     if (favBtn) {
       e.stopPropagation();
-      haptic([15, 25, 15]);
-      handleFavoriteClick(post, favBtn);
+      if (!isDriftedTouch(e)) {
+        haptic([15, 25, 15]);
+        handleFavoriteClick(post, favBtn);
+      }
       return;
     }
     const authorBadgeEl = e.target.closest('.badge-format.author');
@@ -870,19 +892,45 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     stopHoverPreview();
   });
 
+  const HIDE_UNDO_WINDOW_MS = 6000;
+
+  function updateResultsCount() {
+    const resultsCountEl = document.getElementById('resultsCount');
+    if (resultsCountEl) resultsCountEl.textContent = t('gal.countPosts', '{n} постов').replace('{n}', state.posts.length);
+  }
+
   async function handleDislikeClick(post, card) {
     toggleDislikeLocally(post);
-    showToast(t('gal.postHidden', 'Пост скрыт из рекомендаций'), 'info');
 
-    // Smoothly collapse the card
+    // Collapse the card right away but defer the removal until the undo window closes,
+    // so an accidental hide can be reverted from the snackbar
     card.classList.add('card-hiding');
-    setTimeout(() => {
+    let removed = false;
+    const removalTimer = setTimeout(() => {
+      removed = true;
       state.posts = state.posts.filter(p => p.id !== post.id);
       removeCardFromVirtualFlow(card);
       card.remove();
-      const resultsCountEl = document.getElementById('resultsCount');
-      if (resultsCountEl) resultsCountEl.textContent = t('gal.countPosts', '{n} постов').replace('{n}', state.posts.length);
-    }, 280);
+      updateResultsCount();
+    }, HIDE_UNDO_WINDOW_MS);
+
+    showActionToast(
+      t('gal.postHidden', 'Пост скрыт из рекомендаций'),
+      t('gal.undoHide', 'Отменить'),
+      async () => {
+        if (removed) return;
+        clearTimeout(removalTimer);
+        toggleDislikeLocally(post);
+        card.classList.remove('card-hiding');
+        showToast(t('gal.hideUndone', 'Скрытие отменено'));
+        try {
+          await toggleDislikeApi(post);
+        } catch (err) {
+          console.error('Ошибка отмены скрытого поста:', err);
+        }
+      },
+      HIDE_UNDO_WINDOW_MS
+    );
 
     try {
       await toggleDislikeApi(post);
