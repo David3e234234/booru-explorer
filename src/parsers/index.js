@@ -5,6 +5,7 @@ import { fetchRule34 } from './rule34.js';
 import { fetchGelbooru } from './gelbooru.js';
 import { fetchRule34Video } from './rule34video.js';
 import { fetchXbooru, fetchHypnohub, fetchTbib } from './dapi.js';
+import { fetchPawchive } from './pawchive.js';
 import { isPostMatchingFilters } from '../utils/tagHelpers.js';
 import { 
   CURVY_INCLUDE_TAGS, 
@@ -23,7 +24,8 @@ export {
   fetchGelbooru,
   fetchRule34Video,
   fetchXbooru,
-  fetchHypnohub
+  fetchHypnohub,
+  fetchPawchive
 };
 
 async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
@@ -46,6 +48,8 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
       return await fetchHypnohub(params, aiTagsList);
     case 'tbib':
       return await fetchTbib(params, aiTagsList);
+    case 'pawchive':
+      return await fetchPawchive(params, aiTagsList, settings);
     default:
       return [];
   }
@@ -70,7 +74,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   }
 
   if (site === 'all' || site === 'custom' || site.includes(',')) {
-    let mainSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib'];
+    let mainSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive'];
 
     if (site === 'custom' || site.includes(',')) {
       let customList = [];
@@ -83,21 +87,21 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
       } else {
         customList = ['danbooru', 'gelbooru', 'rule34', 'yandere'];
       }
-      const availableSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib'];
+      const availableSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive'];
       mainSites = customList.filter(s => availableSites.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'gelbooru'];
     }
 
     if (params.typeFilter === 'video' || params.typeFilter === 'audio' || params.typeFilter === 'sound') {
-      const videoSupported = ['rule34video', 'danbooru', 'rule34', 'gelbooru', 'xbooru', 'hypnohub'];
+      const videoSupported = ['rule34video', 'danbooru', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'pawchive'];
       mainSites = mainSites.filter(s => videoSupported.includes(s));
       if (mainSites.length === 0) mainSites = ['rule34video', 'danbooru'];
     } else if (params.ratingFilter === 'nsfw') {
-      const nsfwAllowed = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib'];
+      const nsfwAllowed = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib', 'pawchive'];
       mainSites = mainSites.filter(s => nsfwAllowed.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'rule34'];
     } else if (params.ratingFilter === 'questionable' || params.ratingFilter === '16+') {
-      const qAllowed = ['danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib'];
+      const qAllowed = ['danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib', 'pawchive'];
       mainSites = mainSites.filter(s => qAllowed.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'rule34', 'gelbooru'];
     } else if (params.ratingFilter === 'sfw') {

@@ -304,6 +304,7 @@
 .badge-site.site-xbooru { border-color: rgba(244, 63, 94, 0.45); color: #fda4af; }
 .badge-site.site-hypnohub { border-color: rgba(139, 92, 246, 0.45); color: #c4b5fd; }
 .badge-site.site-tbib { border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; }
+.badge-site.site-pawchive { border-color: rgba(249, 115, 22, 0.45); color: #fdba74; }
 
 .badge-ai {
   display: inline-flex;

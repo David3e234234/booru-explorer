@@ -351,6 +351,16 @@ export const SITES = {
     supportsTags: true,
     accentColor: '#f59e0b',
     description: 'Крупнейший агрегатор изображений (~19 млн артов), синхронизируется с другими Booru'
+  },
+  pawchive: {
+    id: 'pawchive',
+    name: 'Pawchive',
+    baseUrl: 'https://pawchive.pw',
+    rating: 'nsfw',
+    supportsVideo: true,
+    supportsTags: false,
+    accentColor: '#f97316',
+    description: 'Архив платных подписок (Fanbox, Patreon, Fantia) с поиском по авторам и названиям'
   }
 };
 

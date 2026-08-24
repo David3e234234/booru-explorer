@@ -10,7 +10,8 @@ export const DEFAULT_SITES = [
   { id: 'rule34video', name: 'Rule34Video', accentColor: '#ef4444' },
   { id: 'xbooru', name: 'Xbooru', accentColor: '#f43f5e' },
   { id: 'hypnohub', name: 'Hypnohub', accentColor: '#8b5cf6' },
-  { id: 'tbib', name: 'TBIB', accentColor: '#f59e0b' }
+  { id: 'tbib', name: 'TBIB', accentColor: '#f59e0b' },
+  { id: 'pawchive', name: 'Pawchive', accentColor: '#f97316' }
 ];
 
 export const state = {

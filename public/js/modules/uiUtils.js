@@ -132,6 +132,10 @@ export function getPostSiteUrl(post) {
   if (site === 'tbib' && origId) {
     return `https://tbib.org/index.php?page=post&s=view&id=${origId}`;
   }
+  if (site === 'pawchive') {
+    if (post.postUrl) return post.postUrl;
+    if (origId) return `https://pawchive.pw/posts`;
+  }
 
   if (post.source && /^https?:\/\//i.test(post.source)) {
     return post.source;

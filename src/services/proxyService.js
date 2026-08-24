@@ -30,7 +30,7 @@ function detectImageExt(cleanPath) {
 const inflightImages = new Map();
 
 function buildUpstreamHeaders(targetUrl, isImage, currentSettings) {
-  const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net') || targetUrl.includes('tbib.org');
+  const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net') || targetUrl.includes('tbib.org') || targetUrl.includes('pawchive.pw') || targetUrl.includes('pawchive.st');
   const headers = {
     'User-Agent': isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT,
     'Accept': '*/*',
@@ -99,6 +99,13 @@ function build404FallbackCandidates(targetUrl) {
     const isVid = targetUrl.endsWith('.mp4') || targetUrl.endsWith('.webm');
     const cleanNoHost = targetUrl.replace(/https?:\/\/[a-zA-Z0-9.-]+(?:paheal\.net|paheal-cdn\.net)/i, '');
     expandHosts(pahealHosts, [cleanNoHost], isVid ? videoExts : imageExts);
+  } else if (targetUrl.includes('pawchive.pw') || targetUrl.includes('pawchive.st')) {
+    const cleanNoQuery = targetUrl.split('?')[0];
+    if (cleanNoQuery.includes('file.pawchive.pw/data/')) {
+      pushCandidate(cleanNoQuery.replace('file.pawchive.pw/data/', 'img.pawchive.pw/thumbnail/data/'));
+    } else if (cleanNoQuery.includes('img.pawchive.pw/thumbnail/data/')) {
+      pushCandidate(cleanNoQuery.replace('img.pawchive.pw/thumbnail/data/', 'file.pawchive.pw/data/'));
+    }
   }
 
   return candidates;

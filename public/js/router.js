@@ -6,7 +6,7 @@ const CATEGORIES = ['new', 'views', 'top', 'recommended', 'random', 'favorites',
 
 const KNOWN_SITES = new Set([
   'danbooru', 'gelbooru', 'rule34', 'yandere', 'konachan',
-  'safebooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'custom'
+  'safebooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive', 'custom'
 ]);
 
 const ENUMS = {

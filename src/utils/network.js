@@ -52,6 +52,7 @@ export function resolveSiteReferer(targetUrl) {
     if (h.includes('safebooru.org')) return 'https://safebooru.org/';
     if (h.includes('xbooru.com')) return 'https://xbooru.com/';
     if (h.includes('hypnohub.net')) return 'https://hypnohub.net/';
+    if (h.includes('pawchive.pw') || h.includes('pawchive.st')) return 'https://pawchive.pw/';
     return `${parsed.protocol}//${parsed.host}/`;
   } catch {
     return 'https://danbooru.donmai.us/';

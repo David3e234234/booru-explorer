@@ -168,15 +168,26 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       rootMargin: '300px 0px',
       threshold: 0.01
     });
-  } else {
-    window.addEventListener('scroll', () => {
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 600) {
-        if (!state.isLoading && state.hasMore && state.posts.length > 0 && state.currentCategory !== 'favorites') {
+  }
+
+  const handleScrollCheck = () => {
+    if (!state.isLoading && state.hasMore && state.posts.length > 0 && state.currentCategory !== 'favorites') {
+      if (mainContent) {
+        if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 700) {
           onLoadMore();
+          return;
         }
       }
-    });
+      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 700) {
+        onLoadMore();
+      }
+    }
+  };
+
+  if (mainContent) {
+    mainContent.addEventListener('scroll', handleScrollCheck, { passive: true });
   }
+  window.addEventListener('scroll', handleScrollCheck, { passive: true });
 
   const loadMoreContainer = document.getElementById('loadMoreContainer');
   const btnLoadMore = document.getElementById('btnLoadMore');
