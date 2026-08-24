@@ -299,10 +299,11 @@ export function saveLocalLikes(likesList) {
   } catch (e) {}
 }
 
-// 📦 Export all user data (settings, favorites, likes, dislikes, authors) into a JSON object
-export function exportUserData() {
+// 📦 Export all user data (settings, favorites, likes, dislikes, authors, account) into a JSON object.
+// `account` comes from GET /api/auth/export and is included only when logged in.
+export function exportUserData(account = null) {
   const exportObject = {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     settings: loadLocalSettings() || state.settings || {},
     favorites: loadLocalFavorites() || state.favorites || [],
@@ -310,41 +311,62 @@ export function exportUserData() {
     likes: loadLocalLikes() || state.likes || [],
     dislikes: loadLocalDislikes() || state.dislikes || []
   };
+  if (account && typeof account === 'object' && account.username && account.passwordHash) {
+    exportObject.account = account;
+  }
   return exportObject;
 }
 
-// 📥 Import user data from JSON
-export function importUserData(data) {
+// Accept both flat v1/v2 files and nested Telegram backups ({ data: {...} })
+function normalizeImportPayload(data) {
+  const nested = data && typeof data.data === 'object' && !Array.isArray(data.data)
+    ? data.data
+    : null;
+  if (!nested) return { ...data, account: data.account || null };
+  if (data.settings || Array.isArray(data.favorites)) return { ...data, account: data.account || null };
+  return {
+    ...nested,
+    version: data.version,
+    exportedAt: data.exportedAt,
+    account: data.account || nested.account || null
+  };
+}
+
+// 📥 Import user data from JSON.
+// With `replace` the imported lists overwrite local ones instead of merging —
+// used after switching to the account from the file, so no stale local items leak into it.
+export function importUserData(data, { replace = false } = {}) {
   if (!data || typeof data !== 'object') {
     throw new Error('Некорректный формат файла данных');
   }
 
-  let importedCounts = { settings: false, favorites: 0, favoriteAuthors: 0, likes: 0, dislikes: 0 };
+  const normalized = normalizeImportPayload(data);
+  const importedCounts = { settings: false, favorites: 0, favoriteAuthors: 0, likes: 0, dislikes: 0, account: normalized.account };
 
   // 1. Settings
-  if (data.settings && typeof data.settings === 'object') {
-    saveLocalSettings(data.settings);
-    state.settings = { ...state.settings, ...data.settings };
+  if (normalized.settings && typeof normalized.settings === 'object') {
+    saveLocalSettings(normalized.settings);
+    state.settings = { ...state.settings, ...normalized.settings };
     importedCounts.settings = true;
   }
 
   // 2. Favorites
-  if (Array.isArray(data.favorites)) {
-    const existing = loadLocalFavorites() || [];
+  if (Array.isArray(normalized.favorites)) {
+    const existing = replace ? [] : (loadLocalFavorites() || []);
     const mergedMap = new Map();
     existing.forEach(p => mergedMap.set(p.id, p));
-    data.favorites.forEach(p => { if (p && p.id) mergedMap.set(p.id, p); });
+    normalized.favorites.forEach(p => { if (p && p.id) mergedMap.set(p.id, p); });
     const mergedList = Array.from(mergedMap.values());
     setFavorites(mergedList);
     importedCounts.favorites = mergedList.length;
   }
 
   // 3. Favorite authors
-  if (Array.isArray(data.favoriteAuthors)) {
-    const existing = loadLocalFavoriteAuthors() || [];
+  if (Array.isArray(normalized.favoriteAuthors)) {
+    const existing = replace ? [] : (loadLocalFavoriteAuthors() || []);
     const mergedMap = new Map();
     existing.forEach(a => mergedMap.set((a.name || '').toLowerCase(), a));
-    data.favoriteAuthors.forEach(a => {
+    normalized.favoriteAuthors.forEach(a => {
       if (a && a.name) mergedMap.set((a.name || '').toLowerCase(), a);
     });
     const mergedList = Array.from(mergedMap.values());
@@ -353,22 +375,22 @@ export function importUserData(data) {
   }
 
   // 4. Likes
-  if (Array.isArray(data.likes)) {
-    const existing = loadLocalLikes() || [];
+  if (Array.isArray(normalized.likes)) {
+    const existing = replace ? [] : (loadLocalLikes() || []);
     const mergedMap = new Map();
     existing.forEach(l => mergedMap.set(l.id, l));
-    data.likes.forEach(l => { if (l && l.id) mergedMap.set(l.id, l); });
+    normalized.likes.forEach(l => { if (l && l.id) mergedMap.set(l.id, l); });
     const mergedList = Array.from(mergedMap.values());
     setLikes(mergedList);
     importedCounts.likes = mergedList.length;
   }
 
   // 5. Dislikes
-  if (Array.isArray(data.dislikes)) {
-    const existing = loadLocalDislikes() || [];
+  if (Array.isArray(normalized.dislikes)) {
+    const existing = replace ? [] : (loadLocalDislikes() || []);
     const mergedMap = new Map();
     existing.forEach(d => mergedMap.set(d.id, d));
-    data.dislikes.forEach(d => { if (d && d.id) mergedMap.set(d.id, d); });
+    normalized.dislikes.forEach(d => { if (d && d.id) mergedMap.set(d.id, d); });
     const mergedList = Array.from(mergedMap.values());
     setDislikes(mergedList);
     importedCounts.dislikes = mergedList.length;

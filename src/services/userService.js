@@ -205,6 +205,92 @@ export function registerUser(username, password, initialData = {}) {
 }
 
 /**
+ * Return the full account record (including passwordHash/salt) for backup/export files.
+ * Never expose this outside authenticated, user-owned flows.
+ */
+export function exportAccountRecord(userId) {
+  const user = findUserById(userId);
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    passwordHash: user.passwordHash,
+    salt: user.salt,
+    avatar: user.avatar || '',
+    createdAt: user.createdAt || null
+  };
+}
+
+const ACCOUNT_HASH_RE = /^[a-f0-9]{128}$/i; // scryptSync(password, salt, 64) -> 64 bytes -> 128 hex chars
+const ACCOUNT_SALT_RE = /^[a-f0-9]{32}$/i;
+const ACCOUNT_ID_RE = /^u_[a-f0-9]{12}$/;
+
+/**
+ * Recreate an account from an exported/backup file (hash+salt based, no plaintext
+ * password needed) and issue a fresh auth token for it.
+ */
+export function restoreUser(account = {}) {
+  const cleanUsername = String(account.username || '').trim();
+  if (cleanUsername.length < 3 || cleanUsername.length > 30 ||
+      !/^[a-zA-Z0-9_\u0400-\u04FF-]+$/.test(cleanUsername)) {
+    throw new Error('Некорректное имя пользователя в файле');
+  }
+  if (!ACCOUNT_HASH_RE.test(String(account.passwordHash || '')) ||
+      !ACCOUNT_SALT_RE.test(String(account.salt || ''))) {
+    throw new Error('В файле отсутствуют корректные данные аккаунта');
+  }
+
+  const users = getUsersList();
+  const idx = users.findIndex(u => (u.username || '').toLowerCase() === cleanUsername.toLowerCase());
+
+  if (idx !== -1) {
+    const existing = users[idx];
+    if (existing.passwordHash === account.passwordHash && existing.salt === account.salt) {
+      // Same credentials: nothing to restore, just re-login
+      const token = generateToken({ id: existing.id, username: existing.username });
+      const { passwordHash, salt: _, ...safeUser } = existing;
+      return { user: safeUser, token, restored: false };
+    }
+    const err = new Error('Пользователь с таким логином уже существует с другим паролем');
+    err.statusCode = 409;
+    throw err;
+  }
+
+  // Keep the original id when free so per-user data continuity survives moves
+  let userId = ACCOUNT_ID_RE.test(String(account.id || '')) && !users.some(u => u.id === account.id)
+    ? account.id
+    : 'u_' + crypto.randomBytes(6).toString('hex');
+
+  const now = new Date().toISOString();
+  const user = {
+    id: userId,
+    username: cleanUsername,
+    passwordHash: account.passwordHash,
+    salt: account.salt,
+    avatar: typeof account.avatar === 'string' ? account.avatar : '',
+    createdAt: account.createdAt || now,
+    lastLoginAt: now
+  };
+
+  users.push(user);
+  saveUsersList(users);
+
+  // Create isolated data files like registerUser does
+  const userDir = getUserDataDir(userId);
+  writeJsonFile(path.join(userDir, 'settings.json'), { ...DEFAULT_SETTINGS });
+  writeJsonFile(path.join(userDir, 'favorites.json'), []);
+  writeJsonFile(path.join(userDir, 'likes.json'), []);
+  writeJsonFile(path.join(userDir, 'dislikes.json'), []);
+  writeJsonFile(path.join(userDir, 'favorite_authors.json'), []);
+  writeJsonFile(path.join(userDir, 'author_feed_state.json'), {});
+  logInfo('Auth', `Аккаунт восстановлен из бэкапа: ${cleanUsername} (ID: ${userId})`);
+
+  const token = generateToken({ id: userId, username: cleanUsername });
+  const { passwordHash, salt: _, ...safeUser } = user;
+  return { user: safeUser, token, restored: true };
+}
+
+/**
  * Log a user in
  */
 export function loginUser(username, password) {

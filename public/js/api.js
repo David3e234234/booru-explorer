@@ -63,6 +63,26 @@ export async function apiLogout() {
   } catch (e) {}
 }
 
+export async function apiExportAccount() {
+  try {
+    const res = await fetch('/api/auth/export', { headers: getAuthHeaders() });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && data.success ? data.account : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export async function apiRestoreAccount(account) {
+  const res = await fetch('/api/auth/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ account })
+  });
+  return await res.json();
+}
+
 export async function fetchSites() {
   const res = await fetch('/api/sites');
   if (!res.ok) throw new Error('Не удалось загрузить список сайтов');

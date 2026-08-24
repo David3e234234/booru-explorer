@@ -1,6 +1,7 @@
 import { 
   state, 
   saveLocalSettings, 
+  saveLocalAuth,
   exportUserData, 
   importUserData 
 } from '../state.js';
@@ -14,11 +15,14 @@ import {
   syncFavoriteAuthors,
   testTelegramConnection,
   sendTelegramBackupNow,
-  fetchTelegramBackupStatus
+  fetchTelegramBackupStatus,
+  apiExportAccount,
+  apiRestoreAccount
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI } from './filtersUI.js';
+import { updateHeaderAuthUI } from './authModal.js';
 
 export const DEFAULT_AI_TAGS = [
   'ai_generated',
@@ -824,9 +828,13 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   }
 
   if (btnExportData) {
-    btnExportData.addEventListener('click', () => {
+    btnExportData.addEventListener('click', async () => {
       try {
-        const data = exportUserData();
+        let account = null;
+        if (state.currentUser) {
+          account = await apiExportAccount();
+        }
+        const data = exportUserData(account);
         const jsonStr = JSON.stringify(data, null, 2);
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -839,7 +847,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast(t('set.backupDownloaded', 'Резервная копия скачана'));
+        showToast(t('set.backupDownloaded', 'Резервная копия скачана') +
+          (data.account ? t('set.backupWithAccount', ' (с аккаунтом {name})').replace('{name}', data.account.username) : ''));
       } catch (err) {
         showToast(t('set.exportFailed', 'Ошибка при экспорте данных'));
       }
@@ -858,8 +867,47 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
 
       try {
         const text = await file.text();
-        const parsed = JSON.parse(text);
-        const counts = importUserData(parsed);
+        let parsed = JSON.parse(text);
+
+        // Unwrap nested Telegram backups ({ version, data: { settings, ... } })
+        const nested = parsed && typeof parsed === 'object' && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
+          ? parsed.data
+          : null;
+        if (nested && !parsed.settings && !Array.isArray(parsed.favorites)) {
+          parsed = { ...nested, account: parsed.account || nested.account || null };
+        }
+
+        // Restore + log into the account embedded in the file (before merging data,
+        // so all server syncs below land under that account)
+        let switchedAccount = false;
+        const fileAccount = parsed.account;
+        if (fileAccount && fileAccount.username && fileAccount.passwordHash) {
+          const sameAccount = state.currentUser &&
+            String(state.currentUser.username).toLowerCase() === String(fileAccount.username).toLowerCase();
+          if (!sameAccount) {
+            const wantLogin = confirm(t('set.accountFound',
+              'В файле найден аккаунт «{name}». Войти в него и загрузить его данные?').replace('{name}', fileAccount.username));
+            if (wantLogin) {
+              try {
+                const res = await apiRestoreAccount(fileAccount);
+                if (res.success && res.token && res.user) {
+                  saveLocalAuth(res.token, res.user);
+                  updateHeaderAuthUI();
+                  switchedAccount = true;
+                  showToast(t('set.accountRestored', 'Вы вошли как @{name}').replace('{name}', res.user.username), 'success');
+                } else {
+                  showToast(res.message || t('set.accountRestoreFailed', 'Не удалось войти в аккаунт из файла'), 'error');
+                }
+              } catch (err) {
+                showToast(t('set.accountRestoreFailed', 'Не удалось войти в аккаунт из файла'), 'error');
+              }
+            }
+          }
+        }
+
+        // After an account switch replace lists instead of merging:
+        // stale items of the previous session must not leak into the restored account
+        const counts = importUserData(parsed, { replace: switchedAccount });
 
         if (counts.settings) {
           try { await saveSettings(state.settings); } catch (err) {}

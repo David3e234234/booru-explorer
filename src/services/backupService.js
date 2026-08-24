@@ -6,7 +6,7 @@ import {
   getDislikes, 
   getFavoriteAuthors 
 } from './storageService.js';
-import { getUsersList } from './userService.js';
+import { getUsersList, exportAccountRecord } from './userService.js';
 import { logInfo, logError, logWarn } from '../utils/logger.js';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
@@ -134,14 +134,16 @@ export function buildBackupPayload(userId = null) {
   const likes = getLikes(userId);
   const dislikes = getDislikes(userId);
   const favoriteAuthors = getFavoriteAuthors(userId);
+  const account = userId ? exportAccountRecord(userId) : null;
 
   const now = new Date();
 
   return {
-    version: 1,
+    version: 2,
     exportedAt: now.toISOString(),
     source: 'Booru Explorer Telegram Backup',
     userId: userId || 'default',
+    account,
     stats: {
       favoritesCount: favorites.length,
       likesCount: likes.length,
@@ -191,6 +193,7 @@ export async function performTelegramBackup(userId = null, isManual = false) {
   const caption = `📦 *Резервная копия Booru Explorer*\n` +
     `🏷️ *Режим:* ${typeLabel}\n` +
     `📅 *Дата:* ${dateFormatted}\n` +
+    (payload.account ? `👤 *Аккаунт:* @${payload.account.username}\n` : '') +
     `⭐ *Закладок:* ${payload.stats.favoritesCount}\n` +
     `❤️ *Лайков:* ${payload.stats.likesCount}\n` +
     `🚫 *Скрыто постов:* ${payload.stats.dislikesCount || 0}\n` +
