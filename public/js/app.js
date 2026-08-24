@@ -69,6 +69,7 @@ import {
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initProfileUI } from './modules/profileUI.js';
+import { consumeInitialUrl, initRouter, syncSearchUrl } from './router.js';
 import { t, applyStaticTranslations } from './i18n.js';
 
 export { isMyLiveDemoHost, isVercelHost, showToast, openDrawer, closeAllDrawers };
@@ -79,6 +80,7 @@ let viewerInstance = null;
 let authModalInstance = null;
 let profileUIInstance = null;
 let deferredInstallPrompt = null;
+let pendingPostId = null;
 
 async function init() {
   // Apply the saved language to all static markup before anything renders
@@ -192,6 +194,20 @@ async function init() {
     showToast
   });
 
+  initRouter({
+    onCloseViewerUi: () => {
+      if (viewerInstance) viewerInstance.closeViewer();
+    },
+    onOpenPost: (postId) => {
+      openPostById(postId);
+    },
+    onSearchParams: (changed) => {
+      if (!changed) return;
+      refreshSearchUiFromState();
+      performSearch(true);
+    }
+  });
+
   initAddAuthorModal({
     onAuthorSaved: () => {
       updateFavoritesBadge();
@@ -252,8 +268,73 @@ async function init() {
   updateCategoryTabsUI();
   updateDateFilterUI();
 
-  // 4. Initial search
+  // 4. Restore search/viewer state from the URL before the initial load
+  const urlParams = consumeInitialUrl();
+  pendingPostId = urlParams.post || null;
+  refreshSearchUiFromState();
+
+  // 5. Initial search
   await performSearch(true);
+
+  if (pendingPostId) {
+    const pid = pendingPostId;
+    pendingPostId = null;
+    await openPostById(pid);
+  }
+}
+
+// Re-render all UI bits that visualize the URL-restorable state fields
+function refreshSearchUiFromState() {
+  if (autocompleteInstance) autocompleteInstance.renderTagsChips();
+  updateCurrentSiteLabel();
+  renderSitesBar({ onSelectSite: selectSite });
+  renderMobileSourcesSheet({ onSelectSite: selectSite });
+  updateCategoryTabsUI();
+  updateAiFilterUI();
+  updateRatingFilterUI();
+  updateTypeFilterUI();
+  updateAgeFilterUI();
+  updateDateFilterUI();
+}
+
+// Opens a post by its original site id: fast path searches the loaded feed,
+// slow path fetches it with the `id:` metatag (bypassing content filters).
+async function openPostById(postId) {
+  if (!postId || !viewerInstance) return;
+
+  const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+  const idx = list.findIndex(p => p && String(p.originalId) === String(postId));
+  if (idx >= 0) {
+    viewerInstance.openViewer(idx);
+    return;
+  }
+
+  try {
+    const res = await fetchPosts({
+      site: state.currentSite,
+      tags: `id:${postId}`,
+      page: 1,
+      limit: 1,
+      category: 'new',
+      aiFilter: 'all',
+      ratingFilter: 'all',
+      typeFilter: 'all',
+      ageFilter: 'all',
+      dateFilter: 'all',
+      hideFurry: false,
+      hidePregnant: false,
+      hideLgbt: false
+    });
+    const posts = res && res.success && Array.isArray(res.posts) ? res.posts : [];
+    const post = posts.find(p => String(p.originalId) === String(postId)) || posts[0];
+    if (post) {
+      viewerInstance.openViewer(-1, { directPost: post });
+    } else {
+      showToast(t('router.postNotFound', 'Пост не найден'));
+    }
+  } catch (e) {
+    showToast(t('router.postNotFound', 'Пост не найден'));
+  }
 }
 
 function updateFavoritesBadge() {
@@ -498,6 +579,8 @@ async function performSearch(reset = false, options = {}) {
     state.hasMore = true;
     galleryInstance.showLoading();
   }
+
+  syncSearchUrl(reset ? 'push' : 'replace');
 
   // 👤 Profile section (TikTok style)
   if (state.currentCategory === 'profile') {
@@ -880,6 +963,7 @@ function setupEventListeners() {
       state.aiFilter = filter;
       updateAiFilterUI();
       persistSettings({ aiFilter: filter });
+      syncSearchUrl('replace');
     });
   });
 
@@ -891,6 +975,7 @@ function setupEventListeners() {
       state.ratingFilter = rating;
       updateRatingFilterUI();
       persistSettings({ ratingFilter: rating });
+      syncSearchUrl('replace');
     });
   });
 
@@ -902,6 +987,7 @@ function setupEventListeners() {
       state.typeFilter = type;
       updateTypeFilterUI();
       persistSettings({ typeFilter: type });
+      syncSearchUrl('replace');
     });
   });
 
@@ -913,6 +999,7 @@ function setupEventListeners() {
       state.ageFilter = age;
       updateAgeFilterUI();
       persistSettings({ ageFilter: age });
+      syncSearchUrl('replace');
     });
   });
 

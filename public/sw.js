@@ -1,5 +1,5 @@
-const CACHE_NAME = 'booru-explorer-v8.3';
-const MEDIA_CACHE = 'booru-media-v8.3';
+const CACHE_NAME = 'booru-explorer-v8.4';
+const MEDIA_CACHE = 'booru-media-v8.4';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
 
@@ -36,6 +36,7 @@ const STATIC_ASSETS = [
   '/css/viewer.css',
   '/js/state.js',
   '/js/api.js',
+  '/js/router.js',
   '/js/i18n.js',
   '/js/app.js',
   '/js/gallery.js',
@@ -65,7 +66,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Кэширование App Shell v8.3');
+      console.log('[ServiceWorker] Кэширование App Shell v8.4');
       return cache.addAll(STATIC_ASSETS).catch(err => {
         console.warn('[ServiceWorker] Не удалось закэшировать часть ресурсов:', err);
       });

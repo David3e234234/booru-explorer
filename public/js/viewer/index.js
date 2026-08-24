@@ -4,6 +4,7 @@ import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/u
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
 import { renderSidebarTags, formatRating } from './viewerSidebar.js';
+import { notifyViewerOpened, notifyViewerMoved, notifyViewerClosed } from '../router.js';
 import { t } from '../i18n.js';
 
 function isVideoUrl(url) {
@@ -61,6 +62,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   let currentPost = null;
   let currentAlbumIndex = 0;
+  let directPostRef = null;
   let activeAbortController = null;
   let activeBlobUrl = null;
   let currentZoomInstance = null;
@@ -76,17 +78,33 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let isPinching = false;
   let lastTapTime = 0;
 
-  function openViewer(index) {
+  function openViewer(index, opts = {}) {
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-    if (index < 0 || index >= list.length) return;
-    state.currentViewerIndex = index;
-    currentPost = list[index];
+    if (opts.directPost) {
+      // Standalone post opened by deep link: no neighbors, not part of the grid
+      directPostRef = opts.directPost;
+      state.currentViewerIndex = -1;
+      currentPost = opts.directPost;
+    } else {
+      if (index < 0 || index >= list.length) return;
+      directPostRef = null;
+      state.currentViewerIndex = index;
+      currentPost = list[index];
+    }
     currentAlbumIndex = 0;
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) viewerContent.classList.remove('ui-hidden');
     renderViewerPost();
     if (modal) modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+
+    if (currentPost && currentPost.originalId != null) {
+      if (opts.move) {
+        notifyViewerMoved(currentPost.originalId);
+      } else {
+        notifyViewerOpened(currentPost.originalId);
+      }
+    }
 
     // For Rule34Video videos, refresh full metadata (author, tags, HD stream)
     if (currentPost?.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
@@ -117,6 +135,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   function closeViewer() {
+    if (!modal || modal.style.display === 'none') return;
     if (modal) modal.style.display = 'none';
     document.body.style.overflow = '';
     if (viewerSidebar) viewerSidebar.classList.remove('open');
@@ -145,7 +164,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (mediaWrapper) mediaWrapper.innerHTML = '';
     currentPost = null;
     currentAlbumIndex = 0;
+    directPostRef = null;
     state.currentViewerIndex = -1;
+    notifyViewerClosed();
   }
 
     function getCurrentMediaItem() {
@@ -783,6 +804,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   function goToNext(skipAlbum = false) {
+    if (directPostRef) return;
     if (!skipAlbum && currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1) {
       haptic(10);
       switchAlbumSlide(currentAlbumIndex + 1);
@@ -792,11 +814,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
     if (state.currentViewerIndex < list.length - 1) {
       haptic(15);
-      openViewer(state.currentViewerIndex + 1);
+      openViewer(state.currentViewerIndex + 1, { move: true });
     }
   }
 
   function goToPrev(skipAlbum = false) {
+    if (directPostRef) return;
     if (!skipAlbum && currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0) {
       haptic(10);
       switchAlbumSlide(currentAlbumIndex - 1);
@@ -806,7 +829,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
     if (state.currentViewerIndex > 0) {
       haptic(15);
-      openViewer(state.currentViewerIndex - 1);
+      openViewer(state.currentViewerIndex - 1, { move: true });
     }
   }
 
