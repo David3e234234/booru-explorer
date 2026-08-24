@@ -4,7 +4,15 @@ import { fileURLToPath } from 'url';
 
 export const ROOT_DIR = process.cwd();
 
-export const PORT = process.env.PORT || 3000;
+function getPort() {
+  const portArg = process.argv.find(arg => arg.startsWith('--port='));
+  if (portArg) return Number(portArg.split('=')[1]);
+  const portIdx = process.argv.indexOf('--port');
+  if (portIdx !== -1 && process.argv[portIdx + 1]) return Number(process.argv[portIdx + 1]);
+  return Number(process.env.PORT || process.env.SERVER_PORT || 3000);
+}
+
+export const PORT = getPort();
 
 // Detect the serverless environment (Vercel, AWS Lambda)
 export const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
