@@ -84,6 +84,7 @@ Object.assign(en, {
   'sidebar.close': 'Close',
   'sidebar.searchTags': 'Tag search',
   'sidebar.search.placeholder': 'Enter a tag (1girl, video)...',
+  'sidebar.search.placeholderPawchive': 'Search by author or title...',
   'sidebar.clear.title': 'Clear search',
   'sidebar.refresh.title': 'Refresh results (busts cache)',
   'sidebar.searchBtn': 'Search',

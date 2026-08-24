@@ -12,6 +12,7 @@ import {
 import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js';
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
+import { getCreatorsDirectory } from '../parsers/pawchive.js';
 import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
 import { fetchSafe } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
@@ -477,6 +478,24 @@ router.get('/tags/autocomplete', async (req, res) => {
       if (tagsResult.length === 0) {
         tagsResult = await fetchDanbooruTags(query);
       }
+    } else if (site === 'pawchive') {
+      try {
+        const { list } = await getCreatorsDirectory();
+        if (Array.isArray(list) && list.length > 0) {
+          const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
+          const matches = list.filter(c => {
+            const nameClean = (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '');
+            return nameClean.includes(cleanQ) || (c.service && c.service.toLowerCase().includes(cleanQ));
+          }).slice(0, 15);
+
+          tagsResult = matches.map(c => ({
+            value: `artist:${(c.name || '').toLowerCase().replace(/[\s_.-]+/g, '_')}`,
+            label: `🎨 ${c.name} (${c.service})`,
+            count: 0,
+            category: 'artist'
+          }));
+        }
+      } catch {}
     } else {
       tagsResult = await fetchDanbooruTags(query);
     }

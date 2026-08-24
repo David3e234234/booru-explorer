@@ -15,10 +15,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/variables.css?v=8.1">
-  <link rel="stylesheet" href="css/main.css?v=8.1">
-  <link rel="stylesheet" href="css/components.css?v=8.7">
-  <link rel="stylesheet" href="css/viewer.css?v=8.1">
+  <link rel="stylesheet" href="css/variables.css?v=8.2">
+  <link rel="stylesheet" href="css/main.css?v=8.2">
+  <link rel="stylesheet" href="css/components.css?v=8.8">
+  <link rel="stylesheet" href="css/viewer.css?v=8.2">
   <script src="js/mp4box.all.min.js"></script>
 </head>
 <body>
@@ -148,7 +148,7 @@
       </div>
 
       <!-- 1. Tag search -->
-      <div class="sidebar-block">
+      <div class="sidebar-block" id="searchBlock">
         <div class="sidebar-title-row">
           <h3 class="sidebar-title">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -183,7 +183,7 @@
       </div>
 
       <!-- 2. AI filter -->
-      <div class="sidebar-block">
+      <div class="sidebar-block" id="aiFilterBlock">
         <h3 class="sidebar-title" data-i18n="sidebar.aiFilter">Фильтр ИИ</h3>
         <div class="ai-filter-toggle" id="aiFilterGroup">
           <button class="ai-pill" data-ai="all" title="Показывать все работы" data-i18n-title="sidebar.aiAll.title"><span data-i18n="sidebar.aiAll">Все</span></button>
@@ -193,7 +193,7 @@
       </div>
 
       <!-- 2.1 Age rating filter (SFW / NSFW) -->
-      <div class="sidebar-block">
+      <div class="sidebar-block" id="ratingFilterBlock">
         <h3 class="sidebar-title" data-i18n="sidebar.rating">Возрастной рейтинг</h3>
         <div class="rating-filter-toggle" id="ratingFilterGroup">
           <button class="rating-pill active" data-rating="all" title="Показывать все рейтинги" data-i18n-title="sidebar.ratingAll.title"><span data-i18n="sidebar.ratingAll">Все</span></button>
@@ -227,7 +227,7 @@
       </div>
 
       <!-- 2.2 Content type toggle (video / images) -->
-      <div class="sidebar-block">
+      <div class="sidebar-block" id="typeFilterBlock">
         <h3 class="sidebar-title" data-i18n="sidebar.type">Тип контента</h3>
         <div class="type-filter-toggle" id="typeFilterGroup">
           <button class="type-pill active" data-type="all" title="Все форматы (видео, гифки и картинки)" data-i18n-title="sidebar.typeAll.title"><span data-i18n="sidebar.typeAll">Все</span></button>
@@ -248,7 +248,7 @@
       </div>
 
       <!-- 2.3 Body type / build filter -->
-      <div class="sidebar-block">
+      <div class="sidebar-block" id="shapesFilterBlock">
         <h3 class="sidebar-title" data-i18n="sidebar.shapes">Формы / Типаж</h3>
         <div class="age-filter-toggle" id="ageFilterGroup">
           <button class="age-pill active" data-age="all" title="Все типажи и комплекции" data-i18n-title="sidebar.shapesAll.title"><span data-i18n="sidebar.shapesAll">Все</span></button>
@@ -258,7 +258,7 @@
       </div>
 
       <!-- 3. Content filters (furry, pregnancy, LGBT) -->
-      <div class="sidebar-block">
+      <div class="sidebar-block" id="contentHidingBlock">
         <h3 class="sidebar-title" data-i18n="sidebar.hiding">Скрытие контента</h3>
         <div class="toggles-list">
           <label class="toggle-row" title="Скрыть фурри, антропоморфных персонажей и животных" data-i18n-title="sidebar.hideFurry.title">
@@ -280,7 +280,7 @@
       </div>
 
       <!-- 4. Booru sources (desktop) -->
-      <div class="sidebar-block desktop-only">
+      <div class="sidebar-block desktop-only" id="sourcesBlock">
         <h3 class="sidebar-title" data-i18n="sidebar.sources">Booru Источники</h3>
         <div class="sources-vertical-list" id="sourcesList">
           <!-- Rendered by JS -->
@@ -1921,6 +1921,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=9.0"></script>
+  <script type="module" src="js/app.js?v=9.1"></script>
 </body>
 </html>

@@ -11,7 +11,7 @@ const CREATORS_CACHE_TTL = 3600 * 1000; // 1 hour
 /**
  * Fetches and caches creator directory from Pawchive
  */
-async function getCreatorsDirectory() {
+export async function getCreatorsDirectory() {
   const now = Date.now();
   if (creatorsCache && (now - creatorsCacheTime) < CREATORS_CACHE_TTL) {
     return creatorsCache;

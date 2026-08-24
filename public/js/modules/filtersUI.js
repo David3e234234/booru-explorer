@@ -1,5 +1,145 @@
-import { state } from '../state.js';
+import { state, getSiteCapabilities } from '../state.js';
 import { t } from '../i18n.js';
+
+export function updateSiteCapabilitiesUI(siteId) {
+  const caps = getSiteCapabilities(siteId || state.currentSite);
+
+  // 1. Categories & navigation tabs (desktop & mobile)
+  const supportedCats = new Set(caps.supportedCategories || ['new', 'views', 'top', 'recommended', 'random']);
+  
+  document.querySelectorAll('.nav-tab').forEach(tab => {
+    const cat = tab.dataset.category;
+    if (cat) {
+      tab.style.display = supportedCats.has(cat) ? '' : 'none';
+    }
+  });
+
+  document.querySelectorAll('.category-card').forEach(card => {
+    const cat = card.dataset.category;
+    if (cat) {
+      card.style.display = supportedCats.has(cat) ? '' : 'none';
+    }
+  });
+
+  if (state.currentCategory !== 'favorites' && state.currentCategory !== 'profile') {
+    if (!supportedCats.has(state.currentCategory)) {
+      state.currentCategory = (caps.supportedCategories && caps.supportedCategories[0]) || 'new';
+    }
+  }
+
+  // 2. AI filter block
+  const aiFilterBlock = document.getElementById('aiFilterBlock');
+  if (aiFilterBlock) {
+    aiFilterBlock.style.display = caps.supportsAiFilter ? '' : 'none';
+  }
+  if (!caps.supportsAiFilter && state.aiFilter !== 'all') {
+    state.aiFilter = 'all';
+  }
+
+  // 3. Rating filter block (hide on sites with fixed rating e.g. Safebooru or Rule34/Pawchive)
+  const ratingFilterBlock = document.getElementById('ratingFilterBlock');
+  const hasMultipleRatings = caps.rating === 'all';
+  if (ratingFilterBlock) {
+    ratingFilterBlock.style.display = hasMultipleRatings ? '' : 'none';
+  }
+  if (!hasMultipleRatings) {
+    state.ratingFilter = 'all';
+  }
+
+  // 4. Date filter block
+  const dateFilterBlock = document.getElementById('dateFilterBlock');
+  if (dateFilterBlock) {
+    dateFilterBlock.style.display = caps.supportsDateFilter ? '' : 'none';
+  }
+  if (!caps.supportsDateFilter && state.dateFilter !== 'all') {
+    state.dateFilter = 'all';
+  }
+
+  // 5. Content type filter block & pills
+  const typeFilterBlock = document.getElementById('typeFilterBlock');
+  const typePillVideo = document.querySelector('.type-pill[data-type="video"]');
+  const typePillAudio = document.querySelector('.type-pill[data-type="audio"]');
+  const typePillImage = document.querySelector('.type-pill[data-type="image"]');
+
+  if (typePillVideo) typePillVideo.style.display = caps.supportsVideo ? '' : 'none';
+  if (typePillAudio) typePillAudio.style.display = caps.supportsVideo ? '' : 'none';
+  if (typePillImage) typePillImage.style.display = caps.supportsImages ? '' : 'none';
+
+  if (!caps.supportsVideo && (state.typeFilter === 'video' || state.typeFilter === 'audio')) {
+    state.typeFilter = 'all';
+  }
+  if (!caps.supportsImages && state.typeFilter === 'image') {
+    state.typeFilter = 'all';
+  }
+
+  if (typeFilterBlock) {
+    // If a site only supports images or only video, we still keep or simplify type block
+    const hasMultipleMediaTypes = caps.supportsVideo && caps.supportsImages;
+    typeFilterBlock.style.display = hasMultipleMediaTypes ? '' : 'none';
+  }
+
+  // 6. Video duration sort block
+  const videoSortBlock = document.getElementById('videoSortBlock');
+  if (videoSortBlock) {
+    videoSortBlock.style.display = caps.supportsVideo ? '' : 'none';
+  }
+  if (!caps.supportsVideo && state.videoDurationSort !== 'none') {
+    state.videoDurationSort = 'none';
+  }
+
+  // 7. Shapes / Body type filter block
+  const shapesFilterBlock = document.getElementById('shapesFilterBlock');
+  if (shapesFilterBlock) {
+    shapesFilterBlock.style.display = caps.supportsShapesFilter ? '' : 'none';
+  }
+  if (!caps.supportsShapesFilter && state.ageFilter !== 'all') {
+    state.ageFilter = 'all';
+  }
+
+  // 8. Content hiding block (Furry, Pregnant, LGBT)
+  const contentHidingBlock = document.getElementById('contentHidingBlock');
+  if (contentHidingBlock) {
+    contentHidingBlock.style.display = caps.supportsContentHiding ? '' : 'none';
+  }
+
+  // 9. Page dynamic tags block
+  const pageTagsBlock = document.getElementById('pageTagsBlock');
+  if (pageTagsBlock) {
+    pageTagsBlock.style.display = caps.supportsTags ? '' : 'none';
+  }
+
+  // 10. Wiki Hint button
+  const btnSidebarWikiHint = document.getElementById('btnSidebarWikiHint');
+  if (btnSidebarWikiHint) {
+    btnSidebarWikiHint.style.display = caps.supportsTags ? '' : 'none';
+  }
+
+  // 11. Search input placeholder
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    if (!caps.supportsTags) {
+      searchInput.placeholder = t('sidebar.search.placeholderPawchive', 'Поиск по автору или названию...');
+    } else {
+      searchInput.placeholder = t('sidebar.search.placeholder', 'Введите тег (1girl, video)...');
+    }
+  }
+
+  // 12. Update active pill indicators
+  updateCategoryTabsUI();
+  updateAiFilterUI();
+  updateRatingFilterUI();
+  updateTypeFilterUI();
+  updateAgeFilterUI();
+  updateDateFilterUI();
+  updateVideoSortUI();
+  updateFilterActiveDot();
+}
+
+export function updateVideoSortUI() {
+  document.querySelectorAll('.video-sort-pill').forEach(pill => {
+    pill.classList.toggle('active', pill.dataset.sort === (state.videoDurationSort || 'none'));
+  });
+}
 
 export function updateAiFilterUI() {
   document.querySelectorAll('.ai-pill').forEach(btn => {
@@ -61,15 +201,14 @@ export function updateDateFilterUI() {
 export function updateFilterActiveDot() {
   const filterActiveDot = document.getElementById('filterActiveDot');
   if (!filterActiveDot) return;
-  const isCustom = state.aiFilter !== 'no-ai' ||
-                   state.ratingFilter !== 'all' ||
-                   state.typeFilter !== 'all' ||
-                   state.ageFilter !== 'all' ||
-                   (state.dateFilter && state.dateFilter !== 'all') ||
-                   !state.hideFurry ||
-                   !state.hidePregnant ||
-                   state.hideLgbt ||
-                   (state.searchTags && state.searchTags.length > 0);
+  const caps = getSiteCapabilities(state.currentSite);
+  const isCustom = (caps.supportsAiFilter && state.aiFilter !== 'no-ai' && state.aiFilter !== 'all') ||
+                   (caps.rating === 'all' && state.ratingFilter !== 'all') ||
+                   (caps.supportsVideo && caps.supportsImages && state.typeFilter !== 'all') ||
+                   (caps.supportsShapesFilter && state.ageFilter !== 'all') ||
+                   (caps.supportsDateFilter && state.dateFilter && state.dateFilter !== 'all') ||
+                   (caps.supportsContentHiding && (!state.hideFurry || !state.hidePregnant || state.hideLgbt)) ||
+                   (caps.supportsTags && state.searchTags && state.searchTags.length > 0);
   filterActiveDot.style.display = isCustom ? 'block' : 'none';
 }
 

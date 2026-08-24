@@ -39,6 +39,7 @@ import { initViewer } from './viewer.js';
 import { isMyLiveDemoHost, isVercelHost, showToast, haptic } from './modules/uiUtils.js';
 import { openDrawer, closeAllDrawers, setDrawerCallbacks } from './modules/drawers.js';
 import { 
+  updateSiteCapabilitiesUI,
   updateAiFilterUI, 
   updateRatingFilterUI, 
   updateTypeFilterUI, 
@@ -301,12 +302,7 @@ function refreshSearchUiFromState() {
   updateCurrentSiteLabel();
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
-  updateCategoryTabsUI();
-  updateAiFilterUI();
-  updateRatingFilterUI();
-  updateTypeFilterUI();
-  updateAgeFilterUI();
-  updateDateFilterUI();
+  updateSiteCapabilitiesUI(state.currentSite);
 }
 
 // Opens a post by its original site id: fast path searches the loaded feed,
@@ -404,8 +400,8 @@ function selectSite(siteId) {
   persistSettings({ defaultSite: siteId });
   if (state.currentCategory === 'favorites') {
     state.currentCategory = 'new';
-    updateCategoryTabsUI();
   }
+  updateSiteCapabilitiesUI(siteId);
   updateCurrentSiteLabel();
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });

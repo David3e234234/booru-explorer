@@ -1,18 +1,60 @@
 export const isMyLiveDemoHost = false;
 
 export const DEFAULT_SITES = [
-  { id: 'danbooru', name: 'Danbooru', accentColor: '#3b82f6' },
-  { id: 'gelbooru', name: 'Gelbooru', accentColor: '#6366f1' },
-  { id: 'rule34', name: 'Rule34', accentColor: '#aae5a4' },
-  { id: 'yandere', name: 'Yande.re', accentColor: '#ec4899' },
-  { id: 'konachan', name: 'Konachan', accentColor: '#f97316' },
-  { id: 'safebooru', name: 'Safebooru', accentColor: '#10b981' },
-  { id: 'rule34video', name: 'Rule34Video', accentColor: '#ef4444' },
-  { id: 'xbooru', name: 'Xbooru', accentColor: '#f43f5e' },
-  { id: 'hypnohub', name: 'Hypnohub', accentColor: '#8b5cf6' },
-  { id: 'tbib', name: 'TBIB', accentColor: '#f59e0b' },
-  { id: 'pawchive', name: 'Pawchive', accentColor: '#f97316' }
+  { id: 'danbooru', name: 'Danbooru', accentColor: '#3b82f6', rating: 'all', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'gelbooru', name: 'Gelbooru', accentColor: '#6366f1', rating: 'all', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'rule34', name: 'Rule34', accentColor: '#aae5a4', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'yandere', name: 'Yande.re', accentColor: '#ec4899', rating: 'all', supportsVideo: false, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: false, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'konachan', name: 'Konachan', accentColor: '#f97316', rating: 'all', supportsVideo: false, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: false, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'safebooru', name: 'Safebooru', accentColor: '#10b981', rating: 'safe', supportsVideo: false, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'rule34video', name: 'Rule34Video', accentColor: '#ef4444', rating: 'nsfw', supportsVideo: true, supportsImages: false, supportsTags: true, supportsAiFilter: true, supportsDateFilter: false, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'xbooru', name: 'Xbooru', accentColor: '#f43f5e', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'hypnohub', name: 'Hypnohub', accentColor: '#8b5cf6', rating: 'all', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
+  { id: 'tbib', name: 'TBIB', accentColor: '#f59e0b', rating: 'all', supportsVideo: false, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: false, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'top', 'recommended', 'random'] },
+  { id: 'pawchive', name: 'Pawchive', accentColor: '#f97316', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsTags: false, supportsAiFilter: false, supportsDateFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportedCategories: ['new'] }
 ];
+
+export function getSiteCapabilities(siteId) {
+  const current = siteId || state.currentSite || 'danbooru';
+  if (current === 'all' || current === 'custom') {
+    return {
+      supportsVideo: true,
+      supportsImages: true,
+      supportsTags: true,
+      supportsAiFilter: true,
+      supportsDateFilter: true,
+      supportsShapesFilter: true,
+      supportsContentHiding: true,
+      supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+      rating: 'all'
+    };
+  }
+  const siteObj = (state.sites || DEFAULT_SITES).find(s => s.id === current) || DEFAULT_SITES.find(s => s.id === current);
+  if (siteObj) {
+    return {
+      supportsVideo: siteObj.supportsVideo ?? true,
+      supportsImages: siteObj.supportsImages ?? true,
+      supportsTags: siteObj.supportsTags ?? true,
+      supportsAiFilter: siteObj.supportsAiFilter ?? (siteObj.supportsTags ?? true),
+      supportsDateFilter: siteObj.supportsDateFilter ?? true,
+      supportsShapesFilter: siteObj.supportsShapesFilter ?? (siteObj.supportsTags ?? true),
+      supportsContentHiding: siteObj.supportsContentHiding ?? (siteObj.supportsTags ?? true),
+      supportedCategories: Array.isArray(siteObj.supportedCategories) ? siteObj.supportedCategories : ['new', 'views', 'top', 'recommended', 'random'],
+      rating: siteObj.rating || 'all'
+    };
+  }
+  return {
+    supportsVideo: true,
+    supportsImages: true,
+    supportsTags: true,
+    supportsAiFilter: true,
+    supportsDateFilter: true,
+    supportsShapesFilter: true,
+    supportsContentHiding: true,
+    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    rating: 'all'
+  };
+}
 
 export const state = {
   sites: [...DEFAULT_SITES],
