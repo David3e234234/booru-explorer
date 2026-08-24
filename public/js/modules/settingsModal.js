@@ -17,7 +17,7 @@ import {
   fetchTelegramBackupStatus
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
-import { t, getLang } from '../i18n.js';
+import { t, getLang, setLang } from '../i18n.js';
 import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI } from './filtersUI.js';
 
 export const DEFAULT_AI_TAGS = [

@@ -21,7 +21,8 @@ const router = express.Router();
 // Client settings fields that affect filtering results - they are part of the cache key
 const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
-  'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'customSources'
+  'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'customSources',
+  'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin'
 ];
 
 function parseClientAuth(req) {
