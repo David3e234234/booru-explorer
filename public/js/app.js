@@ -68,6 +68,7 @@ import {
 } from './modules/settingsModal.js';
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
+import { initWikiModal } from './modules/wikiModal.js';
 import { initProfileUI } from './modules/profileUI.js';
 import { consumeInitialUrl, initRouter, syncSearchUrl } from './router.js';
 import { t, applyStaticTranslations } from './i18n.js';
@@ -246,6 +247,17 @@ async function init() {
   initCustomSourcesModal({
     onApply: () => {
       selectSite('custom');
+    }
+  });
+
+  initWikiModal({
+    onSelectTag: (tag) => {
+      addSearchTag(tag);
+      if (autocompleteInstance) autocompleteInstance.renderTagsChips();
+      performSearch(true);
+    },
+    onSwitchSite: (site) => {
+      selectSite(site);
     }
   });
 

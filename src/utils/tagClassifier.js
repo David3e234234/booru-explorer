@@ -66,9 +66,11 @@ const KNOWN_EXTRA_TAGS = {
 const GENERIC_NON_ARTIST_TAGS = new Set([
   '2d', '3d', 'art', 'artwork', 'animation', 'video', 'sound', 'audio', 'highres', 'lowres', 
   'comic', 'parody', 'original', 'cosplay', 'edit', 'cg', 'illustration', 'sketch', 
-  'webm', 'gif', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'ai_generated', 'ai', 'unknown', 
-  'anonymous', 'various', 'bad_id', 'bad_link', 'translated', 'translation', 'sample', 'thumbnail',
-  'throat', 'oral', 'solo', 'female', 'male', 'breasts', 'nipples', 'pussy', 'penis', 'anal', 'hentai',
+  'webm', 'gif', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'psd', 'clip', 'sai', 'c4d', 'blend',
+  'zip', 'rar', '7z', 'tar', 'pack', 'reward', 'tier', 'patreon', 'fanbox', 'fantia', 'boosty', 'gumroad', 'subscribestar',
+  'ai_generated', 'ai', 'unknown', 'anonymous', 'various', 'bad_id', 'bad_link', 'translated', 'translation', 'sample', 'thumbnail',
+  'throat', 'oral', 'solo', 'female', 'male', 'breasts', 'nipples', 'pussy', 'penis', 'anal', 'hentai', 'r18', 'nsfw', 'sfw',
+  'selfie', 'wip', 'alt', 'version', 'ver', 'set', 'bundle', 'part', 'vol', 'volume',
   'artist_request', 'artist request', 'source_request', 'source request', 'character_request', 'character request'
 ]);
 
@@ -77,7 +79,8 @@ const META_KEYWORDS = new Set([
   'ugoira', 'translated', 'translation_request', 'commentary', 'commentary_request', 
   'tagme', 'bad_id', 'bad_link', 'duplicate', 'source_request', 'source request', 'check_my_note', 
   'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail', 'patreon_reward', 
-  'fantia', 'fanbox', 'skeb', 'lowres', 'downscaled', 'text', 'signature', 'username',
+  'fantia', 'fanbox', 'patreon', 'boosty', 'gumroad', 'subscribestar', 'skeb', 'lowres', 'downscaled', 'text', 'signature', 'username',
+  'psd', 'clip', 'zip', 'rar', '7z', 'pack', 'reward', 'tier',
   'official_art', 'scan', 'wallpaper', 'artist_request', 'artist request', 'character_request', 'character request'
 ]);
 
@@ -217,25 +220,25 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   }
 
   // Author extraction:
-  // Priority 1: explicit artist tags
-  // Priority 2: author passed in advance (e.g. from tag_string_artist on Danbooru)
+  // Priority 1: initialAuthor passed in advance (e.g. from creator directory on Pawchive or tag_string_artist on Danbooru)
+  // Priority 2: explicit artist tags (e.g. artist:name)
   // Priority 3: source link (Pixiv ID, Twitter account, etc.)
   let author = '';
-  if (artist.length > 0) {
-    author = artist.join(', ');
-  } else if (initialAuthor && typeof initialAuthor === 'string' && initialAuthor.trim()) {
+  if (initialAuthor && typeof initialAuthor === 'string' && initialAuthor.trim()) {
     author = initialAuthor.trim();
     // Add to the artist category if not already there
     author.split(',').forEach(a => {
       const cleanA = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
-      if (cleanA) addUnique(artist, cleanA);
+      if (cleanA && !artist.includes(cleanA)) artist.unshift(cleanA);
     });
+  } else if (artist.length > 0) {
+    author = artist.join(', ');
   } else if (sourceUrl) {
     const authorFromSource = extractAuthorFromSource(tags, sourceUrl, '');
     if (authorFromSource) {
       author = authorFromSource;
       const cleanA = author.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
-      if (cleanA) addUnique(artist, cleanA);
+      if (cleanA && !artist.includes(cleanA)) artist.unshift(cleanA);
     }
   }
 

@@ -165,22 +165,32 @@ export async function fetchPawchive(params, aiTagsList, settings) {
 
       const creatorInfo = creatorMap ? creatorMap.get(`${item.service}:${item.user}`) : null;
       const authorName = creatorInfo ? creatorInfo.name : (resolvedCreator?.name || `user_${item.user}`);
+      const authorTag = authorName.toLowerCase().replace(/[\s_.-]+/g, '_');
+      const postUrl = `https://pawchive.pw/${item.service}/user/${item.user}/post/${item.id}`;
 
       // Extract tags from service, creator name, and words in title
       const extractedTags = [
         item.service || 'pawchive',
-        `user_${item.user}`
+        `user_${item.user}`,
+        `artist:${authorTag}`
       ];
-      if (creatorInfo?.name) {
-        extractedTags.push(creatorInfo.name.toLowerCase().replace(/\s+/g, '_'));
+      if (authorTag && !extractedTags.includes(authorTag)) {
+        extractedTags.push(authorTag);
       }
+
+      const STOP_TITLE_WORDS = new Set([
+        'psd', 'clip', 'sai', 'c4d', 'blend', 'zip', 'rar', '7z', 'tar', 'r18', 'nsfw', 'sfw', 
+        'reward', 'pack', 'tier', 'wip', 'sketch', 'vol', 'part', 'set', 'ver', 'version', 
+        'alt', 'the', 'and', 'for', 'with', 'from', 'free', 'fanbox', 'patreon', 'fantia', 'boosty'
+      ]);
+
       if (item.title) {
         const titleWords = item.title
           .replace(/[^\p{L}\p{N}_]+/gu, ' ')
           .trim()
           .toLowerCase()
           .split(/\s+/)
-          .filter(w => w.length > 2);
+          .filter(w => w.length > 2 && !STOP_TITLE_WORDS.has(w));
         for (const w of titleWords.slice(0, 10)) {
           if (!extractedTags.includes(w)) extractedTags.push(w);
         }
@@ -190,7 +200,8 @@ export async function fetchPawchive(params, aiTagsList, settings) {
       const isPostVideo = isVideo || isVideoMediaUrl(rawFileName);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isPostVideo);
       const isAi = checkIsAi(extractedTags, aiTagsList);
-      const { tagDetails, author } = await classifyPostTags(extractedTags, authorName);
+      const { tagDetails } = await classifyPostTags(extractedTags, postUrl, authorName);
+      tagDetails.artist = [authorName];
       const createdAt = normalizeDate(item.published || item.added);
 
       // Build albumItems if multiple media items exist in the post
@@ -223,8 +234,6 @@ export async function fetchPawchive(params, aiTagsList, settings) {
         }
       }
 
-      const postUrl = `https://pawchive.pw/${item.service}/user/${item.user}/post/${item.id}`;
-
       return {
         id: `pawchive_${item.id}`,
         originalId: String(item.id),
@@ -237,7 +246,7 @@ export async function fetchPawchive(params, aiTagsList, settings) {
         isVideo: isPostVideo,
         isGif,
         hasSound: isPostVideo && hasSound,
-        author: author || authorName,
+        author: authorName,
         title: item.title || '',
         tags: extractedTags,
         tagDetails,
