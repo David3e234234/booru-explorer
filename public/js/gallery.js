@@ -122,10 +122,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget) {
               const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+              card._videoProbe = false;
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
             }
           }
           videoEl.muted = true;
+          card._videoProbe = false;
           const playPromise = videoEl.play();
           if (playPromise !== undefined) {
             playPromise.then(() => {
@@ -156,6 +158,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget && !videoEl.src) {
               const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+              // Mark as a background probe: its errors must not trigger proxy/transcode escalation
+              card._videoProbe = true;
               videoEl.preload = 'metadata';
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
             }
@@ -310,17 +314,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       return ph;
     });
     chunk.mounted = false;
-  }
-
-  function removeCardFromVirtualFlow(card) {
-    const chunkIdx = card._chunkIdx;
-    if (typeof chunkIdx === 'number' && virtChunks[chunkIdx]) {
-      const chunk = virtChunks[chunkIdx];
-      const pos = chunk.els.indexOf(card);
-      if (pos !== -1) chunk.els.splice(pos, 1);
-    }
-    if (virtTotal > 0) virtTotal -= 1;
-    detachCardObservers(card);
   }
 
   if (mainContent) {
@@ -752,7 +745,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         }, { once: true });
 
         videoEl.addEventListener('error', function () {
+          // Background duration probes fail often (expired URLs, unsupported codecs);
+          // escalating them queued server-side FFmpeg jobs just from scrolling the feed
+          if (card._videoProbe) {
+            card._videoProbe = false;
+            return;
+          }
           const videoTarget = post.fileUrl || post.sampleUrl;
+          if (!videoTarget) {
+            card.classList.remove('video-playing');
+            return;
+          }
           const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(videoTarget)}`;
           const proxyUrl = getProxiedUrl(videoTarget);
           if (this.src !== proxyUrl && !this.src.includes('/api/proxy') && this.src !== transcodeUrl) {
@@ -884,6 +887,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
 
       videoEl.muted = true;
+      card._videoProbe = false;
       const playPromise = videoEl.play();
       if (playPromise !== undefined) {
         playPromise
@@ -920,9 +924,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const removalTimer = setTimeout(() => {
       removed = true;
       state.posts = state.posts.filter(p => p.id !== post.id);
-      removeCardFromVirtualFlow(card);
-      card.remove();
-      updateResultsCount();
+      // Full re-render instead of surgical DOM removal: patching indices of remaining
+      // placeholders and mounted cards is error-prone and let hidden posts resurface
+      // when scrolling back through stale chunks of state.displayedPosts
+      renderGallery(false, { preserveScroll: true });
     }, HIDE_UNDO_WINDOW_MS);
 
     showActionToast(
@@ -1182,16 +1187,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     return card;
   }
 
-  document.querySelectorAll('.btn-size').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.btn-size').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const cols = btn.dataset.cols;
-      const is1Col = localStorage.getItem('booru_grid_mobile') === '1col';
-      galleryGrid.className = `gallery-grid grid-${cols} ${is1Col ? 'grid-1col' : ''}`;
-      scheduleVirtualUpdate();
-    });
-  });
+  // Note: .btn-size grid-size handling lives in app.js (setupEventListeners),
+  // which persists the choice and preserves other classes on the grid
 
   return {
     renderGallery,

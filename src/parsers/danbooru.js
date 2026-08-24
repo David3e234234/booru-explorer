@@ -101,14 +101,19 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
 
   logInfo('Danbooru', `Поиск в API: tags="${finalTags}", deepFetch=${shouldDeepFetch ? deepFetchPagesSetting + ' стр.' : 'выкл'}, userPriority=${prioritizeUserTags}`);
 
+  // Fallback queries (source:*author*, order:rank) run against a different query,
+  // so their results must not be checked against the original user tags
+  let skipUserTagCheck = false;
+
   const isPostMatch = (item) => {
     if (item.is_banned) return false;
     const rawTags = (item.tag_string || '').toLowerCase().split(/\s+/).filter(Boolean);
-    if (userTagList.length > 0) {
+    if (userTagList.length > 0 && !skipUserTagCheck) {
       const hasAll = userTagList.every(t => {
         const clean = t.toLowerCase();
         if (clean.startsWith('-')) return !rawTags.includes(clean.slice(1));
-        if (clean.includes(':')) return true;
+        // Meta/wildcard/OR syntax never appears verbatim in tag_string - let the API decide
+        if (clean.includes(':') || clean.includes('~') || clean.includes('*')) return true;
         return rawTags.includes(clean);
       });
       if (!hasAll) return false;
@@ -252,6 +257,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         const text = await res.text();
         const data = safeJsonParse(text, null);
         if (Array.isArray(data) && data.length > 0) {
+          skipUserTagCheck = true;
           allData = data;
         }
       }
@@ -285,7 +291,10 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     return hasMedia;
   });
 
-  return validItems.map(item => {
+  // Shaping posts is expensive (tag splits, variant scans); drop items that fail
+  // the cheap checks first. isPostMatch is a subset of the route-level filtering,
+  // so pre-filtering with it cannot change the final result set.
+  return validItems.filter(isPostMatch).map(item => {
     const rawTags = (item.tag_string || '').split(' ').filter(Boolean);
     const variants = item.media_asset?.variants || [];
     

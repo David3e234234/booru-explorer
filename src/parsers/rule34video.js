@@ -2,7 +2,17 @@ import { fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { checkIsAi, classifyTags } from '../utils/tagHelpers.js';
 import { logError } from '../utils/logger.js';
 
+// Insertion-ordered eviction: these caches previously grew without bound
+// (one entry per resolved author/video for the whole uptime)
+const RESOLVED_CACHE_MAX = 500;
 const resolvedAuthorCache = new Map();
+
+function cacheResolved(map, key, value) {
+  if (map.size >= RESOLVED_CACHE_MAX && !map.has(key)) {
+    map.delete(map.keys().next().value);
+  }
+  map.set(key, value);
+}
 
 /**
  * Resolves an author/artist/model name to Rule34Video IDs (model_ids, channels, members)
@@ -59,7 +69,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
             name: exact.title || clean,
             total: parseInt(exact.total, 10) || 0
           };
-          resolvedAuthorCache.set(cacheKey, result);
+          cacheResolved(resolvedAuthorCache, cacheKey, result);
           return result;
         }
       }
@@ -84,7 +94,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
         const slug = channelMatch[2] || '';
         const name = (channelMatch[3] || slug || clean).replace(/&#34;/g, '"').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
         const result = { type: 'channel', id, slug, name: name || clean };
-        resolvedAuthorCache.set(cacheKey, result);
+        cacheResolved(resolvedAuthorCache, cacheKey, result);
         return result;
       }
     }
@@ -108,7 +118,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
         const slug = memberMatch[2] || '';
         const name = (memberMatch[3] || slug || clean).replace(/&#34;/g, '"').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
         const result = { type: 'member', id, slug, name: name || clean };
-        resolvedAuthorCache.set(cacheKey, result);
+        cacheResolved(resolvedAuthorCache, cacheKey, result);
         return result;
       }
     }
@@ -682,7 +692,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
         tags: rawTagsList,
         tagDetails: classifyTags(rawTagsList, finalAuthor)
       };
-      resolvedVideoCache.set(cacheKey, result);
+      cacheResolved(resolvedVideoCache, cacheKey, result);
       return result;
     }
 
@@ -697,7 +707,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
         tags: rawTagsList,
         tagDetails: classifyTags(rawTagsList, finalAuthor)
       };
-      resolvedVideoCache.set(cacheKey, result);
+      cacheResolved(resolvedVideoCache, cacheKey, result);
       return result;
     }
     return null;

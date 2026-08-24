@@ -84,6 +84,9 @@ let profileUIInstance = null;
 let deferredInstallPrompt = null;
 let pendingPostId = null;
 
+// Monotonic token: responses from superseded searches are discarded on arrival
+let searchSeq = 0;
+
 async function init() {
   // Apply the saved language to all static markup before anything renders
   applyStaticTranslations();
@@ -274,6 +277,7 @@ async function init() {
     loadFavorites(),
     loadFavoriteAuthors(),
     loadLikes(),
+    loadDislikes(),
     loadLocalViewed(),
     loadBooruSites({ onSelectSite: selectSite })
   ]);
@@ -576,6 +580,8 @@ async function refreshAllUserData() {
 }
 
 async function performSearch(reset = false, options = {}) {
+  const seq = ++searchSeq;
+
   const favoritesHeaderBar = document.getElementById('favoritesHeaderBar');
   if (favoritesHeaderBar) {
     favoritesHeaderBar.style.display = state.currentCategory === 'favorites' ? 'flex' : 'none';
@@ -788,6 +794,7 @@ async function performSearch(reset = false, options = {}) {
         }
 
         const results = await Promise.allSettled(fetchTasks);
+        if (seq !== searchSeq) return;
         for (const res of results) {
           if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts)) {
             candidatePosts.push(...res.value.posts);
@@ -890,12 +897,20 @@ async function performSearch(reset = false, options = {}) {
       renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
     } catch (err) {
       console.error('Ошибка рекомендаций:', err);
-      if (reset) state.posts = [];
+      if (seq !== searchSeq) return;
+      if (reset) {
+        state.posts = [];
+      } else {
+        state.page--;
+        state.hasMore = true;
+      }
       galleryInstance.renderGallery(false);
     } finally {
-      state.isLoading = false;
-      const btnRefreshSearch = document.getElementById('btnRefreshSearch');
-      if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
+      if (seq === searchSeq) {
+        state.isLoading = false;
+        const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+        if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
+      }
     }
     return;
   }
@@ -924,6 +939,8 @@ async function performSearch(reset = false, options = {}) {
       bustCache: options.bustCache || false
     });
 
+    if (seq !== searchSeq) return;
+
     if (res.success && Array.isArray(res.posts)) {
       state.lastSearchFailed = false;
       if (reset) {
@@ -943,15 +960,22 @@ async function performSearch(reset = false, options = {}) {
     renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
   } catch (err) {
     console.error('Ошибка поиска:', err);
+    if (seq !== searchSeq) return;
     if (reset) {
       state.posts = [];
       state.lastSearchFailed = true;
+    } else {
+      // Roll the page back so infinite scroll does not keep a permanent gap
+      state.page--;
+      state.hasMore = true;
     }
     galleryInstance.renderGallery(false);
   } finally {
-    state.isLoading = false;
-    const btnRefreshSearch = document.getElementById('btnRefreshSearch');
-    if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
+    if (seq === searchSeq) {
+      state.isLoading = false;
+      const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+      if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
+    }
   }
 }
 
@@ -972,6 +996,7 @@ function setupEventListeners() {
       updateAiFilterUI();
       persistSettings({ aiFilter: filter });
       syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 
@@ -984,6 +1009,7 @@ function setupEventListeners() {
       updateRatingFilterUI();
       persistSettings({ ratingFilter: rating });
       syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 
@@ -996,6 +1022,7 @@ function setupEventListeners() {
       updateTypeFilterUI();
       persistSettings({ typeFilter: type });
       syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 
@@ -1008,6 +1035,7 @@ function setupEventListeners() {
       updateAgeFilterUI();
       persistSettings({ ageFilter: age });
       syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 

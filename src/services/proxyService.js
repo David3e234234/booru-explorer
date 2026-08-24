@@ -273,7 +273,8 @@ function pipeUpstream(req, res, webStream) {
 }
 
 export async function handleProxyRequest(req, res) {
-  const targetUrl = req.query.url;
+  // Reassigned when a 404 fallback candidate succeeds, so it must stay mutable
+  let targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).send('Требуется параметр url');
 
   try {

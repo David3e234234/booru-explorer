@@ -67,6 +67,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let activeBlobUrl = null;
   let currentZoomInstance = null;
   let currentVideoInstance = null;
+  // Shared /api/resolve-video result for the currently opened post - both the
+  // metadata refresh here and createVideoPlayer consume the same request
+  let activeResolvePromise = null;
 
   // Touch state variables for gestures
   let touchStartX = 0;
@@ -106,13 +109,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
 
-    // For Rule34Video videos, refresh full metadata (author, tags, HD stream)
+    // For Rule34Video videos, refresh full metadata (author, tags, HD stream).
+    // One request total: the video player receives the same promise.
     if (currentPost?.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
       const targetPostId = currentPost.id;
-      fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
+      activeResolvePromise = fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
         .then(r => r.json())
         .then(data => {
-          if (!data || currentPost?.id !== targetPostId) return;
+          if (!data || currentPost?.id !== targetPostId) return null;
           let changed = false;
           if (data.author && data.author !== currentPost.author) {
             currentPost.author = data.author;
@@ -129,8 +133,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           if (changed) {
             renderViewerPost(true);
           }
+          return data;
         })
-        .catch(() => {});
+        .catch(() => null);
+    } else {
+      activeResolvePromise = null;
     }
   }
 
@@ -152,6 +159,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       URL.revokeObjectURL(activeBlobUrl);
       activeBlobUrl = null;
     }
+    activeResolvePromise = null;
     if (currentZoomInstance) {
       currentZoomInstance.destroy();
       currentZoomInstance = null;
@@ -312,7 +320,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           state,
           getProxiedUrl,
           abortRef,
-          blobRef
+          blobRef,
+          resolvedVideoPromise: activeResolvePromise
         });
         mediaWrapper.appendChild(currentVideoInstance.videoContainer);
         mediaWrapper.appendChild(currentVideoInstance.statusBanner);
@@ -551,18 +560,27 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             }
           }
 
-          // Update the card badge in the gallery DOM
-          const cardEl = document.querySelector(`.post-card[data-id="${currentPost.id}"]`);
+          // Update the card badge in the gallery DOM.
+          // Cards are .media-card[data-post-id] with badges inside .badge-group-top > div;
+          // the old .post-card[data-id] selector matched nothing.
+          const cardEl = document.querySelector(`.media-card[data-post-id="${currentPost.id}"]`);
           if (cardEl) {
             cardEl.classList.add('is-album-card');
-            let badgeAlbum = cardEl.querySelector('.badge-album');
-            if (!badgeAlbum) {
+            const topGroup = cardEl.querySelector('.badge-group-top > div');
+            let badgeAlbum = topGroup ? topGroup.querySelector('.badge-album') : null;
+            if (!badgeAlbum && topGroup) {
               badgeAlbum = document.createElement('span');
               badgeAlbum.className = 'badge-format badge-album';
-              cardEl.querySelector('.post-badges')?.prepend(badgeAlbum);
+              const siteBadgeEl = topGroup.querySelector('.badge-site');
+              if (siteBadgeEl) {
+                topGroup.insertBefore(badgeAlbum, siteBadgeEl.nextSibling);
+              } else {
+                topGroup.prepend(badgeAlbum);
+              }
             }
             if (badgeAlbum) {
-              badgeAlbum.innerHTML = `📑 ${res.albumItems.length}`;
+              badgeAlbum.title = t('gal.albumBadge.title', 'Альбом: {n} изображений').replace('{n}', res.albumItems.length);
+              badgeAlbum.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24"><use href="#ic-album"/></svg> <span>${res.albumItems.length}</span>`;
             }
           }
 

@@ -12,6 +12,24 @@ import {
 
 const criteriaSetsCache = new WeakMap();
 
+// O(1) lookups instead of array scans per post
+const soundKeywordsSet = new Set(SOUND_KEYWORDS);
+
+// Date-filter windows, hoisted out of the per-post path
+const DATE_FILTER_LIMITS_MS = {
+  '24h': 24 * 60 * 60 * 1000,
+  '1d': 24 * 60 * 60 * 1000,
+  '2d': 2 * 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  'week': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000,
+  'month': 30 * 24 * 60 * 60 * 1000,
+  '90d': 90 * 24 * 60 * 60 * 1000,
+  '3months': 90 * 24 * 60 * 60 * 1000,
+  '365d': 365 * 24 * 60 * 60 * 1000,
+  'year': 365 * 24 * 60 * 60 * 1000
+};
+
 function getCriteriaSets(criteria, activeCurvyTags, activePetiteTags, activeFurryTags, activePregnantTags, activeLgbtTags) {
   let sets = criteriaSetsCache.get(criteria);
   if (sets) return sets;
@@ -65,11 +83,18 @@ export function isPostMatchingFilters(post, criteria = {}) {
   const postTagSet = new Set(Array.isArray(post.tags)
     ? post.tags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean)
     : []);
-  const postTagsFlat = Array.from(postTagSet).join(' ').replace(/_/g, ' ');
 
   // 2. Local filtering by excluded (-tag) tags
+  // Exact match against both spellings: negative tokens arrive space-separated
+  // ("long blonde hair") while tags are stored underscored. Substring matching
+  // used to hide unrelated posts (e.g. -blonde_hair also hid long_blonde_haired_girl).
   if (negativeTokens && negativeTokens.length > 0) {
-    if (negativeTokens.some(neg => postTagsFlat.includes(neg) || postTagSet.has(neg))) return false;
+    let hidden = false;
+    for (const neg of negativeTokens) {
+      if (postTagSet.has(neg)) { hidden = true; break; }
+      if (neg.indexOf(' ') !== -1 && postTagSet.has(neg.replace(/ /g, '_'))) { hidden = true; break; }
+    }
+    if (hidden) return false;
   }
 
   // 3. Body type and archetype filter (milfs vs lolis)
@@ -137,22 +162,8 @@ export function isPostMatchingFilters(post, criteria = {}) {
   if (dateFilter && dateFilter !== 'all' && post.createdAt) {
     const postTime = new Date(post.createdAt).getTime();
     if (!isNaN(postTime) && postTime > 0) {
-      const now = Date.now();
-      const diffMs = now - postTime;
-      const msMap = {
-        '24h': 24 * 60 * 60 * 1000,
-        '1d': 24 * 60 * 60 * 1000,
-        '2d': 2 * 24 * 60 * 60 * 1000,
-        '7d': 7 * 24 * 60 * 60 * 1000,
-        'week': 7 * 24 * 60 * 60 * 1000,
-        '30d': 30 * 24 * 60 * 60 * 1000,
-        'month': 30 * 24 * 60 * 60 * 1000,
-        '90d': 90 * 24 * 60 * 60 * 1000,
-        '3months': 90 * 24 * 60 * 60 * 1000,
-        '365d': 365 * 24 * 60 * 60 * 1000,
-        'year': 365 * 24 * 60 * 60 * 1000
-      };
-      const allowedMaxMs = msMap[dateFilter];
+      const diffMs = Date.now() - postTime;
+      const allowedMaxMs = DATE_FILTER_LIMITS_MS[dateFilter];
       if (allowedMaxMs && diffMs > allowedMaxMs) {
         return false;
       }
@@ -182,6 +193,8 @@ export function checkIsAi(tagsArray, aiTagsList) {
 export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
   const lowerTags = Array.isArray(rawTags) ? rawTags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')) : [];
   const tagsStr = lowerTags.join(' ');
+  const lowerUrl = typeof url === 'string' ? url.toLowerCase() : '';
+  const lowerFileExt = typeof fileExt === 'string' ? fileExt.toLowerCase() : '';
   
   // 1. Extract the clean extension (no path, params, or stray dots)
   let ext = '';
@@ -203,12 +216,19 @@ export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
   }
 
   // 2. GIF detection (a GIF is an animated image (img), not an HTML5 video container)
-  const isGif = ext === 'gif' || lowerTags.includes('gif') || (!ext && ((url && url.toLowerCase().includes('.gif')) || (fileExt && fileExt.toLowerCase().includes('.gif'))));
+  const isGif = ext === 'gif' || lowerTags.includes('gif') || (!ext && (lowerUrl.includes('.gif') || lowerFileExt.includes('.gif')));
 
   // 3. Video detection (MP4, WebM, MKV, MOV, M4V, FLV, AVI)
   // IMPORTANT: the 'animated' tag is applied to both GIFs and videos, so animated alone does not make a file a video when it is a GIF or a static format.
   const videoExts = ['mp4', 'webm', 'mkv', 'mov', 'm4v', 'flv', 'avi'];
-  const hasVideoExt = videoExts.includes(ext) || videoExts.some(vExt => (url && url.toLowerCase().includes(`.${vExt}`)) || (fileExt && fileExt.toLowerCase().includes(`.${vExt}`)));
+  let hasVideoExtByUrl = false;
+  for (const vExt of videoExts) {
+    if (lowerUrl.includes(`.${vExt}`) || lowerFileExt.includes(`.${vExt}`)) {
+      hasVideoExtByUrl = true;
+      break;
+    }
+  }
+  const hasVideoExt = videoExts.includes(ext) || hasVideoExtByUrl;
   const hasVideoTag = lowerTags.includes('video') || lowerTags.includes('webm') || lowerTags.includes('mp4') || lowerTags.includes('ugoira');
   
   const isVideo = !isGif && (hasVideoExt || (hasVideoTag && ext !== 'jpg' && ext !== 'jpeg' && ext !== 'png' && ext !== 'webp' && ext !== 'bmp' && ext !== 'gif'));
@@ -222,7 +242,7 @@ export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
 
   // 5. Sound check
   const hasSound = isVideo && (
-    lowerTags.some(t => SOUND_KEYWORDS.includes(t)) || 
+    lowerTags.some(t => soundKeywordsSet.has(t)) || 
     tagsStr.includes('has_audio') || 
     tagsStr.includes('with_sound') || 
     tagsStr.includes('sound_warning')

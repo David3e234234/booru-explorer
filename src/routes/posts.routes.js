@@ -2,6 +2,8 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
 import open from 'open';
 import AdmZip from 'adm-zip';
 import {
@@ -84,7 +86,8 @@ router.get('/posts', async (req, res) => {
       ...clientAuth
     };
 
-    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${buildAuthCacheKey(clientAuth, settings)}`;
+    // groupAlbums changes the response shape (album collapsing), so it belongs in the key
+    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
@@ -307,9 +310,11 @@ router.post('/download', async (req, res) => {
     logInfo('Download', `Скачивание: ${url}`);
     const response = await fetchSafe(url, { timeout: 60000 });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.body) throw new Error('Пустой ответ от источника');
 
-    const buffer = await response.arrayBuffer();
-    fs.writeFileSync(filePath, Buffer.from(buffer));
+    // Stream straight to disk - buffering the whole file in RAM and writing it
+    // synchronously used to stall the entire event loop on big archives
+    await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(filePath));
 
     if (isZip) {
       logInfo('Download', `Распаковка ZIP: ${filePath}`);

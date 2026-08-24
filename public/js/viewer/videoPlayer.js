@@ -161,45 +161,65 @@ export function makeBannerDraggable(bannerEl) {
     }
   }, { passive: true });
 
-  window.addEventListener('touchmove', (e) => {
+  const onWindowTouchMove = (e) => {
     if (isDraggingBanner && e.touches.length === 1) {
       moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
       if (e.cancelable) e.preventDefault();
       e.stopPropagation();
     }
-  }, { passive: false });
+  };
 
-  window.addEventListener('touchend', () => {
+  const onWindowTouchEnd = () => {
     if (isDraggingBanner) {
       endDrag();
     }
-  }, { passive: true });
+  };
 
-  window.addEventListener('touchcancel', () => {
+  const onWindowTouchCancel = () => {
     if (isDraggingBanner) {
       endDrag();
     }
-  }, { passive: true });
+  };
+
+  const onMouseMove = (e) => {
+    if (isDraggingBanner) {
+      moveDrag(e.clientX, e.clientY, e);
+    }
+  };
+
+  const onMouseUp = () => {
+    if (isDraggingBanner) {
+      endDrag();
+    }
+  };
+
+  window.addEventListener('touchmove', onWindowTouchMove, { passive: false });
+
+  window.addEventListener('touchend', onWindowTouchEnd, { passive: true });
+
+  window.addEventListener('touchcancel', onWindowTouchCancel, { passive: true });
 
   bannerEl.addEventListener('mousedown', (e) => {
     e.stopPropagation();
     startDrag(e.clientX, e.clientY, e.target);
   });
 
-  window.addEventListener('mousemove', (e) => {
-    if (isDraggingBanner) {
-      moveDrag(e.clientX, e.clientY, e);
-    }
-  });
+  window.addEventListener('mousemove', onMouseMove);
 
-  window.addEventListener('mouseup', () => {
-    if (isDraggingBanner) {
-      endDrag();
-    }
-  });
+  window.addEventListener('mouseup', onMouseUp);
+
+  // Every player instance registers its own window listeners; without this
+  // teardown they accumulate for the whole session and keep dead banners alive
+  bannerEl._destroyDrag = () => {
+    window.removeEventListener('touchmove', onWindowTouchMove);
+    window.removeEventListener('touchend', onWindowTouchEnd);
+    window.removeEventListener('touchcancel', onWindowTouchCancel);
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
+  };
 }
 
-export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef, blobRef }) {
+export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef, blobRef, resolvedVideoPromise = null }) {
   let directMedia = currentPost.fileUrl || currentPost.sampleUrl;
   let proxyMedia = getProxiedUrl(directMedia);
   let transcodeMedia = `/api/transcode-video?url=${encodeURIComponent(directMedia)}`;
@@ -385,6 +405,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
       video.src = blobRef.current;
       safePlay();
+      // Reset the flag, otherwise the video error listener keeps skipping the
+      // whole fallback chain for the rest of this player's lifetime
+      isPreCaching = false;
       setProgress(100, t('vp.cachedInMemory', 'Закэшировано в память!'), false);
       btnCache.textContent = t('vp.inMemoryOk', 'В памяти (OK)');
       setTimeout(hideStatus, 1200);
@@ -725,47 +748,45 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   });
 
-  // Automatically resolve full HD video with sound for Rule34Video
-  if (currentPost.site === 'rule34video') {
-    fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
-      .then(r => r.json())
-      .then(data => {
-        if (data && data.fullVideoUrl) {
-          currentPost.fileUrl = data.fullVideoUrl;
-          currentPost.hasSound = true;
-          rebuildMediaUrls();
-          const fullDirect = data.fullVideoUrl;
-          const fullProxy = getProxiedUrl(fullDirect);
-          const targetUrl = (currentSource === 'proxy' || needsProxy) ? fullProxy : fullDirect;
+  // Automatically resolve full HD video with sound for Rule34Video.
+  // The request itself is owned by the viewer (openViewer); we only consume its
+  // result here, so opening a video doesn't hit /api/resolve-video twice.
+  if (currentPost.site === 'rule34video' && typeof resolvedVideoPromise?.then === 'function') {
+    resolvedVideoPromise.then(data => {
+      if (!data || !data.fullVideoUrl) return;
+      currentPost.fileUrl = data.fullVideoUrl;
+      currentPost.hasSound = true;
+      rebuildMediaUrls();
+      const fullDirect = data.fullVideoUrl;
+      const fullProxy = getProxiedUrl(fullDirect);
+      const targetUrl = (currentSource === 'proxy' || needsProxy) ? fullProxy : fullDirect;
 
-          let currentTarget = '';
-          try {
-            const parsed = new URL(video.src, window.location.href);
-            currentTarget = parsed.pathname + parsed.search;
-          } catch {}
-          let nextTarget = '';
-          try {
-            const parsed = new URL(targetUrl, window.location.href);
-            nextTarget = parsed.pathname + parsed.search;
-          } catch {}
+      let currentTarget = '';
+      try {
+        const parsed = new URL(video.src, window.location.href);
+        currentTarget = parsed.pathname + parsed.search;
+      } catch {}
+      let nextTarget = '';
+      try {
+        const parsed = new URL(targetUrl, window.location.href);
+        nextTarget = parsed.pathname + parsed.search;
+      } catch {}
 
-          if (currentTarget !== nextTarget && !isPreCaching) {
-            const curTime = video.currentTime || 0;
-            const isPaused = video.paused;
-            video.src = targetUrl;
-            video.addEventListener('loadedmetadata', () => {
-              if (curTime > 0 && curTime < video.duration) {
-                try { video.currentTime = curTime; } catch {}
-              }
-              if (!isPaused) safePlay();
-            }, { once: true });
-            safePlay();
-            setProgress(100, t('vp.hdConnected', 'HD Видео ({q}) со звуком подключено').replace('{q}', data.quality || '1080p'), false);
-            setTimeout(hideStatus, 1500);
+      if (currentTarget !== nextTarget && !isPreCaching) {
+        const curTime = video.currentTime || 0;
+        const isPaused = video.paused;
+        video.src = targetUrl;
+        video.addEventListener('loadedmetadata', () => {
+          if (curTime > 0 && curTime < video.duration) {
+            try { video.currentTime = curTime; } catch {}
           }
-        }
-      })
-      .catch(() => {});
+          if (!isPaused) safePlay();
+        }, { once: true });
+        safePlay();
+        setProgress(100, t('vp.hdConnected', 'HD Видео ({q}) со звуком подключено').replace('{q}', data.quality || '1080p'), false);
+        setTimeout(hideStatus, 1500);
+      }
+    }).catch(() => {});
   }
 
   video.addEventListener('canplay', () => {
@@ -799,6 +820,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     video,
     destroy: () => {
       clearTimeout(loadTimeout);
+      if (statusBanner && typeof statusBanner._destroyDrag === 'function') {
+        statusBanner._destroyDrag();
+      }
       if (mediaSourceInstance && mediaSourceInstance.readyState === 'open') {
         try { mediaSourceInstance.endOfStream(); } catch {}
       }

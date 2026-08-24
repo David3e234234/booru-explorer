@@ -267,17 +267,25 @@ export function loadLocalViewed() {
   }
 }
 
+// Debounced: viewer navigation (including skip-media re-renders) calls this per
+// keypress, and serializing up to 2000 ids on every call stalled typing
+let viewedWriteTimer = null;
+
 export function markPostViewed(id) {
   if (!id) return;
   state.viewedIds.add(id);
-  try {
-    const arr = Array.from(state.viewedIds);
-    if (arr.length > 2000) {
-      arr.splice(0, arr.length - 2000);
-      state.viewedIds = new Set(arr);
-    }
-    localStorage.setItem(STORAGE_KEYS.VIEWED, JSON.stringify(arr));
-  } catch (e) {}
+  if (viewedWriteTimer) clearTimeout(viewedWriteTimer);
+  viewedWriteTimer = setTimeout(() => {
+    viewedWriteTimer = null;
+    try {
+      let arr = Array.from(state.viewedIds);
+      if (arr.length > 2000) {
+        arr = arr.slice(arr.length - 2000);
+        state.viewedIds = new Set(arr);
+      }
+      localStorage.setItem(STORAGE_KEYS.VIEWED, JSON.stringify(arr));
+    } catch (e) {}
+  }, 500);
 }
 
 export function loadLocalSettings() {

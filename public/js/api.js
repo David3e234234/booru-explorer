@@ -133,7 +133,11 @@ export async function fetchPosts({
   const res = await fetch(`/api/posts?${query.toString()}`, {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { success: true, posts: [] };
+  // Surface HTTP failures: returning a fake empty success used to kill infinite
+  // scroll after one transient error and showed "nothing found" instead of the error state
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
   return await res.json();
 }
 

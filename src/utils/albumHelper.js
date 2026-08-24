@@ -171,11 +171,13 @@ export function groupPostsIntoAlbums(posts, options = {}) {
 
   const keyToPostIdx = new Map();
   const postKeysList = [];
+  const keysByPost = new Map();
 
   // 1. Collect all relation keys for each post and union related posts
   posts.forEach((post, idx) => {
     const keys = extractAllSeriesKeys(post, post.site);
     postKeysList[idx] = keys;
+    keysByPost.set(post, keys);
 
     keys.forEach(key => {
       if (keyToPostIdx.has(key)) {
@@ -234,7 +236,8 @@ export function groupPostsIntoAlbums(posts, options = {}) {
         if (Array.isArray(item.tags)) {
           item.tags.forEach(t => allTagsSet.add(t));
         }
-        const kList = extractAllSeriesKeys(item, item.site);
+        // Top-level posts already have keys from step 1; only nested albumItems need a recompute
+        const kList = keysByPost.get(item) || extractAllSeriesKeys(item, item.site);
         kList.forEach(k => allKeysSet.add(k));
       });
 
