@@ -176,21 +176,14 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
   const handleScrollCheck = () => {
     if (!state.isLoading && state.hasMore && state.posts.length > 0 && state.currentCategory !== 'favorites') {
-      if (mainContent) {
-        if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 700) {
-          onLoadMore();
-          return;
-        }
-      }
+      // The body is the only real scroller at every breakpoint (.main-content has no
+      // height constraint), so proximity must be measured against document height
       if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 700) {
         onLoadMore();
       }
     }
   };
 
-  if (mainContent) {
-    mainContent.addEventListener('scroll', handleScrollCheck, { passive: true });
-  }
   window.addEventListener('scroll', handleScrollCheck, { passive: true });
 
   const loadMoreContainer = document.getElementById('loadMoreContainer');
@@ -214,6 +207,13 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   let virtChunks = [];             // [{ els: [], mounted }]
   let virtTotal = 0;
   let virtUpdateScheduled = false;
+  // Incremental scan state: chunk elements follow post order in the grid, so their
+  // vertical bounds grow monotonically. Frames that scroll down (or stay put) can
+  // start past the dead top region and stop at the first chunk fully below the
+  // window; scrolling up or any grid geometry change falls back to a full pass.
+  let virtScanFrom = 0;
+  let virtLastScrollY = -1;
+  let virtLastVh = -1;
 
   function createPlaceholder(index) {
     const ph = document.createElement('div');
@@ -230,6 +230,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   function resetVirtualization() {
     virtChunks = [];
     virtTotal = 0;
+    virtScanFrom = 0;
+    virtLastScrollY = -1;
+    virtLastVh = -1;
   }
 
   function buildPlaceholderRange(from, to) {
@@ -256,21 +259,51 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (!virtChunks.length) return;
 
     const vh = window.innerHeight || document.documentElement.clientHeight;
+    if (vh !== virtLastVh) {
+      virtScanFrom = 0;
+      virtLastVh = vh;
+    }
+    const scrollY = window.scrollY || 0;
+    if (scrollY < virtLastScrollY) {
+      virtScanFrom = 0;
+    }
+    virtLastScrollY = scrollY;
+
     const mountMargin = vh * VIRT_MOUNT_MARGIN;
     const unmountMargin = vh * VIRT_UNMOUNT_MARGIN;
     const toMount = [];
     const toUnmount = [];
+    let firstAlive = virtChunks.length;
+    let sweepFrom = -1;
 
-    for (let i = 0; i < virtChunks.length; i++) {
+    for (let i = virtScanFrom; i < virtChunks.length; i++) {
       const chunk = virtChunks[i];
       const bounds = chunkBounds(chunk);
       if (!bounds) continue;
+      if (bounds.bottom < -unmountMargin) {
+        // Entirely above the window: mounted chunks unmount, placeholders stay put
+        if (chunk.mounted) toUnmount.push(i);
+        continue;
+      }
+      firstAlive = Math.min(firstAlive, i);
+      if (bounds.top > vh + unmountMargin) {
+        // First chunk fully below the window; every later chunk is even lower,
+        // so the rest is swept without measuring
+        sweepFrom = i;
+        break;
+      }
       if (!chunk.mounted) {
         if (bounds.bottom >= -mountMargin && bounds.top <= vh + mountMargin) toMount.push(i);
-      } else if (bounds.bottom < -unmountMargin || bounds.top > vh + unmountMargin) {
-        toUnmount.push(i);
       }
     }
+
+    if (sweepFrom !== -1) {
+      for (let i = sweepFrom; i < virtChunks.length; i++) {
+        if (virtChunks[i].mounted) toUnmount.push(i);
+      }
+      firstAlive = Math.min(firstAlive, sweepFrom);
+    }
+    virtScanFrom = firstAlive;
 
     toMount.forEach(idx => mountChunk(idx));
     toUnmount.forEach(idx => unmountChunk(idx));
@@ -322,7 +355,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   window.addEventListener('scroll', scheduleVirtualUpdate, { passive: true });
   window.addEventListener('resize', scheduleVirtualUpdate, { passive: true });
   if ('ResizeObserver' in window) {
-    const gridResizeObserver = new ResizeObserver(() => scheduleVirtualUpdate());
+    const gridResizeObserver = new ResizeObserver(() => {
+      // Grid box changed (append, 1col image loads): vertical offsets are stale
+      virtScanFrom = 0;
+      scheduleVirtualUpdate();
+    });
     gridResizeObserver.observe(galleryGrid);
   }
 
