@@ -1,10 +1,30 @@
+import crypto from 'crypto';
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
-export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList) {
+// Moebooru API auth: password_hash is SHA1 of a fixed-salted password,
+// see "Logging In" on the site help/api page
+const MOEBOORU_PASSWORD_SALT = 'So-I-Heard-You-Like-Mupkids-?--';
+
+const MOEBOORU_AUTH_FIELDS = {
+  konachan: { login: 'konachanLogin', password: 'konachanPassword' },
+  yandere: { login: 'yandereLogin', password: 'yanderePassword' }
+};
+
+function buildAuthQuery(siteId, settings) {
+  const fields = MOEBOORU_AUTH_FIELDS[siteId];
+  if (!fields || !settings) return '';
+  const login = String(settings[fields.login] || '').trim();
+  const password = String(settings[fields.password] || '').trim();
+  if (!login || !password) return '';
+  const hash = crypto.createHash('sha1').update(`${MOEBOORU_PASSWORD_SALT}${password}--`).digest('hex');
+  return `&login=${encodeURIComponent(login)}&password_hash=${hash}`;
+}
+
+export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
     return [];
@@ -30,19 +50,26 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   }
 
   url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
+  const authQuery = buildAuthQuery(siteId, settings);
+  if (authQuery) url += authQuery;
+
+  // konachan.net is a separate site with its own accounts, so the fallback goes anonymous
+  const toAltKonachanUrl = (u) => {
+    const bare = authQuery && u.endsWith(authQuery) ? u.slice(0, -authQuery.length) : u;
+    return bare.includes('konachan.com') ? bare.replace('konachan.com', 'konachan.net') : bare.replace('konachan.net', 'konachan.com');
+  };
+
   let res = null;
   try {
     res = await fetchSafe(url);
     if (!res.ok && siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
-      const altUrl = url.includes('konachan.com') ? url.replace('konachan.com', 'konachan.net') : url.replace('konachan.net', 'konachan.com');
-      const altRes = await fetchSafe(altUrl);
+      const altRes = await fetchSafe(toAltKonachanUrl(url));
       if (altRes.ok) res = altRes;
     }
   } catch (e) {
     if (siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
       try {
-        const altUrl = url.includes('konachan.com') ? url.replace('konachan.com', 'konachan.net') : url.replace('konachan.net', 'konachan.com');
-        res = await fetchSafe(altUrl);
+        res = await fetchSafe(toAltKonachanUrl(url));
       } catch (err) {}
     }
   }

@@ -17,7 +17,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/variables.css?v=8.2">
   <link rel="stylesheet" href="css/main.css?v=8.2">
-  <link rel="stylesheet" href="css/components.css?v=8.9">
+  <link rel="stylesheet" href="css/components.css?v=9.1">
   <link rel="stylesheet" href="css/viewer.css?v=8.2">
   <script src="js/mp4box.all.min.js"></script>
 </head>
@@ -991,7 +991,13 @@
               <div class="api-key-card">
                 <div class="api-key-card-header">
                   <span class="api-key-site-badge site-r34">Rule34.xxx</span>
-                  <a href="https://rule34.xxx/index.php?page=account&s=home" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в профиле Rule34" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestRule34Auth" title="Проверить авторизацию">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                    <a href="https://rule34.xxx/index.php?page=account&s=home" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в профиле Rule34" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  </span>
                 </div>
                 <div class="api-keys-grid">
                   <input type="text" id="inputRule34ApiKey" class="input-setting" placeholder="Rule34 API Key" autocomplete="off" spellcheck="false">
@@ -1003,7 +1009,13 @@
               <div class="api-key-card">
                 <div class="api-key-card-header">
                   <span class="api-key-site-badge site-gelbooru">Gelbooru.com</span>
-                  <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в настройках Gelbooru" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestGelbooruAuth" title="Проверить авторизацию">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                    <a href="https://gelbooru.com/index.php?page=account&s=options" target="_blank" rel="noopener" class="api-key-link" title="Получить ключ в настройках Gelbooru" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  </span>
                 </div>
                 <div class="api-keys-grid">
                   <input type="text" id="inputGelbooruApiKey" class="input-setting" placeholder="Gelbooru API Key" autocomplete="off" spellcheck="false">
@@ -1015,11 +1027,53 @@
               <div class="api-key-card">
                 <div class="api-key-card-header">
                   <span class="api-key-site-badge site-danbooru">Danbooru</span>
-                  <a href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener" class="api-key-link" title="Получить API Key в профиле Danbooru" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestDanbooruAuth" title="Проверить авторизацию">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                    <a href="https://danbooru.donmai.us/profile" target="_blank" rel="noopener" class="api-key-link" title="Получить API Key в профиле Danbooru" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  </span>
                 </div>
                 <div class="api-keys-grid">
                   <input type="text" id="inputDanbooruApiKey" class="input-setting" placeholder="Danbooru API Key" autocomplete="off" spellcheck="false">
                   <input type="text" id="inputDanbooruLogin" class="input-setting" placeholder="Danbooru Username (Логин)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 4. Konachan -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-konachan">Konachan.com</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestKonachanAuth" title="Проверить авторизацию">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                    <a href="https://konachan.com/login" target="_blank" rel="noopener" class="api-key-link" title="Логин или регистрация на Konachan" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  </span>
+                </div>
+                <div class="api-keys-grid">
+                  <input type="text" id="inputKonachanLogin" class="input-setting" placeholder="Konachan логин" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.konachanLogin.placeholder">
+                  <input type="text" id="inputKonachanPassword" class="input-setting" placeholder="Konachan пароль" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.konachanPassword.placeholder">
+                </div>
+              </div>
+
+              <!-- 5. Yande.re -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-yandere">Yande.re</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestYandereAuth" title="Проверить авторизацию">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                    <a href="https://yande.re/login" target="_blank" rel="noopener" class="api-key-link" title="Логин или регистрация на Yande.re" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  </span>
+                </div>
+                <div class="api-keys-grid">
+                  <input type="text" id="inputYandereLogin" class="input-setting" placeholder="Yande.re логин" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.yandereLogin.placeholder">
+                  <input type="text" id="inputYanderePassword" class="input-setting" placeholder="Yande.re пароль" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.yanderePassword.placeholder">
                 </div>
               </div>
             </div>
@@ -1231,7 +1285,7 @@
                   <label class="settings-sublabel" for="inputTelegramBotToken" data-i18n="settings.tgToken">Токен бота (Bot Token):</label>
                   <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" class="tg-helper-link" data-i18n="settings.tgGetBotFather">Получить в @BotFather ↗</a>
                 </div>
-                <input type="password" id="inputTelegramBotToken" class="settings-input" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..." autocomplete="off">
+                <input type="text" id="inputTelegramBotToken" class="settings-input" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz..." autocomplete="off">
               </div>
 
               <div class="settings-input-row">
@@ -1921,6 +1975,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=9.2"></script>
+  <script type="module" src="js/app.js?v=9.4"></script>
 </body>
 </html>

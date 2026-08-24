@@ -14,6 +14,7 @@ import {
   syncDislikes, 
   syncFavoriteAuthors,
   testTelegramConnection,
+  testSiteAuth,
   sendTelegramBackupNow,
   fetchTelegramBackupStatus,
   apiExportAccount,
@@ -230,6 +231,10 @@ export function applySettingsToUIAndState(s) {
   const inputGelbooruUserId = document.getElementById('inputGelbooruUserId');
   const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
   const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
+  const inputKonachanLogin = document.getElementById('inputKonachanLogin');
+  const inputKonachanPassword = document.getElementById('inputKonachanPassword');
+  const inputYandereLogin = document.getElementById('inputYandereLogin');
+  const inputYanderePassword = document.getElementById('inputYanderePassword');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
@@ -246,6 +251,10 @@ export function applySettingsToUIAndState(s) {
   if (s.gelbooruUserId && inputGelbooruUserId) inputGelbooruUserId.value = s.gelbooruUserId;
   if (s.danbooruApiKey && inputDanbooruApiKey) inputDanbooruApiKey.value = s.danbooruApiKey;
   if (s.danbooruLogin && inputDanbooruLogin) inputDanbooruLogin.value = s.danbooruLogin;
+  if (s.konachanLogin && inputKonachanLogin) inputKonachanLogin.value = s.konachanLogin;
+  if (s.konachanPassword && inputKonachanPassword) inputKonachanPassword.value = s.konachanPassword;
+  if (s.yandereLogin && inputYandereLogin) inputYandereLogin.value = s.yandereLogin;
+  if (s.yanderePassword && inputYanderePassword) inputYanderePassword.value = s.yanderePassword;
   if (s.itemsPerPage) {
     state.limit = s.itemsPerPage;
     if (selectItemsPerPage) selectItemsPerPage.value = String(s.itemsPerPage);
@@ -571,6 +580,10 @@ export function openSettingsModal() {
   const inputGelbooruUserId = document.getElementById('inputGelbooruUserId');
   const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
   const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
+  const inputKonachanLogin = document.getElementById('inputKonachanLogin');
+  const inputKonachanPassword = document.getElementById('inputKonachanPassword');
+  const inputYandereLogin = document.getElementById('inputYandereLogin');
+  const inputYanderePassword = document.getElementById('inputYanderePassword');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
@@ -623,6 +636,10 @@ export function openSettingsModal() {
   if (inputGelbooruUserId) inputGelbooruUserId.value = state.settings.gelbooruUserId || '';
   if (inputDanbooruApiKey) inputDanbooruApiKey.value = state.settings.danbooruApiKey || '';
   if (inputDanbooruLogin) inputDanbooruLogin.value = state.settings.danbooruLogin || '';
+  if (inputKonachanLogin) inputKonachanLogin.value = state.settings.konachanLogin || '';
+  if (inputKonachanPassword) inputKonachanPassword.value = state.settings.konachanPassword || '';
+  if (inputYandereLogin) inputYandereLogin.value = state.settings.yandereLogin || '';
+  if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
   if (selectItemsPerPage) selectItemsPerPage.value = String(state.limit || 100);
   if (selectPreviewQuality) selectPreviewQuality.value = state.settings.previewQuality || 'medium';
   if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = state.settings.videoAutoplayHover !== false;
@@ -934,6 +951,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         const inputGelbooruUserId = document.getElementById('inputGelbooruUserId');
         const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
         const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
+        const inputKonachanLogin = document.getElementById('inputKonachanLogin');
+        const inputKonachanPassword = document.getElementById('inputKonachanPassword');
+        const inputYandereLogin = document.getElementById('inputYandereLogin');
+        const inputYanderePassword = document.getElementById('inputYanderePassword');
 
         if (inputRule34ApiKey) inputRule34ApiKey.value = state.settings.rule34ApiKey || '';
         if (inputRule34UserId) inputRule34UserId.value = state.settings.rule34UserId || '';
@@ -941,6 +962,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         if (inputGelbooruUserId) inputGelbooruUserId.value = state.settings.gelbooruUserId || '';
         if (inputDanbooruApiKey) inputDanbooruApiKey.value = state.settings.danbooruApiKey || '';
         if (inputDanbooruLogin) inputDanbooruLogin.value = state.settings.danbooruLogin || '';
+        if (inputKonachanLogin) inputKonachanLogin.value = state.settings.konachanLogin || '';
+        if (inputKonachanPassword) inputKonachanPassword.value = state.settings.konachanPassword || '';
+        if (inputYandereLogin) inputYandereLogin.value = state.settings.yandereLogin || '';
+        if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
         tempBlacklist = state.settings.blacklist || [];
         tempAiTags = state.settings.aiTags || [];
         tempCurvyTags = state.settings.curvyTags || [...DEFAULT_CURVY_TAGS];
@@ -1013,6 +1038,53 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       }
     });
   }
+
+  // Board credential tests: each button validates the values typed in its own card
+  const authTestConfigs = [
+    { btnId: 'btnTestRule34Auth', site: 'rule34', fields: { apiKey: 'inputRule34ApiKey', userId: 'inputRule34UserId' } },
+    { btnId: 'btnTestGelbooruAuth', site: 'gelbooru', fields: { apiKey: 'inputGelbooruApiKey', userId: 'inputGelbooruUserId' } },
+    { btnId: 'btnTestDanbooruAuth', site: 'danbooru', fields: { apiKey: 'inputDanbooruApiKey', login: 'inputDanbooruLogin' } },
+    { btnId: 'btnTestKonachanAuth', site: 'konachan', fields: { login: 'inputKonachanLogin', password: 'inputKonachanPassword' } },
+    { btnId: 'btnTestYandereAuth', site: 'yandere', fields: { login: 'inputYandereLogin', password: 'inputYanderePassword' } }
+  ];
+  authTestConfigs.forEach(({ btnId, site, fields }) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const payload = { site };
+      let hasAnyValue = false;
+      for (const [key, inputId] of Object.entries(fields)) {
+        const el = document.getElementById(inputId);
+        payload[key] = el ? el.value.trim() : '';
+        if (payload[key]) hasAnyValue = true;
+      }
+
+      if (!hasAnyValue) {
+        showToast(t('set.authTestNeedsCreds', 'Заполните данные для входа в карточке'));
+        return;
+      }
+
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      btn.innerHTML = `<span>${t('set.tgTesting', 'Проверка...')}</span>`;
+
+      try {
+        const res = await testSiteAuth(payload);
+        if (res.success) {
+          showToast(res.message || t('set.authTestOk', 'Авторизация работает'));
+        } else {
+          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || t('set.authTestFail', 'Проверка не пройдена')));
+        }
+      } catch (err) {
+        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.serverUnreachable', 'Не удалось связаться с сервером')));
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+        btn.innerHTML = originalHtml;
+      }
+    });
+  });
 
   if (btnSendTelegramBackup) {
     btnSendTelegramBackup.addEventListener('click', async () => {
@@ -1140,6 +1212,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputGelbooruUserId = document.getElementById('inputGelbooruUserId');
       const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
       const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
+      const inputKonachanLogin = document.getElementById('inputKonachanLogin');
+      const inputKonachanPassword = document.getElementById('inputKonachanPassword');
+      const inputYandereLogin = document.getElementById('inputYandereLogin');
+      const inputYanderePassword = document.getElementById('inputYanderePassword');
 
       const checkTgEnabled = document.getElementById('checkTelegramBackupEnabled');
       const inputTgToken = document.getElementById('inputTelegramBotToken');
@@ -1176,6 +1252,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         gelbooruUserId: inputGelbooruUserId ? inputGelbooruUserId.value.trim() : '',
         danbooruApiKey: inputDanbooruApiKey ? inputDanbooruApiKey.value.trim() : '',
         danbooruLogin: inputDanbooruLogin ? inputDanbooruLogin.value.trim() : '',
+        konachanLogin: inputKonachanLogin ? inputKonachanLogin.value.trim() : '',
+        konachanPassword: inputKonachanPassword ? inputKonachanPassword.value.trim() : '',
+        yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : '',
+        yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : '',
         telegramBackupEnabled: checkTgEnabled ? checkTgEnabled.checked : false,
         telegramBotToken: inputTgToken ? inputTgToken.value.trim() : '',
         telegramChatId: inputTgChat ? inputTgChat.value.trim() : '',
@@ -1225,6 +1305,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputGelbooruUserId = document.getElementById('inputGelbooruUserId');
       const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
       const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
+      const inputKonachanLogin = document.getElementById('inputKonachanLogin');
+      const inputKonachanPassword = document.getElementById('inputKonachanPassword');
+      const inputYandereLogin = document.getElementById('inputYandereLogin');
+      const inputYanderePassword = document.getElementById('inputYanderePassword');
       const selectPreviewQuality = document.getElementById('selectPreviewQuality');
       const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
       const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
@@ -1245,6 +1329,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (inputGelbooruUserId) inputGelbooruUserId.value = '';
       if (inputDanbooruApiKey) inputDanbooruApiKey.value = '';
       if (inputDanbooruLogin) inputDanbooruLogin.value = '';
+      if (inputKonachanLogin) inputKonachanLogin.value = '';
+      if (inputKonachanPassword) inputKonachanPassword.value = '';
+      if (inputYandereLogin) inputYandereLogin.value = '';
+      if (inputYanderePassword) inputYanderePassword.value = '';
       if (inputTgToken) inputTgToken.value = '';
       if (inputTgChat) inputTgChat.value = '';
       if (checkTgEnabled) checkTgEnabled.checked = false;
@@ -1277,6 +1365,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         gelbooruUserId: '',
         danbooruApiKey: '',
         danbooruLogin: '',
+        konachanLogin: '',
+        konachanPassword: '',
+        yandereLogin: '',
+        yanderePassword: '',
         telegramBackupEnabled: false,
         telegramBotToken: '',
         telegramChatId: '',

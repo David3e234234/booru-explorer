@@ -33,11 +33,11 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
     case 'rule34video':
       return await fetchRule34Video(params, aiTagsList);
     case 'yandere':
-      return await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', params, aiTagsList);
+      return await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', params, aiTagsList, settings);
     case 'safebooru':
       return await fetchSafebooru(params, aiTagsList);
     case 'konachan':
-      return await fetchMoebooru('konachan', 'https://konachan.com', 'Konachan', params, aiTagsList);
+      return await fetchMoebooru('konachan', 'https://konachan.com', 'Konachan', params, aiTagsList, settings);
     case 'rule34':
       return await fetchRule34(params, aiTagsList, settings);
     case 'gelbooru':

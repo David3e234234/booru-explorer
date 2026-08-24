@@ -1716,9 +1716,23 @@
   border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
+.api-key-site-badge.site-konachan {
+  background: rgba(20, 184, 166, 0.15);
+  color: #5eead4;
+  border: 1px solid rgba(20, 184, 166, 0.3);
+}
+
+.api-key-site-badge.site-yandere {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
 [data-theme="warm-paper"] .api-key-site-badge.site-r34 { color: #15803d; border-color: rgba(21, 128, 61, 0.35); background: rgba(21, 128, 61, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-gelbooru { color: #4338ca; border-color: rgba(67, 56, 202, 0.35); background: rgba(67, 56, 202, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-danbooru { color: #1d4ed8; border-color: rgba(29, 78, 216, 0.35); background: rgba(29, 78, 216, 0.08); }
+[data-theme="warm-paper"] .api-key-site-badge.site-konachan { color: #0f766e; border-color: rgba(15, 118, 110, 0.35); background: rgba(15, 118, 110, 0.08); }
+[data-theme="warm-paper"] .api-key-site-badge.site-yandere { color: #b91c1c; border-color: rgba(185, 28, 28, 0.35); background: rgba(185, 28, 28, 0.08); }
 
 .api-key-link {
   font-size: 11px;
@@ -1726,6 +1740,43 @@
   text-decoration: none;
   opacity: 0.85;
   transition: opacity var(--transition-fast);
+}
+
+.api-key-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.api-key-test-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-medium);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color var(--transition-fast), border-color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.api-key-test-btn:hover:not(:disabled) {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+}
+
+.api-key-test-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.api-key-test-btn:disabled,
+.api-key-test-btn.is-loading {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .api-key-link:hover {

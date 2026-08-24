@@ -18,6 +18,10 @@ function getAuthHeaders(includeJson = false) {
       gelbooruUserId: state.settings.gelbooruUserId || '',
       danbooruApiKey: state.settings.danbooruApiKey || '',
       danbooruLogin: state.settings.danbooruLogin || '',
+      konachanLogin: state.settings.konachanLogin || '',
+      konachanPassword: state.settings.konachanPassword || '',
+      yandereLogin: state.settings.yandereLogin || '',
+      yanderePassword: state.settings.yanderePassword || '',
       curvyTags: state.settings.curvyTags || [],
       petiteTags: state.settings.petiteTags || [],
       furryTags: state.settings.furryTags || [],
@@ -348,6 +352,15 @@ export async function testTelegramConnection(token, chatId) {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify({ token, chatId })
+  });
+  return await res.json();
+}
+
+export async function testSiteAuth(payload) {
+  const res = await fetch('/api/sites/auth-test', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
   });
   return await res.json();
 }

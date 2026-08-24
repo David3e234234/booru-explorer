@@ -16,7 +16,7 @@ import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
 import { getCreatorsDirectory, fetchPawchivePostById } from '../parsers/pawchive.js';
 import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
-import { fetchSafe } from '../utils/network.js';
+import { fetchSafe, safeJsonParse } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 const router = express.Router();
@@ -25,7 +25,8 @@ const router = express.Router();
 const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
   'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'customSources',
-  'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin'
+  'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
+  'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword'
 ];
 
 function parseClientAuth(req) {
@@ -44,6 +45,117 @@ function buildAuthCacheKey(clientAuth, settings) {
   const parts = AUTH_CACHE_FIELDS.map(f => JSON.stringify(clientAuth[f] ?? settings[f] ?? null));
   return crypto.createHash('md5').update(parts.join('|')).digest('hex').slice(0, 10);
 }
+
+// POST /api/sites/auth-test - validate board credentials typed in the settings modal
+const AUTH_TEST_TIMEOUT_MS = 8000;
+const MOEBOORU_PASSWORD_SALT = 'So-I-Heard-You-Like-Mupkids-?--';
+
+async function readJsonSafe(res) {
+  try {
+    return safeJsonParse(await res.text(), null);
+  } catch {
+    return null;
+  }
+}
+
+async function runAuthTest(site, creds) {
+  const login = String(creds.login || '').trim();
+  const apiKey = String(creds.apiKey || '').trim();
+  const userId = String(creds.userId || '').trim();
+  const password = String(creds.password || '').trim();
+
+  if (site === 'danbooru') {
+    if (!login || !apiKey) return { success: false, message: 'Введите логин и API ключ Danbooru' };
+    let res;
+    try {
+      res = await fetchSafe(`https://danbooru.donmai.us/profile.json?login=${encodeURIComponent(login)}&api_key=${encodeURIComponent(apiKey)}`, { timeout: AUTH_TEST_TIMEOUT_MS });
+    } catch {
+      return { success: false, message: 'Danbooru недоступен' };
+    }
+    // 401/403 is the site's explicit rejection of bad credentials
+    if (res.status === 401 || res.status === 403) return { success: false, message: 'Danbooru: неверный логин или API ключ' };
+    if (res.ok) {
+      const data = await readJsonSafe(res);
+      if (data && data.name) return { success: true, message: `Danbooru: вход выполнен как ${data.name}` };
+      return { success: false, message: 'Danbooru: неожиданный ответ сервера' };
+    }
+    return { success: false, message: `Danbooru: ошибка сайта (HTTP ${res.status})` };
+  }
+
+  if (site === 'konachan' || site === 'yandere') {
+    const siteName = site === 'yandere' ? 'Yande.re' : 'Konachan';
+    const base = site === 'yandere' ? 'https://yande.re' : 'https://konachan.com';
+    if (!login || !password) return { success: false, message: `Введите логин и пароль ${siteName}` };
+    const hash = crypto.createHash('sha1').update(`${MOEBOORU_PASSWORD_SALT}${password}--`).digest('hex');
+    let res;
+    try {
+      // user/show.json denies anonymous access, so bad credentials fall back to the anonymous 403
+      res = await fetchSafe(`${base}/user/show.json?name=${encodeURIComponent(login)}&login=${encodeURIComponent(login)}&password_hash=${hash}`, { timeout: AUTH_TEST_TIMEOUT_MS });
+    } catch {
+      return { success: false, message: `${siteName} недоступен` };
+    }
+    if (res.status === 401 || res.status === 403) return { success: false, message: `${siteName}: неверный логин или пароль` };
+    if (res.ok) {
+      const data = await readJsonSafe(res);
+      if (data && data.name) return { success: true, message: `${siteName}: вход выполнен как ${data.name}` };
+    }
+    // The show action only responds in HTML, so valid credentials that pass the auth filter
+    // end up as 406 (or 404 when the profile name lookup redirects). Both mean "authenticated".
+    if (res.status === 406 || res.status === 404) return { success: true, message: `${siteName}: вход выполнен как ${login}` };
+    return { success: false, message: `${siteName}: ошибка сайта (HTTP ${res.status})` };
+  }
+
+  if (site === 'gelbooru') {
+    if (!apiKey || !userId) return { success: false, message: 'Введите API ключ и User ID Gelbooru' };
+    let res;
+    try {
+      res = await fetchSafe(`https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&limit=1&tags=1girl&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`, { timeout: AUTH_TEST_TIMEOUT_MS, headers: { 'Referer': 'https://gelbooru.com/' } });
+    } catch {
+      return { success: false, message: 'Gelbooru недоступен' };
+    }
+    if (res.ok) {
+      const data = await readJsonSafe(res);
+      if (data && (data['@attributes'] || Array.isArray(data.posts))) return { success: true, message: 'Gelbooru: ключ принят' };
+      return { success: false, message: 'Gelbooru: неверный API ключ или User ID' };
+    }
+    if (res.status === 401 || res.status === 403) return { success: false, message: 'Gelbooru: неверный API ключ или User ID' };
+    return { success: false, message: `Gelbooru: ошибка сайта (HTTP ${res.status})` };
+  }
+
+  if (site === 'rule34') {
+    if (!apiKey || !userId) return { success: false, message: 'Введите API ключ и User ID Rule34' };
+    let res;
+    try {
+      res = await fetchSafe(`https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&limit=1&tags=1girl&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`, { timeout: AUTH_TEST_TIMEOUT_MS, headers: { 'Referer': 'https://rule34.xxx/' } });
+    } catch {
+      return { success: false, message: 'Rule34 недоступен' };
+    }
+    if (res.ok) {
+      // Bad credentials get HTTP 200 with a "Missing authentication" string instead of a posts array
+      const data = await readJsonSafe(res);
+      if (Array.isArray(data)) return { success: true, message: 'Rule34: ключ принят' };
+      return { success: false, message: 'Rule34: неверный API ключ или User ID' };
+    }
+    if (res.status === 401 || res.status === 403) return { success: false, message: 'Rule34: неверный API ключ или User ID' };
+    return { success: false, message: `Rule34: ошибка сайта (HTTP ${res.status})` };
+  }
+
+  return { success: false, message: 'Для этого сайта нет данных для проверки' };
+}
+
+router.post('/sites/auth-test', async (req, res) => {
+  try {
+    const { site } = req.body || {};
+    if (!site || !SITES[site]) {
+      return res.status(400).json({ success: false, message: 'Неизвестный сайт' });
+    }
+    const result = await runAuthTest(site, req.body || {});
+    res.json(result);
+  } catch (err) {
+    logError('AuthTest', 'Ошибка проверки авторизации', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // GET /api/sites
 router.get('/sites', (req, res) => {
