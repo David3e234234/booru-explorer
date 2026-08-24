@@ -20,5 +20,4 @@ jobs:
             git pull origin main
             npm install --omit=dev
             mkdir -p tmp && touch tmp/restart.txt
-            pkill -9 -u $USER -f node || true
 
