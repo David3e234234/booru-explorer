@@ -159,7 +159,7 @@ export function formatBytes(bytes, decimals = 1) {
 export function isVideoMediaUrl(url) {
   if (!url) return false;
   const clean = url.split('?')[0].toLowerCase();
-  return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.zip') ||
+  return clean.endsWith('.mp4') || clean.endsWith('.webm') ||
          clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
 }
 

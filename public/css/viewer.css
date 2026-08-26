@@ -578,6 +578,26 @@
   flex-shrink: 0;
 }
 
+/* Archive unpacking placeholder (zip-only posts) */
+.archive-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: var(--text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.archive-loading .video-status-spinner {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+}
+
 .video-status-text {
   font-size: 12px;
   font-weight: 600;

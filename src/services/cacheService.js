@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { THUMBS_DIR, VIDEOS_DIR } from '../config/constants.js';
+import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 export class MemoryCache {
@@ -99,11 +99,12 @@ export async function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
 
     const thumbs = await getDirectoryStats(THUMBS_DIR);
     const videos = await getDirectoryStats(VIDEOS_DIR);
-    let totalBytes = thumbs.totalBytes + videos.totalBytes;
+    const archives = await getDirectoryStats(ARCHIVES_DIR);
+    let totalBytes = thumbs.totalBytes + videos.totalBytes + archives.totalBytes;
 
     if (totalBytes > maxBytes) {
       logInfo('Cache', `Превышен лимит кэша (${(totalBytes / 1024 / 1024).toFixed(1)} MB / ${(maxBytes / 1024 / 1024).toFixed(1)} MB). Автоочистка LRU...`);
-      const allFiles = [...thumbs.fileList, ...videos.fileList];
+      const allFiles = [...thumbs.fileList, ...videos.fileList, ...archives.fileList];
       allFiles.sort((a, b) => a.mtime - b.mtime);
 
       for (const f of allFiles) {

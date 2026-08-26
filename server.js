@@ -13,12 +13,14 @@ import {
   CACHE_DIR, 
   THUMBS_DIR, 
   VIDEOS_DIR, 
+  ARCHIVES_DIR,
   ROOT_DIR 
 } from './src/config/constants.js';
 import postsRoutes from './src/routes/posts.routes.js';
 import mediaRoutes from './src/routes/media.routes.js';
 import userRoutes from './src/routes/user.routes.js';
 import authRoutes from './src/routes/auth.routes.js';
+import archiveRoutes from './src/routes/archive.routes.js';
 import { initBackupScheduler } from './src/services/backupService.js';
 
 // Force IPv4 first for reliable network requests to overseas Booru sites
@@ -41,7 +43,7 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Initialize storage and cache directories
-[DATA_DIR, CACHE_DIR, THUMBS_DIR, VIDEOS_DIR].forEach(dir => {
+[DATA_DIR, CACHE_DIR, THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR].forEach(dir => {
   try {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -79,6 +81,7 @@ app.use(express.static(publicDir, {
 
 // Mount modular API routers
 app.use('/api/auth', authRoutes);
+app.use('/api/archive', archiveRoutes);
 app.use('/api', postsRoutes);
 app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);

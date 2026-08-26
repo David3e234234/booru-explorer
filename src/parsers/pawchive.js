@@ -10,11 +10,18 @@ const CREATORS_CACHE_TTL = 3600 * 1000; // 1 hour
 
 const PAWCHIVE_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif']);
 const PAWCHIVE_VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v']);
+const PAWCHIVE_ARCHIVE_EXTS = new Set(['zip', 'rar', '7z']);
 
 function isPawchiveVisualMedia(nameOrPath) {
   if (!nameOrPath) return false;
   const ext = nameOrPath.split('?')[0].split('.').pop()?.toLowerCase();
   return PAWCHIVE_IMAGE_EXTS.has(ext) || PAWCHIVE_VIDEO_EXTS.has(ext);
+}
+
+function isPawchiveArchive(nameOrPath) {
+  if (!nameOrPath) return false;
+  const ext = nameOrPath.split('?')[0].split('.').pop()?.toLowerCase();
+  return PAWCHIVE_ARCHIVE_EXTS.has(ext);
 }
 
 const STOP_TITLE_WORDS = new Set([
@@ -102,6 +109,11 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     ? item.attachments.filter(a => a && a.path && isPawchiveVisualMedia(a.name || a.path))
     : [];
 
+  // Archive-only posts (zip/rar packs with no images on the source itself)
+  const archiveAttachments = Array.isArray(item.attachments)
+    ? item.attachments.filter(a => a && a.path && isPawchiveArchive(a.name || a.path))
+    : [];
+
   const mediaFiles = [];
   if (item.file && item.file.path) {
     const isCoverMedia = isPawchiveVisualMedia(item.file.name || item.file.path) || Boolean(item.file.preview_only || item.has_full === false);
@@ -116,18 +128,7 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     }
   }
 
-  // Fallback if no media matched regex but file/attachments exist
-  if (mediaFiles.length === 0) {
-    if (item.file && item.file.path) {
-      mediaFiles.push(item.file);
-    } else if (validAttachments.length > 0) {
-      mediaFiles.push(...validAttachments);
-    } else if (Array.isArray(item.attachments) && item.attachments.length > 0 && item.attachments[0]?.path) {
-      mediaFiles.push(item.attachments[0]);
-    } else {
-      return null;
-    }
-  }
+  if (mediaFiles.length === 0 && archiveAttachments.length === 0) return null;
 
   const creatorInfo = creatorMap ? creatorMap.get(`${item.service}:${item.user}`) : null;
   const authorName = creatorInfo ? creatorInfo.name : (resolvedCreator?.name || `user_${item.user}`);
@@ -163,6 +164,48 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
 
   const seriesKey = `pawchive:${item.service}:${item.user}:${item.id}`;
   const allSeriesKeys = [seriesKey, `${item.service}:${item.id}`];
+
+  // Archive-only post: no playable slides, the viewer unpacks archiveUrls on open
+  if (mediaFiles.length === 0) {
+    return {
+      id: `pawchive_${item.id}`,
+      originalId: String(item.id),
+      site: 'pawchive',
+      siteName: 'Pawchive',
+      previewUrl: '',
+      sampleUrl: '',
+      fileUrl: '',
+      thumb180: '',
+      thumb360: '',
+      thumb720: '',
+      fileExt: 'zip',
+      isVideo: false,
+      isGif: false,
+      hasSound: false,
+      author: authorName,
+      title: item.title || '',
+      tags: extractedTags,
+      tagDetails,
+      score: 0,
+      rating: 'e',
+      width: 0,
+      height: 0,
+      source: postUrl,
+      postUrl,
+      parentId: null,
+      hasChildren: false,
+      isAlbum: false,
+      albumCount: 0,
+      seriesKey,
+      allSeriesKeys,
+      canFetchAlbum: false,
+      createdAt,
+      isAi,
+      isArchive: true,
+      archiveUrls: archiveAttachments.map(a => `https://file.pawchive.pw/data${a.path}?f=${encodeURIComponent(a.name || 'archive.zip')}`),
+      archiveNames: archiveAttachments.map(a => a.name || 'archive.zip')
+    };
+  }
 
   // Build complete albumItems array for all visual slides
   const albumItems = mediaFiles.map((m, idx) => {
@@ -360,6 +403,10 @@ export async function fetchPawchive(params, aiTagsList, settings) {
     }));
 
     let validPosts = results.filter(Boolean);
+
+    if (settings?.hideZipPosts) {
+      validPosts = validPosts.filter(p => !p.isArchive);
+    }
 
     if (typeFilter === 'video') {
       validPosts = validPosts.filter(p => p.isVideo);

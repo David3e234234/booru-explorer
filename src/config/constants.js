@@ -22,6 +22,7 @@ export const DATA_DIR = isServerless ? path.join(os.tmpdir(), 'booru_data') : pa
 export const CACHE_DIR = path.join(DATA_DIR, 'cache');
 export const THUMBS_DIR = path.join(CACHE_DIR, 'thumbnails');
 export const VIDEOS_DIR = path.join(CACHE_DIR, 'videos');
+export const ARCHIVES_DIR = path.join(CACHE_DIR, 'archives');
 
 export const FAVORITES_FILE = path.join(DATA_DIR, 'favorites.json');
 export const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json');
@@ -213,6 +214,7 @@ export const DEFAULT_SETTINGS = {
   hideFurry: true,
   hidePregnant: true,
   hideLgbt: false,
+  hideZipPosts: false,
   excludedInterestTags: [],
   showVideoStatusBanner: true,
   aiTags: DEFAULT_AI_TAGS,

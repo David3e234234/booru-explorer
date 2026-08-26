@@ -159,6 +159,14 @@ export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', paren
   return await res.json();
 }
 
+export async function fetchArchiveList(zipUrl) {
+  const res = await fetch(`/api/archive/list?url=${encodeURIComponent(zipUrl)}`, {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) return { success: false, albumItems: [], albumCount: 0 };
+  return await res.json();
+}
+
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
   const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`, {
@@ -333,6 +341,8 @@ export async function saveSettings(settings) {
 
 export function getProxiedUrl(targetUrl) {
   if (!targetUrl) return '';
+  // Same-origin endpoints (unpacked archive files) must not loop through the proxy
+  if (targetUrl.startsWith('/api/')) return targetUrl;
   return `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
 }
 

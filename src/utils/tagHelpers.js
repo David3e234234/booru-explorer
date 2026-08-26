@@ -49,7 +49,8 @@ function getCriteriaSets(criteria, activeCurvyTags, activePetiteTags, activeFurr
 }
 
 export function isPostMatchingFilters(post, criteria = {}) {
-  if (!post || (!post.previewUrl && !post.fileUrl && !post.sampleUrl)) return false;
+  // Archive-only posts (zip packs) carry no direct media URLs until unpacked
+  if (!post || (!post.isArchive && !post.previewUrl && !post.fileUrl && !post.sampleUrl)) return false;
 
   const {
     typeFilter = 'all',

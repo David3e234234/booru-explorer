@@ -74,7 +74,7 @@ export function resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo) {
   const isVideoExt = (url) => {
     if (!url) return false;
     const clean = url.split('?')[0].toLowerCase();
-    return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.zip') || clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
+    return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
   };
 
   if (!previewUrl || isVideoExt(previewUrl)) {

@@ -584,7 +584,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
 
     const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us'))) ? true : (state.settings?.proxyThumbnails !== false);
-    const mainThumbSrc = directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '';
+    let mainThumbSrc = directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '';
+
+    // Archive-only posts have no source preview - show a generated ZIP placeholder
+    if (!mainThumbSrc && post.isArchive) {
+      mainThumbSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="14" fill="#232a36"/><path d="M38 26h30l16 16v50a8 8 0 0 1-8 8H38a8 8 0 0 1-8-8V34a8 8 0 0 1 8-8z" fill="#f97316" opacity="0.92"/><path d="M68 26v16h16" fill="#c2410c"/><text x="60" y="88" font-family="Arial,sans-serif" font-size="17" font-weight="bold" fill="#fff" text-anchor="middle">ZIP</text></svg>');
+    }
 
     const siteName = post.siteName || (post.site ? post.site.toUpperCase() : '');
     const siteBadge = siteName ? `<span class="badge-site site-${post.site}">${siteName}</span>` : '';
@@ -596,6 +601,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       } else {
         formatBadge = `<span class="badge-format video">${t('gal.badgeVideo', 'Видео')}</span>`;
       }
+    } else if (post.isArchive) {
+      formatBadge = `<span class="badge-format" style="background-color: rgba(249, 115, 22, 0.85);" title="${t('gal.badgeZip.title', 'Пост содержит только ZIP-архивы - откроется после распаковки')}">ZIP</span>`;
     } else if (post.isGif) {
       formatBadge = `<span class="badge-format gif">GIF</span>`;
     } else if (post.width && post.height) {

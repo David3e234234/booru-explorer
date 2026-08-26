@@ -1,5 +1,5 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts } from '../api.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -354,6 +354,73 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
 
+    function renderArchiveLoading() {
+      if (!mediaWrapper) return;
+      mediaWrapper.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'archive-loading';
+      const spinner = document.createElement('div');
+      spinner.className = 'video-status-spinner';
+      const label = document.createElement('span');
+      label.textContent = t('vw.archiveUnpacking', 'Распаковка архива...');
+      box.appendChild(spinner);
+      box.appendChild(label);
+      mediaWrapper.appendChild(box);
+    }
+
+    function syncUnpackedAlbumToGallery() {
+      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+      if (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length) {
+        list[state.currentViewerIndex] = currentPost;
+      }
+      if (Array.isArray(state.posts)) {
+        const origIdx = state.posts.findIndex(p => p.id === currentPost.id);
+        if (origIdx !== -1) {
+          state.posts[origIdx] = currentPost;
+        }
+      }
+    }
+
+    async function unpackArchivePost() {
+      if (!currentPost?.isArchive) return;
+      if (!Array.isArray(currentPost.archiveUrls) || currentPost.archiveUrls.length === 0) {
+        showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
+        return;
+      }
+      if (currentPost._archivePromise) return currentPost._archivePromise;
+
+      currentPost._archivePromise = (async () => {
+        try {
+          const items = [];
+          for (const zipUrl of currentPost.archiveUrls) {
+            const res = await fetchArchiveList(zipUrl);
+            if (res.success && Array.isArray(res.albumItems)) items.push(...res.albumItems);
+          }
+
+          if (!currentPost) return;
+          if (items.length === 0) {
+            showToast(t('vw.archiveEmpty', 'В архиве не найдено изображений или видео'));
+            return;
+          }
+
+          currentPost.isAlbum = true;
+          currentPost.albumItems = items;
+          currentPost.albumCount = items.length;
+          currentAlbumIndex = 0;
+          syncUnpackedAlbumToGallery();
+
+          renderViewerPost();
+          showToast(t('vw.archiveReady', 'Архив распакован: {n} файлов').replace('{n}', items.length));
+        } catch (err) {
+          console.error('Ошибка распаковки архива:', err);
+          if (currentPost) showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
+        } finally {
+          if (currentPost) delete currentPost._archivePromise;
+        }
+      })();
+      return currentPost._archivePromise;
+    }
+
   function renderViewerPost(skipMediaLoad = false) {
     if (!currentPost) return;
 
@@ -520,8 +587,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     renderAlbumFilmstrip();
 
     if (!skipMediaLoad) {
-      const activeMediaItem = getCurrentMediaItem();
-      loadMediaItem(activeMediaItem);
+      if (currentPost.isArchive && !Array.isArray(currentPost.albumItems)) {
+        renderArchiveLoading();
+        unpackArchivePost();
+      } else {
+        const activeMediaItem = getCurrentMediaItem();
+        loadMediaItem(activeMediaItem);
+      }
     }
   }
 
