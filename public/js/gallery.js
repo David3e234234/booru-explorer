@@ -797,19 +797,14 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           if (card._videoProbe) {
             card._videoProbe = false;
             return;
-          }
           const videoTarget = post.fileUrl || post.sampleUrl;
           if (!videoTarget) {
             card.classList.remove('video-playing');
             return;
           }
-          const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(videoTarget)}`;
           const proxyUrl = getProxiedUrl(videoTarget);
-          if (this.src !== proxyUrl && !this.src.includes('/api/proxy') && this.src !== transcodeUrl) {
+          if (this.src !== proxyUrl && !this.src.includes('/api/proxy')) {
             this.src = proxyUrl;
-            this.play().catch(() => {});
-          } else if (this.src !== transcodeUrl) {
-            this.src = transcodeUrl;
             this.play().catch(() => {});
           } else {
             card.classList.remove('video-playing');

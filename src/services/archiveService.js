@@ -10,8 +10,8 @@ import { logError, logInfo } from '../utils/logger.js';
 
 const ALLOWED_HOSTS = ['file.pawchive.pw', 'file.pawchive.st'];
 
-const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif']);
-const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v']);
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp', 'svg']);
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts']);
 
 // Zip-bomb and runaway-extraction guards. Entries are streamed to disk, so the
 // caps bound disk usage only - RAM stays flat even for multi-hundred-MB videos
@@ -201,7 +201,8 @@ export function buildArchiveAlbumItems(manifest) {
       hasSound: false,
       width: 0,
       height: 0,
-      title: item.name
+      title: item.name,
+      fileSize: item.size || 0
     };
   });
 }

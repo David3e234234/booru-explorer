@@ -8,8 +8,8 @@ let creatorsCache = null;
 let creatorsCacheTime = 0;
 const CREATORS_CACHE_TTL = 3600 * 1000; // 1 hour
 
-const PAWCHIVE_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif']);
-const PAWCHIVE_VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v']);
+const PAWCHIVE_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp']);
+const PAWCHIVE_VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts']);
 const PAWCHIVE_ARCHIVE_EXTS = new Set(['zip', 'rar', '7z']);
 
 // The global feed (/api/v1/posts) has no server-side service filter, so a
@@ -168,10 +168,16 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     ? item.attachments.filter(a => a && a.path && isPawchiveVisualMedia(a.name || a.path))
     : [];
 
+  // Collect all archive attachments from both item.attachments and item.file
+  const allRawAttachments = Array.isArray(item.attachments) ? [...item.attachments] : [];
+  if (item.file && item.file.path && isPawchiveArchive(item.file.name || item.file.path)) {
+    if (!allRawAttachments.some(a => a.path === item.file.path)) {
+      allRawAttachments.unshift(item.file);
+    }
+  }
+
   // Archive-only posts (zip/rar packs with no images on the source itself)
-  const archiveAttachments = Array.isArray(item.attachments)
-    ? item.attachments.filter(a => a && a.path && isPawchiveArchive(a.name || a.path))
-    : [];
+  const archiveAttachments = allRawAttachments.filter(a => a && a.path && isPawchiveArchive(a.name || a.path));
 
   const mediaFiles = [];
   if (item.file && item.file.path) {

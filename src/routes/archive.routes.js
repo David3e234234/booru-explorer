@@ -56,7 +56,12 @@ router.get('/file', async (req, res) => {
     // Key and extension come from the manifest entry, never from user input
     const filePath = path.join(ARCHIVES_DIR, `${key}_${item.n}.${item.ext}`);
     res.setHeader('Cache-Control', 'public, max-age=604800');
-    res.sendFile(filePath);
+    const isDownload = req.query.download === '1' || req.query.download === 'true';
+    if (isDownload) {
+      const downloadName = item.name || `file_${item.n}.${item.ext}`;
+      return res.download(filePath, downloadName);
+    }
+    res.sendFile(filePath, { acceptRanges: true });
   } catch (err) {
     res.status(404).send('Архив не найден в кэше');
   }

@@ -169,6 +169,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       currentVideoInstance = null;
     }
 
+    removeArchiveFloatingBanner();
     if (mediaWrapper) mediaWrapper.innerHTML = '';
     currentPost = null;
     currentAlbumIndex = 0;
@@ -358,7 +359,37 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
 
+    function getOrCreateArchiveFloatingBanner() {
+      let banner = document.getElementById('viewerArchiveFloatingBanner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'viewerArchiveFloatingBanner';
+        banner.className = 'viewer-archive-floating-banner';
+        banner.innerHTML = `
+          <div class="video-status-spinner"></div>
+          <div class="archive-floating-info">
+            <span class="archive-floating-label">${t('vw.archiveUnpacking', 'Распаковка архива...')}</span>
+            <div class="video-progress-track">
+              <div class="video-progress-fill" style="width: 0%;"></div>
+            </div>
+            <span class="archive-floating-text"></span>
+          </div>
+        `;
+        const container = viewerContent || mediaWrapper || document.body;
+        container.appendChild(banner);
+      }
+      return banner;
+    }
+
+    function removeArchiveFloatingBanner() {
+      const banner = document.getElementById('viewerArchiveFloatingBanner');
+      if (banner) {
+        banner.remove();
+      }
+    }
+
     function renderArchiveLoading() {
+      removeArchiveFloatingBanner();
       if (!mediaWrapper) return;
       mediaWrapper.innerHTML = '';
       const box = document.createElement('div');
@@ -377,20 +408,27 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     function updateArchiveLoadingUi(targetPost, archiveIdx, archiveCount, status, etaText) {
-      if (currentPost !== targetPost || !mediaWrapper) return;
-      const box = mediaWrapper.querySelector('.archive-loading');
-      if (!box) return;
-      const label = box.querySelector('.archive-loading-label');
+      if (currentPost !== targetPost) return;
+      const box = mediaWrapper ? mediaWrapper.querySelector('.archive-loading') : null;
+      const floatingBanner = !box ? getOrCreateArchiveFloatingBanner() : null;
+      const targetEl = box || floatingBanner;
+      if (!targetEl) return;
+
+      const label = targetEl.querySelector('.archive-loading-label, .archive-floating-label');
       if (label) {
         label.textContent = archiveCount > 1
           ? t('vw.archiveUnpackingN', 'Распаковка архивов ({i} из {n})...').replace('{i}', String(archiveIdx + 1)).replace('{n}', String(archiveCount))
           : t('vw.archiveUnpacking', 'Распаковка архива...');
       }
-      const progressWrap = box.querySelector('.archive-progress');
-      const fill = box.querySelector('.video-progress-fill');
-      const text = box.querySelector('.archive-progress-text');
-      if (!progressWrap || !fill || !text) return;
-      progressWrap.style.display = 'block';
+      const fill = targetEl.querySelector('.video-progress-fill');
+      const text = targetEl.querySelector('.archive-progress-text, .archive-floating-text');
+      if (!fill || !text) return;
+
+      if (box) {
+        const progressWrap = box.querySelector('.archive-progress');
+        if (progressWrap) progressWrap.style.display = 'block';
+      }
+
       if (status && status.active && status.phase === 'extract') {
         fill.style.width = '100%';
         text.textContent = t('vw.archiveExtracting', 'Извлечение файлов...');
@@ -566,6 +604,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           console.error('Ошибка распаковки архива:', err);
           showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
         } finally {
+          removeArchiveFloatingBanner();
           delete targetPost._archivePromise;
         }
       })();
@@ -843,6 +882,18 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const downloadTarget = item.fileUrl || item.sampleUrl || item.previewUrl;
       if (!downloadTarget) continue;
 
+      if (downloadTarget.startsWith('/api/archive/file')) {
+        const dlUrl = downloadTarget.includes('?') ? `${downloadTarget}&download=1` : `${downloadTarget}?download=1`;
+        const a = document.createElement('a');
+        a.href = dlUrl;
+        a.download = item.title || `album_${currentPost.site || 'post'}_${currentPost.id}_p${i + 1}.${item.fileExt || (item.isVideo ? 'mp4' : 'jpg')}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        await new Promise(r => setTimeout(r, 250));
+        continue;
+      }
+
       try {
         const proxyUrl = getProxiedUrl(downloadTarget);
         const res = await fetch(proxyUrl);
@@ -991,6 +1042,18 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
 
       showToast(t('vw.downloadStarted', 'Начата загрузка на устройство...'));
+
+      if (downloadTarget.startsWith('/api/archive/file')) {
+        const dlUrl = downloadTarget.includes('?') ? `${downloadTarget}&download=1` : `${downloadTarget}?download=1`;
+        const a = document.createElement('a');
+        a.href = dlUrl;
+        a.download = activeItem.title || `file_${activeItem.originalId || activeItem.id}.${activeItem.fileExt || (activeItem.isVideo ? 'mp4' : 'jpg')}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast(t('vw.savedToDevice', 'Файл сохранён в память устройства'));
+        return;
+      }
       
       const getExtensionFromMime = (mimeType, fallbackExt) => {
         if (!mimeType) return fallbackExt || 'jpg';
