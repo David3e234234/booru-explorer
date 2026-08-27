@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import StreamZip from 'node-stream-zip';
-import { Readable } from 'stream';
+import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import { ARCHIVES_DIR } from '../config/constants.js';
 import { fetchSafe } from '../utils/network.js';
@@ -26,6 +26,13 @@ const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 
 
 // Deduplicate concurrent extractions of the same archive
 const inflightJobs = new Map();
+
+// Download/extract progress, polled by the client loading indicator
+const jobStatus = new Map(); // zipUrl -> { phase: 'download'|'extract', received, total }
+
+export function getArchiveJobStatus(zipUrl) {
+  return jobStatus.get(zipUrl) || null;
+}
 
 function getExt(nameOrPath) {
   if (!nameOrPath) return '';
@@ -71,7 +78,20 @@ async function extractArchive(zipUrl, key) {
       throw new Error(`HTTP ${response.status}`);
     }
 
-    await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(tmpPath));
+    const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
+    jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader });
+    const progressCounter = new Transform({
+      transform(chunk, enc, cb) {
+        const st = jobStatus.get(zipUrl);
+        if (st) st.received += chunk.length;
+        cb(null, chunk);
+      }
+    });
+
+    await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(tmpPath));
+
+    const downloadStatus = jobStatus.get(zipUrl);
+    if (downloadStatus) downloadStatus.phase = 'extract';
 
     const zip = new StreamZip.async({ file: tmpPath });
     try {
@@ -130,6 +150,7 @@ async function extractArchive(zipUrl, key) {
       zip.close().catch(() => {});
     }
   } finally {
+    jobStatus.delete(zipUrl);
     fs.promises.unlink(tmpPath).catch(() => {});
   }
 }

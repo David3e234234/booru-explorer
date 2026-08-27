@@ -42,6 +42,7 @@ function sanitizeStoredPost(post) {
   delete clean.allSeriesKeys;
   delete clean._archiveUnpacked;
   delete clean._archivePromise;
+  delete clean._unpackedZips;
   return clean;
 }
 

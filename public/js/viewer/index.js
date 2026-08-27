@@ -1,5 +1,5 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList } from '../api.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -209,7 +209,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           itemDiv.className = `album-filmstrip-item ${idx === currentAlbumIndex ? 'active' : ''}`;
           itemDiv.title = t('vw.albumImageTitle', 'Изображение {n} из {total}').replace('{n}', idx + 1).replace('{total}', currentPost.albumItems.length);
 
-          const thumbUrl = item.thumb180 || item.thumb360 || item.previewUrl || item.sampleUrl || item.fileUrl || '';
+          let thumbUrl = item.thumb180 || item.thumb360 || item.previewUrl || item.sampleUrl || item.fileUrl || '';
+          // Extracted archive videos serve the raw mp4 as thumb: swap it for an FFmpeg frame
+          if (item.isVideo && thumbUrl.startsWith('/api/archive/file')) {
+            thumbUrl = `/api/video-thumbnail?url=${encodeURIComponent(thumbUrl)}&quality=low`;
+          }
           const needsThumbProxy = (item.site === 'danbooru' || thumbUrl.includes('donmai.us')) ? true : (state.settings?.proxyThumbnails !== false);
           const thumbSrc = thumbUrl ? (thumbUrl.startsWith('/api/') ? thumbUrl : (needsThumbProxy ? getProxiedUrl(thumbUrl) : thumbUrl)) : '';
 
@@ -359,25 +363,89 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       mediaWrapper.innerHTML = '';
       const box = document.createElement('div');
       box.className = 'archive-loading';
-      const spinner = document.createElement('div');
-      spinner.className = 'video-status-spinner';
-      const label = document.createElement('span');
-      label.textContent = t('vw.archiveUnpacking', 'Распаковка архива...');
-      box.appendChild(spinner);
-      box.appendChild(label);
+      box.innerHTML = `
+        <div class="video-status-spinner"></div>
+        <span class="archive-loading-label">${t('vw.archiveUnpacking', 'Распаковка архива...')}</span>
+        <div class="archive-progress" style="display: none;">
+          <div class="video-progress-track">
+            <div class="video-progress-fill" style="width: 0%;"></div>
+          </div>
+          <span class="archive-progress-text"></span>
+        </div>
+      `;
       mediaWrapper.appendChild(box);
     }
 
-    function syncUnpackedAlbumToGallery() {
-      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-      if (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length) {
-        list[state.currentViewerIndex] = currentPost;
+    function updateArchiveLoadingUi(targetPost, archiveIdx, archiveCount, status, etaText) {
+      if (currentPost !== targetPost || !mediaWrapper) return;
+      const box = mediaWrapper.querySelector('.archive-loading');
+      if (!box) return;
+      const label = box.querySelector('.archive-loading-label');
+      if (label) {
+        label.textContent = archiveCount > 1
+          ? t('vw.archiveUnpackingN', 'Распаковка архивов ({i} из {n})...').replace('{i}', String(archiveIdx + 1)).replace('{n}', String(archiveCount))
+          : t('vw.archiveUnpacking', 'Распаковка архива...');
       }
-      if (Array.isArray(state.posts)) {
-        const origIdx = state.posts.findIndex(p => p.id === currentPost.id);
-        if (origIdx !== -1) {
-          state.posts[origIdx] = currentPost;
+      const progressWrap = box.querySelector('.archive-progress');
+      const fill = box.querySelector('.video-progress-fill');
+      const text = box.querySelector('.archive-progress-text');
+      if (!progressWrap || !fill || !text) return;
+      progressWrap.style.display = 'block';
+      if (status && status.active && status.phase === 'extract') {
+        fill.style.width = '100%';
+        text.textContent = t('vw.archiveExtracting', 'Извлечение файлов...');
+        return;
+      }
+      if (status && status.active && status.phase === 'download' && status.total > 0) {
+        fill.style.width = `${status.percent || 0}%`;
+        text.textContent = t('vw.archiveDownloadProgress', 'Загрузка: {p}% ({done}/{total} МБ)')
+          .replace('{p}', String(status.percent || 0))
+          .replace('{done}', (status.received / 1048576).toFixed(0))
+          .replace('{total}', (status.total / 1048576).toFixed(0))
+          + (etaText ? ` · ${etaText}` : '');
+        return;
+      }
+      fill.style.width = '0%';
+      text.textContent = '';
+    }
+
+    function formatArchiveEta(sec) {
+      return sec >= 60
+        ? t('vw.archiveEtaMin', 'осталось ~{m}:{s}').replace('{m}', String(Math.floor(sec / 60))).replace('{s}', String(sec % 60).padStart(2, '0'))
+        : t('vw.archiveEtaSec', 'осталось ~{n} с').replace('{n}', String(sec));
+    }
+
+    // Polls the server download progress of one zip while it is being fetched;
+    // returns the stop function
+    function startArchiveStatusPolling(targetPost, zipUrl, archiveIdx, archiveCount) {
+      let prevSample = null;
+      let etaText = '';
+      const poll = async () => {
+        if (currentPost !== targetPost) return;
+        const status = await fetchArchiveStatus(zipUrl);
+        if (status && status.active && status.phase === 'download' && status.total > 0) {
+          const now = Date.now();
+          if (prevSample && now > prevSample.time) {
+            const rate = (status.received - prevSample.received) / ((now - prevSample.time) / 1000);
+            if (rate > 1024) {
+              etaText = formatArchiveEta(Math.max(0, Math.round((status.total - status.received) / rate)));
+            }
+          }
+          prevSample = { received: status.received, time: now };
         }
+        updateArchiveLoadingUi(targetPost, archiveIdx, archiveCount, status, etaText);
+      };
+      poll().catch(() => {});
+      const interval = setInterval(() => { poll().catch(() => {}); }, 1000);
+      return () => clearInterval(interval);
+    }
+
+    function syncPostToGallery(post) {
+      if (!post || !post.id) return;
+      for (const list of [state.displayedPosts, state.posts]) {
+        if (!Array.isArray(list)) continue;
+        const idx = list.findIndex(p => p && p.id === post.id);
+        if (idx !== -1) list[idx] = post;
       }
     }
 
@@ -388,72 +456,120 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     async function unpackArchivePost() {
-      if (!currentPost?.isArchive) return;
-      if (isArchiveUnpacked(currentPost)) return;
-      if (!Array.isArray(currentPost.archiveUrls) || currentPost.archiveUrls.length === 0) {
+      const targetPost = currentPost;
+      if (!targetPost?.isArchive) return;
+      if (isArchiveUnpacked(targetPost)) return;
+      if (!Array.isArray(targetPost.archiveUrls) || targetPost.archiveUrls.length === 0) {
         showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
         return;
       }
-      if (currentPost._archivePromise) return currentPost._archivePromise;
+      if (targetPost._archivePromise) return targetPost._archivePromise;
 
-      currentPost._archivePromise = (async () => {
+      targetPost._archivePromise = (async () => {
+        const archiveCount = targetPost.archiveUrls.length;
+        // Mixed posts (cover media + zips) keep their existing slides first,
+        // archive contents are appended as each archive completes
+        const baseSlides = Array.isArray(targetPost.albumItems)
+          ? [...targetPost.albumItems]
+          : (targetPost.fileUrl || targetPost.sampleUrl || targetPost.previewUrl)
+            ? [{
+                id: targetPost.id,
+                originalId: targetPost.originalId,
+                site: targetPost.site,
+                siteName: targetPost.siteName,
+                previewUrl: targetPost.previewUrl,
+                sampleUrl: targetPost.sampleUrl,
+                fileUrl: targetPost.fileUrl,
+                thumb180: targetPost.thumb180,
+                thumb360: targetPost.thumb360,
+                thumb720: targetPost.thumb720,
+                fileExt: targetPost.fileExt,
+                isVideo: targetPost.isVideo,
+                isGif: targetPost.isGif,
+                hasSound: targetPost.hasSound,
+                width: targetPost.width,
+                height: targetPost.height,
+                title: targetPost.title
+              }]
+            : [];
+        let slides = baseSlides;
+        const unpackedZips = Array.isArray(targetPost._unpackedZips) ? [...targetPost._unpackedZips] : [];
+        let newFiles = 0;
+        let failedZips = 0;
+        // Slides already visible: append silently; loading box visible: first batch renders the post
+        let mediaAlreadyVisible = !mediaWrapper?.querySelector('.archive-loading');
+
         try {
-          const items = [];
-          for (const zipUrl of currentPost.archiveUrls) {
-            const res = await fetchArchiveList(zipUrl);
-            if (res.success && Array.isArray(res.albumItems)) items.push(...res.albumItems);
+          for (let i = 0; i < archiveCount; i++) {
+            const zipUrl = targetPost.archiveUrls[i];
+            if (unpackedZips.includes(zipUrl)) continue;
+
+            const stopPolling = startArchiveStatusPolling(targetPost, zipUrl, i, archiveCount);
+            let res = null;
+            try {
+              res = await fetchArchiveList(zipUrl);
+            } finally {
+              stopPolling();
+            }
+            if (!res || !res.success || !Array.isArray(res.albumItems) || res.albumItems.length === 0) {
+              failedZips++;
+              continue;
+            }
+
+            slides = [...slides, ...res.albumItems];
+            newFiles += res.albumItems.length;
+            unpackedZips.push(zipUrl);
+            targetPost.isAlbum = true;
+            targetPost.albumItems = slides;
+            targetPost.albumCount = slides.length;
+            targetPost._unpackedZips = unpackedZips;
+
+            if (currentPost === targetPost) {
+              if (!mediaAlreadyVisible) {
+                mediaAlreadyVisible = true;
+                currentAlbumIndex = 0;
+                renderViewerPost();
+              } else {
+                renderAlbumFilmstrip();
+              }
+            }
+            syncPostToGallery(targetPost);
+            showToast(archiveCount > 1
+              ? t('vw.archiveReadyN', 'Архив {i}/{n} распакован: {files} файлов').replace('{i}', String(i + 1)).replace('{n}', String(archiveCount)).replace('{files}', String(res.albumItems.length))
+              : t('vw.archiveReady', 'Архив распакован: {n} файлов').replace('{n}', String(res.albumItems.length)));
           }
 
-          if (!currentPost) return;
-          if (items.length === 0) {
-            showToast(t('vw.archiveEmpty', 'В архиве не найдено изображений или видео'));
+          if (newFiles === 0) {
+            const msg = failedZips === archiveCount
+              ? t('vw.archiveFailed', 'Не удалось распаковать архив')
+              : t('vw.archiveEmpty', 'В архиве не найдено изображений или видео');
+            if (currentPost === targetPost && mediaWrapper?.querySelector('.archive-loading')) {
+              const box = mediaWrapper.querySelector('.archive-loading');
+              const spinner = box.querySelector('.video-status-spinner');
+              if (spinner) spinner.style.display = 'none';
+              const progressWrap = box.querySelector('.archive-progress');
+              if (progressWrap) progressWrap.style.display = 'none';
+              const label = box.querySelector('.archive-loading-label');
+              if (label) label.textContent = msg;
+            }
+            showToast(msg);
             return;
           }
 
-          // Mixed posts (cover media + zips) keep their existing slides first,
-          // archive contents are appended after them
-          const existingSlides = Array.isArray(currentPost.albumItems)
-            ? currentPost.albumItems
-            : (currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl)
-              ? [{
-                  id: currentPost.id,
-                  originalId: currentPost.originalId,
-                  site: currentPost.site,
-                  siteName: currentPost.siteName,
-                  previewUrl: currentPost.previewUrl,
-                  sampleUrl: currentPost.sampleUrl,
-                  fileUrl: currentPost.fileUrl,
-                  thumb180: currentPost.thumb180,
-                  thumb360: currentPost.thumb360,
-                  thumb720: currentPost.thumb720,
-                  fileExt: currentPost.fileExt,
-                  isVideo: currentPost.isVideo,
-                  isGif: currentPost.isGif,
-                  hasSound: currentPost.hasSound,
-                  width: currentPost.width,
-                  height: currentPost.height,
-                  title: currentPost.title
-                }]
-              : [];
-          const mergedSlides = [...existingSlides, ...items];
-
-          currentPost.isAlbum = true;
-          currentPost.albumItems = mergedSlides;
-          currentPost.albumCount = mergedSlides.length;
-          currentPost._archiveUnpacked = true;
-          currentAlbumIndex = 0;
-          syncUnpackedAlbumToGallery();
-
-          renderViewerPost();
-          showToast(t('vw.archiveReady', 'Архив распакован: {n} файлов').replace('{n}', items.length));
+          // Fully done only when every zip was unpacked: a partial failure
+          // leaves the flag off so the missing archives retry on next open
+          if (unpackedZips.length >= archiveCount) {
+            targetPost._archiveUnpacked = true;
+          }
+          syncPostToGallery(targetPost);
         } catch (err) {
           console.error('Ошибка распаковки архива:', err);
-          if (currentPost) showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
+          showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
         } finally {
-          if (currentPost) delete currentPost._archivePromise;
+          delete targetPost._archivePromise;
         }
       })();
-      return currentPost._archivePromise;
+      return targetPost._archivePromise;
     }
 
   function renderViewerPost(skipMediaLoad = false) {
@@ -623,8 +739,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     if (!skipMediaLoad) {
       if (currentPost.isArchive && !isArchiveUnpacked(currentPost)) {
-        renderArchiveLoading();
-        unpackArchivePost();
+        const hasVisibleMedia = (Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) ||
+          Boolean(currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl);
+        if (hasVisibleMedia) {
+          // Cover/existing slides are viewable right away; archives keep unpacking in background
+          const activeMediaItem = getCurrentMediaItem();
+          loadMediaItem(activeMediaItem);
+          unpackArchivePost();
+        } else {
+          renderArchiveLoading();
+          unpackArchivePost();
+        }
       } else {
         const activeMediaItem = getCurrentMediaItem();
         loadMediaItem(activeMediaItem);

@@ -2,13 +2,47 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { THUMBS_DIR, VIDEOS_DIR } from '../config/constants.js';
+import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
 import { getFfmpegHeaders } from '../utils/network.js';
 import { getSettings } from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 const activeTranscodes = new Map();
 const activeThumbnails = new Map();
+
+// Unpacked archive media lives on this server's disk: /api/archive/file?key=<md5>&n=<idx>
+// resolves straight to the extracted file so FFmpeg reads it locally instead of
+// treating the relative URL as a missing file path
+function resolveArchiveFilePath(relativeUrl) {
+  try {
+    const parsed = new URL(relativeUrl, 'http://localhost');
+    if (parsed.pathname !== '/api/archive/file') return null;
+    const key = parsed.searchParams.get('key') || '';
+    const n = parseInt(parsed.searchParams.get('n'), 10);
+    if (!/^[a-f0-9]{32}$/.test(key) || !Number.isInteger(n) || n < 1 || n > 9999) return null;
+    const manifestPath = path.join(ARCHIVES_DIR, `${key}.manifest.json`);
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const item = Array.isArray(manifest?.items) ? manifest.items.find(it => it.n === n) : null;
+    if (!item) return null;
+    const filePath = path.join(ARCHIVES_DIR, `${key}_${item.n}.${item.ext}`);
+    return fs.existsSync(filePath) ? filePath : null;
+  } catch {
+    return null;
+  }
+}
+
+// FFmpeg input for a media URL: same-origin relative URLs are resolved locally
+// (archive files -> disk path, anything else -> absolute URL against this host)
+function resolveFfmpegInput(req, targetUrl) {
+  if (typeof targetUrl === 'string' && targetUrl.startsWith('/')) {
+    const localPath = resolveArchiveFilePath(targetUrl);
+    if (localPath) return { input: localPath, isLocal: true };
+    try {
+      return { input: new URL(targetUrl, `${req.protocol}://${req.get('host')}`).href, isLocal: false };
+    } catch {}
+  }
+  return { input: targetUrl, isLocal: false };
+}
 
 export async function handleVideoThumbnailRequest(req, res) {
   const targetUrl = req.query.url;
@@ -64,7 +98,8 @@ function sendVideoPlaceholder(res) {
 
 function generateThumbnail(req, targetUrl, quality, thumbPath) {
   const currentSettings = getSettings();
-  const headers = getFfmpegHeaders(targetUrl, currentSettings);
+  const { input: ffmpegInput, isLocal } = resolveFfmpegInput(req, targetUrl);
+  const headers = isLocal ? null : getFfmpegHeaders(targetUrl, currentSettings);
 
   let scaleFilter = 'scale=480:-1';
   let qScale = '2';
@@ -82,9 +117,9 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
   const extractFrame = (ssTime) => {
     return new Promise((resolve) => {
       const args = [
-        '-headers', headers,
+        ...(headers ? ['-headers', headers] : []),
         '-ss', ssTime,
-        '-i', targetUrl,
+        '-i', ffmpegInput,
         '-vframes', '1',
         '-vf', scaleFilter,
         '-q:v', qScale,
@@ -146,11 +181,12 @@ export async function handleTranscodeVideoRequest(req, res) {
     logInfo('FFmpeg', `Начало транскодирования видео в H.264/AAC: ${targetUrl}`);
 
     const currentSettings = getSettings();
-    const headers = getFfmpegHeaders(targetUrl, currentSettings);
+    const { input: ffmpegInput, isLocal } = resolveFfmpegInput(req, targetUrl);
+    const headers = isLocal ? null : getFfmpegHeaders(targetUrl, currentSettings);
     const transcodePromise = new Promise((resolve, reject) => {
       const args = [
-        '-headers', headers,
-        '-i', targetUrl,
+        ...(headers ? ['-headers', headers] : []),
+        '-i', ffmpegInput,
         '-map', '0:v:0',
         '-map', '0:a?',
         '-c:v', 'libx264',

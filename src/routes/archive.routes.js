@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { ARCHIVES_DIR } from '../config/constants.js';
-import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl } from '../services/archiveService.js';
+import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus } from '../services/archiveService.js';
 import { logError } from '../utils/logger.js';
 
 const router = express.Router();
@@ -23,6 +23,18 @@ router.get('/list', async (req, res) => {
     logError('Archive', 'Ошибка обработки архива', err);
     res.json({ success: false, error: err.message || 'Не удалось распаковать архив' });
   }
+});
+
+// GET /api/archive/status?url=<zip-url> - download/extract progress for the loading indicator
+router.get('/status', (req, res) => {
+  const zipUrl = req.query.url;
+  if (!zipUrl || !isAllowedArchiveUrl(zipUrl)) {
+    return res.json({ active: false });
+  }
+  const status = getArchiveJobStatus(zipUrl);
+  if (!status) return res.json({ active: false });
+  const percent = status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0;
+  res.json({ active: true, phase: status.phase, received: status.received, total: status.total, percent });
 });
 
 // GET /api/archive/file?key=<md5>&n=<idx> - serve one extracted file from cache

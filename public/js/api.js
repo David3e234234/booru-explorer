@@ -182,6 +182,18 @@ export async function fetchArchiveList(zipUrl) {
   return await res.json();
 }
 
+export async function fetchArchiveStatus(zipUrl) {
+  try {
+    const res = await fetch(`/api/archive/status?url=${encodeURIComponent(zipUrl)}`, {
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) return { active: false };
+    return await res.json();
+  } catch {
+    return { active: false };
+  }
+}
+
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
   const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`, {
