@@ -860,5 +860,25 @@ Object.assign(en, {
   'wiki.hk.enterDesc': 'Executes search with entered tags',
   'wiki.footerHint': '💡 Click on any example tag in the guide to add it directly to your search',
   'wiki.tagAdded': 'Tag {tag} added to search',
-  'wiki.siteSwitched': 'Switched source to {site}'
+  'wiki.siteSwitched': 'Switched source to {site}',
+
+  // In-page download manager
+  'dl.managerTitle': 'In-Page Downloads',
+  'dl.activeCount': '{n} active',
+  'dl.allDone': 'All downloads finished',
+  'dl.speed': '{speed} MB/s',
+  'dl.eta': '{time} left',
+  'dl.etaSec': '~{s}s left',
+  'dl.etaMin': '~{m}m {s}s left',
+  'dl.saving': 'Saving to device...',
+  'dl.saved': 'Saved to device ✓',
+  'dl.cancelled': 'Cancelled',
+  'dl.error': 'Download error',
+  'dl.minimize': 'Minimize',
+  'dl.expand': 'Expand',
+  'dl.cancel': 'Cancel download',
+  'dl.clear': 'Clear completed',
+  'dl.toastSaved': 'Archive "{name}" saved to device',
+  'dl.toastStarted': 'Download "{name}" started in background'
 });
+

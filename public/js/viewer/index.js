@@ -5,6 +5,7 @@ import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
 import { renderSidebarTags, formatRating } from './viewerSidebar.js';
 import { notifyViewerOpened, notifyViewerMoved, notifyViewerClosed } from '../router.js';
+import { downloadManager } from '../modules/downloadManager.js';
 import { t } from '../i18n.js';
 
 function isVideoUrl(url) {
@@ -400,20 +401,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const iconEl = btn.querySelector('.btn-archive-icon');
       const subEl = btn.querySelector('.btn-archive-sub');
 
-      let abortController = null;
-      let isDownloading = false;
-
-      const setProgress = (percent, loadedBytes, totalBytes) => {
-        const clamped = Math.min(100, Math.max(0, Math.round(percent)));
-        if (fillEl) fillEl.style.width = `${clamped}%`;
-        const loadedMb = (loadedBytes / (1024 * 1024)).toFixed(1);
-        if (totalBytes > 0) {
-          const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
-          if (labelEl) labelEl.textContent = `${clamped}% · ${loadedMb} / ${totalMb} MB`;
-        } else {
-          if (labelEl) labelEl.textContent = `${loadedMb} MB...`;
-        }
-      };
+      let serverUnpackAbortController = null;
+      let isServerUnpacking = false;
 
       const resetToDefault = () => {
         btn.classList.remove('is-downloading', 'is-completed', 'is-error');
@@ -427,17 +416,67 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             <line x1="12" y1="15" x2="12" y2="3"/>
           `;
         }
-        isDownloading = false;
-        abortController = null;
+        isServerUnpacking = false;
+        serverUnpackAbortController = null;
       };
+
+      // Subscribe to global in-page download manager
+      downloadManager.subscribeToUrl(url, (task) => {
+        if (!task) return;
+        if (isServerUnpacking) return;
+
+        if (task.status === 'downloading' || task.status === 'saving') {
+          btn.classList.remove('is-completed', 'is-error');
+          btn.classList.add('is-downloading');
+          if (subEl) subEl.textContent = '';
+          const pct = Math.round(task.percent || 0);
+          if (fillEl) fillEl.style.width = `${pct}%`;
+
+          if (task.status === 'saving') {
+            if (labelEl) labelEl.textContent = t('dl.saving', 'Сохранение...');
+          } else {
+            const loadedMb = (task.loaded / (1024 * 1024)).toFixed(1);
+            if (task.total > 0) {
+              const totalMb = (task.total / (1024 * 1024)).toFixed(1);
+              if (labelEl) labelEl.textContent = `${pct}% · ${loadedMb} / ${totalMb} MB`;
+            } else {
+              if (labelEl) labelEl.textContent = `${loadedMb} MB...`;
+            }
+          }
+        } else if (task.status === 'completed') {
+          btn.classList.remove('is-downloading', 'is-error');
+          btn.classList.add('is-completed');
+          if (fillEl) fillEl.style.width = '100%';
+          const finalMb = (task.loaded / (1024 * 1024)).toFixed(1);
+          if (labelEl) labelEl.textContent = t('vw.downloadArchiveDone', 'Скачано ({size} МБ) ✓').replace('{size}', finalMb);
+          if (iconEl) {
+            iconEl.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
+          }
+          setTimeout(() => resetToDefault(), 4000);
+        } else if (task.status === 'cancelled') {
+          resetToDefault();
+        } else if (task.status === 'error') {
+          btn.classList.remove('is-downloading');
+          btn.classList.add('is-error');
+          if (fillEl) fillEl.style.width = '0%';
+          if (labelEl) labelEl.textContent = t('vw.downloadArchiveError', 'Ошибка. Повторить?');
+        }
+      });
 
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         e.preventDefault();
 
-        if (isDownloading) {
-          if (abortController) {
-            abortController.abort();
+        const activeTask = downloadManager.getTaskByUrl(url);
+        if (activeTask && (activeTask.status === 'downloading' || activeTask.status === 'saving')) {
+          downloadManager.cancelDownload(activeTask.id);
+          resetToDefault();
+          return;
+        }
+
+        if (isServerUnpacking) {
+          if (serverUnpackAbortController) {
+            serverUnpackAbortController.abort();
           }
           resetToDefault();
           showToast(t('vw.downloadCancelled', 'Скачивание отменено'));
@@ -449,14 +488,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
         if (isUnpackEnabled && isExtractable) {
           // Unpack on server and download extracted files
-          isDownloading = true;
+          isServerUnpacking = true;
           btn.classList.remove('is-completed', 'is-error');
           btn.classList.add('is-downloading');
           if (subEl) subEl.textContent = '';
           if (labelEl) labelEl.textContent = t('vw.unpackingOnServer', 'Распаковка на сервере...');
 
-          abortController = new AbortController();
-          activeArchiveDownloads.set(url, abortController);
+          serverUnpackAbortController = new AbortController();
+          activeArchiveDownloads.set(url, serverUnpackAbortController);
 
           let pollInterval = setInterval(async () => {
             const status = await fetchArchiveStatus(url);
@@ -478,7 +517,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             const res = await fetchArchiveList(url);
             clearInterval(pollInterval);
 
-            if (abortController.signal.aborted) {
+            if (serverUnpackAbortController.signal.aborted) {
               resetToDefault();
               return;
             }
@@ -488,7 +527,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
               if (labelEl) labelEl.textContent = t('vw.savingFiles', 'Сохранение файлов ({n})...').replace('{n}', String(res.albumItems.length));
 
               for (let i = 0; i < res.albumItems.length; i++) {
-                if (abortController.signal.aborted) break;
+                if (serverUnpackAbortController.signal.aborted) break;
                 const item = res.albumItems[i];
                 const downloadUrl = `${item.fileUrl}&download=1`;
                 const a = document.createElement('a');
@@ -525,78 +564,18 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           }
         }
 
-        // Direct stream download (default, or for non-zip attachments like .clip, .psd)
-        isDownloading = true;
-        btn.classList.remove('is-completed', 'is-error');
-        btn.classList.add('is-downloading');
-        if (subEl) subEl.textContent = '';
-        if (labelEl) labelEl.textContent = '0%...';
-
-        abortController = new AbortController();
-        activeArchiveDownloads.set(url, abortController);
-
-        try {
-          const targetUrl = getProxiedUrl(url);
-          const res = await fetch(targetUrl, { signal: abortController.signal });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-          const contentLength = res.headers.get('content-length');
-          const total = contentLength ? parseInt(contentLength, 10) : (size > 0 ? size : 0);
-          let loaded = 0;
-          const reader = res.body.getReader();
-          const chunks = [];
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-            loaded += value.length;
-            const pct = total > 0 ? (loaded / total) * 100 : Math.min(95, (loaded / 5000000) * 100);
-            setProgress(pct, loaded, total);
-          }
-
-          const blob = new Blob(chunks, { type: 'application/octet-stream' });
-          const blobUrl = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = cleanName;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-
-          btn.classList.remove('is-downloading');
-          btn.classList.add('is-completed');
-          if (fillEl) fillEl.style.width = '100%';
-          const finalMb = (loaded / (1024 * 1024)).toFixed(1);
-          if (labelEl) labelEl.textContent = t('vw.downloadArchiveDone', 'Скачано ({size} МБ) ✓').replace('{size}', finalMb);
-          if (iconEl) {
-            iconEl.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
-          }
-          showToast(t('vw.downloadArchiveDoneShort', 'Файл сохранён на устройство'));
-
-          setTimeout(() => {
-            resetToDefault();
-          }, 4000);
-        } catch (err) {
-          if (err.name === 'AbortError') {
-            resetToDefault();
-            return;
-          }
-          console.warn('[Archive download error]', err);
-          btn.classList.remove('is-downloading');
-          btn.classList.add('is-error');
-          if (fillEl) fillEl.style.width = '0%';
-          if (labelEl) labelEl.textContent = t('vw.downloadArchiveError', 'Ошибка. Повторить?');
-          isDownloading = false;
-          abortController = null;
-        } finally {
-          activeArchiveDownloads.delete(url);
-        }
+        // MEGA-style in-site background stream download
+        downloadManager.startDownload({
+          url,
+          filename: cleanName,
+          size: Number(size) || 0,
+          isZip: true
+        });
       });
 
       return btn;
     }
+
 
     function renderArchivePostCard(targetPost) {
       if (!mediaWrapper) return;
@@ -1085,6 +1064,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const downloadTarget = activeItem.fileUrl || activeItem.sampleUrl || activeItem.previewUrl;
       if (!downloadTarget) {
         showToast(t('vw.fileLinkUnavailable', 'Ссылка на файл недоступна'));
+        return;
+      }
+
+      const isZipArchive = activeItem.fileExt === 'zip' || downloadTarget.toLowerCase().includes('.zip') || (Array.isArray(activeItem.archiveUrls) && activeItem.archiveUrls.length > 0);
+      if (isZipArchive) {
+        const targetArchiveUrl = (Array.isArray(activeItem.archiveUrls) && activeItem.archiveUrls[0]) || downloadTarget;
+        const filename = (Array.isArray(activeItem.archiveNames) && activeItem.archiveNames[0]) || `booru_${activeItem.site || 'archive'}_${activeItem.id || 'pack'}.zip`;
+        const size = (Array.isArray(activeItem.archiveSizes) && activeItem.archiveSizes[0]) || 0;
+        downloadManager.startDownload({ url: targetArchiveUrl, filename, size, isZip: true });
         return;
       }
 

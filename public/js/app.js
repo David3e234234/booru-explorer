@@ -74,6 +74,7 @@ import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initWikiModal } from './modules/wikiModal.js';
 import { initProfileUI } from './modules/profileUI.js';
+import { initDownloadManager } from './modules/downloadManager.js';
 import { consumeInitialUrl, initRouter, syncSearchUrl } from './router.js';
 import { t, applyStaticTranslations } from './i18n.js';
 
@@ -267,6 +268,8 @@ async function init() {
       selectSite(site);
     }
   });
+
+  initDownloadManager();
 
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
