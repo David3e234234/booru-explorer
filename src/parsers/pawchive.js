@@ -37,7 +37,8 @@ function buildArchiveFields(archiveAttachments) {
   return {
     isArchive: true,
     archiveUrls: archiveAttachments.map(a => `https://file.pawchive.pw/data${a.path}?f=${encodeURIComponent(a.name || 'archive.zip')}`),
-    archiveNames: archiveAttachments.map(a => a.name || 'archive.zip')
+    archiveNames: archiveAttachments.map(a => a.name || 'archive.zip'),
+    archiveSizes: archiveAttachments.map(a => a.size || 0)
   };
 }
 

@@ -1,5 +1,5 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus } from '../api.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -169,7 +169,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       currentVideoInstance = null;
     }
 
-    removeArchiveFloatingBanner();
+    if (activeArchiveDownloads && activeArchiveDownloads.size > 0) {
+      activeArchiveDownloads.forEach((ctrl) => {
+        try { ctrl.abort(); } catch {}
+      });
+      activeArchiveDownloads.clear();
+    }
+
     if (mediaWrapper) mediaWrapper.innerHTML = '';
     currentPost = null;
     currentAlbumIndex = 0;
@@ -359,256 +365,218 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
 
-    function getOrCreateArchiveFloatingBanner() {
-      let banner = document.getElementById('viewerArchiveFloatingBanner');
-      if (!banner) {
-        banner = document.createElement('div');
-        banner.id = 'viewerArchiveFloatingBanner';
-        banner.className = 'viewer-archive-floating-banner';
-        banner.innerHTML = `
-          <div class="video-status-spinner"></div>
-          <div class="archive-floating-info">
-            <span class="archive-floating-label">${t('vw.archiveUnpacking', 'Распаковка архива...')}</span>
-            <div class="video-progress-track">
-              <div class="video-progress-fill" style="width: 0%;"></div>
-            </div>
-            <span class="archive-floating-text"></span>
-          </div>
-        `;
-        const container = viewerContent || mediaWrapper || document.body;
-        container.appendChild(banner);
-      }
-      return banner;
+    const activeArchiveDownloads = new Map();
+
+    function formatBytes(bytes) {
+      if (!bytes || isNaN(bytes) || bytes <= 0) return '';
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
     }
 
-    function removeArchiveFloatingBanner() {
-      const banner = document.getElementById('viewerArchiveFloatingBanner');
-      if (banner) {
-        banner.remove();
-      }
-    }
+    function createAnimatedArchiveButton({ url, name, size = 0, isSidebar = false }) {
+      const btn = document.createElement('button');
+      btn.className = 'btn-archive-download';
+      btn.type = 'button';
 
-    function renderArchiveLoading() {
-      removeArchiveFloatingBanner();
-      if (!mediaWrapper) return;
-      mediaWrapper.innerHTML = '';
-      const box = document.createElement('div');
-      box.className = 'archive-loading';
-      box.innerHTML = `
-        <div class="video-status-spinner"></div>
-        <span class="archive-loading-label">${t('vw.archiveUnpacking', 'Распаковка архива...')}</span>
-        <div class="archive-progress" style="display: none;">
-          <div class="video-progress-track">
-            <div class="video-progress-fill" style="width: 0%;"></div>
-          </div>
-          <span class="archive-progress-text"></span>
+      const cleanName = name || 'archive.zip';
+      const displaySize = size > 0 ? formatBytes(size) : '';
+
+      btn.innerHTML = `
+        <div class="btn-archive-progress-fill" style="width: 0%;"></div>
+        <div class="btn-archive-inner">
+          <svg class="btn-archive-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span class="btn-archive-label">${cleanName}</span>
+          ${displaySize ? `<span class="btn-archive-sub">(${displaySize})</span>` : ''}
         </div>
       `;
-      mediaWrapper.appendChild(box);
-    }
 
-    function updateArchiveLoadingUi(targetPost, archiveIdx, archiveCount, status, etaText) {
-      if (currentPost !== targetPost) return;
-      const box = mediaWrapper ? mediaWrapper.querySelector('.archive-loading') : null;
-      const floatingBanner = !box ? getOrCreateArchiveFloatingBanner() : null;
-      const targetEl = box || floatingBanner;
-      if (!targetEl) return;
+      const fillEl = btn.querySelector('.btn-archive-progress-fill');
+      const labelEl = btn.querySelector('.btn-archive-label');
+      const iconEl = btn.querySelector('.btn-archive-icon');
+      const subEl = btn.querySelector('.btn-archive-sub');
 
-      const label = targetEl.querySelector('.archive-loading-label, .archive-floating-label');
-      if (label) {
-        label.textContent = archiveCount > 1
-          ? t('vw.archiveUnpackingN', 'Распаковка архивов ({i} из {n})...').replace('{i}', String(archiveIdx + 1)).replace('{n}', String(archiveCount))
-          : t('vw.archiveUnpacking', 'Распаковка архива...');
-      }
-      const fill = targetEl.querySelector('.video-progress-fill');
-      const text = targetEl.querySelector('.archive-progress-text, .archive-floating-text');
-      if (!fill || !text) return;
+      let abortController = null;
+      let isDownloading = false;
 
-      if (box) {
-        const progressWrap = box.querySelector('.archive-progress');
-        if (progressWrap) progressWrap.style.display = 'block';
-      }
-
-      if (status && status.active && status.phase === 'extract') {
-        fill.style.width = '100%';
-        text.textContent = t('vw.archiveExtracting', 'Извлечение файлов...');
-        return;
-      }
-      if (status && status.active && status.phase === 'download' && status.total > 0) {
-        fill.style.width = `${status.percent || 0}%`;
-        text.textContent = t('vw.archiveDownloadProgress', 'Загрузка: {p}% ({done}/{total} МБ)')
-          .replace('{p}', String(status.percent || 0))
-          .replace('{done}', (status.received / 1048576).toFixed(0))
-          .replace('{total}', (status.total / 1048576).toFixed(0))
-          + (etaText ? ` · ${etaText}` : '');
-        return;
-      }
-      fill.style.width = '0%';
-      text.textContent = '';
-    }
-
-    function formatArchiveEta(sec) {
-      return sec >= 60
-        ? t('vw.archiveEtaMin', 'осталось ~{m}:{s}').replace('{m}', String(Math.floor(sec / 60))).replace('{s}', String(sec % 60).padStart(2, '0'))
-        : t('vw.archiveEtaSec', 'осталось ~{n} с').replace('{n}', String(sec));
-    }
-
-    // Polls the server download progress of one zip while it is being fetched;
-    // returns the stop function
-    function startArchiveStatusPolling(targetPost, zipUrl, archiveIdx, archiveCount) {
-      let prevSample = null;
-      let etaText = '';
-      const poll = async () => {
-        if (currentPost !== targetPost) return;
-        const status = await fetchArchiveStatus(zipUrl);
-        if (status && status.active && status.phase === 'download' && status.total > 0) {
-          const now = Date.now();
-          if (prevSample && now > prevSample.time) {
-            const rate = (status.received - prevSample.received) / ((now - prevSample.time) / 1000);
-            if (rate > 1024) {
-              etaText = formatArchiveEta(Math.max(0, Math.round((status.total - status.received) / rate)));
-            }
-          }
-          prevSample = { received: status.received, time: now };
+      const setProgress = (percent, loadedBytes, totalBytes) => {
+        const clamped = Math.min(100, Math.max(0, Math.round(percent)));
+        if (fillEl) fillEl.style.width = `${clamped}%`;
+        const loadedMb = (loadedBytes / (1024 * 1024)).toFixed(1);
+        if (totalBytes > 0) {
+          const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
+          if (labelEl) labelEl.textContent = `${clamped}% · ${loadedMb} / ${totalMb} MB`;
+        } else {
+          if (labelEl) labelEl.textContent = `${loadedMb} MB...`;
         }
-        updateArchiveLoadingUi(targetPost, archiveIdx, archiveCount, status, etaText);
       };
-      poll().catch(() => {});
-      const interval = setInterval(() => { poll().catch(() => {}); }, 1000);
-      return () => clearInterval(interval);
-    }
 
-    function syncPostToGallery(post) {
-      if (!post || !post.id) return;
-      for (const list of [state.displayedPosts, state.posts]) {
-        if (!Array.isArray(list)) continue;
-        const idx = list.findIndex(p => p && p.id === post.id);
-        if (idx !== -1) list[idx] = post;
-      }
-    }
+      const resetToDefault = () => {
+        btn.classList.remove('is-downloading', 'is-completed', 'is-error');
+        if (fillEl) fillEl.style.width = '0%';
+        if (labelEl) labelEl.textContent = cleanName;
+        if (subEl) subEl.textContent = displaySize ? `(${displaySize})` : '';
+        if (iconEl) {
+          iconEl.innerHTML = `
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          `;
+        }
+        isDownloading = false;
+        abortController = null;
+      };
 
-    // Unpacked means the flag is set AND the slides are actually present:
-    // favorites restore strips albumItems, so such posts must unpack again
-    function isArchiveUnpacked(post) {
-      return Boolean(post && post._archiveUnpacked && Array.isArray(post.albumItems) && post.albumItems.length > 0);
-    }
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        e.preventDefault();
 
-    async function unpackArchivePost() {
-      const targetPost = currentPost;
-      if (!targetPost?.isArchive) return;
-      if (isArchiveUnpacked(targetPost)) return;
-      if (!Array.isArray(targetPost.archiveUrls) || targetPost.archiveUrls.length === 0) {
-        showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
-        return;
-      }
-      if (targetPost._archivePromise) return targetPost._archivePromise;
+        if (isDownloading) {
+          if (abortController) {
+            abortController.abort();
+          }
+          resetToDefault();
+          showToast(t('vw.downloadCancelled', 'Скачивание отменено'));
+          return;
+        }
 
-      targetPost._archivePromise = (async () => {
-        const archiveCount = targetPost.archiveUrls.length;
-        // Mixed posts (cover media + zips) keep their existing slides first,
-        // archive contents are appended as each archive completes
-        const baseSlides = Array.isArray(targetPost.albumItems)
-          ? [...targetPost.albumItems]
-          : (targetPost.fileUrl || targetPost.sampleUrl || targetPost.previewUrl)
-            ? [{
-                id: targetPost.id,
-                originalId: targetPost.originalId,
-                site: targetPost.site,
-                siteName: targetPost.siteName,
-                previewUrl: targetPost.previewUrl,
-                sampleUrl: targetPost.sampleUrl,
-                fileUrl: targetPost.fileUrl,
-                thumb180: targetPost.thumb180,
-                thumb360: targetPost.thumb360,
-                thumb720: targetPost.thumb720,
-                fileExt: targetPost.fileExt,
-                isVideo: targetPost.isVideo,
-                isGif: targetPost.isGif,
-                hasSound: targetPost.hasSound,
-                width: targetPost.width,
-                height: targetPost.height,
-                title: targetPost.title
-              }]
-            : [];
-        let slides = baseSlides;
-        const unpackedZips = Array.isArray(targetPost._unpackedZips) ? [...targetPost._unpackedZips] : [];
-        let newFiles = 0;
-        let failedZips = 0;
-        // Slides already visible: append silently; loading box visible: first batch renders the post
-        let mediaAlreadyVisible = !mediaWrapper?.querySelector('.archive-loading');
+        isDownloading = true;
+        btn.classList.remove('is-completed', 'is-error');
+        btn.classList.add('is-downloading');
+        if (subEl) subEl.textContent = '';
+        if (labelEl) labelEl.textContent = '0%...';
+
+        abortController = new AbortController();
+        activeArchiveDownloads.set(url, abortController);
 
         try {
-          for (let i = 0; i < archiveCount; i++) {
-            const zipUrl = targetPost.archiveUrls[i];
-            if (unpackedZips.includes(zipUrl)) continue;
+          const targetUrl = getProxiedUrl(url);
+          const res = await fetch(targetUrl, { signal: abortController.signal });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-            const stopPolling = startArchiveStatusPolling(targetPost, zipUrl, i, archiveCount);
-            let res = null;
-            try {
-              res = await fetchArchiveList(zipUrl);
-            } finally {
-              stopPolling();
-            }
-            if (!res || !res.success || !Array.isArray(res.albumItems) || res.albumItems.length === 0) {
-              failedZips++;
-              continue;
-            }
+          const contentLength = res.headers.get('content-length');
+          const total = contentLength ? parseInt(contentLength, 10) : (size > 0 ? size : 0);
+          let loaded = 0;
+          const reader = res.body.getReader();
+          const chunks = [];
 
-            slides = [...slides, ...res.albumItems];
-            newFiles += res.albumItems.length;
-            unpackedZips.push(zipUrl);
-            targetPost.isAlbum = true;
-            targetPost.albumItems = slides;
-            targetPost.albumCount = slides.length;
-            targetPost._unpackedZips = unpackedZips;
-
-            if (currentPost === targetPost) {
-              if (!mediaAlreadyVisible) {
-                mediaAlreadyVisible = true;
-                currentAlbumIndex = 0;
-                renderViewerPost();
-              } else {
-                renderAlbumFilmstrip();
-              }
-            }
-            syncPostToGallery(targetPost);
-            showToast(archiveCount > 1
-              ? t('vw.archiveReadyN', 'Архив {i}/{n} распакован: {files} файлов').replace('{i}', String(i + 1)).replace('{n}', String(archiveCount)).replace('{files}', String(res.albumItems.length))
-              : t('vw.archiveReady', 'Архив распакован: {n} файлов').replace('{n}', String(res.albumItems.length)));
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+            loaded += value.length;
+            const pct = total > 0 ? (loaded / total) * 100 : Math.min(95, (loaded / 5000000) * 100);
+            setProgress(pct, loaded, total);
           }
 
-          if (newFiles === 0) {
-            const msg = failedZips === archiveCount
-              ? t('vw.archiveFailed', 'Не удалось распаковать архив')
-              : t('vw.archiveEmpty', 'В архиве не найдено изображений или видео');
-            if (currentPost === targetPost && mediaWrapper?.querySelector('.archive-loading')) {
-              const box = mediaWrapper.querySelector('.archive-loading');
-              const spinner = box.querySelector('.video-status-spinner');
-              if (spinner) spinner.style.display = 'none';
-              const progressWrap = box.querySelector('.archive-progress');
-              if (progressWrap) progressWrap.style.display = 'none';
-              const label = box.querySelector('.archive-loading-label');
-              if (label) label.textContent = msg;
-            }
-            showToast(msg);
+          const blob = new Blob(chunks, { type: 'application/zip' });
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = cleanName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+
+          btn.classList.remove('is-downloading');
+          btn.classList.add('is-completed');
+          if (fillEl) fillEl.style.width = '100%';
+          const finalMb = (loaded / (1024 * 1024)).toFixed(1);
+          if (labelEl) labelEl.textContent = t('vw.downloadArchiveDone', 'Скачано ({size} МБ) ✓').replace('{size}', finalMb);
+          if (iconEl) {
+            iconEl.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
+          }
+          showToast(t('vw.downloadArchiveDoneShort', 'Архив сохранён на устройство'));
+
+          setTimeout(() => {
+            resetToDefault();
+          }, 4000);
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            resetToDefault();
             return;
           }
-
-          // Fully done only when every zip was unpacked: a partial failure
-          // leaves the flag off so the missing archives retry on next open
-          if (unpackedZips.length >= archiveCount) {
-            targetPost._archiveUnpacked = true;
-          }
-          syncPostToGallery(targetPost);
-        } catch (err) {
-          console.error('Ошибка распаковки архива:', err);
-          showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
+          console.warn('[Archive download error]', err);
+          btn.classList.remove('is-downloading');
+          btn.classList.add('is-error');
+          if (fillEl) fillEl.style.width = '0%';
+          if (labelEl) labelEl.textContent = t('vw.downloadArchiveError', 'Ошибка. Повторить?');
+          isDownloading = false;
+          abortController = null;
         } finally {
-          removeArchiveFloatingBanner();
-          delete targetPost._archivePromise;
+          activeArchiveDownloads.delete(url);
         }
-      })();
-      return targetPost._archivePromise;
+      });
+
+      return btn;
+    }
+
+    function renderArchivePostCard(targetPost) {
+      if (!mediaWrapper) return;
+      mediaWrapper.innerHTML = '';
+
+      const card = document.createElement('div');
+      card.className = 'archive-post-card';
+
+      const archiveCount = Array.isArray(targetPost.archiveUrls) ? targetPost.archiveUrls.length : 1;
+      const descText = t('vw.archiveCardDesc', 'Пост содержит архив с материалами ({n} шт.). Нажмите кнопку ниже для сохранения на устройство.').replace('{n}', String(archiveCount));
+      const titleText = targetPost.title || t('vw.archiveCardTitle', 'Архив файлов');
+
+      card.innerHTML = `
+        <div class="archive-card-icon-wrap">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 8v13H3V8"/>
+            <path d="M1 3h22v5H1z"/>
+            <path d="M10 12h4"/>
+          </svg>
+        </div>
+        <div class="archive-card-header">
+          <div class="archive-card-title">${titleText}</div>
+          <div class="archive-card-desc">${descText}</div>
+        </div>
+        <div class="archive-card-buttons"></div>
+      `;
+
+      const buttonsContainer = card.querySelector('.archive-card-buttons');
+      if (Array.isArray(targetPost.archiveUrls) && targetPost.archiveUrls.length > 0) {
+        targetPost.archiveUrls.forEach((url, idx) => {
+          const name = (Array.isArray(targetPost.archiveNames) && targetPost.archiveNames[idx]) || `archive_${idx + 1}.zip`;
+          const size = (Array.isArray(targetPost.archiveSizes) && targetPost.archiveSizes[idx]) || 0;
+          const btn = createAnimatedArchiveButton({ url, name, size, isSidebar: false });
+          buttonsContainer.appendChild(btn);
+        });
+      }
+
+      mediaWrapper.appendChild(card);
+    }
+
+    function renderSidebarArchives(targetPost) {
+      const section = document.getElementById('viewerSidebarArchivesSection');
+      const countEl = document.getElementById('viewerSidebarArchivesCount');
+      const listEl = document.getElementById('viewerSidebarArchivesList');
+      if (!section || !listEl) return;
+
+      if (!targetPost || !targetPost.isArchive || !Array.isArray(targetPost.archiveUrls) || targetPost.archiveUrls.length === 0) {
+        section.style.display = 'none';
+        listEl.innerHTML = '';
+        return;
+      }
+
+      section.style.display = 'block';
+      if (countEl) countEl.textContent = String(targetPost.archiveUrls.length);
+      listEl.innerHTML = '';
+
+      targetPost.archiveUrls.forEach((url, idx) => {
+        const name = (Array.isArray(targetPost.archiveNames) && targetPost.archiveNames[idx]) || `archive_${idx + 1}.zip`;
+        const size = (Array.isArray(targetPost.archiveSizes) && targetPost.archiveSizes[idx]) || 0;
+        const btn = createAnimatedArchiveButton({ url, name, size, isSidebar: true });
+        listEl.appendChild(btn);
+      });
     }
 
   function renderViewerPost(skipMediaLoad = false) {
@@ -774,21 +742,18 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       closeViewer
     });
 
+    renderSidebarArchives(currentPost);
     renderAlbumFilmstrip();
 
     if (!skipMediaLoad) {
-      if (currentPost.isArchive && !isArchiveUnpacked(currentPost)) {
-        const hasVisibleMedia = (Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) ||
-          Boolean(currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl);
-        if (hasVisibleMedia) {
-          // Cover/existing slides are viewable right away; archives keep unpacking in background
-          const activeMediaItem = getCurrentMediaItem();
-          loadMediaItem(activeMediaItem);
-          unpackArchivePost();
-        } else {
-          renderArchiveLoading();
-          unpackArchivePost();
-        }
+      const hasVisibleMedia = (Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) ||
+        Boolean(currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl);
+
+      if (hasVisibleMedia) {
+        const activeMediaItem = getCurrentMediaItem();
+        loadMediaItem(activeMediaItem);
+      } else if (currentPost.isArchive) {
+        renderArchivePostCard(currentPost);
       } else {
         const activeMediaItem = getCurrentMediaItem();
         loadMediaItem(activeMediaItem);

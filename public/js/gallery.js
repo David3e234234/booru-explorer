@@ -603,8 +603,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     } else if (post.isArchive) {
       const zipBadgeTitle = post.fileUrl
-        ? t('gal.badgeZipMixed.title', 'Пост содержит ZIP-архивы - распакуется после открытия')
-        : t('gal.badgeZip.title', 'Пост содержит только ZIP-архивы - откроется после распаковки');
+        ? t('gal.badgeZipMixed.title', 'Пост содержит прикреплённые ZIP-архивы для скачивания')
+        : t('gal.badgeZip.title', 'Пост содержит ZIP-архивы для скачивания');
       formatBadge = `<span class="badge-format" style="background-color: rgba(249, 115, 22, 0.85);" title="${zipBadgeTitle}">ZIP</span>`;
     } else if (post.isGif) {
       formatBadge = `<span class="badge-format gif">GIF</span>`;
@@ -797,6 +797,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           if (card._videoProbe) {
             card._videoProbe = false;
             return;
+          }
           const videoTarget = post.fileUrl || post.sampleUrl;
           if (!videoTarget) {
             card.classList.remove('video-playing');

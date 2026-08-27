@@ -622,50 +622,215 @@
   text-align: center;
 }
 
-/* Floating archive progress banner when media is already visible */
-.viewer-archive-floating-banner {
-  position: absolute;
-  top: 24px;
-  right: 24px;
+/* Archive post card displayed in the center of the viewer */
+.archive-post-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  min-width: 260px;
-  max-width: 380px;
-  background-color: var(--bg-surface-elevated);
+  justify-content: center;
+  gap: 16px;
+  padding: 32px 28px;
+  max-width: 480px;
+  width: 90%;
+  background: var(--bg-surface-elevated);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: var(--shadow-lg);
-  z-index: 55;
-  font-size: 12px;
-  color: var(--text-primary);
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.25s ease-out;
+  z-index: 20;
+  text-align: center;
   pointer-events: auto;
 }
 
-.viewer-archive-floating-banner .archive-floating-info {
+.archive-card-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  color: #f97316;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.viewer-archive-floating-banner .archive-floating-label {
+.archive-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.archive-card-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.archive-card-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.archive-card-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+/* Animated Download Button with Progress Fill */
+.btn-archive-download {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 18px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 13px;
   font-weight: 600;
-  font-size: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+}
+
+.btn-archive-download:hover {
+  background: var(--bg-surface);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-archive-download:active {
+  transform: scale(0.98);
+}
+
+/* Progress fill bar inside the button */
+.btn-archive-progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 0%;
+  background: var(--accent-primary-subtle);
+  border-right: 2px solid var(--accent-primary);
+  transition: width 0.12s linear;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.btn-archive-inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.btn-archive-icon {
+  flex-shrink: 0;
+  transition: transform var(--transition-fast);
+}
+
+.btn-archive-label {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.viewer-archive-floating-banner .archive-floating-text {
+.btn-archive-sub {
   font-size: 11px;
-  color: var(--text-muted);
   font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+/* Downloading state */
+.btn-archive-download.is-downloading {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface-elevated);
+}
+
+.btn-archive-download.is-downloading .btn-archive-progress-fill {
+  background: rgba(99, 102, 241, 0.22);
+}
+
+/* Completed state */
+.btn-archive-download.is-completed {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.btn-archive-download.is-completed .btn-archive-progress-fill {
+  width: 100% !important;
+  background: rgba(16, 185, 129, 0.18);
+  border-right: none;
+}
+
+/* Error state */
+.btn-archive-download.is-error {
+  border-color: var(--accent-danger);
+  background: rgba(244, 63, 94, 0.12);
+  color: var(--accent-danger);
+}
+
+/* Sidebar archives list */
+.sidebar-archives-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.sidebar-archives-list .btn-archive-download {
+  width: 100%;
+  font-size: 12px;
+  min-height: 40px;
+  padding: 8px 14px;
+}
+
+/* Quick archive badge button in viewer toolbar / media overlay */
+.viewer-archive-quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  color: #fb923c;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.viewer-archive-quick-btn:hover {
+  background: rgba(249, 115, 22, 0.28);
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
 /* Unsupported video fallback container */

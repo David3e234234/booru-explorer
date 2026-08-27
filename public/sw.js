@@ -1,5 +1,5 @@
-const CACHE_NAME = 'booru-explorer-v8.6';
-const MEDIA_CACHE = 'booru-media-v8.5';
+const CACHE_NAME = 'booru-explorer-v8.7';
+const MEDIA_CACHE = 'booru-media-v8.7';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
 
@@ -41,6 +41,7 @@ const STATIC_ASSETS = [
   '/js/app.js',
   '/js/gallery.js',
   '/js/viewer.js',
+  '/js/viewer/index.js',
   '/js/autocomplete.js',
   '/js/modules/uiUtils.js',
   '/js/modules/filtersUI.js',
