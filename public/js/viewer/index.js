@@ -293,6 +293,69 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       loadMediaItem(activeItem);
     }
 
+    const preloadedUrls = new Set();
+
+    function getMediaItemUrl(item) {
+      if (!item) return '';
+      const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
+      if (!directMedia) return '';
+      const needsImgProxy = item.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
+      return needsImgProxy ? getProxiedUrl(directMedia) : directMedia;
+    }
+
+    function preloadSingleUrl(url) {
+      if (!url || preloadedUrls.has(url)) return;
+      preloadedUrls.add(url);
+      if (preloadedUrls.size > 60) {
+        const first = preloadedUrls.values().next().value;
+        preloadedUrls.delete(first);
+      }
+      const img = new Image();
+      img.referrerPolicy = 'no-referrer';
+      img.src = url;
+      if ('decode' in img) {
+        img.decode().catch(() => {});
+      }
+    }
+
+    function preloadAdjacentMedia() {
+      if (!currentPost) return;
+
+      // 1. If currently in an album, preload neighboring album slides
+      if (currentPost.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 1) {
+        const items = currentPost.albumItems;
+        if (currentAlbumIndex + 1 < items.length) {
+          preloadSingleUrl(getMediaItemUrl(items[currentAlbumIndex + 1]));
+        }
+        if (currentAlbumIndex + 2 < items.length) {
+          preloadSingleUrl(getMediaItemUrl(items[currentAlbumIndex + 2]));
+        }
+        if (currentAlbumIndex - 1 >= 0) {
+          preloadSingleUrl(getMediaItemUrl(items[currentAlbumIndex - 1]));
+        }
+      }
+
+      // 2. Preload neighboring posts in the gallery
+      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+      if (!Array.isArray(list) || list.length === 0 || state.currentViewerIndex < 0) return;
+
+      const curIdx = state.currentViewerIndex;
+      for (let offset = 1; offset <= 2; offset++) {
+        const nextPost = list[curIdx + offset];
+        if (nextPost && !nextPost.isVideo) {
+          const activeItem = (nextPost.isAlbum && nextPost.albumItems?.[0]) ? nextPost.albumItems[0] : nextPost;
+          preloadSingleUrl(getMediaItemUrl(activeItem));
+        }
+      }
+      if (curIdx - 1 >= 0) {
+        const prevPost = list[curIdx - 1];
+        if (prevPost && !prevPost.isVideo) {
+          const activeItem = (prevPost.isAlbum && prevPost.albumItems?.[0]) ? prevPost.albumItems[0] : prevPost;
+          preloadSingleUrl(getMediaItemUrl(activeItem));
+        }
+      }
+    }
+
     function loadMediaItem(item) {
       if (activeAbortController) {
         activeAbortController.abort();
@@ -338,13 +401,51 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         mediaWrapper.appendChild(currentVideoInstance.videoContainer);
         mediaWrapper.appendChild(currentVideoInstance.statusBanner);
       } else {
+        const container = document.createElement('div');
+        container.className = 'viewer-image-container';
+
+        // 1. Instant thumbnail placeholder (0ms, already in memory from gallery)
+        const thumbMedia = item.previewUrl || item.thumb360 || item.thumb180 || item.sampleUrl || '';
+        const needsThumbProxy = item.site === 'danbooru' || thumbMedia.includes('donmai.us') || state.settings?.proxyThumbnails !== false;
+        const placeholderSrc = thumbMedia ? (thumbMedia.startsWith('/api/') ? thumbMedia : (needsThumbProxy ? getProxiedUrl(thumbMedia) : thumbMedia)) : '';
+
+        let placeholderImg = null;
+        if (placeholderSrc) {
+          placeholderImg = document.createElement('img');
+          placeholderImg.className = 'viewer-image-placeholder';
+          placeholderImg.src = placeholderSrc;
+          placeholderImg.referrerPolicy = 'no-referrer';
+          placeholderImg.alt = '';
+          container.appendChild(placeholderImg);
+        }
+
+        // 2. Delayed loading spinner for slow connections
+        const spinner = document.createElement('div');
+        spinner.className = 'viewer-media-spinner';
+        container.appendChild(spinner);
+
+        // 3. Full-resolution target image
         const img = document.createElement('img');
         img.className = 'viewer-image';
         const needsImgProxy = item.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
         const proxyMedia = getProxiedUrl(directMedia);
-        img.src = needsImgProxy ? proxyMedia : directMedia;
         img.referrerPolicy = 'no-referrer';
         img.alt = 'Full View';
+
+        const onImageReady = () => {
+          img.classList.add('is-loaded');
+          if (placeholderImg) {
+            placeholderImg.classList.add('is-hidden');
+            setTimeout(() => {
+              if (placeholderImg && placeholderImg.parentElement) placeholderImg.remove();
+            }, 300);
+          }
+          if (spinner && spinner.parentElement) {
+            spinner.remove();
+          }
+        };
+
+        img.addEventListener('load', onImageReady);
 
         img.addEventListener('error', function () {
           if (this.src !== proxyMedia) {
@@ -357,14 +458,27 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             console.warn('[Viewer Image Fallback] Переключение на previewUrl');
             this.src = getProxiedUrl(item.previewUrl);
           } else {
+            if (spinner && spinner.parentElement) spinner.remove();
             showToast(t('vw.fullImgFailed', 'Не удалось загрузить полноразмерное фото'));
           }
         });
 
+        img.src = needsImgProxy ? proxyMedia : directMedia;
+
+        // If already cached in memory
+        if (img.complete && img.naturalWidth > 0) {
+          onImageReady();
+        }
+
+        container.appendChild(img);
         currentZoomInstance = setupImageZoom(img, { showToast });
-        mediaWrapper.appendChild(img);
+        mediaWrapper.appendChild(container);
+
+        // Trigger background preloading for adjacent media
+        preloadAdjacentMedia();
       }
     }
+
 
     const activeArchiveDownloads = new Map();
 

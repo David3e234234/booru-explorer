@@ -400,7 +400,39 @@
 }
 
 /* Work in a frame: a thin shadow instead of a glow */
+.viewer-image-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.viewer-image-placeholder {
+  position: absolute;
+  max-width: 95%;
+  max-height: 95%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: blur(10px);
+  transform: scale(1.03);
+  opacity: 0.85;
+  pointer-events: none;
+  transition: opacity 0.28s ease-out;
+  border-radius: var(--radius-sm);
+  z-index: 1;
+}
+
+.viewer-image-placeholder.is-hidden {
+  opacity: 0;
+}
+
 .viewer-image {
+  position: relative;
+  z-index: 2;
   max-width: 95%;
   max-height: 95%;
   width: auto;
@@ -410,7 +442,12 @@
   border-radius: var(--radius-sm);
   cursor: grab;
   transform-origin: center center;
-  transition: transform 0.22s cubic-bezier(0.2, 0, 0.2, 1);
+  opacity: 0;
+  transition: opacity 0.22s cubic-bezier(0.2, 0, 0.2, 1), transform 0.22s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.viewer-image.is-loaded {
+  opacity: 1;
 }
 
 .viewer-image.zoomed {
@@ -421,6 +458,28 @@
 .viewer-image.dragging {
   cursor: grabbing !important;
   transition: none !important;
+}
+
+/* Subtle delayed loading spinner (only for slow network > 180ms) */
+.viewer-media-spinner {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  border: 3px solid rgba(229, 169, 104, 0.18);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: viewerMediaSpin 0.75s linear infinite;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  animation-delay: 0.18s;
+  animation-fill-mode: forwards;
+}
+
+@keyframes viewerMediaSpin {
+  0% { transform: rotate(0deg); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: rotate(360deg); opacity: 1; }
 }
 
 /* Video player */
