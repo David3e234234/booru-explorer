@@ -48,7 +48,8 @@ import {
   updateDateFilterUI,
   updatePawchiveServiceUI,
   getPawchiveServiceLabel,
-  updateCategoryTabsUI 
+  updateCategoryTabsUI,
+  updateFilterActiveDot
 } from './modules/filtersUI.js';
 import { 
   loadBooruSites, 

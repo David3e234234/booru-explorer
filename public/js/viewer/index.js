@@ -777,8 +777,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         viewerAuthorBadge.style.display = 'inline-flex';
         viewerAuthorBadge.onclick = (e) => {
           e.stopPropagation();
+          const targetSite = currentPost?.site;
           closeViewer();
-          const tagToSearch = (currentPost.site === 'rule34video' && !cleanAuthorTag.includes(':'))
+          const tagToSearch = (targetSite === 'rule34video' && !cleanAuthorTag.includes(':'))
             ? `artist:${cleanAuthorTag}`
             : cleanAuthorTag;
           if (onTagSelect) onTagSelect(tagToSearch);
@@ -795,8 +796,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         infoAuthor.textContent = authorName;
         infoAuthorRow.style.display = 'flex';
         infoAuthor.onclick = () => {
+          const targetSite = currentPost?.site;
           closeViewer();
-          const tagToSearch = (currentPost.site === 'rule34video' && !cleanAuthorTag.includes(':'))
+          const tagToSearch = (targetSite === 'rule34video' && !cleanAuthorTag.includes(':'))
             ? `artist:${cleanAuthorTag}`
             : cleanAuthorTag;
           if (onTagSelect) onTagSelect(tagToSearch);
