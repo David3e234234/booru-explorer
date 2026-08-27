@@ -12,7 +12,7 @@ function getRecentDateFilter(days = 30) {
   return `date:>=${year}-${month}-${day}`;
 }
 
-export async function fetchSafebooru(params, aiTagsList) {
+export async function fetchSafebooru(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ratingFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound' || ratingFilter === 'nsfw' || ratingFilter === 'questionable' || ratingFilter === '16+') {
     return [];
@@ -65,7 +65,7 @@ export async function fetchSafebooru(params, aiTagsList) {
 
   const pid = Math.max(0, page - 1);
   const url = `https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(finalTags)}&pid=${pid}&limit=${limit}`;
-  const res = await fetchSafe(url);
+  const res = await fetchSafe(url, { settings, site: 'safebooru' });
   if (!res.ok) return [];
   const text = await res.text();
   const data = safeJsonParse(text, []);
@@ -88,7 +88,7 @@ export async function fetchSafebooru(params, aiTagsList) {
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList);
-    const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
+    const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
     const createdAt = normalizeDate(item.created_at || item.change);
     const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
     const hasChildren = Boolean(item.has_children);

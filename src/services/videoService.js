@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
-import { getFfmpegHeaders } from '../utils/network.js';
+import { getFfmpegHeaders, getProxyForSite, resolveSiteFromUrl } from '../utils/network.js';
 import { getSettings } from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
@@ -100,6 +100,8 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
   const currentSettings = getSettings();
   const { input: ffmpegInput, isLocal } = resolveFfmpegInput(req, targetUrl);
   const headers = isLocal ? null : getFfmpegHeaders(targetUrl, currentSettings);
+  const site = isLocal ? null : resolveSiteFromUrl(targetUrl);
+  const proxyUrl = site ? getProxyForSite(site, currentSettings) : '';
 
   let scaleFilter = 'scale=480:-1';
   let qScale = '2';
@@ -116,7 +118,9 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
 
   const extractFrame = (ssTime) => {
     return new Promise((resolve) => {
+      const httpProxyArg = (proxyUrl && (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://'))) ? ['-http_proxy', proxyUrl] : [];
       const args = [
+        ...httpProxyArg,
         ...(headers ? ['-headers', headers] : []),
         '-ss', ssTime,
         '-i', ffmpegInput,
@@ -128,7 +132,8 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
       ];
       let proc;
       try {
-        proc = spawn('ffmpeg', args);
+        const env = proxyUrl ? { ...process.env, HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, ALL_PROXY: proxyUrl } : process.env;
+        proc = spawn('ffmpeg', args, { env });
       } catch {
         resolve(false);
         return;
@@ -183,8 +188,13 @@ export async function handleTranscodeVideoRequest(req, res) {
     const currentSettings = getSettings();
     const { input: ffmpegInput, isLocal } = resolveFfmpegInput(req, targetUrl);
     const headers = isLocal ? null : getFfmpegHeaders(targetUrl, currentSettings);
+    const site = isLocal ? null : resolveSiteFromUrl(targetUrl);
+    const proxyUrl = site ? getProxyForSite(site, currentSettings) : '';
+
     const transcodePromise = new Promise((resolve, reject) => {
+      const httpProxyArg = (proxyUrl && (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://'))) ? ['-http_proxy', proxyUrl] : [];
       const args = [
+        ...httpProxyArg,
         ...(headers ? ['-headers', headers] : []),
         '-i', ffmpegInput,
         '-map', '0:v:0',
@@ -200,7 +210,8 @@ export async function handleTranscodeVideoRequest(req, res) {
         tempPath
       ];
 
-      const proc = spawn('ffmpeg', args);
+      const env = proxyUrl ? { ...process.env, HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, ALL_PROXY: proxyUrl } : process.env;
+      const proc = spawn('ffmpeg', args, { env });
 
       // The stderr tail tells an unavailable source apart from a failure on our side
       let stderrTail = '';

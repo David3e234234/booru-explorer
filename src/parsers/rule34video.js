@@ -17,7 +17,7 @@ function cacheResolved(map, key, value) {
 /**
  * Resolves an author/artist/model name to Rule34Video IDs (model_ids, channels, members)
  */
-export async function resolveRule34VideoAuthor(authorQuery) {
+export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
   if (!authorQuery) return null;
   const clean = authorQuery
     .replace(/^(?:channel|user|account|artist|author|uploader|creator|member|model):\s*/i, '')
@@ -53,7 +53,9 @@ export async function resolveRule34VideoAuthor(authorQuery) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'X-Requested-With': 'XMLHttpRequest'
       },
-      timeout: 5000
+      timeout: 5000,
+      settings,
+      site: 'rule34video'
     });
 
     if (resModelJson.ok) {
@@ -82,7 +84,9 @@ export async function resolveRule34VideoAuthor(authorQuery) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'X-Requested-With': 'XMLHttpRequest'
       },
-      timeout: 5000
+      timeout: 5000,
+      settings,
+      site: 'rule34video'
     });
 
     if (resChannel.ok) {
@@ -106,7 +110,9 @@ export async function resolveRule34VideoAuthor(authorQuery) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'X-Requested-With': 'XMLHttpRequest'
       },
-      timeout: 5000
+      timeout: 5000,
+      settings,
+      site: 'rule34video'
     });
 
     if (resMember.ok) {
@@ -129,7 +135,7 @@ export async function resolveRule34VideoAuthor(authorQuery) {
   return null;
 }
 
-export async function fetchRule34Video(params, aiTagsList) {
+export async function fetchRule34Video(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 80, category = '', ratingFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
   if (ratingFilter === 'sfw') {
     return [];
@@ -160,7 +166,7 @@ export async function fetchRule34Video(params, aiTagsList) {
 
   let authorTarget = null;
   if (extractedAuthor) {
-    authorTarget = await resolveRule34VideoAuthor(extractedAuthor);
+    authorTarget = await resolveRule34VideoAuthor(extractedAuthor, settings);
   }
 
   // Search query for KVS search
@@ -259,7 +265,9 @@ export async function fetchRule34Video(params, aiTagsList) {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'X-Requested-With': 'XMLHttpRequest'
         },
-        timeout: 10000
+        timeout: 10000,
+        settings,
+        site: 'rule34video'
       });
       if (!res.ok) return [];
       const html = await res.text();
@@ -525,7 +533,7 @@ export async function fetchRule34Video(params, aiTagsList) {
     const chunk = resolveQueue.slice(i, i + concurrency);
     await Promise.allSettled(chunk.map(async (post) => {
       try {
-        const resolved = await resolveRule34VideoFullMedia(post.source, post.originalId);
+        const resolved = await resolveRule34VideoFullMedia(post.source, post.originalId, settings);
         if (resolved) {
           if (resolved.fullVideoUrl) {
             post.fileUrl = resolved.fullVideoUrl;
@@ -548,7 +556,7 @@ export async function fetchRule34Video(params, aiTagsList) {
 
 const resolvedVideoCache = new Map();
 
-export async function resolveRule34VideoFullMedia(sourceUrl, id) {
+export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) {
   const cacheKey = String(id || sourceUrl);
   if (resolvedVideoCache.has(cacheKey)) {
     return resolvedVideoCache.get(cacheKey);
@@ -564,7 +572,9 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': 'https://rule34video.com/'
       },
-      timeout: 10000
+      timeout: 10000,
+      settings,
+      site: 'rule34video'
     });
     if (!res.ok) return null;
     const html = await res.text();

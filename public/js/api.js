@@ -22,6 +22,18 @@ function getAuthHeaders(includeJson = false) {
       konachanPassword: state.settings.konachanPassword || '',
       yandereLogin: state.settings.yandereLogin || '',
       yanderePassword: state.settings.yanderePassword || '',
+      globalProxy: state.settings.globalProxy || '',
+      danbooruProxy: state.settings.danbooruProxy || '',
+      gelbooruProxy: state.settings.gelbooruProxy || '',
+      rule34Proxy: state.settings.rule34Proxy || '',
+      yandereProxy: state.settings.yandereProxy || '',
+      konachanProxy: state.settings.konachanProxy || '',
+      safebooruProxy: state.settings.safebooruProxy || '',
+      rule34videoProxy: state.settings.rule34videoProxy || '',
+      xbooruProxy: state.settings.xbooruProxy || '',
+      hypnohubProxy: state.settings.hypnohubProxy || '',
+      tbibProxy: state.settings.tbibProxy || '',
+      pawchiveProxy: state.settings.pawchiveProxy || '',
       curvyTags: state.settings.curvyTags || [],
       petiteTags: state.settings.petiteTags || [],
       furryTags: state.settings.furryTags || [],
@@ -398,6 +410,15 @@ export async function testSiteAuth(payload) {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify(payload)
+  });
+  return await res.json();
+}
+
+export async function testProxyConnection(site, proxyUrl) {
+  const res = await fetch('/api/proxy/test', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ site, proxyUrl })
   });
   return await res.json();
 }

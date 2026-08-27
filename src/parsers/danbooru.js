@@ -173,7 +173,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       for (let retry = 0; retry < 2; retry++) {
         try {
           if (i > 0 || retry > 0) await new Promise(r => setTimeout(r, 150));
-          const res = await fetchSafe(url);
+          const res = await fetchSafe(url, { settings, site: 'danbooru' });
           if (!res.ok) {
             if (res.status === 429) {
               await new Promise(r => setTimeout(r, 600));
@@ -230,7 +230,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       : '';
     const url = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(finalTags)}&page=${page}&limit=${fetchLimit}${authParam}`;
     try {
-      const res = await fetchSafe(url);
+      const res = await fetchSafe(url, { settings, site: 'danbooru' });
       if (res.ok) {
         const text = await res.text();
         const data = safeJsonParse(text, null);
@@ -252,7 +252,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
         : '';
       const fallbackUrl = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(sourceQuery)}&limit=${fetchLimit}${authParam}`;
-      const res = await fetchSafe(fallbackUrl);
+      const res = await fetchSafe(fallbackUrl, { settings, site: 'danbooru' });
       if (res.ok) {
         const text = await res.text();
         const data = safeJsonParse(text, null);
@@ -271,7 +271,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
         : '';
       const fallbackUrl = `https://danbooru.donmai.us/posts.json?tags=order:rank&limit=${fetchLimit}${authParam}`;
-      const res = await fetchSafe(fallbackUrl);
+      const res = await fetchSafe(fallbackUrl, { settings, site: 'danbooru' });
       if (res.ok) {
         const text = await res.text();
         const data = safeJsonParse(text, null);

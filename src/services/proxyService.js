@@ -4,7 +4,7 @@ import fs from 'fs';
 import { Readable } from 'stream';
 import { THUMBS_DIR, BROWSER_USER_AGENT, BOORU_USER_AGENT } from '../config/constants.js';
 import { getSettings } from './storageService.js';
-import { resolveSiteReferer } from '../utils/network.js';
+import { resolveSiteReferer, fetchSafe } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
 
 // Max image size that gets buffered into memory and written to the disk cache
@@ -131,8 +131,8 @@ function fixContentType(res, targetUrl) {
   }
 }
 
-async function tryFetch(url, headers, signal) {
-  return fetch(url, { headers, redirect: 'follow', signal });
+async function tryFetch(url, headers, signal, settings) {
+  return fetchSafe(url, { headers, redirect: 'follow', signal, settings, timeout: PROXY_ABORT_MS });
 }
 
 // Sources like rule34video answer 429 to a burst of Range requests for one video.
@@ -148,7 +148,7 @@ function pruneUpstreamCooldown() {
   }
 }
 
-async function fetchUpstreamWithRetry(targetUrl, headers, signal, maxRetries = 2) {
+async function fetchUpstreamWithRetry(targetUrl, headers, signal, settings, maxRetries = 2) {
   for (let attempt = 0; ; attempt++) {
     // Cooldown after a recent 429: a burst of Range requests must not hammer the source back-to-back
     const cooldownEnd = upstreamCooldown.get(targetUrl) || 0;
@@ -157,7 +157,7 @@ async function fetchUpstreamWithRetry(targetUrl, headers, signal, maxRetries = 2
       await new Promise(resolve => setTimeout(resolve, Math.min(waitMs, UPSTREAM_COOLDOWN_MS)));
     }
 
-    const response = await tryFetch(targetUrl, headers, signal);
+    const response = await tryFetch(targetUrl, headers, signal, settings);
     if (!RETRYABLE_STATUSES.has(response.status) || attempt >= maxRetries || signal?.aborted) {
       return response;
     }
@@ -176,7 +176,7 @@ async function fetchUpstreamWithRetry(targetUrl, headers, signal, maxRetries = 2
 }
 
 // Full cycle: download the image (with 404 fallback), put it in the disk cache, and return it to the client
-async function downloadAndCacheImage(req, res, originalUrl, headers) {
+async function downloadAndCacheImage(req, res, originalUrl, headers, settings) {
   const controller = new AbortController();
   const abortTimeout = setTimeout(() => controller.abort(), PROXY_ABORT_MS);
   req.on('close', () => {
@@ -187,12 +187,12 @@ async function downloadAndCacheImage(req, res, originalUrl, headers) {
   let response;
   let effectiveUrl = originalUrl;
   try {
-    response = await fetchUpstreamWithRetry(originalUrl, headers, controller.signal);
+    response = await fetchUpstreamWithRetry(originalUrl, headers, controller.signal, settings);
 
     if (response.status === 404) {
       for (const altUrl of build404FallbackCandidates(originalUrl)) {
         try {
-          const altResp = await tryFetch(altUrl, headers, controller.signal);
+          const altResp = await tryFetch(altUrl, headers, controller.signal, settings);
           if (altResp.ok || altResp.status === 206) {
             response = altResp;
             effectiveUrl = altUrl;
@@ -310,7 +310,7 @@ export async function handleProxyRequest(req, res) {
       }
 
       // Register our own download as active
-      const job = downloadAndCacheImage(req, res, targetUrl, buildUpstreamHeaders(targetUrl, true, currentSettings));
+      const job = downloadAndCacheImage(req, res, targetUrl, buildUpstreamHeaders(targetUrl, true, currentSettings), currentSettings);
       inflightImages.set(targetUrl, job);
       const cleanup = () => {
         if (inflightImages.get(targetUrl) === job) inflightImages.delete(targetUrl);
@@ -332,12 +332,12 @@ export async function handleProxyRequest(req, res) {
       try { controller.abort(); } catch {}
     });
 
-    let response = await fetchUpstreamWithRetry(targetUrl, headers, controller.signal);
+    let response = await fetchUpstreamWithRetry(targetUrl, headers, controller.signal, currentSettings);
 
     if (response.status === 404) {
       for (const altUrl of build404FallbackCandidates(targetUrl)) {
         try {
-          const altResp = await tryFetch(altUrl, headers, controller.signal);
+          const altResp = await tryFetch(altUrl, headers, controller.signal, currentSettings);
           if (altResp.ok || altResp.status === 206) {
             response = altResp;
             targetUrl = altUrl;

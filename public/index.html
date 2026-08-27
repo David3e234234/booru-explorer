@@ -17,7 +17,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/variables.css?v=8.2">
   <link rel="stylesheet" href="css/main.css?v=8.2">
-  <link rel="stylesheet" href="css/components.css?v=9.2">
+  <link rel="stylesheet" href="css/components.css?v=9.3">
   <link rel="stylesheet" href="css/viewer.css?v=8.5">
   <script src="js/mp4box.all.min.js"></script>
 </head>
@@ -1107,6 +1107,205 @@
         <!-- 5. TAB: PROXY & NETWORK -->
         <div class="settings-tab-pane" id="tabPane-proxy" style="display: none;">
           <div class="settings-group">
+            <label class="settings-label" data-i18n="settings.proxyServers">Серверные HTTP / HTTPS / SOCKS5 прокси для сайтов:</label>
+            <p class="settings-hint" data-i18n="settings.proxyServersHint">Укажите прокси (например <code>http://127.0.0.1:8080</code> или <code>socks5://127.0.0.1:1080</code>) отдельно под каждый сайт для обхода блокировок и исключения ситуаций, когда сайт заблокирован на IP хостинга. Если прокси для сайта не задан, используется общий прокси или прямое подключение.</p>
+            
+            <div class="api-keys-list" style="margin-top: 10px;">
+              <!-- 0. Global Fallback Proxy -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-global" data-i18n="settings.proxyGlobalBadge">🌐 Общий прокси (Fallback)</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestGlobalProxy" title="Проверить общий прокси">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputGlobalProxy" class="input-setting" placeholder="http://127.0.0.1:8080 или socks5://127.0.0.1:1080" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.proxyGlobalPlaceholder">
+                </div>
+              </div>
+
+              <!-- 1. Danbooru -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-danbooru">Danbooru</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestDanbooruProxy" title="Проверить прокси Danbooru">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputDanbooruProxy" class="input-setting" placeholder="Прокси для Danbooru (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 2. Gelbooru -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-gelbooru">Gelbooru.com</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestGelbooruProxy" title="Проверить прокси Gelbooru">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputGelbooruProxy" class="input-setting" placeholder="Прокси для Gelbooru (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 3. Rule34.xxx -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-r34">Rule34.xxx</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestRule34Proxy" title="Проверить прокси Rule34">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputRule34Proxy" class="input-setting" placeholder="Прокси для Rule34 (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 4. Yande.re -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-yandere">Yande.re</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestYandereProxy" title="Проверить прокси Yande.re">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputYandereProxy" class="input-setting" placeholder="Прокси для Yande.re (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 5. Konachan -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-konachan">Konachan.com</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestKonachanProxy" title="Проверить прокси Konachan">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputKonachanProxy" class="input-setting" placeholder="Прокси для Konachan (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 6. Safebooru -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-safebooru">Safebooru.org</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestSafebooruProxy" title="Проверить прокси Safebooru">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputSafebooruProxy" class="input-setting" placeholder="Прокси для Safebooru (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 7. Rule34Video -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-rule34video">Rule34Video</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestRule34videoProxy" title="Проверить прокси Rule34Video">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputRule34videoProxy" class="input-setting" placeholder="Прокси для Rule34Video (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 8. Pawchive -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-pawchive">Pawchive.pw</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestPawchiveProxy" title="Проверить прокси Pawchive">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputPawchiveProxy" class="input-setting" placeholder="Прокси для Pawchive (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 9. Xbooru -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-xbooru">Xbooru.com</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestXbooruProxy" title="Проверить прокси Xbooru">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputXbooruProxy" class="input-setting" placeholder="Прокси для Xbooru (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 10. Hypnohub -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-hypnohub">Hypnohub.net</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestHypnohubProxy" title="Проверить прокси Hypnohub">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputHypnohubProxy" class="input-setting" placeholder="Прокси для Hypnohub (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 11. TBIB -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-tbib">TBIB.org</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestTbibProxy" title="Проверить прокси TBIB">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputTbibProxy" class="input-setting" placeholder="Прокси для TBIB (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-group">
             <label class="settings-label" data-i18n="settings.proxyMain">Проксирование и экономия трафика сервера:</label>
             <p class="settings-hint" data-i18n="settings.proxyMainHint">Отключайте проксирование для прямой загрузки с CDN. Если CDN борды блокирует доступ, приложение автоматически подключит прокси (Fallback).</p>
             <div class="toggles-list" style="margin-top: 6px;">
@@ -2009,6 +2208,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=10.1"></script>
+  <script type="module" src="js/app.js?v=10.2"></script>
 </body>
 </html>

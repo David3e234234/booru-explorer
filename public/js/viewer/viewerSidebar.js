@@ -53,12 +53,22 @@ export const CATEGORY_CONFIG = {
 };
 
 const META_KEYWORDS = new Set([
-  'highres', 'absurdres', 'superabsurdres', '4k', 'sound', 'audio', 'video', 'animated', 
-  'ugoira', 'translated', 'translation_request', 'commentary', 'commentary_request', 
-  'tagme', 'bad_id', 'bad_link', 'duplicate', 'source_request', 'check_my_note', 
-  'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail', 'patreon_reward', 
-  'fantia', 'fanbox', 'skeb', 'lowres', 'downscaled', 'text', 'signature', 'username',
-  'official_art', 'scan', 'wallpaper'
+  'highres', 'absurdres', 'superabsurdres', 'incredibly_absurdres', 'huge_filesize', 'bad_id',
+  'bad_link', 'bad_pixiv_id', 'bad_twitter_id', 'duplicate', 'source_request', 'tagme',
+  'check_my_note', 'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail',
+  'patreon_reward', 'patreon_logo', 'fantia', 'fanbox', 'skeb', 'lowres', 'downscaled',
+  'text', 'signature', 'username', 'official_art', 'scan', 'wallpaper', 'cover', 'sound',
+  'audio', 'video', 'animated', 'animation', 'ugoira', 'web_address', 'commission',
+  'translated', 'translation_request', 'commentary', 'commentary_request', 'partial_commentary',
+  'typeset', 'annotated', 'translated_subtitles', 'subtitled', 'voiced', 'no_sound',
+  'spoiler', 'epilepsy_warning', 'dated', 'resized', 'pixel_art', 'vector', 'transparent_background',
+  'white_background', 'simple_background', 'monochrome', 'greyscale', 'comic', 'manga', '4k', 'hd', '60fps'
+]);
+
+const NON_CHARACTER_PAREN_SUFFIXES = new Set([
+  'artist', 'creator', 'circle', 'studio', 'series', 'game', 'anime', 'manga',
+  'vtuber', 'novel', 'comic', 'franchise', 'project', 'medium', 'style', 'cosplay',
+  'person', 'artwork', 'parody', 'group', 'company', 'label', 'universe'
 ]);
 
 export function getTagCategory(tag, tagDetails, author = '') {
@@ -76,7 +86,7 @@ export function getTagCategory(tag, tagDetails, author = '') {
 
   if (author) {
     const authorClean = String(author).toLowerCase().replace(/^[@pixiv:]+/, '').trim().replace(/\s+/g, '_');
-    if (authorClean && (clean === authorClean || clean.includes(authorClean))) {
+    if (authorClean && (clean === authorClean || clean.includes(authorClean) || authorClean.includes(clean))) {
       return 'artist';
     }
   }
@@ -99,6 +109,15 @@ export function getTagCategory(tag, tagDetails, author = '') {
 
   if (clean.startsWith('meta:') || META_KEYWORDS.has(clean) || clean.endsWith('_(medium)') || clean.endsWith('_(style)')) {
     return 'meta';
+  }
+
+  // Universal Booru character detection: name_(series) where series is not a reserved meta keyword
+  const parenMatch = clean.match(/^(.+)_\(([^)]+)\)$/);
+  if (parenMatch) {
+    const suffix = parenMatch[2].toLowerCase().trim();
+    if (!NON_CHARACTER_PAREN_SUFFIXES.has(suffix)) {
+      return 'character';
+    }
   }
 
   return 'general';

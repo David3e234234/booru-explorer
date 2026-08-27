@@ -1698,6 +1698,12 @@
   letter-spacing: 0.02em;
 }
 
+.api-key-site-badge.site-global {
+  background: rgba(168, 85, 247, 0.15);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
 .api-key-site-badge.site-r34 {
   background: rgba(34, 197, 94, 0.15);
   color: #86efac;
@@ -1728,11 +1734,41 @@
   border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
+.api-key-site-badge.site-safebooru {
+  background: rgba(14, 165, 233, 0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(14, 165, 233, 0.3);
+}
+
+.api-key-site-badge.site-rule34video {
+  background: rgba(249, 115, 22, 0.15);
+  color: #fdba74;
+  border: 1px solid rgba(249, 115, 22, 0.3);
+}
+
+.api-key-site-badge.site-xbooru,
+.api-key-site-badge.site-hypnohub,
+.api-key-site-badge.site-tbib {
+  background: rgba(234, 179, 8, 0.15);
+  color: #fde047;
+  border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.api-key-site-badge.site-pawchive {
+  background: rgba(236, 72, 153, 0.15);
+  color: #f9a8d4;
+  border: 1px solid rgba(236, 72, 153, 0.3);
+}
+
+[data-theme="warm-paper"] .api-key-site-badge.site-global { color: #7e22ce; border-color: rgba(126, 34, 206, 0.35); background: rgba(126, 34, 206, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-r34 { color: #15803d; border-color: rgba(21, 128, 61, 0.35); background: rgba(21, 128, 61, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-gelbooru { color: #4338ca; border-color: rgba(67, 56, 202, 0.35); background: rgba(67, 56, 202, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-danbooru { color: #1d4ed8; border-color: rgba(29, 78, 216, 0.35); background: rgba(29, 78, 216, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-konachan { color: #0f766e; border-color: rgba(15, 118, 110, 0.35); background: rgba(15, 118, 110, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-yandere { color: #b91c1c; border-color: rgba(185, 28, 28, 0.35); background: rgba(185, 28, 28, 0.08); }
+[data-theme="warm-paper"] .api-key-site-badge.site-safebooru { color: #0369a1; border-color: rgba(3, 105, 161, 0.35); background: rgba(3, 105, 161, 0.08); }
+[data-theme="warm-paper"] .api-key-site-badge.site-rule34video { color: #c2410c; border-color: rgba(194, 65, 12, 0.35); background: rgba(194, 65, 12, 0.08); }
+[data-theme="warm-paper"] .api-key-site-badge.site-pawchive { color: #be185d; border-color: rgba(190, 24, 93, 0.35); background: rgba(190, 24, 93, 0.08); }
 
 .api-key-link {
   font-size: 11px;

@@ -1,5 +1,4 @@
 import { fetchSafe } from './network.js';
-import { logError } from './logger.js';
 import { extractAuthor as extractAuthorFromSource } from './tagHelpers.js';
 
 // Cache of the global tag map (1 = artist, 3 = copyright, 4 = character, 0 = general, 6 = meta)
@@ -9,8 +8,8 @@ let lastFetchedTime = 0;
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-const KNOWN_EXTRA_TAGS = {
-  // Popular artists and animators
+export const KNOWN_EXTRA_TAGS = {
+  // Popular artists, animators and studios
   minus8: 1,
   derpixon: 1,
   'zone-sama': 1,
@@ -43,27 +42,141 @@ const KNOWN_EXTRA_TAGS = {
   yd: 1,
   as109: 1,
   raiko: 1,
-  reDrop: 1,
+  redrop: 1,
   wlop: 1,
+  artgerm: 1,
+  alp: 1,
+  mignon: 1,
+  cubex55: 1,
+  fugtrup: 1,
+  tororo: 1,
+  fkey: 1,
+  hews: 1,
+  hiten: 1,
+  sydsnap: 1,
+  tiv: 1,
+  reina: 1,
+  ciloranko: 1,
+  krenz_cushart: 1,
+  mika_pikazo: 1,
+  anmi: 1,
+  rurudo: 1,
+  mocha: 1,
+  shirabii: 1,
+  pocomi: 1,
+  kantoku: 1,
+  tony_taka: 1,
 
-  // Popular franchises (copyright)
+  // Popular franchises and series (copyright)
   hololive: 3,
+  nijisanji: 3,
+  vshojo: 3,
   genshin_impact: 3,
   honkai_star_rail: 3,
+  honkai_impact_3rd: 3,
+  zenless_zone_zero: 3,
+  wuthering_waves: 3,
   blue_archive: 3,
   fate_grand_order: 3,
+  'fate/grand_order': 3,
+  'fate_(series)': 3,
+  fate_stay_night: 3,
   azur_lane: 3,
-  overwatch: 3,
-  league_of_legends: 3,
-  pokemon: 3,
-  touhou: 3,
-  vocaloid: 3,
   arknights: 3,
   nikke: 3,
-  zenless_zone_zero: 3
+  'goddess_of_victory:_nikke': 3,
+  overwatch: 3,
+  overwatch_2: 3,
+  league_of_legends: 3,
+  pokemon: 3,
+  pocket_monsters: 3,
+  touhou: 3,
+  touhou_project: 3,
+  vocaloid: 3,
+  idolmaster: 3,
+  the_idolmaster: 3,
+  'the_idolm@ster': 3,
+  'love_live!': 3,
+  'love_live!_sunshine!!': 3,
+  'love_live!_superstar!!': 3,
+  granblue_fantasy: 3,
+  kantai_collection: 3,
+  chainsaw_man: 3,
+  jujutsu_kaisen: 3,
+  demon_slayer: 3,
+  kimetsu_no_yaiba: 3,
+  my_hero_academia: 3,
+  boku_no_hero_academia: 3,
+  naruto: 3,
+  naruto_shippuuden: 3,
+  one_piece: 3,
+  bleach: 3,
+  dragon_ball: 3,
+  dragon_ball_z: 3,
+  dragon_ball_super: 3,
+  final_fantasy: 3,
+  final_fantasy_vii: 3,
+  final_fantasy_xiv: 3,
+  persona: 3,
+  persona_3: 3,
+  persona_4: 3,
+  persona_5: 3,
+  nier: 3,
+  nier_automata: 3,
+  'nier:automata': 3,
+  danganronpa: 3,
+  rwby: 3,
+  spy_x_family: 3,
+  sousou_no_frieren: 3,
+  frieren: 3,
+  dungeon_meshi: 3,
+  delicious_in_dungeon: 3,
+  evangelion: 3,
+  neon_genesis_evangelion: 3,
+  cyberpunk: 3,
+  cyberpunk_2077: 3,
+  'cyberpunk:_edgerunners': 3,
+  elden_ring: 3,
+  dark_souls: 3,
+  bloodborne: 3,
+  monster_hunter: 3,
+  zelda: 3,
+  the_legend_of_zelda: 3,
+  mario: 3,
+  super_mario: 3,
+  sonic_the_hedgehog: 3,
+  street_fighter: 3,
+  tekken: 3,
+  guilty_gear: 3,
+  dead_or_alive: 3,
+  atelier: 3,
+  tales_of: 3,
+  xenoblade: 3,
+  xenoblade_chronicles: 3,
+  fire_emblem: 3,
+  fire_emblem_heroes: 3,
+  fire_emblem_three_houses: 3,
+  girls_frontline: 3,
+  'princess_connect!': 3,
+  'princess_connect!_re:dive': 3,
+  'bang_dream!': 3,
+  project_sekai: 3,
+  uma_musume: 3,
+  uma_musume_pretty_derby: 3,
+  'bocchi_the_rock!': 3,
+  oshi_no_ko: 3,
+  mushoku_tensei: 3,
+  sword_art_online: 3,
+  're:zero': 3,
+  're:zero_kara_hajimeru_isekai_seikatsu': 3,
+  konosuba: 3,
+  fate: 3,
+  hololive_en: 3,
+  hololive_jp: 3,
+  hololive_id: 3
 };
 
-const GENERIC_NON_ARTIST_TAGS = new Set([
+export const GENERIC_NON_ARTIST_TAGS = new Set([
   '2d', '3d', 'art', 'artwork', 'animation', 'video', 'sound', 'audio', 'highres', 'lowres', 
   'comic', 'parody', 'original', 'cosplay', 'edit', 'cg', 'illustration', 'sketch', 
   'webm', 'gif', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'psd', 'clip', 'sai', 'c4d', 'blend',
@@ -71,20 +184,52 @@ const GENERIC_NON_ARTIST_TAGS = new Set([
   'ai_generated', 'ai', 'unknown', 'anonymous', 'various', 'bad_id', 'bad_link', 'translated', 'translation', 'sample', 'thumbnail',
   'throat', 'oral', 'solo', 'female', 'male', 'breasts', 'nipples', 'pussy', 'penis', 'anal', 'hentai', 'r18', 'nsfw', 'sfw',
   'selfie', 'wip', 'alt', 'version', 'ver', 'set', 'bundle', 'part', 'vol', 'volume',
-  'artist_request', 'artist request', 'source_request', 'source request', 'character_request', 'character request'
+  'artist_request', 'artist request', 'source_request', 'source request', 'character_request', 'character request', 'copyright_request', 'meta_request'
 ]);
 
-const META_KEYWORDS = new Set([
-  'highres', 'absurdres', 'superabsurdres', '4k', 'sound', 'audio', 'video', 'animated', 
-  'ugoira', 'translated', 'translation_request', 'commentary', 'commentary_request', 
-  'tagme', 'bad_id', 'bad_link', 'duplicate', 'source_request', 'source request', 'check_my_note', 
-  'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail', 'patreon_reward', 
-  'fantia', 'fanbox', 'patreon', 'boosty', 'gumroad', 'subscribestar', 'skeb', 'lowres', 'downscaled', 'text', 'signature', 'username',
+export const META_KEYWORDS = new Set([
+  // Resolution and quality
+  'highres', 'absurdres', 'superabsurdres', 'lowres', 'downscaled', 'lossless', '4k', '8k', 'hd', '60fps', 
+  'ultra_high_res', 'bad_quality', 'poor_quality', 'huge_filesize', 'webp_artifacts', 'jpeg_artifacts',
+  
+  // Media types and formats
+  'sound', 'audio', 'video', 'animated', 'animation', 'ugoira', 'web_audio', 'has_sound', 'with_sound', 
+  'muted', 'loop', 'silent', 'mp4', 'webm', 'gif', 'flash', 'swf', 'apng', 'interactive',
+  
+  // Text, language and translations
+  'translated', 'partially_translated', 'translation_request', 'commentary', 'commentary_request', 
+  'check_commentary', 'check_my_note', 'annotated', 'hard_translated', 'text', 'subtitles', 'rus_sub', 'eng_sub', 
+  'speech_bubble', 'watermark', 'sample', 'thumbnail', 'signature', 'username', 'artist_name', 'url', 'web_address', 
+  'timestamp', 'twitter_username', 'pixiv_id', 'bad_pixiv_id', 'bad_id', 'bad_link', 'bad_source', 
+  'source_request', 'source request', 'tagme', 'duplicate', 'third-party_edit', 'edit', 'official_art', 
+  'scan', 'magazine_scan', 'wallpaper', 'artbook', 'cover', 'doujinshi_cover', 'comic', 'manga', 'multi-panel', 
+  'column_layout', 'page_number', 'omake', 'monochrome', 'greyscale', 'sketch', 'lineart', 'traditional_media', 'digital_media',
+
+  // Platforms and monetization
+  'patreon', 'patreon_reward', 'patreon_logo', 'patreon_username', 'fanbox', 'fanbox_reward', 
+  'fantia', 'fantia_reward', 'boosty', 'gumroad', 'subscribestar', 'skeb', 'ci-en', 'afdian', 'ko-fi',
   'psd', 'clip', 'zip', 'rar', '7z', 'pack', 'reward', 'tier',
-  'official_art', 'scan', 'wallpaper', 'artist_request', 'artist request', 'character_request', 'character request'
+
+  // AI detection & metadata
+  'ai_generated', 'ai_assisted', 'created_by_ai', 'stable_diffusion', 'novelai', 'midjourney', 'dall-e', 'dall-e_3', 'synthetic',
+
+  // Tag requests
+  'artist_request', 'artist request', 'character_request', 'character request', 'copyright_request', 'copyright request', 'meta_request', 'source_needed'
 ]);
 
-async function loadGlobalTagSummary() {
+const ARTIST_SUFFIXES = ['_(artist)', '_(creator)', '_(circle)', '_(studio)', '_(animator)', '_(mangaka)', '_(illustrator)'];
+const COPYRIGHT_SUFFIXES = ['_(series)', '_(game)', '_(anime)', '_(manga)', '_(vtuber)', '_(novel)', '_(comic)', '_(franchise)', '_(project)', '_(visual_novel)', '_(light_novel)', '_(web_novel)', '_(mobile_game)'];
+const META_SUFFIXES = ['_(medium)', '_(style)', '_(artwork)'];
+const CHARACTER_SUFFIXES = ['_(character)', '_(cosplay)', '_(person)', '_(actor)', '_(actress)'];
+
+const RESERVED_PAREN_WORDS = new Set([
+  'artist', 'creator', 'circle', 'studio', 'animator', 'mangaka', 'illustrator',
+  'series', 'game', 'anime', 'manga', 'vtuber', 'novel', 'comic', 'franchise', 'project', 'visual_novel', 'light_novel', 'web_novel', 'mobile_game',
+  'medium', 'style', 'artwork',
+  'character', 'cosplay', 'person', 'actor', 'actress'
+]);
+
+async function loadGlobalTagSummary(settings = {}) {
   if (globalTagMap && Date.now() - lastFetchedTime < CACHE_TTL_MS) {
     return globalTagMap;
   }
@@ -95,22 +240,18 @@ async function loadGlobalTagSummary() {
 
   isLoadingMap = (async () => {
     try {
-      // Load the full tag database from konachan (or yandere on error)
-      let res = await fetchSafe('https://konachan.com/tag/summary.json', { timeout: 15000 });
-      if (!res.ok) {
-        res = await fetchSafe('https://yande.re/tag/summary.json', { timeout: 15000 });
-      }
-      if (!res.ok) {
-        res = await fetchSafe('https://konachan.net/tag/summary.json', { timeout: 15000 });
+      // Fast non-blocking load with 3-second timeout and site proxy support
+      let res = await fetchSafe('https://konachan.com/tag/summary.json', { timeout: 3000, settings, site: 'konachan' }).catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetchSafe('https://yande.re/tag/summary.json', { timeout: 3000, settings, site: 'yandere' }).catch(() => null);
       }
 
       if (res && res.ok) {
-        const json = await res.json();
+        const json = await res.json().catch(() => null);
         if (json && typeof json.data === 'string') {
           const entries = json.data.split(' ');
           const map = new Map();
 
-          // Add tags from summary
           for (const entryStr of entries) {
             if (!entryStr) continue;
             const parts = entryStr.split('`');
@@ -123,7 +264,6 @@ async function loadGlobalTagSummary() {
             }
           }
 
-          // Add extra tags
           for (const [tag, type] of Object.entries(KNOWN_EXTRA_TAGS)) {
             map.set(tag.toLowerCase(), type);
           }
@@ -134,12 +274,11 @@ async function loadGlobalTagSummary() {
         }
       }
     } catch (err) {
-      logError('TagClassifier', 'Не удалось загрузить глобальную сводку тегов', err);
+      // Non-fatal, fallback to local dictionary
     } finally {
       isLoadingMap = null;
     }
 
-    // Fallback: base set
     if (!globalTagMap) {
       globalTagMap = new Map(Object.entries(KNOWN_EXTRA_TAGS));
     }
@@ -150,21 +289,24 @@ async function loadGlobalTagSummary() {
 }
 
 /**
- * Universal post tag classification for any Booru site (Rule34, Danbooru, Gelbooru, Moebooru, etc.)
- * @param {string[]} rawTags - raw tag array
- * @param {string} sourceUrl - source link (Pixiv, Twitter, etc.)
- * @param {string} initialAuthor - author known in advance (if provided)
+ * Universal post tag classification for all Booru sites (Gelbooru, Rule34, Danbooru, Moebooru, Safebooru, Dapi, Pawchive, Rule34Video)
+ * @param {string[]} rawTags - Raw tags array
+ * @param {string} sourceUrl - Source link (Pixiv, Twitter, etc.)
+ * @param {string} initialAuthor - Author known in advance
+ * @param {object} settings - Application settings (for proxy resolution)
  * @returns {Promise<{ tagDetails: { artist: string[], copyright: string[], character: string[], general: string[], meta: string[] }, author: string }>}
  */
-export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuthor = '') {
+export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuthor = '', settings = {}) {
   const tags = Array.isArray(rawTags) ? rawTags : [];
-  const tagMap = await loadGlobalTagSummary();
+  const tagMap = await loadGlobalTagSummary(settings);
 
   const artist = [];
   const copyright = [];
   const character = [];
   const meta = [];
   const general = [];
+
+  const detectedSeriesSet = new Set();
 
   const addUnique = (arr, val) => {
     if (val && !arr.includes(val)) arr.push(val);
@@ -174,71 +316,111 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     if (!tag) continue;
     const originalTag = String(tag).trim();
     const lower = originalTag.toLowerCase();
-    const cleanLower = lower
-      .replace(/^(artist|creator|author|draw|channel|uploader|character|copyright|meta):/i, '')
-      .replace(/_?\((artist|creator|circle|studio|character|cosplay|person|series|game|anime|manga|vtuber|novel|comic|franchise|project)\)$/i, '')
-      .replace(/^by_/i, '');
 
-    // 1. Check explicit prefixes and markers
-    if (lower.startsWith('artist:') || lower.startsWith('creator:') || lower.startsWith('author:') || lower.startsWith('draw:') ||
-        lower.endsWith('_(artist)') || lower.endsWith('_(creator)') || lower.endsWith('_(circle)') || lower.endsWith('_(studio)') || lower.startsWith('by_')) {
-      addUnique(artist, cleanLower);
+    // 1. Explicit prefixes
+    if (lower.startsWith('artist:') || lower.startsWith('creator:') || lower.startsWith('author:') || lower.startsWith('draw:') || lower.startsWith('by_') || lower.startsWith('channel:') || lower.startsWith('uploader:')) {
+      const clean = originalTag.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/^by_/i, '').trim();
+      addUnique(artist, clean || originalTag);
       continue;
     }
 
-    if (lower.startsWith('character:') || lower.endsWith('_(character)') || lower.endsWith('_(cosplay)') || lower.endsWith('_(person)')) {
-      addUnique(character, cleanLower);
+    if (lower.startsWith('copyright:') || lower.startsWith('series:')) {
+      const clean = originalTag.replace(/^(copyright|series):/i, '').trim();
+      addUnique(copyright, clean || originalTag);
       continue;
     }
 
-    if (lower.startsWith('copyright:') || lower.endsWith('_(series)') || lower.endsWith('_(game)') || lower.endsWith('_(anime)') || 
-        lower.endsWith('_(manga)') || lower.endsWith('_(vtuber)') || lower.endsWith('_(novel)') || lower.endsWith('_(comic)') || 
-        lower.endsWith('_(franchise)') || lower.endsWith('_(project)')) {
-      addUnique(copyright, cleanLower);
+    if (lower.startsWith('character:')) {
+      const clean = originalTag.replace(/^character:/i, '').trim();
+      addUnique(character, clean || originalTag);
       continue;
     }
 
-    if (lower.startsWith('meta:') || META_KEYWORDS.has(lower) || lower.endsWith('_(medium)') || lower.endsWith('_(style)')) {
-      addUnique(meta, cleanLower);
+    if (lower.startsWith('meta:')) {
+      const clean = originalTag.replace(/^meta:/i, '').trim();
+      addUnique(meta, clean || originalTag);
       continue;
     }
 
-    // 2. Look up the tag-type dictionary (tagMap)
-    const type = tagMap ? (tagMap.get(lower) ?? tagMap.get(cleanLower)) : undefined;
+    // 2. Specific suffixes
+    if (ARTIST_SUFFIXES.some(s => lower.endsWith(s))) {
+      addUnique(artist, originalTag);
+      continue;
+    }
 
-    if (type === 1 && !GENERIC_NON_ARTIST_TAGS.has(cleanLower)) {
-      addUnique(artist, cleanLower);
+    if (COPYRIGHT_SUFFIXES.some(s => lower.endsWith(s))) {
+      addUnique(copyright, originalTag);
+      continue;
+    }
+
+    if (META_SUFFIXES.some(s => lower.endsWith(s)) || META_KEYWORDS.has(lower)) {
+      addUnique(meta, originalTag);
+      continue;
+    }
+
+    if (CHARACTER_SUFFIXES.some(s => lower.endsWith(s))) {
+      addUnique(character, originalTag);
+      continue;
+    }
+
+    // 3. Universal Booru parenthesized character heuristic: name_(series)
+    const parenMatch = lower.match(/^(.+?)_\(([^)]+)\)$/);
+    if (parenMatch) {
+      const seriesPart = parenMatch[2].trim();
+      if (!RESERVED_PAREN_WORDS.has(seriesPart)) {
+        addUnique(character, originalTag);
+        detectedSeriesSet.add(seriesPart);
+        continue;
+      }
+    }
+
+    // 4. Tag type dictionary lookup
+    const type = tagMap ? (tagMap.get(lower) ?? tagMap.get(lower.replace(/^by_/i, ''))) : undefined;
+
+    if (type === 1 && !GENERIC_NON_ARTIST_TAGS.has(lower)) {
+      addUnique(artist, originalTag);
     } else if (type === 3) {
-      addUnique(copyright, cleanLower);
+      addUnique(copyright, originalTag);
     } else if (type === 4) {
-      addUnique(character, cleanLower);
-    } else if (type === 6 || META_KEYWORDS.has(cleanLower)) {
-      addUnique(meta, cleanLower);
+      addUnique(character, originalTag);
+    } else if (type === 6 || META_KEYWORDS.has(lower)) {
+      addUnique(meta, originalTag);
     } else {
-      addUnique(general, originalTag);
+      general.push(originalTag);
     }
   }
 
-  // Author extraction:
-  // Priority 1: initialAuthor passed in advance (e.g. from creator directory on Pawchive or tag_string_artist on Danbooru)
-  // Priority 2: explicit artist tags (e.g. artist:name)
-  // Priority 3: source link (Pixiv ID, Twitter account, etc.)
+  // 5. Post-pass: check if any general tags match detected series from character tags
+  if (detectedSeriesSet.size > 0) {
+    for (let i = general.length - 1; i >= 0; i--) {
+      const gLower = general[i].toLowerCase();
+      if (detectedSeriesSet.has(gLower) || KNOWN_EXTRA_TAGS[gLower] === 3) {
+        addUnique(copyright, general[i]);
+        general.splice(i, 1);
+      }
+    }
+  }
+
+  // 6. Author extraction and synchronization
   let author = '';
   if (initialAuthor && typeof initialAuthor === 'string' && initialAuthor.trim()) {
     author = initialAuthor.trim();
-    // Add to the artist category if not already there
     author.split(',').forEach(a => {
       const cleanA = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
-      if (cleanA && !artist.includes(cleanA)) artist.unshift(cleanA);
+      if (cleanA && !artist.includes(cleanA) && !artist.includes(a.trim())) {
+        artist.unshift(cleanA);
+      }
     });
   } else if (artist.length > 0) {
-    author = artist.join(', ');
+    author = artist.map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/i, '')).join(', ');
   } else if (sourceUrl) {
     const authorFromSource = extractAuthorFromSource(tags, sourceUrl, '');
     if (authorFromSource) {
       author = authorFromSource;
       const cleanA = author.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
-      if (cleanA && !artist.includes(cleanA)) artist.unshift(cleanA);
+      if (cleanA && !artist.includes(cleanA)) {
+        artist.unshift(cleanA);
+      }
     }
   }
 

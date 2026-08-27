@@ -93,7 +93,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
           'User-Agent': BROWSER_USER_AGENT,
           'Referer': 'https://rule34.xxx/'
         },
-        timeout: 6000
+        timeout: 6000,
+        settings,
+        site: 'rule34'
       });
       if (res.ok) {
         const text = await res.text();
@@ -113,7 +115,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 sampleUrl = fileUrl;
               }
               previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
-              const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
+              const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
               const createdAt = normalizeDate(item.created_at || item.change);
               const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
               const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -183,7 +185,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
         'User-Agent': BROWSER_USER_AGENT,
         'Referer': 'https://rule34.xxx/'
       },
-      timeout: 8000
+      timeout: 8000,
+      settings,
+      site: 'rule34'
     });
     if (res.ok) {
       const html = await res.text();
@@ -284,7 +288,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
       if (rawParsedItems.length > 0) {
         posts = await Promise.all(rawParsedItems.map(async p => {
-          const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source);
+          const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source, '', settings);
           const seriesKey = extractSeriesKey({
             source: p.source,
             parentId: null,
@@ -397,7 +401,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
         if (altItems.length > 0) {
           posts = await Promise.all(altItems.map(async p => {
-            const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source);
+            const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source, '', settings);
             return {
               id: `rule34_${p.id}`,
               originalId: p.id,
@@ -476,7 +480,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Referer': 'https://rule34.paheal.net/'
       },
-      timeout: 15000
+      timeout: 15000,
+      settings,
+      site: 'rule34'
     });
     if (!pahealRes.ok) return [];
     const text = await pahealRes.text();
@@ -506,7 +512,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
       }
       const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
-      const { tagDetails, author } = await classifyPostTags(rawTags, attrs.source);
+      const { tagDetails, author } = await classifyPostTags(rawTags, attrs.source, '', settings);
       const createdAt = normalizeDate(attrs.created_at || attrs.date);
       return {
         id: `paheal_${attrs.id}`,

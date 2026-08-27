@@ -31,11 +31,11 @@ export {
 async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
   switch (site) {
     case 'rule34video':
-      return await fetchRule34Video(params, aiTagsList);
+      return await fetchRule34Video(params, aiTagsList, settings);
     case 'yandere':
       return await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', params, aiTagsList, settings);
     case 'safebooru':
-      return await fetchSafebooru(params, aiTagsList);
+      return await fetchSafebooru(params, aiTagsList, settings);
     case 'konachan':
       return await fetchMoebooru('konachan', 'https://konachan.com', 'Konachan', params, aiTagsList, settings);
     case 'rule34':
@@ -43,11 +43,11 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
     case 'gelbooru':
       return await fetchGelbooru(params, aiTagsList, settings);
     case 'xbooru':
-      return await fetchXbooru(params, aiTagsList);
+      return await fetchXbooru(params, aiTagsList, settings);
     case 'hypnohub':
-      return await fetchHypnohub(params, aiTagsList);
+      return await fetchHypnohub(params, aiTagsList, settings);
     case 'tbib':
-      return await fetchTbib(params, aiTagsList);
+      return await fetchTbib(params, aiTagsList, settings);
     case 'pawchive':
       return await fetchPawchive(params, aiTagsList, settings);
     default:

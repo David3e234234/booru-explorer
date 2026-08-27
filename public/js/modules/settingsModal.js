@@ -15,6 +15,7 @@ import {
   syncFavoriteAuthors,
   testTelegramConnection,
   testSiteAuth,
+  testProxyConnection,
   sendTelegramBackupNow,
   fetchTelegramBackupStatus,
   apiExportAccount,
@@ -259,6 +260,25 @@ export function applySettingsToUIAndState(s) {
   if (s.konachanPassword && inputKonachanPassword) inputKonachanPassword.value = s.konachanPassword;
   if (s.yandereLogin && inputYandereLogin) inputYandereLogin.value = s.yandereLogin;
   if (s.yanderePassword && inputYanderePassword) inputYanderePassword.value = s.yanderePassword;
+
+  const proxyInputs = [
+    { key: 'globalProxy', id: 'inputGlobalProxy' },
+    { key: 'danbooruProxy', id: 'inputDanbooruProxy' },
+    { key: 'gelbooruProxy', id: 'inputGelbooruProxy' },
+    { key: 'rule34Proxy', id: 'inputRule34Proxy' },
+    { key: 'yandereProxy', id: 'inputYandereProxy' },
+    { key: 'konachanProxy', id: 'inputKonachanProxy' },
+    { key: 'safebooruProxy', id: 'inputSafebooruProxy' },
+    { key: 'rule34videoProxy', id: 'inputRule34videoProxy' },
+    { key: 'pawchiveProxy', id: 'inputPawchiveProxy' },
+    { key: 'xbooruProxy', id: 'inputXbooruProxy' },
+    { key: 'hypnohubProxy', id: 'inputHypnohubProxy' },
+    { key: 'tbibProxy', id: 'inputTbibProxy' }
+  ];
+  proxyInputs.forEach(({ key, id }) => {
+    const el = document.getElementById(id);
+    if (el && s[key] !== undefined) el.value = s[key] || '';
+  });
   if (s.itemsPerPage) {
     state.limit = s.itemsPerPage;
     if (selectItemsPerPage) selectItemsPerPage.value = String(s.itemsPerPage);
@@ -652,6 +672,25 @@ export function openSettingsModal() {
   if (inputKonachanPassword) inputKonachanPassword.value = state.settings.konachanPassword || '';
   if (inputYandereLogin) inputYandereLogin.value = state.settings.yandereLogin || '';
   if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
+
+  const proxyInputs = [
+    { key: 'globalProxy', id: 'inputGlobalProxy' },
+    { key: 'danbooruProxy', id: 'inputDanbooruProxy' },
+    { key: 'gelbooruProxy', id: 'inputGelbooruProxy' },
+    { key: 'rule34Proxy', id: 'inputRule34Proxy' },
+    { key: 'yandereProxy', id: 'inputYandereProxy' },
+    { key: 'konachanProxy', id: 'inputKonachanProxy' },
+    { key: 'safebooruProxy', id: 'inputSafebooruProxy' },
+    { key: 'rule34videoProxy', id: 'inputRule34videoProxy' },
+    { key: 'pawchiveProxy', id: 'inputPawchiveProxy' },
+    { key: 'xbooruProxy', id: 'inputXbooruProxy' },
+    { key: 'hypnohubProxy', id: 'inputHypnohubProxy' },
+    { key: 'tbibProxy', id: 'inputTbibProxy' }
+  ];
+  proxyInputs.forEach(({ key, id }) => {
+    const el = document.getElementById(id);
+    if (el) el.value = state.settings[key] || '';
+  });
   if (selectItemsPerPage) selectItemsPerPage.value = String(state.limit || 100);
   if (selectPreviewQuality) selectPreviewQuality.value = state.settings.previewQuality || 'medium';
   if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = state.settings.videoAutoplayHover !== false;
@@ -1102,6 +1141,55 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     });
   });
 
+  // Per-site proxy tests
+  const proxyTestConfigs = [
+    { btnId: 'btnTestGlobalProxy', site: '', inputId: 'inputGlobalProxy' },
+    { btnId: 'btnTestDanbooruProxy', site: 'danbooru', inputId: 'inputDanbooruProxy' },
+    { btnId: 'btnTestGelbooruProxy', site: 'gelbooru', inputId: 'inputGelbooruProxy' },
+    { btnId: 'btnTestRule34Proxy', site: 'rule34', inputId: 'inputRule34Proxy' },
+    { btnId: 'btnTestYandereProxy', site: 'yandere', inputId: 'inputYandereProxy' },
+    { btnId: 'btnTestKonachanProxy', site: 'konachan', inputId: 'inputKonachanProxy' },
+    { btnId: 'btnTestSafebooruProxy', site: 'safebooru', inputId: 'inputSafebooruProxy' },
+    { btnId: 'btnTestRule34videoProxy', site: 'rule34video', inputId: 'inputRule34videoProxy' },
+    { btnId: 'btnTestPawchiveProxy', site: 'pawchive', inputId: 'inputPawchiveProxy' },
+    { btnId: 'btnTestXbooruProxy', site: 'xbooru', inputId: 'inputXbooruProxy' },
+    { btnId: 'btnTestHypnohubProxy', site: 'hypnohub', inputId: 'inputHypnohubProxy' },
+    { btnId: 'btnTestTbibProxy', site: 'tbib', inputId: 'inputTbibProxy' }
+  ];
+  proxyTestConfigs.forEach(({ btnId, site, inputId }) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const el = document.getElementById(inputId);
+      const proxyUrl = el ? el.value.trim() : '';
+
+      if (!proxyUrl) {
+        showToast(t('set.proxyTestNeedsUrl', 'Введите URL прокси (например: http://127.0.0.1:8080)'));
+        return;
+      }
+
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      btn.innerHTML = `<span>${t('set.tgTesting', 'Проверка...')}</span>`;
+
+      try {
+        const res = await testProxyConnection(site, proxyUrl);
+        if (res.success) {
+          showToast(res.message || t('set.proxyTestOk', 'Прокси успешно подключен'));
+        } else {
+          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || t('set.proxyTestFail', 'Не удалось подключиться через прокси')));
+        }
+      } catch (err) {
+        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.serverUnreachable', 'Не удалось связаться с сервером')));
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('is-loading');
+        btn.innerHTML = originalHtml;
+      }
+    });
+  });
+
   if (btnSendTelegramBackup) {
     btnSendTelegramBackup.addEventListener('click', async () => {
       const tokenInput = document.getElementById('inputTelegramBotToken');
@@ -1278,6 +1366,18 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         konachanPassword: inputKonachanPassword ? inputKonachanPassword.value.trim() : '',
         yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : '',
         yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : '',
+        globalProxy: document.getElementById('inputGlobalProxy')?.value.trim() || '',
+        danbooruProxy: document.getElementById('inputDanbooruProxy')?.value.trim() || '',
+        gelbooruProxy: document.getElementById('inputGelbooruProxy')?.value.trim() || '',
+        rule34Proxy: document.getElementById('inputRule34Proxy')?.value.trim() || '',
+        yandereProxy: document.getElementById('inputYandereProxy')?.value.trim() || '',
+        konachanProxy: document.getElementById('inputKonachanProxy')?.value.trim() || '',
+        safebooruProxy: document.getElementById('inputSafebooruProxy')?.value.trim() || '',
+        rule34videoProxy: document.getElementById('inputRule34videoProxy')?.value.trim() || '',
+        pawchiveProxy: document.getElementById('inputPawchiveProxy')?.value.trim() || '',
+        xbooruProxy: document.getElementById('inputXbooruProxy')?.value.trim() || '',
+        hypnohubProxy: document.getElementById('inputHypnohubProxy')?.value.trim() || '',
+        tbibProxy: document.getElementById('inputTbibProxy')?.value.trim() || '',
         telegramBackupEnabled: checkTgEnabled ? checkTgEnabled.checked : false,
         telegramBotToken: inputTgToken ? inputTgToken.value.trim() : '',
         telegramChatId: inputTgChat ? inputTgChat.value.trim() : '',
@@ -1357,6 +1457,15 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (inputKonachanPassword) inputKonachanPassword.value = '';
       if (inputYandereLogin) inputYandereLogin.value = '';
       if (inputYanderePassword) inputYanderePassword.value = '';
+      const proxyInputIds = [
+        'inputGlobalProxy', 'inputDanbooruProxy', 'inputGelbooruProxy', 'inputRule34Proxy',
+        'inputYandereProxy', 'inputKonachanProxy', 'inputSafebooruProxy', 'inputRule34videoProxy',
+        'inputPawchiveProxy', 'inputXbooruProxy', 'inputHypnohubProxy', 'inputTbibProxy'
+      ];
+      proxyInputIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
       if (inputTgToken) inputTgToken.value = '';
       if (inputTgChat) inputTgChat.value = '';
       if (checkTgEnabled) checkTgEnabled.checked = false;

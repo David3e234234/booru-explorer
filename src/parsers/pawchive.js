@@ -54,14 +54,14 @@ const STOP_TITLE_WORDS = new Set([
  * times out - retry once with a generous timeout instead of silently
  * degrading author resolution to an empty directory.
  */
-export async function getCreatorsDirectory() {
+export async function getCreatorsDirectory(settings = {}) {
   const now = Date.now();
   if (creatorsCache && (now - creatorsCacheTime) < CREATORS_CACHE_TTL) {
     return creatorsCache;
   }
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetchSafe('https://pawchive.pw/api/v1/creators', { timeout: 30000 });
+      const res = await fetchSafe('https://pawchive.pw/api/v1/creators', { timeout: 30000, settings, site: 'pawchive' });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -224,7 +224,7 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
   }
 
   const isAi = checkIsAi(extractedTags, aiTagsList);
-  const { tagDetails } = await classifyPostTags(extractedTags, postUrl, authorName);
+  const { tagDetails } = await classifyPostTags(extractedTags, postUrl, authorName, settings);
   tagDetails.artist = [authorName];
   const createdAt = normalizeDate(item.published || item.added);
 
@@ -383,9 +383,9 @@ export async function fetchPawchivePostById(postId, service, user, aiTagsList = 
     let targetUser = user;
 
     if (!targetService || !targetUser) {
-      const { list } = await getCreatorsDirectory();
+      const { list } = await getCreatorsDirectory(settings);
       // If service or user missing, try searching
-      const resSearch = await fetchSafe(`https://pawchive.pw/api/v1/posts?q=${encodeURIComponent(postId)}`, { timeout: 10000 });
+      const resSearch = await fetchSafe(`https://pawchive.pw/api/v1/posts?q=${encodeURIComponent(postId)}`, { timeout: 10000, settings, site: 'pawchive' });
       if (resSearch.ok) {
         const found = await resSearch.json();
         const p = Array.isArray(found) ? found.find(x => String(x.id) === String(postId)) : null;
@@ -399,13 +399,13 @@ export async function fetchPawchivePostById(postId, service, user, aiTagsList = 
     if (!targetService || !targetUser) return null;
 
     const url = `https://pawchive.pw/api/v1/${targetService}/user/${targetUser}/post/${postId}`;
-    const res = await fetchSafe(url, { timeout: 10000 });
+    const res = await fetchSafe(url, { timeout: 10000, settings, site: 'pawchive' });
     if (!res.ok) return null;
     const item = await res.json();
     if (!item || !item.id) return null;
 
-    const { map: creatorMap } = await getCreatorsDirectory();
-    return await normalizePawchivePost(item, creatorMap, null, aiTagsList);
+    const { map: creatorMap } = await getCreatorsDirectory(settings);
+    return await normalizePawchivePost(item, creatorMap, null, aiTagsList, settings);
   } catch (err) {
     logError('Pawchive', `Failed to fetch post ${postId}`, err);
     return null;
@@ -415,7 +415,7 @@ export async function fetchPawchivePostById(postId, service, user, aiTagsList = 
 /**
  * Fetches posts from Pawchive API
  */
-export async function fetchPawchive(params, aiTagsList, settings) {
+export async function fetchPawchive(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, ratingFilter = 'all', typeFilter = 'all', pawchiveService = '' } = params;
 
   if (ratingFilter === 'sfw') {
@@ -469,7 +469,7 @@ export async function fetchPawchive(params, aiTagsList, settings) {
   const fetchJsonPage = async (apiUrl) => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await fetchSafe(apiUrl, { timeout: 15000 });
+        const res = await fetchSafe(apiUrl, { timeout: 15000, settings, site: 'pawchive' });
         if (!res.ok) return null;
         const data = safeJsonParse(await res.text(), []);
         return Array.isArray(data) ? data : [];
@@ -510,10 +510,10 @@ export async function fetchPawchive(params, aiTagsList, settings) {
 
     if (items.length === 0) return [];
 
-    const { map: creatorMap } = await getCreatorsDirectory();
+    const { map: creatorMap } = await getCreatorsDirectory(settings);
 
     const results = await Promise.all(items.map(async item => {
-      return await normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList);
+      return await normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList, settings);
     }));
 
     let validPosts = results.filter(Boolean);

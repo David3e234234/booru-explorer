@@ -301,6 +301,10 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     if (twitterMatch && !['intent', 'i', 'home', 'search', 'post', 'status'].includes(twitterMatch[1].toLowerCase())) {
       return `@${twitterMatch[1]}`;
     }
+    const bskyMatch = s.match(/bsky\.app\/profile\/([a-zA-Z0-9_.-]+)/i);
+    if (bskyMatch) {
+      return `@${bskyMatch[1]}`;
+    }
     const pixivUserMatch = s.match(/pixiv\.net\/(?:en\/)?users\/(\d+)/i) || s.match(/pixiv\.me\/([a-zA-Z0-9_-]+)/i);
     if (pixivUserMatch) {
       return `pixiv:${pixivUserMatch[1]}`;
@@ -324,6 +328,14 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     const patreonMatch = s.match(/patreon\.com\/([a-zA-Z0-9_-]+)/i);
     if (patreonMatch && !['posts', 'join'].includes(patreonMatch[1].toLowerCase())) {
       return `patreon:${patreonMatch[1]}`;
+    }
+    const boostyMatch = s.match(/boosty\.to\/([a-zA-Z0-9_-]+)/i);
+    if (boostyMatch) {
+      return boostyMatch[1];
+    }
+    const gumroadMatch = s.match(/([a-zA-Z0-9_-]+)\.gumroad\.com/i) || s.match(/gumroad\.com\/([a-zA-Z0-9_-]+)/i);
+    if (gumroadMatch) {
+      return gumroadMatch[1];
     }
     const skebMatch = s.match(/skeb\.jp\/@([a-zA-Z0-9_-]+)/i);
     if (skebMatch) {
@@ -355,6 +367,25 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
   return '';
 }
 
+const META_HELPER_KEYWORDS = new Set([
+  'highres', 'absurdres', 'superabsurdres', 'lowres', 'downscaled', 'lossless', '4k', '8k', 'hd', '60fps', 
+  'ultra_high_res', 'bad_quality', 'poor_quality', 'huge_filesize', 'webp_artifacts', 'jpeg_artifacts',
+  'sound', 'audio', 'video', 'animated', 'animation', 'ugoira', 'web_audio', 'has_sound', 'with_sound', 
+  'muted', 'loop', 'silent', 'mp4', 'webm', 'gif', 'flash', 'swf', 'apng', 'interactive',
+  'translated', 'partially_translated', 'translation_request', 'commentary', 'commentary_request', 
+  'check_commentary', 'check_my_note', 'annotated', 'hard_translated', 'text', 'subtitles', 'rus_sub', 'eng_sub', 
+  'speech_bubble', 'watermark', 'sample', 'thumbnail', 'signature', 'username', 'artist_name', 'url', 'web_address', 
+  'timestamp', 'twitter_username', 'pixiv_id', 'bad_pixiv_id', 'bad_id', 'bad_link', 'bad_source', 
+  'source_request', 'source request', 'tagme', 'duplicate', 'third-party_edit', 'edit', 'official_art', 
+  'scan', 'magazine_scan', 'wallpaper', 'artbook', 'cover', 'doujinshi_cover', 'comic', 'manga', 'multi-panel', 
+  'column_layout', 'page_number', 'omake', 'monochrome', 'greyscale', 'sketch', 'lineart', 'traditional_media', 'digital_media',
+  'patreon', 'patreon_reward', 'patreon_logo', 'patreon_username', 'fanbox', 'fanbox_reward', 
+  'fantia', 'fantia_reward', 'boosty', 'gumroad', 'subscribestar', 'skeb', 'ci-en', 'afdian', 'ko-fi',
+  'psd', 'clip', 'zip', 'rar', '7z', 'pack', 'reward', 'tier',
+  'ai_generated', 'ai_assisted', 'created_by_ai', 'stable_diffusion', 'novelai', 'midjourney', 'dall-e', 'dall-e_3', 'synthetic',
+  'artist_request', 'artist request', 'character_request', 'character request', 'copyright_request', 'copyright request', 'meta_request', 'source_needed'
+]);
+
 export function classifyTags(rawTags = [], author = '') {
   const tags = Array.isArray(rawTags) ? rawTags : [];
   const artist = [];
@@ -363,43 +394,77 @@ export function classifyTags(rawTags = [], author = '') {
   const meta = [];
   const general = [];
 
+  const addUnique = (arr, val) => {
+    if (val && !arr.includes(val)) arr.push(val);
+  };
+
   if (author) {
     author.split(',').forEach(a => {
-      const clean = a.trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/\s+/g, '_');
-      if (clean && !artist.includes(clean)) artist.push(clean);
+      const clean = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
+      if (clean) addUnique(artist, clean);
     });
   }
 
-  const metaKeywords = [
-    'highres', 'absurdres', 'superabsurdres', '4k', 'sound', 'audio', 'video', 'animated', 
-    'ugoira', 'translated', 'translation_request', 'commentary', 'commentary_request', 
-    'tagme', 'bad_id', 'bad_link', 'duplicate', 'source_request', 'check_my_note', 
-    'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail', 'patreon_reward', 
-    'fantia', 'fanbox', 'skeb', 'lowres', 'downscaled'
-  ];
-
   for (const tag of tags) {
     if (!tag) continue;
-    const t = String(tag).toLowerCase().trim();
-    if (t.startsWith('artist:') || t.startsWith('channel:') || t.startsWith('uploader:') || t.endsWith('_(artist)') || t.endsWith('_(creator)') || t.startsWith('by_') || t.endsWith('_(circle)') || t.endsWith('_(studio)')) {
-      const clean = tag.replace(/^(artist|channel|uploader|creator|author|draw):/i, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/i, '');
-      if (!artist.includes(clean)) artist.push(clean);
-      if (!artist.includes(tag)) artist.push(tag);
-    } else if (t.startsWith('character:') || t.endsWith('_(character)') || t.endsWith('_(cosplay)') || t.endsWith('_(person)')) {
-      const clean = tag.replace(/^character:/i, '').replace(/_?\((character|cosplay|person)\)$/i, '');
-      if (!character.includes(clean)) character.push(clean);
-      if (!character.includes(tag)) character.push(tag);
-    } else if (t.startsWith('copyright:') || t.endsWith('_(series)') || t.endsWith('_(game)') || t.endsWith('_(anime)') || t.endsWith('_(manga)') || t.endsWith('_(vtuber)') || t.endsWith('_(novel)') || t.endsWith('_(comic)') || t.endsWith('_(franchise)') || t.endsWith('_(project)')) {
-      const clean = tag.replace(/^copyright:/i, '').replace(/_?\((series|game|anime|manga|vtuber|novel|comic|franchise|project)\)$/i, '');
-      if (!copyright.includes(clean)) copyright.push(clean);
-      if (!copyright.includes(tag)) copyright.push(tag);
-    } else if (t.startsWith('meta:') || metaKeywords.includes(t) || t.endsWith('_(medium)') || t.endsWith('_(style)')) {
-      const clean = tag.replace(/^meta:/i, '');
-      if (!meta.includes(clean)) meta.push(clean);
-      if (!meta.includes(tag)) meta.push(tag);
-    } else {
-      general.push(tag);
+    const originalTag = String(tag).trim();
+    const lower = originalTag.toLowerCase();
+
+    if (lower.startsWith('artist:') || lower.startsWith('creator:') || lower.startsWith('author:') || lower.startsWith('draw:') || lower.startsWith('by_') || lower.startsWith('channel:') || lower.startsWith('uploader:')) {
+      const clean = originalTag.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/^by_/i, '').trim();
+      addUnique(artist, clean || originalTag);
+      continue;
     }
+
+    if (lower.startsWith('copyright:') || lower.startsWith('series:')) {
+      const clean = originalTag.replace(/^(copyright|series):/i, '').trim();
+      addUnique(copyright, clean || originalTag);
+      continue;
+    }
+
+    if (lower.startsWith('character:')) {
+      const clean = originalTag.replace(/^character:/i, '').trim();
+      addUnique(character, clean || originalTag);
+      continue;
+    }
+
+    if (lower.startsWith('meta:')) {
+      const clean = originalTag.replace(/^meta:/i, '').trim();
+      addUnique(meta, clean || originalTag);
+      continue;
+    }
+
+    if (lower.endsWith('_(artist)') || lower.endsWith('_(creator)') || lower.endsWith('_(circle)') || lower.endsWith('_(studio)') || lower.endsWith('_(animator)') || lower.endsWith('_(mangaka)')) {
+      addUnique(artist, originalTag);
+      continue;
+    }
+
+    if (lower.endsWith('_(series)') || lower.endsWith('_(game)') || lower.endsWith('_(anime)') || lower.endsWith('_(manga)') || lower.endsWith('_(vtuber)') || lower.endsWith('_(novel)') || lower.endsWith('_(comic)') || lower.endsWith('_(franchise)') || lower.endsWith('_(project)')) {
+      addUnique(copyright, originalTag);
+      continue;
+    }
+
+    if (META_HELPER_KEYWORDS.has(lower) || lower.endsWith('_(medium)') || lower.endsWith('_(style)') || lower.endsWith('_(artwork)')) {
+      addUnique(meta, originalTag);
+      continue;
+    }
+
+    if (lower.endsWith('_(character)') || lower.endsWith('_(cosplay)') || lower.endsWith('_(person)')) {
+      addUnique(character, originalTag);
+      continue;
+    }
+
+    const parenMatch = lower.match(/^(.+?)_\(([^)]+)\)$/);
+    if (parenMatch) {
+      const seriesPart = parenMatch[2].trim();
+      const reserved = ['artist', 'creator', 'circle', 'studio', 'series', 'game', 'anime', 'manga', 'vtuber', 'novel', 'comic', 'franchise', 'project', 'medium', 'style', 'artwork', 'character', 'cosplay', 'person'];
+      if (!reserved.includes(seriesPart)) {
+        addUnique(character, originalTag);
+        continue;
+      }
+    }
+
+    general.push(originalTag);
   }
 
   return { artist, copyright, character, general, meta };

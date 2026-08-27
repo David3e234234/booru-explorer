@@ -77,7 +77,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
   if (settings?.gelbooruApiKey && settings?.gelbooruUserId) {
     const url = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.gelbooruApiKey)}&user_id=${encodeURIComponent(settings.gelbooruUserId)}`;
     try {
-      const res = await fetchSafe(url);
+      const res = await fetchSafe(url, { settings, site: 'gelbooru' });
       if (res.ok) {
         const text = await res.text();
         const data = safeJsonParse(text, []);
@@ -89,7 +89,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
             const sampleUrl = item.sample_url || fileUrl;
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
             const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
-            const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
+            const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
             const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -139,7 +139,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
   // 2. Universal fallback via the public Gelbooru HTML feed
   const htmlUrl = `https://gelbooru.com/index.php?page=post&s=list&tags=${encodeURIComponent(searchTags)}&pid=${pid * 42}`;
   try {
-    const res = await fetchSafe(htmlUrl);
+    const res = await fetchSafe(htmlUrl, { settings, site: 'gelbooru' });
     if (!res.ok) return [];
     const html = await res.text();
 
@@ -193,7 +193,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
 
     if (rawParsed.length > 0) {
       return await Promise.all(rawParsed.map(async p => {
-        const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source);
+        const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source, '', settings);
         const seriesKey = extractSeriesKey({
           source: '',
           parentId: null,

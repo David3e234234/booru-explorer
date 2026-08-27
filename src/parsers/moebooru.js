@@ -61,15 +61,15 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
 
   let res = null;
   try {
-    res = await fetchSafe(url);
+    res = await fetchSafe(url, { settings, site: siteId });
     if (!res.ok && siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
-      const altRes = await fetchSafe(toAltKonachanUrl(url));
+      const altRes = await fetchSafe(toAltKonachanUrl(url), { settings, site: siteId });
       if (altRes.ok) res = altRes;
     }
   } catch (e) {
     if (siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
       try {
-        res = await fetchSafe(toAltKonachanUrl(url));
+        res = await fetchSafe(toAltKonachanUrl(url), { settings, site: siteId });
       } catch (err) {}
     }
   }
@@ -89,7 +89,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList);
 
-    const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
+    const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
 
     const createdAt = normalizeDate(item.created_at);
     const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;

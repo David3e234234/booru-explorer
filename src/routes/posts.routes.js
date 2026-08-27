@@ -26,7 +26,9 @@ const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
   'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'hideZipPosts', 'customSources',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
-  'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword'
+  'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword',
+  'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
+  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy'
 ];
 
 function parseClientAuth(req) {
@@ -58,7 +60,7 @@ async function readJsonSafe(res) {
   }
 }
 
-async function runAuthTest(site, creds) {
+async function runAuthTest(site, creds, settings = {}) {
   const login = String(creds.login || '').trim();
   const apiKey = String(creds.apiKey || '').trim();
   const userId = String(creds.userId || '').trim();
@@ -68,7 +70,11 @@ async function runAuthTest(site, creds) {
     if (!login || !apiKey) return { success: false, message: 'Введите логин и API ключ Danbooru' };
     let res;
     try {
-      res = await fetchSafe(`https://danbooru.donmai.us/profile.json?login=${encodeURIComponent(login)}&api_key=${encodeURIComponent(apiKey)}`, { timeout: AUTH_TEST_TIMEOUT_MS });
+      res = await fetchSafe(`https://danbooru.donmai.us/profile.json?login=${encodeURIComponent(login)}&api_key=${encodeURIComponent(apiKey)}`, { 
+        timeout: AUTH_TEST_TIMEOUT_MS, 
+        settings, 
+        site: 'danbooru' 
+      });
     } catch {
       return { success: false, message: 'Danbooru недоступен' };
     }
@@ -90,7 +96,11 @@ async function runAuthTest(site, creds) {
     let res;
     try {
       // user/show.json denies anonymous access, so bad credentials fall back to the anonymous 403
-      res = await fetchSafe(`${base}/user/show.json?name=${encodeURIComponent(login)}&login=${encodeURIComponent(login)}&password_hash=${hash}`, { timeout: AUTH_TEST_TIMEOUT_MS });
+      res = await fetchSafe(`${base}/user/show.json?name=${encodeURIComponent(login)}&login=${encodeURIComponent(login)}&password_hash=${hash}`, { 
+        timeout: AUTH_TEST_TIMEOUT_MS, 
+        settings, 
+        site 
+      });
     } catch {
       return { success: false, message: `${siteName} недоступен` };
     }
@@ -109,7 +119,12 @@ async function runAuthTest(site, creds) {
     if (!apiKey || !userId) return { success: false, message: 'Введите API ключ и User ID Gelbooru' };
     let res;
     try {
-      res = await fetchSafe(`https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&limit=1&tags=1girl&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`, { timeout: AUTH_TEST_TIMEOUT_MS, headers: { 'Referer': 'https://gelbooru.com/' } });
+      res = await fetchSafe(`https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&limit=1&tags=1girl&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`, { 
+        timeout: AUTH_TEST_TIMEOUT_MS, 
+        headers: { 'Referer': 'https://gelbooru.com/' },
+        settings, 
+        site: 'gelbooru' 
+      });
     } catch {
       return { success: false, message: 'Gelbooru недоступен' };
     }
@@ -126,7 +141,12 @@ async function runAuthTest(site, creds) {
     if (!apiKey || !userId) return { success: false, message: 'Введите API ключ и User ID Rule34' };
     let res;
     try {
-      res = await fetchSafe(`https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&limit=1&tags=1girl&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`, { timeout: AUTH_TEST_TIMEOUT_MS, headers: { 'Referer': 'https://rule34.xxx/' } });
+      res = await fetchSafe(`https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&limit=1&tags=1girl&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`, { 
+        timeout: AUTH_TEST_TIMEOUT_MS, 
+        headers: { 'Referer': 'https://rule34.xxx/' },
+        settings, 
+        site: 'rule34' 
+      });
     } catch {
       return { success: false, message: 'Rule34 недоступен' };
     }
@@ -149,11 +169,57 @@ router.post('/sites/auth-test', async (req, res) => {
     if (!site || !SITES[site]) {
       return res.status(400).json({ success: false, message: 'Неизвестный сайт' });
     }
-    const result = await runAuthTest(site, req.body || {});
+    const settings = { ...getSettings(), ...parseClientAuth(req) };
+    const result = await runAuthTest(site, req.body || {}, settings);
     res.json(result);
   } catch (err) {
     logError('AuthTest', 'Ошибка проверки авторизации', err);
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/proxy/test - test a proxy connection for a specific board or globally
+router.post('/proxy/test', async (req, res) => {
+  try {
+    const { site, proxyUrl } = req.body || {};
+    if (!proxyUrl || typeof proxyUrl !== 'string' || !proxyUrl.trim()) {
+      return res.status(400).json({ success: false, message: 'Укажите URL прокси (например: http://127.0.0.1:8080 или socks5://127.0.0.1:1080)' });
+    }
+
+    const cleanProxy = proxyUrl.trim();
+    const siteConfig = site && SITES[site] ? SITES[site] : null;
+    const testTargetUrl = siteConfig ? `${siteConfig.baseUrl}/` : 'https://danbooru.donmai.us/';
+    const targetName = siteConfig ? siteConfig.name : 'интернет';
+
+    logInfo('ProxyTest', `Проверка прокси ${cleanProxy} для ${site || 'общий'}: ${testTargetUrl}`);
+
+    const response = await fetchSafe(testTargetUrl, {
+      proxy: cleanProxy,
+      timeout: 10000,
+      headers: {
+        'User-Agent': BROWSER_USER_AGENT
+      }
+    });
+
+    if (response.ok || response.status === 403 || response.status === 401 || response.status === 406 || response.status === 302 || response.status === 301) {
+      return res.json({
+        success: true,
+        status: response.status,
+        message: `Прокси работает: получен ответ от ${targetName} (HTTP ${response.status})`
+      });
+    }
+
+    return res.json({
+      success: false,
+      status: response.status,
+      message: `Сервер ${targetName} ответил кодом HTTP ${response.status}`
+    });
+  } catch (err) {
+    logError('ProxyTest', 'Ошибка проверки прокси', err);
+    return res.json({
+      success: false,
+      message: `Ошибка подключения через прокси: ${err.message || 'Таймаут или сбой соединения'}`
+    });
   }
 });
 
@@ -434,7 +500,8 @@ router.post('/download', async (req, res) => {
     const filePath = path.join(downloadsDir, filename);
 
     logInfo('Download', `Скачивание: ${url}`);
-    const response = await fetchSafe(url, { timeout: 60000 });
+    const currentSettings = getSettings();
+    const response = await fetchSafe(url, { timeout: 60000, settings: currentSettings, site });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (!response.body) throw new Error('Пустой ответ от источника');
 
@@ -480,7 +547,7 @@ router.get('/tags/autocomplete', async (req, res) => {
   const fetchDanbooruTags = async (q) => {
     try {
       const url = `https://danbooru.donmai.us/tags.json?search[name_matches]=*${encodeURIComponent(q)}*&limit=15&search[order]=count`;
-      const resp = await fetchSafe(url, { timeout: 3500 });
+      const resp = await fetchSafe(url, { timeout: 3500, settings, site: 'danbooru' });
       if (resp.ok) {
         const data = await resp.json();
         if (Array.isArray(data)) {
@@ -509,7 +576,9 @@ router.get('/tags/autocomplete', async (req, res) => {
         const url = `https://api.rule34.xxx/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}${authQuery}`;
         const resp = await fetchSafe(url, { 
           headers: { 'Referer': 'https://rule34.xxx/' },
-          timeout: 3000 
+          timeout: 3000,
+          settings,
+          site: 'rule34'
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -522,7 +591,7 @@ router.get('/tags/autocomplete', async (req, res) => {
                 value: val,
                 label: val.replace(/_/g, ' '),
                 count: total,
-                category: type
+                category: type === 'tag' ? 'general' : type
               };
             });
           }
@@ -537,17 +606,28 @@ router.get('/tags/autocomplete', async (req, res) => {
         const url = `https://gelbooru.com/index.php?page=autocomplete2&term=${encodeURIComponent(query.toLowerCase())}&type=tag_query&limit=15`;
         const resp = await fetchSafe(url, {
           headers: { 'Referer': 'https://gelbooru.com/' },
-          timeout: 3000
+          timeout: 3000,
+          settings,
+          site: 'gelbooru'
         });
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data) && data.length > 0) {
-            tagsResult = data.map(item => ({
-              value: item.value || item.label,
-              label: (item.label || item.value || '').replace(/_/g, ' '),
-              count: parseInt(item.post_count || item.count, 10) || 0,
-              category: item.category || 'general'
-            }));
+            tagsResult = data.map(item => {
+              let cat = 'general';
+              const rawCat = String(item.category || '').toLowerCase();
+              if (rawCat === '1' || rawCat === 'artist') cat = 'artist';
+              else if (rawCat === '3' || rawCat === 'copyright') cat = 'copyright';
+              else if (rawCat === '4' || rawCat === 'character') cat = 'character';
+              else if (rawCat === '5' || rawCat === '6' || rawCat === 'metadata' || rawCat === 'meta') cat = 'meta';
+
+              return {
+                value: item.value || item.label,
+                label: (item.label || item.value || '').replace(/_/g, ' '),
+                count: parseInt(item.post_count || item.count, 10) || 0,
+                category: cat
+              };
+            });
           }
         }
       } catch {}
@@ -559,7 +639,7 @@ router.get('/tags/autocomplete', async (req, res) => {
       const base = site === 'yandere' ? 'https://yande.re' : 'https://konachan.com';
       try {
         const url = `${base}/tag.json?name=${encodeURIComponent(query)}&limit=15&order=count`;
-        const resp = await fetchSafe(url, { timeout: 3000 });
+        const resp = await fetchSafe(url, { timeout: 3000, settings, site });
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -567,7 +647,7 @@ router.get('/tags/autocomplete', async (req, res) => {
               value: item.name,
               label: item.name.replace(/_/g, ' '),
               count: item.count || 0,
-              category: item.type === 1 ? 'artist' : item.type === 3 ? 'copyright' : item.type === 4 ? 'character' : 'general'
+              category: item.type === 1 ? 'artist' : item.type === 3 ? 'copyright' : item.type === 4 ? 'character' : item.type === 6 ? 'meta' : 'general'
             }));
           }
         }
@@ -584,7 +664,9 @@ router.get('/tags/autocomplete', async (req, res) => {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'X-Requested-With': 'XMLHttpRequest'
           },
-          timeout: 4000
+          timeout: 4000,
+          settings,
+          site: 'rule34video'
         });
         if (resModels.ok) {
           const data = await resModels.json();
@@ -611,7 +693,7 @@ router.get('/tags/autocomplete', async (req, res) => {
     } else if (site === 'safebooru') {
       try {
         const url = `https://safebooru.org/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
-        const resp = await fetchSafe(url, { timeout: 3000 });
+        const resp = await fetchSafe(url, { timeout: 3000, settings, site: 'safebooru' });
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data) && data.length > 0) {
@@ -630,7 +712,7 @@ router.get('/tags/autocomplete', async (req, res) => {
       }
     } else if (site === 'pawchive') {
       try {
-        const { list } = await getCreatorsDirectory();
+        const { list } = await getCreatorsDirectory(settings);
         if (Array.isArray(list) && list.length > 0) {
           const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
           const matches = list.filter(c => {

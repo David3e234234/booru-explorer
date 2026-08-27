@@ -339,6 +339,11 @@ Object.assign(en, {
   'settings.yandereLogin.placeholder': 'Yande.re Username',
   'settings.yanderePassword.placeholder': 'Yande.re Password',
 
+  'settings.proxyServers': 'Server HTTP / HTTPS / SOCKS5 proxies per site:',
+  'settings.proxyServersHint': 'Specify a proxy (e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:1080) for each board individually to bypass IP bans or hosting blocks. If no proxy is set for a site, the global fallback proxy or direct connection is used.',
+  'settings.proxyGlobalBadge': '🌐 Global Proxy (Fallback)',
+  'settings.proxyGlobalPlaceholder': 'http://127.0.0.1:8080 or socks5://127.0.0.1:1080',
+
   'settings.proxyMain': 'Proxying and server traffic saving:',
   'settings.proxyMainHint': 'Disable proxying for direct CDN downloads. If a board CDN blocks access, the app connects the proxy automatically (fallback).',
   'settings.proxyThumbs': 'Proxy feed previews (server-side caching)',
@@ -614,6 +619,9 @@ Object.assign(en, {
   'set.authTestNeedsCreds': 'Fill in the credentials in the card first',
   'set.authTestOk': 'Authorization works',
   'set.authTestFail': 'Test failed',
+  'set.proxyTestNeedsUrl': 'Enter a proxy URL (e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:1080)',
+  'set.proxyTestOk': 'Proxy connected successfully',
+  'set.proxyTestFail': 'Failed to connect through proxy',
   'set.serverUnreachable': 'Could not reach the server',
   'set.tgSendNeedsCreds': 'Enter the bot token and Chat ID first',
   'set.tgSending': 'Sending...',

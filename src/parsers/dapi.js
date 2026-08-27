@@ -13,7 +13,7 @@ function getRecentDateFilter(days = 30) {
   return `date:>=${year}-${month}-${day}`;
 }
 
-export async function fetchXbooru(params, aiTagsList) {
+export async function fetchXbooru(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('xbooru', tags, ageFilter, typeFilter);
@@ -62,7 +62,7 @@ export async function fetchXbooru(params, aiTagsList) {
   const url = `https://xbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
 
   try {
-    const res = await fetchSafe(url);
+    const res = await fetchSafe(url, { settings, site: 'xbooru' });
     if (!res.ok) return [];
     const text = await res.text();
     const data = safeJsonParse(text, []);
@@ -85,7 +85,7 @@ export async function fetchXbooru(params, aiTagsList) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
+      const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
 
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
@@ -132,7 +132,7 @@ export async function fetchXbooru(params, aiTagsList) {
   }
 }
 
-export async function fetchHypnohub(params, aiTagsList) {
+export async function fetchHypnohub(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('hypnohub', tags, ageFilter, typeFilter);
@@ -181,7 +181,7 @@ export async function fetchHypnohub(params, aiTagsList) {
   const url = `https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
 
   try {
-    const res = await fetchSafe(url);
+    const res = await fetchSafe(url, { settings, site: 'hypnohub' });
     if (!res.ok) return [];
     const text = await res.text();
     const data = safeJsonParse(text, []);
@@ -204,7 +204,7 @@ export async function fetchHypnohub(params, aiTagsList) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
+      const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
       const hasChildren = Boolean(item.has_children);
@@ -258,7 +258,7 @@ function normalizeTbibRating(raw) {
   return 'e';
 }
 
-export async function fetchTbib(params, aiTagsList) {
+export async function fetchTbib(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('tbib', tags, ageFilter, typeFilter);
@@ -293,7 +293,7 @@ export async function fetchTbib(params, aiTagsList) {
   const url = `https://tbib.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
 
   try {
-    const res = await fetchSafe(url);
+    const res = await fetchSafe(url, { settings, site: 'tbib' });
     if (!res.ok) return [];
     const text = await res.text();
     const data = safeJsonParse(text, []);
@@ -312,7 +312,7 @@ export async function fetchTbib(params, aiTagsList) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const { tagDetails, author } = await classifyPostTags(rawTags, item.source);
+      const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
 
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
