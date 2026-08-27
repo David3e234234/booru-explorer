@@ -93,6 +93,16 @@ export async function fetchSites() {
   return await res.json();
 }
 
+export async function fetchPawchiveServices() {
+  try {
+    const res = await fetch('/api/pawchive-services');
+    if (!res.ok) return { success: false, services: [] };
+    return await res.json();
+  } catch (e) {
+    return { success: false, services: [] };
+  }
+}
+
 export async function fetchPosts({
   site = 'danbooru',
   tags = '',
@@ -108,6 +118,7 @@ export async function fetchPosts({
   hidePregnant = true,
   hideLgbt = false,
   customSites = '',
+  pawchiveService = '',
   bustCache = false
 }) {
   const params = {
@@ -128,6 +139,10 @@ export async function fetchPosts({
 
   if (customSites) {
     params.customSites = Array.isArray(customSites) ? customSites.join(',') : customSites;
+  }
+
+  if (pawchiveService && pawchiveService !== 'all') {
+    params.pawchiveService = pawchiveService;
   }
 
   if (bustCache) {

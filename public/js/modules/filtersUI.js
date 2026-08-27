@@ -1,8 +1,25 @@
 import { state, getSiteCapabilities } from '../state.js';
 import { t } from '../i18n.js';
 
+const PAWCHIVE_SERVICE_LABELS = {
+  patreon: 'Patreon',
+  fanbox: 'Pixiv Fanbox',
+  fantia: 'Fantia',
+  boosty: 'Boosty',
+  gumroad: 'Gumroad',
+  discord: 'Discord',
+  subscribe: 'SubscribeStar',
+  onlyfans: 'OnlyFans'
+};
+
+export function getPawchiveServiceLabel(service) {
+  if (!service || service === 'all') return t('sidebar.pawchiveServiceAll', 'Все платформы');
+  return PAWCHIVE_SERVICE_LABELS[service] || (service.charAt(0).toUpperCase() + service.slice(1));
+}
+
 export function updateSiteCapabilitiesUI(siteId) {
   const caps = getSiteCapabilities(siteId || state.currentSite);
+  const currentSiteId = siteId || state.currentSite;
 
   // 1. Categories & navigation tabs (desktop & mobile)
   const supportedCats = new Set(caps.supportedCategories || ['new', 'views', 'top', 'recommended', 'random']);
@@ -108,6 +125,12 @@ export function updateSiteCapabilitiesUI(siteId) {
     pageTagsBlock.style.display = caps.supportsTags ? '' : 'none';
   }
 
+  // 9.1 Pawchive platform filter block (exclusive to the Pawchive source)
+  const pawchiveServiceBlock = document.getElementById('pawchiveServiceBlock');
+  if (pawchiveServiceBlock) {
+    pawchiveServiceBlock.style.display = currentSiteId === 'pawchive' ? '' : 'none';
+  }
+
   // 10. Wiki Hint button
   const btnSidebarWikiHint = document.getElementById('btnSidebarWikiHint');
   if (btnSidebarWikiHint) {
@@ -131,6 +154,7 @@ export function updateSiteCapabilitiesUI(siteId) {
   updateTypeFilterUI();
   updateAgeFilterUI();
   updateDateFilterUI();
+  updatePawchiveServiceUI();
   updateVideoSortUI();
   updateFilterActiveDot();
 }
@@ -198,6 +222,20 @@ export function updateDateFilterUI() {
   updateFilterActiveDot();
 }
 
+export function updatePawchiveServiceUI() {
+  const pawchiveServiceLabel = document.getElementById('pawchiveServiceLabel');
+  if (pawchiveServiceLabel) {
+    pawchiveServiceLabel.textContent = getPawchiveServiceLabel(state.pawchiveService);
+  }
+
+  document.querySelectorAll('#pawchiveServiceMenu .dropdown-item').forEach(item => {
+    const itemService = item.dataset.service || 'all';
+    item.classList.toggle('active', itemService === (state.pawchiveService || 'all'));
+  });
+
+  updateFilterActiveDot();
+}
+
 export function updateFilterActiveDot() {
   const filterActiveDot = document.getElementById('filterActiveDot');
   if (!filterActiveDot) return;
@@ -208,6 +246,7 @@ export function updateFilterActiveDot() {
                    (caps.supportsShapesFilter && state.ageFilter !== 'all') ||
                    (caps.supportsDateFilter && state.dateFilter && state.dateFilter !== 'all') ||
                    (caps.supportsContentHiding && (!state.hideFurry || !state.hidePregnant || state.hideLgbt)) ||
+                   (state.currentSite === 'pawchive' && state.pawchiveService && state.pawchiveService !== 'all') ||
                    (caps.supportsTags && state.searchTags && state.searchTags.length > 0);
   filterActiveDot.style.display = isCustom ? 'block' : 'none';
 }

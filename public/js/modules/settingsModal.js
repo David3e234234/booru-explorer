@@ -22,7 +22,7 @@ import {
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
-import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI } from './filtersUI.js';
+import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI, updatePawchiveServiceUI } from './filtersUI.js';
 import { updateHeaderAuthUI } from './authModal.js';
 
 export const DEFAULT_AI_TAGS = [
@@ -209,6 +209,10 @@ export function applySettingsToUIAndState(s) {
   if (s.dateFilter) {
     state.dateFilter = s.dateFilter;
     updateDateFilterUI();
+  }
+  if (s.pawchiveService) {
+    state.pawchiveService = s.pawchiveService;
+    updatePawchiveServiceUI();
   }
   const checkHideFurry = document.getElementById('checkHideFurry');
   if (typeof s.hideFurry === 'boolean') {

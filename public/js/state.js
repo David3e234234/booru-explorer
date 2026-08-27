@@ -65,6 +65,7 @@ export const state = {
   typeFilter: 'all', // 'all', 'video', 'image'
   ageFilter: 'all', // 'all', 'adult', 'young'
   dateFilter: 'all', // 'all', '24h', '2d', '7d', '30d', '90d', '365d'
+  pawchiveService: 'all', // 'all' or a Pawchive platform id: 'patreon', 'fanbox', ...
   videoDurationSort: 'none', // 'none' | 'longest' | 'shortest'
   hideFurry: true,
   hidePregnant: true,
@@ -106,6 +107,7 @@ export const state = {
     typeFilter: 'all',
     ageFilter: 'all',
     dateFilter: 'all',
+    pawchiveService: 'all',
     hideFurry: true,
     hidePregnant: true,
     hideLgbt: false,

@@ -12,6 +12,14 @@ const PAWCHIVE_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'
 const PAWCHIVE_VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v']);
 const PAWCHIVE_ARCHIVE_EXTS = new Set(['zip', 'rar', '7z']);
 
+// The global feed (/api/v1/posts) has no server-side service filter, so a
+// platform filter is applied by scanning a window of raw pages client-side.
+const PAWCHIVE_RAW_PAGE_SIZE = 50;
+const PAWCHIVE_SERVICE_SCAN_PAGES = 3;
+// The API starts returning 429 after ~4-5 rapid requests, so pace the scan
+const PAWCHIVE_SERVICE_SCAN_DELAY_MS = 400;
+const PAWCHIVE_FALLBACK_SERVICES = ['patreon', 'fanbox'];
+
 function isPawchiveVisualMedia(nameOrPath) {
   if (!nameOrPath) return false;
   const ext = nameOrPath.split('?')[0].split('.').pop()?.toLowerCase();
@@ -58,6 +66,29 @@ export async function getCreatorsDirectory() {
     logError('Pawchive', 'Failed to load creators list', err);
   }
   return creatorsCache || { list: [], map: new Map() };
+}
+
+/**
+ * Returns Pawchive platforms (services) that currently have creators,
+ * sorted by creator count desc. Feeds the client-side platform dropdown.
+ */
+export async function getPawchiveServices() {
+  try {
+    const { list } = await getCreatorsDirectory();
+    if (Array.isArray(list) && list.length > 0) {
+      const counts = new Map();
+      for (const c of list) {
+        const svc = (c && c.service ? String(c.service) : '').toLowerCase();
+        if (svc) counts.set(svc, (counts.get(svc) || 0) + 1);
+      }
+      if (counts.size > 0) {
+        return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([svc]) => svc);
+      }
+    }
+  } catch (err) {
+    logError('Pawchive', 'Failed to load services list', err);
+  }
+  return [...PAWCHIVE_FALLBACK_SERVICES];
 }
 
 /**
@@ -336,7 +367,7 @@ export async function fetchPawchivePostById(postId, service, user, aiTagsList = 
  * Fetches posts from Pawchive API
  */
 export async function fetchPawchive(params, aiTagsList, settings) {
-  const { tags = '', page = 1, limit = 40, ratingFilter = 'all', typeFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, ratingFilter = 'all', typeFilter = 'all', pawchiveService = '' } = params;
 
   if (ratingFilter === 'sfw') {
     return [];
@@ -364,6 +395,12 @@ export async function fetchPawchive(params, aiTagsList, settings) {
     }
   }
 
+  // Platform dropdown value (explicit UI choice) overrides the service: token
+  const dropdownService = String(pawchiveService || '').trim().toLowerCase();
+  if (/^[a-z0-9_-]+$/.test(dropdownService)) {
+    serviceFilter = dropdownService;
+  }
+
   // Attempt author resolution if authorQuery is given or if single keyword might match a creator
   let resolvedCreator = null;
   if (authorQuery) {
@@ -375,24 +412,50 @@ export async function fetchPawchive(params, aiTagsList, settings) {
     }
   }
 
-  let apiUrl = '';
-  if (resolvedCreator) {
-    apiUrl = `https://pawchive.pw/api/v1/${resolvedCreator.service}/user/${resolvedCreator.user}/posts?o=${offset}`;
-  } else if (serviceFilter && userFilter) {
-    apiUrl = `https://pawchive.pw/api/v1/${serviceFilter}/user/${userFilter}/posts?o=${offset}`;
-  } else if (searchKeywords.length > 0) {
-    const qStr = searchKeywords.join(' ');
-    apiUrl = `https://pawchive.pw/api/v1/posts?q=${encodeURIComponent(qStr)}&o=${offset}`;
-  } else {
-    apiUrl = `https://pawchive.pw/api/v1/posts?o=${offset}`;
-  }
+  const qPart = searchKeywords.length > 0 ? `q=${encodeURIComponent(searchKeywords.join(' '))}&` : '';
+
+  // First connect attempt after idle often times out on flaky links, so retry once
+  const fetchJsonPage = async (apiUrl) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetchSafe(apiUrl, { timeout: 15000 });
+        if (!res.ok) return null;
+        const data = safeJsonParse(await res.text(), []);
+        return Array.isArray(data) ? data : [];
+      } catch (err) {
+        if (attempt === 0) continue;
+        throw err;
+      }
+    }
+    return null;
+  };
+
+  let items = [];
 
   try {
-    const res = await fetchSafe(apiUrl, { timeout: 15000 });
-    if (!res.ok) return [];
-    const text = await res.text();
-    const data = safeJsonParse(text, []);
-    const items = Array.isArray(data) ? data : [];
+    if (resolvedCreator) {
+      items = (await fetchJsonPage(`https://pawchive.pw/api/v1/${resolvedCreator.service}/user/${resolvedCreator.user}/posts?o=${offset}`)) || [];
+    } else if (serviceFilter && userFilter) {
+      items = (await fetchJsonPage(`https://pawchive.pw/api/v1/${serviceFilter}/user/${userFilter}/posts?o=${offset}`)) || [];
+    } else if (serviceFilter) {
+      // Platform filter without a specific author: the feed has no server-side
+      // service filter, so scan a fixed window of raw pages per app page and
+      // keep only matching posts. Page N maps to raw pages [N*K, N*K+K).
+      const windowStart = Math.max(0, (page - 1) * PAWCHIVE_RAW_PAGE_SIZE * PAWCHIVE_SERVICE_SCAN_PAGES);
+      for (let i = 0; i < PAWCHIVE_SERVICE_SCAN_PAGES; i++) {
+        const pageItems = await fetchJsonPage(`https://pawchive.pw/api/v1/posts?${qPart}o=${windowStart + i * PAWCHIVE_RAW_PAGE_SIZE}`);
+        if (pageItems === null) break; // 429 or repeated failure: return what we have
+        for (const it of pageItems) {
+          if (it && (it.service || '').toLowerCase() === serviceFilter) items.push(it);
+        }
+        if (pageItems.length < PAWCHIVE_RAW_PAGE_SIZE) break; // feed exhausted
+        if (i < PAWCHIVE_SERVICE_SCAN_PAGES - 1) {
+          await new Promise(r => setTimeout(r, PAWCHIVE_SERVICE_SCAN_DELAY_MS));
+        }
+      }
+    } else {
+      items = (await fetchJsonPage(`https://pawchive.pw/api/v1/posts?${qPart}o=${offset}`)) || [];
+    }
 
     if (items.length === 0) return [];
 

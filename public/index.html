@@ -182,6 +182,23 @@
         </button>
       </div>
 
+      <!-- 1.1 Pawchive platform filter (visible only for the Pawchive source) -->
+      <div class="sidebar-block" id="pawchiveServiceBlock" style="display: none;">
+        <h3 class="sidebar-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span data-i18n="sidebar.pawchiveService">Платформа</span>
+        </h3>
+        <div class="date-filter-dropdown" id="pawchiveServiceDropdown">
+          <button type="button" class="btn-dropdown-toggle" id="btnPawchiveServiceToggle" aria-haspopup="listbox" aria-expanded="false" title="Выбрать платформу для поиска" data-i18n-title="sidebar.pawchiveService.title">
+            <span class="dropdown-label" id="pawchiveServiceLabel" data-i18n="sidebar.pawchiveServiceAll">Все платформы</span>
+            <svg class="dropdown-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dropdown-menu" id="pawchiveServiceMenu" role="listbox">
+            <button type="button" class="dropdown-item active" data-service="all" role="option" data-i18n="sidebar.pawchiveServiceAll">Все платформы</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 2. AI filter -->
       <div class="sidebar-block" id="aiFilterBlock">
         <h3 class="sidebar-title" data-i18n="sidebar.aiFilter">Фильтр ИИ</h3>
@@ -1980,6 +1997,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=9.5"></script>
+  <script type="module" src="js/app.js?v=9.6"></script>
 </body>
 </html>

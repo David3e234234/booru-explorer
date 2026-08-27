@@ -31,6 +31,7 @@ import {
   syncFavoriteAuthors,
   fetchSettings, 
   saveSettings,
+  fetchPawchiveServices,
   apiGetMe
 } from './api.js';
 import { initAutocomplete } from './autocomplete.js';
@@ -45,6 +46,8 @@ import {
   updateTypeFilterUI, 
   updateAgeFilterUI, 
   updateDateFilterUI,
+  updatePawchiveServiceUI,
+  getPawchiveServiceLabel,
   updateCategoryTabsUI 
 } from './modules/filtersUI.js';
 import { 
@@ -307,6 +310,7 @@ function refreshSearchUiFromState() {
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
   updateSiteCapabilitiesUI(state.currentSite);
+  if (state.currentSite === 'pawchive') ensurePawchiveServiceOptions();
 }
 
 // Opens a post by its original site id: fast path searches the loaded feed,
@@ -409,7 +413,46 @@ function selectSite(siteId) {
   updateCurrentSiteLabel();
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
+  if (siteId === 'pawchive') ensurePawchiveServiceOptions();
   performSearch(true);
+}
+
+// Pawchive platform dropdown: options are loaded once from the server
+let pawchiveServicesLoaded = false;
+let pawchiveServicesLoading = null;
+
+async function ensurePawchiveServiceOptions() {
+  if (pawchiveServicesLoaded) return;
+  if (pawchiveServicesLoading) return pawchiveServicesLoading;
+
+  pawchiveServicesLoading = (async () => {
+    try {
+      const data = await fetchPawchiveServices();
+      const services = Array.isArray(data?.services) ? data.services.filter(s => s && s !== 'all') : [];
+      const menu = document.getElementById('pawchiveServiceMenu');
+      if (!menu) return;
+
+      menu.querySelectorAll('.dropdown-item[data-dynamic="1"]').forEach(el => el.remove());
+      for (const svc of services) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'dropdown-item';
+        btn.dataset.service = svc;
+        btn.dataset.dynamic = '1';
+        btn.setAttribute('role', 'option');
+        btn.textContent = getPawchiveServiceLabel(svc);
+        menu.appendChild(btn);
+      }
+      if (services.length > 0) pawchiveServicesLoaded = true;
+      updatePawchiveServiceUI();
+    } catch (e) {
+      console.warn('Не удалось загрузить список платформ Pawchive:', e);
+    } finally {
+      pawchiveServicesLoading = null;
+    }
+  })();
+
+  return pawchiveServicesLoading;
 }
 
 function selectCategory(category) {
@@ -936,6 +979,7 @@ async function performSearch(reset = false, options = {}) {
       hidePregnant: state.hidePregnant,
       hideLgbt: state.hideLgbt,
       customSites: state.currentSite === 'custom' ? state.settings.customSources : '',
+      pawchiveService: state.currentSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
       bustCache: options.bustCache || false
     });
 
@@ -1078,6 +1122,54 @@ function setupEventListeners() {
       if (e.key === 'Escape' && dateFilterDropdown.classList.contains('open')) {
         dateFilterDropdown.classList.remove('open');
         btnDateFilterToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  // Pawchive platform dropdown (only visible for the Pawchive source)
+  const pawchiveServiceDropdown = document.getElementById('pawchiveServiceDropdown');
+  const btnPawchiveServiceToggle = document.getElementById('btnPawchiveServiceToggle');
+  if (btnPawchiveServiceToggle && pawchiveServiceDropdown) {
+    btnPawchiveServiceToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ensurePawchiveServiceOptions();
+      const isOpen = pawchiveServiceDropdown.classList.toggle('open');
+      btnPawchiveServiceToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    // Items are populated lazily, so clicks are delegated on the menu
+    const pawchiveServiceMenu = document.getElementById('pawchiveServiceMenu');
+    if (pawchiveServiceMenu) {
+      pawchiveServiceMenu.addEventListener('click', (e) => {
+        const item = e.target.closest('.dropdown-item');
+        if (!item) return;
+        e.stopPropagation();
+        const serviceVal = item.dataset.service || 'all';
+        if (state.pawchiveService === serviceVal) {
+          pawchiveServiceDropdown.classList.remove('open');
+          btnPawchiveServiceToggle.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        state.pawchiveService = serviceVal;
+        updatePawchiveServiceUI();
+        persistSettings({ pawchiveService: serviceVal });
+        pawchiveServiceDropdown.classList.remove('open');
+        btnPawchiveServiceToggle.setAttribute('aria-expanded', 'false');
+        if (state.currentSite === 'pawchive') performSearch(true);
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!pawchiveServiceDropdown.contains(e.target)) {
+        pawchiveServiceDropdown.classList.remove('open');
+        btnPawchiveServiceToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && pawchiveServiceDropdown.classList.contains('open')) {
+        pawchiveServiceDropdown.classList.remove('open');
+        btnPawchiveServiceToggle.setAttribute('aria-expanded', 'false');
       }
     });
   }

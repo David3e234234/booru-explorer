@@ -14,7 +14,7 @@ import {
 import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js';
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
-import { getCreatorsDirectory, fetchPawchivePostById } from '../parsers/pawchive.js';
+import { getCreatorsDirectory, fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
 import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
@@ -162,6 +162,17 @@ router.get('/sites', (req, res) => {
   res.json({ sites: Object.values(SITES) });
 });
 
+// GET /api/pawchive-services - active Pawchive platforms (patreon, fanbox, ...) for the dropdown
+router.get('/pawchive-services', async (req, res) => {
+  try {
+    const services = await getPawchiveServices();
+    res.json({ success: true, services });
+  } catch (err) {
+    logError('Search', 'Ошибка получения списка платформ Pawchive', err);
+    res.json({ success: false, services: [] });
+  }
+});
+
 // GET /api/version
 router.get('/version', (req, res) => {
   res.json({
@@ -189,6 +200,8 @@ router.get('/posts', async (req, res) => {
     const hideLgbt = req.query.hideLgbt === 'true' || req.query.hideLgbt === '1';
     const excludeSites = req.query.excludeSites || '';
     const customSites = req.query.customSites || '';
+    const pawchiveServiceRaw = String(req.query.pawchiveService || '').trim().toLowerCase();
+    const pawchiveService = /^[a-z0-9_-]+$/.test(pawchiveServiceRaw) ? pawchiveServiceRaw : '';
 
     // Check the in-memory cache (for everything except random)
     let clientAuth = parseClientAuth(req);
@@ -199,7 +212,7 @@ router.get('/posts', async (req, res) => {
     };
 
     // groupAlbums changes the response shape (album collapsing), so it belongs in the key
-    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
+    const cacheKey = `${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
@@ -223,6 +236,7 @@ router.get('/posts', async (req, res) => {
       dateFilter,
       excludeSites,
       customSites,
+      pawchiveService,
       hideFurry,
       hidePregnant,
       hideLgbt
