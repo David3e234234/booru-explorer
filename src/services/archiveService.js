@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import AdmZip from 'adm-zip';
+import StreamZip from 'node-stream-zip';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { ARCHIVES_DIR } from '../config/constants.js';
@@ -13,10 +13,11 @@ const ALLOWED_HOSTS = ['file.pawchive.pw', 'file.pawchive.st'];
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif']);
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v']);
 
-// Zip-bomb and runaway-extraction guards
+// Zip-bomb and runaway-extraction guards. Entries are streamed to disk, so the
+// caps bound disk usage only - RAM stays flat even for multi-hundred-MB videos
 const MAX_FILES = 500;
-const MAX_TOTAL_BYTES = 1024 * 1024 * 1024; // 1 GB uncompressed
-const MAX_ENTRY_BYTES = 200 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 1024 * 1024 * 1024; // 1 GB uncompressed per archive
+const MAX_ENTRY_BYTES = 1024 * 1024 * 1024; // 1 GB per file
 
 const DOWNLOAD_TIMEOUT_MS = 120000;
 
@@ -72,54 +73,62 @@ async function extractArchive(zipUrl, key) {
 
     await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(tmpPath));
 
-    const zip = new AdmZip(tmpPath);
-    const entries = zip.getEntries().filter(entry => {
-      if (entry.isDirectory) return false;
-      const name = entry.entryName.replace(/\\/g, '/');
-      const base = name.split('/').pop();
-      if (!base || base.startsWith('.') || name.includes('__MACOSX')) return false;
-      const ext = getExt(base);
-      return IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext);
-    });
-
-    entries.sort((a, b) => nameCollator.compare(a.entryName, b.entryName));
-
-    let totalBytes = 0;
-    const items = [];
-    for (const entry of entries) {
-      if (items.length >= MAX_FILES) break;
-      const size = entry.header.size || 0;
-      if (size > MAX_ENTRY_BYTES) continue;
-      if (totalBytes + size > MAX_TOTAL_BYTES) break;
-
-      const base = entry.entryName.replace(/\\/g, '/').split('/').pop();
-      const ext = getExt(base);
-      const n = items.length + 1;
-      const buffer = zip.readFile(entry);
-      if (!buffer) continue;
-
-      await fs.promises.writeFile(path.join(ARCHIVES_DIR, `${key}_${n}.${ext}`), buffer);
-      totalBytes += size;
-      items.push({
-        n,
-        ext,
-        name: base,
-        isVideo: VIDEO_EXTS.has(ext),
-        size
+    const zip = new StreamZip.async({ file: tmpPath });
+    try {
+      const entries = Object.values(await zip.entries()).filter(entry => {
+        if (entry.isDirectory) return false;
+        const name = entry.name.replace(/\\/g, '/');
+        const base = name.split('/').pop();
+        if (!base || base.startsWith('.') || name.includes('__MACOSX')) return false;
+        const ext = getExt(base);
+        return IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext);
       });
-    }
 
-    if (items.length === 0) {
-      throw new Error('В архиве нет изображений или видео');
-    }
+      entries.sort((a, b) => nameCollator.compare(a.name, b.name));
 
-    const manifest = { key, zipUrl, extractedAt: Date.now(), items };
-    await fs.promises.writeFile(
-      path.join(ARCHIVES_DIR, `${key}.manifest.json`),
-      JSON.stringify(manifest)
-    );
-    logInfo('Archive', `Архив ${key} распакован: ${items.length} файлов (${(totalBytes / 1024 / 1024).toFixed(1)} МБ)`);
-    return manifest;
+      let totalBytes = 0;
+      const items = [];
+      for (const entry of entries) {
+        if (items.length >= MAX_FILES) break;
+        const size = entry.size || 0;
+        if (size > MAX_ENTRY_BYTES) continue;
+        if (totalBytes + size > MAX_TOTAL_BYTES) break;
+
+        const base = entry.name.replace(/\\/g, '/').split('/').pop();
+        const ext = getExt(base);
+        const n = items.length + 1;
+        const destPath = path.join(ARCHIVES_DIR, `${key}_${n}.${ext}`);
+        try {
+          await zip.extract(entry.name, destPath);
+        } catch (extractErr) {
+          logError('Archive', `Не удалось извлечь файл ${base}`, extractErr);
+          fs.promises.unlink(destPath).catch(() => {});
+          continue;
+        }
+        totalBytes += size;
+        items.push({
+          n,
+          ext,
+          name: base,
+          isVideo: VIDEO_EXTS.has(ext),
+          size
+        });
+      }
+
+      if (items.length === 0) {
+        throw new Error('В архиве нет изображений или видео');
+      }
+
+      const manifest = { key, zipUrl, extractedAt: Date.now(), items };
+      await fs.promises.writeFile(
+        path.join(ARCHIVES_DIR, `${key}.manifest.json`),
+        JSON.stringify(manifest)
+      );
+      logInfo('Archive', `Архив ${key} распакован: ${items.length} файлов (${(totalBytes / 1024 / 1024).toFixed(1)} МБ)`);
+      return manifest;
+    } finally {
+      zip.close().catch(() => {});
+    }
   } finally {
     fs.promises.unlink(tmpPath).catch(() => {});
   }
