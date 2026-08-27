@@ -32,6 +32,15 @@ function isPawchiveArchive(nameOrPath) {
   return PAWCHIVE_ARCHIVE_EXTS.has(ext);
 }
 
+function buildArchiveFields(archiveAttachments) {
+  if (!archiveAttachments || archiveAttachments.length === 0) return {};
+  return {
+    isArchive: true,
+    archiveUrls: archiveAttachments.map(a => `https://file.pawchive.pw/data${a.path}?f=${encodeURIComponent(a.name || 'archive.zip')}`),
+    archiveNames: archiveAttachments.map(a => a.name || 'archive.zip')
+  };
+}
+
 const STOP_TITLE_WORDS = new Set([
   'psd', 'clip', 'sai', 'c4d', 'blend', 'zip', 'rar', '7z', 'tar', 'r18', 'nsfw', 'sfw', 
   'reward', 'pack', 'tier', 'wip', 'sketch', 'vol', 'part', 'set', 'ver', 'version', 
@@ -215,6 +224,11 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
   const seriesKey = `pawchive:${item.service}:${item.user}:${item.id}`;
   const allSeriesKeys = [seriesKey, `${item.service}:${item.id}`];
 
+  // Posts with zip/rar attachments carry archive fields in both branches:
+  // the viewer unpacks archiveUrls on open, whether or not the post also
+  // has a cover image / playable slides.
+  const archiveFields = buildArchiveFields(archiveAttachments);
+
   // Archive-only post: no playable slides, the viewer unpacks archiveUrls on open
   if (mediaFiles.length === 0) {
     return {
@@ -251,9 +265,7 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
       canFetchAlbum: false,
       createdAt,
       isAi,
-      isArchive: true,
-      archiveUrls: archiveAttachments.map(a => `https://file.pawchive.pw/data${a.path}?f=${encodeURIComponent(a.name || 'archive.zip')}`),
-      archiveNames: archiveAttachments.map(a => a.name || 'archive.zip')
+      ...archiveFields
     };
   }
 
@@ -349,7 +361,8 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     allSeriesKeys,
     canFetchAlbum: hasMultiple,
     createdAt,
-    isAi
+    isAi,
+    ...archiveFields
   };
 }
 
@@ -499,7 +512,8 @@ export async function fetchPawchive(params, aiTagsList, settings) {
     let validPosts = results.filter(Boolean);
 
     if (settings?.hideZipPosts) {
-      validPosts = validPosts.filter(p => !p.isArchive);
+      // Hide only archive-only posts; mixed posts (cover media + zips) stay visible
+      validPosts = validPosts.filter(p => !(p.isArchive && !p.fileUrl));
     }
 
     if (typeFilter === 'video') {

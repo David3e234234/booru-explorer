@@ -602,7 +602,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         formatBadge = `<span class="badge-format video">${t('gal.badgeVideo', 'Видео')}</span>`;
       }
     } else if (post.isArchive) {
-      formatBadge = `<span class="badge-format" style="background-color: rgba(249, 115, 22, 0.85);" title="${t('gal.badgeZip.title', 'Пост содержит только ZIP-архивы - откроется после распаковки')}">ZIP</span>`;
+      const zipBadgeTitle = post.fileUrl
+        ? t('gal.badgeZipMixed.title', 'Пост содержит ZIP-архивы - распакуется после открытия')
+        : t('gal.badgeZip.title', 'Пост содержит только ZIP-архивы - откроется после распаковки');
+      formatBadge = `<span class="badge-format" style="background-color: rgba(249, 115, 22, 0.85);" title="${zipBadgeTitle}">ZIP</span>`;
     } else if (post.isGif) {
       formatBadge = `<span class="badge-format gif">GIF</span>`;
     } else if (post.width && post.height) {

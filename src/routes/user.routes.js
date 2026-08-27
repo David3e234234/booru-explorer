@@ -40,6 +40,8 @@ function sanitizeStoredPost(post) {
   const clean = { ...post };
   delete clean.albumItems;
   delete clean.allSeriesKeys;
+  delete clean._archiveUnpacked;
+  delete clean._archivePromise;
   return clean;
 }
 

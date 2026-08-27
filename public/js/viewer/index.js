@@ -381,8 +381,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
 
+    // Unpacked means the flag is set AND the slides are actually present:
+    // favorites restore strips albumItems, so such posts must unpack again
+    function isArchiveUnpacked(post) {
+      return Boolean(post && post._archiveUnpacked && Array.isArray(post.albumItems) && post.albumItems.length > 0);
+    }
+
     async function unpackArchivePost() {
       if (!currentPost?.isArchive) return;
+      if (isArchiveUnpacked(currentPost)) return;
       if (!Array.isArray(currentPost.archiveUrls) || currentPost.archiveUrls.length === 0) {
         showToast(t('vw.archiveFailed', 'Не удалось распаковать архив'));
         return;
@@ -403,9 +410,37 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             return;
           }
 
+          // Mixed posts (cover media + zips) keep their existing slides first,
+          // archive contents are appended after them
+          const existingSlides = Array.isArray(currentPost.albumItems)
+            ? currentPost.albumItems
+            : (currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl)
+              ? [{
+                  id: currentPost.id,
+                  originalId: currentPost.originalId,
+                  site: currentPost.site,
+                  siteName: currentPost.siteName,
+                  previewUrl: currentPost.previewUrl,
+                  sampleUrl: currentPost.sampleUrl,
+                  fileUrl: currentPost.fileUrl,
+                  thumb180: currentPost.thumb180,
+                  thumb360: currentPost.thumb360,
+                  thumb720: currentPost.thumb720,
+                  fileExt: currentPost.fileExt,
+                  isVideo: currentPost.isVideo,
+                  isGif: currentPost.isGif,
+                  hasSound: currentPost.hasSound,
+                  width: currentPost.width,
+                  height: currentPost.height,
+                  title: currentPost.title
+                }]
+              : [];
+          const mergedSlides = [...existingSlides, ...items];
+
           currentPost.isAlbum = true;
-          currentPost.albumItems = items;
-          currentPost.albumCount = items.length;
+          currentPost.albumItems = mergedSlides;
+          currentPost.albumCount = mergedSlides.length;
+          currentPost._archiveUnpacked = true;
           currentAlbumIndex = 0;
           syncUnpackedAlbumToGallery();
 
@@ -587,7 +622,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     renderAlbumFilmstrip();
 
     if (!skipMediaLoad) {
-      if (currentPost.isArchive && !Array.isArray(currentPost.albumItems)) {
+      if (currentPost.isArchive && !isArchiveUnpacked(currentPost)) {
         renderArchiveLoading();
         unpackArchivePost();
       } else {

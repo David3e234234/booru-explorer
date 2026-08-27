@@ -491,6 +491,7 @@ Object.assign(en, {
   'gal.matchBadge.title': 'Taste match: {p}%',
   'gal.albumBadge.title': 'Album: {n} images',
   'gal.badgeZip.title': 'Post contains only ZIP archives - opens after unpacking',
+  'gal.badgeZipMixed.title': 'Post contains ZIP archives - unpacks after opening',
   'gal.scoreBadge.title': 'Score / Rating: {n}',
   'gal.viewsBadge.title': 'Views: {n}',
   'gal.favsBadge.title': 'In bookmarks: {n}',
