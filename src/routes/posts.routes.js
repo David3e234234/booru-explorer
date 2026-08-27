@@ -9,7 +9,8 @@ import AdmZip from 'adm-zip';
 import {
   SITES,
   DEFAULT_AI_TAGS,
-  ROOT_DIR
+  ROOT_DIR,
+  BROWSER_USER_AGENT
 } from '../config/constants.js';
 import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js';
 import { getSettings } from '../services/storageService.js';

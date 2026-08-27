@@ -1040,7 +1040,6 @@ function setupEventListeners() {
       updateAiFilterUI();
       persistSettings({ aiFilter: filter });
       syncSearchUrl('replace');
-      performSearch(true);
     });
   });
 
@@ -1053,7 +1052,6 @@ function setupEventListeners() {
       updateRatingFilterUI();
       persistSettings({ ratingFilter: rating });
       syncSearchUrl('replace');
-      performSearch(true);
     });
   });
 
@@ -1066,7 +1064,6 @@ function setupEventListeners() {
       updateTypeFilterUI();
       persistSettings({ typeFilter: type });
       syncSearchUrl('replace');
-      performSearch(true);
     });
   });
 
@@ -1079,7 +1076,6 @@ function setupEventListeners() {
       updateAgeFilterUI();
       persistSettings({ ageFilter: age });
       syncSearchUrl('replace');
-      performSearch(true);
     });
   });
 
@@ -1107,7 +1103,6 @@ function setupEventListeners() {
         persistSettings({ dateFilter: dateVal });
         dateFilterDropdown.classList.remove('open');
         btnDateFilterToggle.setAttribute('aria-expanded', 'false');
-        performSearch(true);
       });
     });
 
@@ -1155,7 +1150,6 @@ function setupEventListeners() {
         persistSettings({ pawchiveService: serviceVal });
         pawchiveServiceDropdown.classList.remove('open');
         btnPawchiveServiceToggle.setAttribute('aria-expanded', 'false');
-        if (state.currentSite === 'pawchive') performSearch(true);
       });
     }
 
