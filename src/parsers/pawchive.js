@@ -39,31 +39,38 @@ const STOP_TITLE_WORDS = new Set([
 ]);
 
 /**
- * Fetches and caches creator directory from Pawchive
+ * Fetches and caches creator directory from Pawchive.
+ * The payload is ~12 MB, so on flaky links the first connect attempt often
+ * times out - retry once with a generous timeout instead of silently
+ * degrading author resolution to an empty directory.
  */
 export async function getCreatorsDirectory() {
   const now = Date.now();
   if (creatorsCache && (now - creatorsCacheTime) < CREATORS_CACHE_TTL) {
     return creatorsCache;
   }
-  try {
-    const res = await fetchSafe('https://pawchive.pw/api/v1/creators', { timeout: 10000 });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        const creatorMap = new Map();
-        for (const c of data) {
-          if (c && c.service && c.id) {
-            creatorMap.set(`${c.service}:${c.id}`, c);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetchSafe('https://pawchive.pw/api/v1/creators', { timeout: 30000 });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          const creatorMap = new Map();
+          for (const c of data) {
+            if (c && c.service && c.id) {
+              creatorMap.set(`${c.service}:${c.id}`, c);
+            }
           }
+          creatorsCache = { list: data, map: creatorMap };
+          creatorsCacheTime = Date.now();
+          return creatorsCache;
         }
-        creatorsCache = { list: data, map: creatorMap };
-        creatorsCacheTime = now;
-        return creatorsCache;
       }
+      break; // got a response (non-ok / bad shape): retrying won't help
+    } catch (err) {
+      if (attempt === 0) continue; // transient connect failure: retry once
+      logError('Pawchive', 'Failed to load creators list', err);
     }
-  } catch (err) {
-    logError('Pawchive', 'Failed to load creators list', err);
   }
   return creatorsCache || { list: [], map: new Map() };
 }
@@ -92,9 +99,12 @@ export async function getPawchiveServices() {
 }
 
 /**
- * Resolves an author name or query to Pawchive creator { service, user, name }
+ * Resolves an author name or query to Pawchive creator { service, user, name }.
+ * When preferredService is given, each match stage first looks on that platform
+ * (the same name can exist on several services with different content), then
+ * falls back to any service.
  */
-export async function resolvePawchiveAuthor(authorQuery) {
+export async function resolvePawchiveAuthor(authorQuery, preferredService = null) {
   if (!authorQuery) return null;
   const clean = authorQuery
     .replace(/^(?:creator|artist|author|user|uploader):\s*/i, '')
@@ -107,16 +117,25 @@ export async function resolvePawchiveAuthor(authorQuery) {
 
   const cleanLower = clean.toLowerCase();
   const cleanNoSpace = cleanLower.replace(/[\s_.-]+/g, '');
+  const preferred = preferredService ? String(preferredService).toLowerCase() : null;
+
+  const findBy = (pred) => {
+    if (preferred) {
+      const inPreferred = list.find(c => (c.service || '').toLowerCase() === preferred && pred(c));
+      if (inPreferred) return inPreferred;
+    }
+    return list.find(pred);
+  };
 
   // Exact name match first
-  let match = list.find(c => (c.name || '').toLowerCase() === cleanLower);
+  let match = findBy(c => (c.name || '').toLowerCase() === cleanLower);
   if (!match) {
     // Normalized no-space match
-    match = list.find(c => (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '') === cleanNoSpace);
+    match = findBy(c => (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '') === cleanNoSpace);
   }
   if (!match) {
     // ID match or contains match
-    match = list.find(c => String(c.id) === clean || (c.name || '').toLowerCase().includes(cleanLower));
+    match = findBy(c => String(c.id) === clean || (c.name || '').toLowerCase().includes(cleanLower));
   }
 
   if (match) {
@@ -283,6 +302,16 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     };
   });
 
+  // Video-first cover: if the post contains a video, promote the first video slide
+  // to the cover so card badges, hover preview, duration probing, the "video" type
+  // filter and duration sort all treat the post as a video. Reordering the built
+  // items keeps each slide's own id/originalId stable.
+  const firstVideoIdx = albumItems.findIndex(i => i.isVideo);
+  if (firstVideoIdx > 0) {
+    const [videoItem] = albumItems.splice(firstVideoIdx, 1);
+    albumItems.unshift(videoItem);
+  }
+
   const mainMedia = albumItems[0];
   const hasMultiple = albumItems.length > 1;
 
@@ -401,12 +430,14 @@ export async function fetchPawchive(params, aiTagsList, settings) {
     serviceFilter = dropdownService;
   }
 
-  // Attempt author resolution if authorQuery is given or if single keyword might match a creator
+  // Attempt author resolution if authorQuery is given or if single keyword might match a creator.
+  // The selected platform is passed as a preference: the same author name can exist
+  // on several services with different content.
   let resolvedCreator = null;
   if (authorQuery) {
-    resolvedCreator = await resolvePawchiveAuthor(authorQuery);
-  } else if (searchKeywords.length === 1 && !serviceFilter && !userFilter) {
-    const candidate = await resolvePawchiveAuthor(searchKeywords[0]);
+    resolvedCreator = await resolvePawchiveAuthor(authorQuery, serviceFilter);
+  } else if (searchKeywords.length === 1 && !userFilter) {
+    const candidate = await resolvePawchiveAuthor(searchKeywords[0], serviceFilter);
     if (candidate && candidate.name.toLowerCase().replace(/[\s_.-]+/g, '') === searchKeywords[0].toLowerCase().replace(/[\s_.-]+/g, '')) {
       resolvedCreator = candidate;
     }
