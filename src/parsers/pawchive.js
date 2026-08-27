@@ -36,8 +36,8 @@ function buildArchiveFields(archiveAttachments) {
   if (!archiveAttachments || archiveAttachments.length === 0) return {};
   return {
     isArchive: true,
-    archiveUrls: archiveAttachments.map(a => `https://file.pawchive.pw/data${a.path}?f=${encodeURIComponent(a.name || 'archive.zip')}`),
-    archiveNames: archiveAttachments.map(a => a.name || 'archive.zip'),
+    archiveUrls: archiveAttachments.map(a => `https://file.pawchive.pw/data${a.path}?f=${encodeURIComponent(a.name || (a.path ? a.path.split('/').pop() : 'file'))}`),
+    archiveNames: archiveAttachments.map(a => a.name || (a.path ? a.path.split('/').pop() : 'file')),
     archiveSizes: archiveAttachments.map(a => a.size || 0)
   };
 }
@@ -169,16 +169,16 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     ? item.attachments.filter(a => a && a.path && isPawchiveVisualMedia(a.name || a.path))
     : [];
 
-  // Collect all archive attachments from both item.attachments and item.file
+  // Collect all non-visual downloadable attachments (zips, clips, psds, blends, etc.)
   const allRawAttachments = Array.isArray(item.attachments) ? [...item.attachments] : [];
-  if (item.file && item.file.path && isPawchiveArchive(item.file.name || item.file.path)) {
+  if (item.file && item.file.path && !isPawchiveVisualMedia(item.file.name || item.file.path)) {
     if (!allRawAttachments.some(a => a.path === item.file.path)) {
       allRawAttachments.unshift(item.file);
     }
   }
 
-  // Archive-only posts (zip/rar packs with no images on the source itself)
-  const archiveAttachments = allRawAttachments.filter(a => a && a.path && isPawchiveArchive(a.name || a.path));
+  // Non-visual downloadable attachments
+  const archiveAttachments = allRawAttachments.filter(a => a && a.path && !isPawchiveVisualMedia(a.name || a.path));
 
   const mediaFiles = [];
   if (item.file && item.file.path) {

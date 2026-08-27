@@ -297,6 +297,10 @@ export function applySettingsToUIAndState(s) {
   if (checkHideZipPostsApply && typeof s.hideZipPosts === 'boolean') {
     checkHideZipPostsApply.checked = s.hideZipPosts;
   }
+  const checkUnpackArchivesApply = document.getElementById('checkUnpackArchivesOnDownload');
+  if (checkUnpackArchivesApply && typeof s.unpackArchivesOnDownload === 'boolean') {
+    checkUnpackArchivesApply.checked = s.unpackArchivesOnDownload;
+  }
 
   const selectMaxServerCache = document.getElementById('selectMaxServerCache');
   if (selectMaxServerCache && s.maxServerCacheMb !== undefined) {
@@ -657,6 +661,8 @@ export function openSettingsModal() {
   if (checkEnablePaheal) checkEnablePaheal.checked = state.settings.enablePaheal !== false;
   const checkHideZipPostsModal = document.getElementById('checkHideZipPosts');
   if (checkHideZipPostsModal) checkHideZipPostsModal.checked = state.settings.hideZipPosts === true;
+  const checkUnpackArchivesModal = document.getElementById('checkUnpackArchivesOnDownload');
+  if (checkUnpackArchivesModal) checkUnpackArchivesModal.checked = state.settings.unpackArchivesOnDownload === true;
   const checkEnableJsDemuxingModal = document.getElementById('checkEnableJsDemuxing');
   if (checkEnableJsDemuxingModal) checkEnableJsDemuxingModal.checked = state.settings.enableJsDemuxing !== false;
   if (selectDeepFetchPages) selectDeepFetchPages.value = String(state.settings.deepFetchPages || 2);
@@ -1219,6 +1225,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkHideZipPosts = document.getElementById('checkHideZipPosts');
       const hideZipPostsVal = checkHideZipPosts ? checkHideZipPosts.checked : false;
 
+      const checkUnpackArchives = document.getElementById('checkUnpackArchivesOnDownload');
+      const unpackArchivesOnDownloadVal = checkUnpackArchives ? checkUnpackArchives.checked : false;
+
       const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
       const inputRule34UserId = document.getElementById('inputRule34UserId');
       const inputGelbooruApiKey = document.getElementById('inputGelbooruApiKey');
@@ -1277,7 +1286,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         prioritizeUserTags: prioritizeUserTagsVal,
         enablePaheal: enablePahealVal,
         enableJsDemuxing: enableJsDemuxingVal,
-        hideZipPosts: hideZipPostsVal
+        hideZipPosts: hideZipPostsVal,
+        unpackArchivesOnDownload: unpackArchivesOnDownloadVal
       };
 
       saveLocalSettings(updated);

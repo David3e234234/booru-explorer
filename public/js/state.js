@@ -111,6 +111,8 @@ export const state = {
     hideFurry: true,
     hidePregnant: true,
     hideLgbt: false,
+    hideZipPosts: false,
+    unpackArchivesOnDownload: false,
     excludedInterestTags: [],
     videoAutoplayHover: true,
     videoAutoplayMobile: true,

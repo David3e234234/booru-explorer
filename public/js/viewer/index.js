@@ -1,5 +1,5 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts } from '../api.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -444,6 +444,88 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           return;
         }
 
+        const isUnpackEnabled = state.settings?.unpackArchivesOnDownload === true;
+        const isExtractable = /\.(zip|rar|7z)$/i.test(cleanName) || url.toLowerCase().includes('.zip');
+
+        if (isUnpackEnabled && isExtractable) {
+          // Unpack on server and download extracted files
+          isDownloading = true;
+          btn.classList.remove('is-completed', 'is-error');
+          btn.classList.add('is-downloading');
+          if (subEl) subEl.textContent = '';
+          if (labelEl) labelEl.textContent = t('vw.unpackingOnServer', 'Распаковка на сервере...');
+
+          abortController = new AbortController();
+          activeArchiveDownloads.set(url, abortController);
+
+          let pollInterval = setInterval(async () => {
+            const status = await fetchArchiveStatus(url);
+            if (status && status.active) {
+              if (status.phase === 'extract') {
+                if (fillEl) fillEl.style.width = '100%';
+                if (labelEl) labelEl.textContent = t('vw.archiveExtracting', 'Извлечение файлов...');
+              } else if (status.phase === 'download' && status.total > 0) {
+                const pct = status.percent || Math.round((status.received / status.total) * 100);
+                if (fillEl) fillEl.style.width = `${pct}%`;
+                const loadedMb = (status.received / (1024 * 1024)).toFixed(1);
+                const totalMb = (status.total / (1024 * 1024)).toFixed(1);
+                if (labelEl) labelEl.textContent = `${pct}% · ${loadedMb} / ${totalMb} MB`;
+              }
+            }
+          }, 600);
+
+          try {
+            const res = await fetchArchiveList(url);
+            clearInterval(pollInterval);
+
+            if (abortController.signal.aborted) {
+              resetToDefault();
+              return;
+            }
+
+            if (res && res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
+              if (fillEl) fillEl.style.width = '100%';
+              if (labelEl) labelEl.textContent = t('vw.savingFiles', 'Сохранение файлов ({n})...').replace('{n}', String(res.albumItems.length));
+
+              for (let i = 0; i < res.albumItems.length; i++) {
+                if (abortController.signal.aborted) break;
+                const item = res.albumItems[i];
+                const downloadUrl = `${item.fileUrl}&download=1`;
+                const a = document.createElement('a');
+                a.href = downloadUrl;
+                a.download = item.title || `file_${i + 1}.${item.fileExt || 'jpg'}`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                if (res.albumItems.length > 1) {
+                  await new Promise(r => setTimeout(r, 200));
+                }
+              }
+
+              btn.classList.remove('is-downloading');
+              btn.classList.add('is-completed');
+              if (labelEl) labelEl.textContent = t('vw.downloadedFilesCount', 'Скачано ({n} файлов) ✓').replace('{n}', String(res.albumItems.length));
+              if (iconEl) {
+                iconEl.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
+              }
+              showToast(t('vw.archiveExtractedAndSaved', 'Архив распакован, файлы ({n} шт.) сохранены на устройство').replace('{n}', String(res.albumItems.length)));
+              setTimeout(() => resetToDefault(), 4000);
+              return;
+            }
+          } catch (err) {
+            clearInterval(pollInterval);
+            if (err.name === 'AbortError') {
+              resetToDefault();
+              return;
+            }
+            console.warn('[Server unpack error, fallback to direct download]', err);
+          } finally {
+            clearInterval(pollInterval);
+            activeArchiveDownloads.delete(url);
+          }
+        }
+
+        // Direct stream download (default, or for non-zip attachments like .clip, .psd)
         isDownloading = true;
         btn.classList.remove('is-completed', 'is-error');
         btn.classList.add('is-downloading');
@@ -473,7 +555,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             setProgress(pct, loaded, total);
           }
 
-          const blob = new Blob(chunks, { type: 'application/zip' });
+          const blob = new Blob(chunks, { type: 'application/octet-stream' });
           const blobUrl = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = blobUrl;
@@ -491,7 +573,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           if (iconEl) {
             iconEl.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
           }
-          showToast(t('vw.downloadArchiveDoneShort', 'Архив сохранён на устройство'));
+          showToast(t('vw.downloadArchiveDoneShort', 'Файл сохранён на устройство'));
 
           setTimeout(() => {
             resetToDefault();

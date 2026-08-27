@@ -43,7 +43,9 @@ export function isAllowedArchiveUrl(url) {
   try {
     const parsed = new URL(url);
     if (!ALLOWED_HOSTS.includes(parsed.hostname)) return false;
-    return parsed.pathname.toLowerCase().endsWith('.zip');
+    const cleanPath = parsed.pathname.toLowerCase();
+    const queryF = (parsed.searchParams.get('f') || '').toLowerCase();
+    return cleanPath.endsWith('.zip') || queryF.endsWith('.zip');
   } catch {
     return false;
   }

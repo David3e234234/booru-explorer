@@ -215,6 +215,7 @@ export const DEFAULT_SETTINGS = {
   hidePregnant: true,
   hideLgbt: false,
   hideZipPosts: false,
+  unpackArchivesOnDownload: false,
   excludedInterestTags: [],
   showVideoStatusBanner: true,
   aiTags: DEFAULT_AI_TAGS,
