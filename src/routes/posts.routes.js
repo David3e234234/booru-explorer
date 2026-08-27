@@ -203,10 +203,11 @@ router.post('/proxy/test', async (req, res) => {
     });
 
     if (response.ok || response.status === 403 || response.status === 401 || response.status === 406 || response.status === 302 || response.status === 301) {
+      const note = response.status === 403 ? ' (Cloudflare)' : '';
       return res.json({
         success: true,
         status: response.status,
-        message: `Прокси работает: получен ответ от ${targetName} (HTTP ${response.status})`
+        message: `Прокси работает: получен ответ от ${targetName} (HTTP ${response.status}${note})`
       });
     }
 
@@ -217,9 +218,19 @@ router.post('/proxy/test', async (req, res) => {
     });
   } catch (err) {
     logError('ProxyTest', 'Ошибка проверки прокси', err);
+    let detail = err.cause ? (err.cause.message || String(err.cause)) : (err.message || 'Таймаут или сбой соединения');
+    if (err.name === 'AbortError' || String(detail).includes('aborted')) {
+      detail = 'Превышено время ожидания ответа (таймаут)';
+    } else if (String(detail).includes('authentication timeout')) {
+      detail = 'Таймаут авторизации SOCKS5 (прокси не отвечает)';
+    } else if (String(detail).includes('ECONNREFUSED')) {
+      detail = 'Соединение отклонено (прокси выключен или неверный порт)';
+    } else if (String(detail).includes('ENOTFOUND')) {
+      detail = 'Хост прокси не найден (неверный адрес)';
+    }
     return res.json({
       success: false,
-      message: `Ошибка подключения через прокси: ${err.message || 'Таймаут или сбой соединения'}`
+      message: `Ошибка подключения через прокси: ${detail}`
     });
   }
 });

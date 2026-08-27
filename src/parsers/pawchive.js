@@ -161,7 +161,7 @@ export async function resolvePawchiveAuthor(authorQuery, preferredService = null
 /**
  * Normalizes a single Pawchive post item into standard BooruExp post structure
  */
-export async function normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList = []) {
+export async function normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList = [], settings = {}) {
   if (!item || !item.id) return null;
 
   // Filter attachments to valid visual media (exclude zips, psds, etc.)

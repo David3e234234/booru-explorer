@@ -1,5 +1,5 @@
 import os from 'os';
-import { ProxyAgent, Socks5ProxyAgent } from 'undici';
+import { fetch as undiciFetch, ProxyAgent, Socks5ProxyAgent } from 'undici';
 import { BOORU_USER_AGENT, BROWSER_USER_AGENT } from '../config/constants.js';
 import { logError, logInfo } from './logger.js';
 
@@ -142,7 +142,7 @@ export async function fetchSafe(url, options = {}) {
       fetchOptions.dispatcher = dispatcher;
     }
 
-    const response = await fetch(url, fetchOptions);
+    const response = await undiciFetch(url, fetchOptions);
     clearTimeout(timeout);
     return response;
   } catch (err) {
