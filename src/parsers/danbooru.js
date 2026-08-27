@@ -339,6 +339,9 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       parentId: item.parent_id,
       hasChildren: Boolean(item.has_children || item.has_active_children),
       originalId: String(item.id),
+      pixiv_id: item.pixiv_id,
+      pool_id: item.pool_id,
+      pools: item.pools,
       tags: rawTags
     }, 'danbooru');
 
@@ -379,6 +382,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       postUrl: `https://danbooru.donmai.us/posts/${item.id}`,
       parentId: item.parent_id || null,
       hasChildren: Boolean(item.has_children || item.has_active_children),
+      poolId: item.pool_id || null,
       seriesKey,
       createdAt: item.created_at || '',
       isAi

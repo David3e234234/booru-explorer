@@ -409,9 +409,24 @@ router.get('/posts/album', async (req, res) => {
     }
     if (seriesKey.startsWith('pixiv:')) {
       pendingQueries.push(fetchAndCollect(seriesKey));
-    }
-    if (seriesKey.startsWith('twitter:')) {
-      pendingQueries.push(fetchAndCollect(`source:*${seriesKey.replace('twitter:', '')}*`));
+    } else if (seriesKey.startsWith('twitter:')) {
+      const twId = seriesKey.replace('twitter:', '');
+      pendingQueries.push(fetchAndCollect(`source:*${twId}*`));
+    } else if (seriesKey.startsWith('fanbox:')) {
+      const fbId = seriesKey.replace('fanbox:', '');
+      pendingQueries.push(fetchAndCollect(`source:*${fbId}*`));
+    } else if (seriesKey.startsWith('fantia:')) {
+      const ftId = seriesKey.replace('fantia:', '');
+      pendingQueries.push(fetchAndCollect(`source:*${ftId}*`));
+    } else if (seriesKey.startsWith('patreon:')) {
+      const ptId = seriesKey.replace('patreon:', '');
+      pendingQueries.push(fetchAndCollect(`source:*${ptId}*`));
+    } else if (seriesKey.startsWith('pool:')) {
+      const poolIdOnly = seriesKey.split(':').pop();
+      pendingQueries.push(fetchAndCollect(`pool:${poolIdOnly}`));
+    } else if (seriesKey.startsWith('cien:') || seriesKey.startsWith('gumroad:') || seriesKey.startsWith('boosty:') || seriesKey.startsWith('subscribestar:') || seriesKey.startsWith('aipictors:') || seriesKey.startsWith('weibo:') || seriesKey.startsWith('bilibili:') || seriesKey.startsWith('plurk:') || seriesKey.startsWith('bsky:')) {
+      const idOnly = seriesKey.split(':').pop();
+      pendingQueries.push(fetchAndCollect(`source:*${idOnly}*`));
     }
     if (pendingQueries.length > 0) {
       await Promise.all(pendingQueries);
@@ -421,6 +436,16 @@ router.get('/posts/album', async (req, res) => {
     if (seriesKey.startsWith('pixiv:') && foundPostsMap.size === 0) {
       const pixivId = seriesKey.replace('pixiv:', '');
       await fetchAndCollect(`pixiv_id:${pixivId}`);
+    } else if (seriesKey.startsWith('fanbox:') && foundPostsMap.size === 0) {
+      const fbId = seriesKey.replace('fanbox:', '');
+      await fetchAndCollect(`fanbox:${fbId}`);
+      if (foundPostsMap.size === 0) await fetchAndCollect(`fanbox_id:${fbId}`);
+    } else if (seriesKey.startsWith('fantia:') && foundPostsMap.size === 0) {
+      const ftId = seriesKey.replace('fantia:', '');
+      await fetchAndCollect(`fantia:${ftId}`);
+    } else if (seriesKey.startsWith('patreon:') && foundPostsMap.size === 0) {
+      const ptId = seriesKey.replace('patreon:', '');
+      await fetchAndCollect(`patreon:${ptId}`);
     }
 
     if ((site === 'pawchive' || seriesKey.startsWith('pawchive:')) && foundPostsMap.size === 0) {

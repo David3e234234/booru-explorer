@@ -18,7 +18,7 @@ export function extractAllSeriesKeys(post, site = '') {
   const source = (post.source || '').trim();
   const tags = Array.isArray(post.tags) ? post.tags : (typeof post.tag_string === 'string' ? post.tag_string.split(/\s+/) : []);
 
-  // 1. Pixiv ID (looked up in source and tags)
+  // 1. Pixiv ID (source, tags, pixiv_id field)
   const pixivPatterns = [
     /pixiv\.net\/(?:en\/)?artworks\/(\d+)/i,
     /pixiv\.net\/member_illust\.php\?.*illust_id=(\d+)/i,
@@ -33,11 +33,18 @@ export function extractAllSeriesKeys(post, site = '') {
     const tagMatch = tag.match(/^(?:pixiv|pixiv_id):(\d+)$/i);
     if (tagMatch && tagMatch[1]) keys.add(`pixiv:${tagMatch[1]}`);
   }
+  if (post.pixiv_id || post.pixivId) {
+    keys.add(`pixiv:${String(post.pixiv_id || post.pixivId)}`);
+  }
 
-  // 2. Twitter / X Status ID
-  const twitterMatch = source.match(/(?:twitter\.com|x\.com)\/[^/]+\/status\/(\d+)/i);
+  // 2. Twitter / X Status ID (source and tags)
+  const twitterMatch = source.match(/(?:twitter\.com|x\.com)\/(?:[^\s"'<>]+\/)*status\/(\d+)/i);
   if (twitterMatch && twitterMatch[1]) {
     keys.add(`twitter:${twitterMatch[1]}`);
+  }
+  for (const tag of tags) {
+    const twitterTagMatch = tag.match(/^(?:twitter|twitter_id|x_id):(\d+)$/i);
+    if (twitterTagMatch && twitterTagMatch[1]) keys.add(`twitter:${twitterTagMatch[1]}`);
   }
 
   // 3. Bluesky Post ID
@@ -46,28 +53,79 @@ export function extractAllSeriesKeys(post, site = '') {
     keys.add(`bsky:${bskyMatch[1]}`);
   }
 
-  // 4. Fanbox / Fantia / Patreon / Pawchive
-  const fanboxMatch = source.match(/(?:fanbox\.cc\/(?:@[\w-]+|[\w-]+)\/posts\/|fanbox\/user\/\d+\/post\/)(\d+)/i);
+  // 4. Fanbox (supports subdomain https://creator.fanbox.cc/posts/123, path https://fanbox.cc/@creator/posts/123, pixiv.fanbox.cc, etc.)
+  const fanboxMatch = source.match(/(?:(?:[\w.-]+\.)?fanbox\.(?:cc|pixiv\.net)\/(?:@[\w.-]+\/|[\w.-]+\/)?posts?\/|fanbox\/user\/\d+\/post\/)(\d+)/i);
   if (fanboxMatch && fanboxMatch[1]) keys.add(`fanbox:${fanboxMatch[1]}`);
+  for (const tag of tags) {
+    const fbTagMatch = tag.match(/^(?:fanbox|fanbox_id):(\d+)$/i);
+    if (fbTagMatch && fbTagMatch[1]) keys.add(`fanbox:${fbTagMatch[1]}`);
+  }
 
-  const fantiaMatch = source.match(/(?:fantia\.jp\/posts\/|fantia\/user\/\d+\/post\/)(\d+)/i);
+  // 5. Fantia
+  const fantiaMatch = source.match(/(?:fantia\.jp\/(?:[^\s"'<>]*\/)?posts?\/|fantia\/user\/\d+\/post\/)(\d+)/i);
   if (fantiaMatch && fantiaMatch[1]) keys.add(`fantia:${fantiaMatch[1]}`);
+  for (const tag of tags) {
+    const fantiaTagMatch = tag.match(/^(?:fantia|fantia_id):(\d+)$/i);
+    if (fantiaTagMatch && fantiaTagMatch[1]) keys.add(`fantia:${fantiaTagMatch[1]}`);
+  }
 
-  const patreonMatch = source.match(/(?:patreon\.com\/posts\/(?:[\w-]+-)?|patreon\/user\/\d+\/post\/)(\d+)/i);
+  // 6. Patreon
+  const patreonMatch = source.match(/(?:patreon\.com\/(?:[^\s"'<>]*\/)?posts\/(?:[\w-]+-)?|patreon\/user\/\d+\/post\/)(\d+)/i);
   if (patreonMatch && patreonMatch[1]) keys.add(`patreon:${patreonMatch[1]}`);
+  for (const tag of tags) {
+    const patreonTagMatch = tag.match(/^(?:patreon|patreon_id):(\d+)$/i);
+    if (patreonTagMatch && patreonTagMatch[1]) keys.add(`patreon:${patreonTagMatch[1]}`);
+  }
 
+  // 7. Pawchive
   const pawchiveMatch = source.match(/pawchive\.pw\/([a-z0-9_-]+)\/user\/(\d+)\/post\/(\d+)/i);
   if (pawchiveMatch) {
     keys.add(`pawchive:${pawchiveMatch[1]}:${pawchiveMatch[2]}:${pawchiveMatch[3]}`);
     keys.add(`${pawchiveMatch[1]}:${pawchiveMatch[3]}`);
   }
 
+  // 8. Ci-en
+  const cienMatch = source.match(/ci-en\.(?:dlsite\.com|net)\/(?:[^\s"'<>]*\/)?article\/(\d+)/i);
+  if (cienMatch && cienMatch[1]) keys.add(`cien:${cienMatch[1]}`);
+
+  // 9. Gumroad
+  const gumroadMatch = source.match(/gumroad\.com\/(?:l\/|posts\/)([a-zA-Z0-9_-]+)/i);
+  if (gumroadMatch && gumroadMatch[1]) keys.add(`gumroad:${gumroadMatch[1]}`);
+
+  // 10. Boosty
+  const boostyMatch = source.match(/boosty\.to\/[^/]+\/posts\/([a-zA-Z0-9-]+)/i);
+  if (boostyMatch && boostyMatch[1]) keys.add(`boosty:${boostyMatch[1]}`);
+
+  // 11. Subscribestar
+  const subStarMatch = source.match(/subscribestar\.(?:adult|com)\/posts\/(\d+)/i);
+  if (subStarMatch && subStarMatch[1]) keys.add(`subscribestar:${subStarMatch[1]}`);
+
+  // 12. Aipictors
+  const aipictorsMatch = source.match(/aipictors\.com\/works\/(\d+)/i);
+  if (aipictorsMatch && aipictorsMatch[1]) keys.add(`aipictors:${aipictorsMatch[1]}`);
+
+  // 13. Weibo
+  const weiboMatch = source.match(/(?:weibo\.(?:com|cn)\/(?:[^\s"'<>]*\/)?status\/|weibo\.com\/\d+\/)([a-zA-Z0-9]+)/i);
+  if (weiboMatch && weiboMatch[1]) keys.add(`weibo:${weiboMatch[1]}`);
+
+  // 14. Lofter
+  const lofterMatch = source.match(/([\w-]+)\.lofter\.com\/post\/([a-zA-Z0-9_]+)/i);
+  if (lofterMatch && lofterMatch[1] && lofterMatch[2]) keys.add(`lofter:${lofterMatch[1]}:${lofterMatch[2]}`);
+
+  // 15. Bilibili
+  const bilibiliMatch = source.match(/(?:bilibili\.com\/opus\/|t\.bilibili\.com\/)(\d+)/i);
+  if (bilibiliMatch && bilibiliMatch[1]) keys.add(`bilibili:${bilibiliMatch[1]}`);
+
+  // 16. Plurk
+  const plurkMatch = source.match(/plurk\.com\/p\/([a-zA-Z0-9]+)/i);
+  if (plurkMatch && plurkMatch[1]) keys.add(`plurk:${plurkMatch[1]}`);
+
   if (post.seriesKey) keys.add(post.seriesKey);
   if (Array.isArray(post.allSeriesKeys)) {
     post.allSeriesKeys.forEach(k => { if (k) keys.add(k); });
   }
 
-  // 5. Booru Parent/Child relation (a reliable bridge between different sources)
+  // 17. Booru Parent/Child relation (a reliable bridge between different sources)
   const rawParentId = post.parentId || post.parent_id;
   if (rawParentId && String(rawParentId) !== '0' && String(rawParentId) !== 'null') {
     keys.add(`parent:${siteId}:${String(rawParentId)}`);
@@ -80,10 +138,20 @@ export function extractAllSeriesKeys(post, site = '') {
     keys.add(`parent:${siteId}:${rootId}`);
   }
 
-  // 6. Pool - series/chapters
+  // 18. Pool - series/chapters/collections
   const poolId = post.poolId || post.pool_id;
   if (poolId) {
     keys.add(`pool:${siteId}:${String(poolId)}`);
+  }
+  if (Array.isArray(post.pools)) {
+    post.pools.forEach(p => {
+      const pid = (p && typeof p === 'object') ? (p.id || p.pool_id) : p;
+      if (pid) keys.add(`pool:${siteId}:${String(pid)}`);
+    });
+  }
+  for (const tag of tags) {
+    const poolTagMatch = tag.match(/^(?:pool|series):(\d+)$/i);
+    if (poolTagMatch && poolTagMatch[1]) keys.add(`pool:${siteId}:${poolTagMatch[1]}`);
   }
 
   return Array.from(keys);
@@ -95,13 +163,23 @@ export function extractAllSeriesKeys(post, site = '') {
 export function extractSeriesKey(post, site = '') {
   const keys = extractAllSeriesKeys(post, site);
   if (keys.length === 0) return null;
-  // Priority: pixiv -> parent -> pawchive -> twitter -> others
+  // Priority: pixiv -> fanbox -> fantia -> patreon -> parent -> pool -> pawchive -> twitter -> others
   const pixivKey = keys.find(k => k.startsWith('pixiv:'));
   if (pixivKey) return pixivKey;
+  const fanboxKey = keys.find(k => k.startsWith('fanbox:'));
+  if (fanboxKey) return fanboxKey;
+  const fantiaKey = keys.find(k => k.startsWith('fantia:'));
+  if (fantiaKey) return fantiaKey;
+  const patreonKey = keys.find(k => k.startsWith('patreon:'));
+  if (patreonKey) return patreonKey;
   const parentKey = keys.find(k => k.startsWith('parent:'));
   if (parentKey) return parentKey;
+  const poolKey = keys.find(k => k.startsWith('pool:'));
+  if (poolKey) return poolKey;
   const pawchiveKey = keys.find(k => k.startsWith('pawchive:'));
   if (pawchiveKey) return pawchiveKey;
+  const twitterKey = keys.find(k => k.startsWith('twitter:'));
+  if (twitterKey) return twitterKey;
   return keys[0];
 }
 
