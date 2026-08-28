@@ -1,5 +1,5 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
@@ -84,7 +84,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
         const posts = data?.post || (Array.isArray(data) ? data : []);
         if (Array.isArray(posts) && posts.length > 0) {
           return await Promise.all(posts.map(async item => {
-            const rawTags = (item.tags || '').split(' ').filter(Boolean);
+            const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
             const fileUrl = item.file_url || '';
             const sampleUrl = item.sample_url || fileUrl;
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
@@ -165,7 +165,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
       const ratingMatch = titleAttr.match(/rating:(\w+)/);
       if (ratingMatch) rating = ratingMatch[1].charAt(0).toLowerCase();
 
-      const cleanTitleTags = titleAttr.replace(/score:-?\d+/g, '').replace(/rating:\w+/g, '').trim();
+      const cleanTitleTags = decodeHtmlEntities(titleAttr.replace(/score:-?\d+/g, '').replace(/rating:\w+/g, '')).trim();
       const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
 
       const fileUrl = thumbUrl.replace('/thumbnails/', '/images/').replace('thumbnail_', '');

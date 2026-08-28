@@ -1,5 +1,5 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
@@ -69,7 +69,7 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
     const posts = data?.post || (Array.isArray(data) ? data : []);
 
     return await Promise.all(posts.map(async item => {
-      const rawTags = (item.tags || '').split(' ').filter(Boolean);
+      const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
         fileUrl = `https://img.xbooru.com/images/${item.directory}/${item.image}`;
@@ -188,7 +188,7 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
     const posts = data?.post || (Array.isArray(data) ? data : []);
 
     return await Promise.all(posts.map(async item => {
-      const rawTags = (item.tags || '').split(' ').filter(Boolean);
+      const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
         fileUrl = `https://hypnohub.net/images/${item.directory}/${item.image}`;
@@ -300,7 +300,7 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
     const posts = Array.isArray(data) ? data : [];
 
     return await Promise.all(posts.map(async item => {
-      const rawTags = (item.tags || '').split(' ').filter(Boolean);
+      const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
         fileUrl = `https://tbib.org/images/${item.directory}/${item.image}`;

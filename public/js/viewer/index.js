@@ -766,10 +766,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (extBadge) extBadge.textContent = (currentPost.fileExt || 'JPG').toUpperCase();
 
     // Author display
-    const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
+    const primaryArtistTag = (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0) ? currentPost.tagDetails.artist[0] : '';
+    const rawAuthor = primaryArtistTag || currentPost.author || '';
     const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
     if (authorName && authorName.trim()) {
-      const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      const cleanAuthorTag = (primaryArtistTag || authorName.split(',')[0]).trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
       const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
 
       if (viewerAuthorBadge && viewerAuthorText) {

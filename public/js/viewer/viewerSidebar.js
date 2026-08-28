@@ -53,22 +53,23 @@ export const CATEGORY_CONFIG = {
 };
 
 const META_KEYWORDS = new Set([
-  'highres', 'absurdres', 'superabsurdres', 'incredibly_absurdres', 'huge_filesize', 'bad_id',
-  'bad_link', 'bad_pixiv_id', 'bad_twitter_id', 'duplicate', 'source_request', 'tagme',
-  'check_my_note', 'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail',
-  'patreon_reward', 'patreon_logo', 'fantia', 'fanbox', 'skeb', 'lowres', 'downscaled',
-  'text', 'signature', 'username', 'official_art', 'scan', 'wallpaper', 'cover', 'sound',
+  'highres', 'high_res', 'absurdres', 'superabsurdres', 'incredibly_absurdres', 'huge_filesize', 'large_filesize', 'bad_id',
+  'bad_link', 'bad_pixiv_id', 'bad_twitter_id', 'duplicate', 'source_request', 'source_needed', 'tagme',
+  'check_commentary', 'check_my_note', 'lossless', 'third-party_edit', 'watermark', 'sample', 'thumbnail',
+  'patreon_reward', 'patreon_logo', 'fantia', 'fanbox', 'skeb', 'lowres', 'low_res', 'downscaled',
+  'text', 'signature', 'username', 'artist_name', 'character_name', 'official_art', 'scan', 'wallpaper', 'cover', 'sound',
   'audio', 'video', 'animated', 'animation', 'ugoira', 'web_address', 'commission',
   'translated', 'translation_request', 'commentary', 'commentary_request', 'partial_commentary',
   'typeset', 'annotated', 'translated_subtitles', 'subtitled', 'voiced', 'no_sound',
   'spoiler', 'epilepsy_warning', 'dated', 'resized', 'pixel_art', 'vector', 'transparent_background',
-  'white_background', 'simple_background', 'monochrome', 'greyscale', 'comic', 'manga', '4k', 'hd', '60fps'
+  'white_background', 'simple_background', 'monochrome', 'greyscale', 'comic', 'manga', '4k', 'hd', '60fps', 'bad_aspect_ratio'
 ]);
 
 const NON_CHARACTER_PAREN_SUFFIXES = new Set([
-  'artist', 'creator', 'circle', 'studio', 'series', 'game', 'anime', 'manga',
-  'vtuber', 'novel', 'comic', 'franchise', 'project', 'medium', 'style', 'cosplay',
-  'person', 'artwork', 'parody', 'group', 'company', 'label', 'universe'
+  'artist', 'creator', 'circle', 'studio', 'animator', 'mangaka', 'illustrator', 'doujin_circle', 'cosplayer',
+  'series', 'game', 'anime', 'manga', 'vtuber', 'novel', 'comic', 'franchise', 'project', 'visual_novel', 'light_novel', 'web_novel', 'mobile_game', 'company', 'label', 'universe',
+  'medium', 'style', 'artwork', 'parody', 'group',
+  'fruit', 'food', 'animal', 'vehicle', 'object', 'clothing', 'instrument', 'weapon', 'anatomy', 'pose', 'hair', 'eyes', 'color', 'background', 'furniture', 'disambiguation'
 ]);
 
 export function getTagCategory(tag, tagDetails, author = '') {

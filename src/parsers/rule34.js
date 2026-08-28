@@ -1,6 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { BROWSER_USER_AGENT } from '../config/constants.js';
-import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
@@ -103,7 +103,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           const data = safeJsonParse(text, null);
           if (Array.isArray(data) && data.length > 0) {
             const mappedPosts = await Promise.all(data.map(async item => {
-              const rawTags = (item.tags || '').split(' ').filter(Boolean);
+              const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
               let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
               const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
               let sampleUrl = item.sample_url || fileUrl;
@@ -220,7 +220,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         const ratingMatch = titleAttr.match(/rating:(\w+)/i);
         if (ratingMatch) rating = ratingMatch[1].charAt(0).toLowerCase();
 
-        const cleanTitleTags = titleAttr.replace(/score:-?\d+/gi, '').replace(/rating:\w+/gi, '').trim();
+        const cleanTitleTags = decodeHtmlEntities(titleAttr.replace(/score:-?\d+/gi, '').replace(/rating:\w+/gi, '')).trim();
         const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
 
         const isGif = rawTags.includes('gif');
@@ -345,7 +345,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           const ratingMatch = titleAttr.match(/rating:(\w+)/i);
           if (ratingMatch) rating = ratingMatch[1].charAt(0).toLowerCase();
 
-          const cleanTitleTags = titleAttr.replace(/score:-?\d+/gi, '').replace(/rating:\w+/gi, '').trim();
+          const cleanTitleTags = decodeHtmlEntities(titleAttr.replace(/score:-?\d+/gi, '').replace(/rating:\w+/gi, '')).trim();
           const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
 
           const isGif = rawTags.includes('gif');
@@ -504,7 +504,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
     }
 
     const posts = await Promise.all(rawAttrsList.map(async attrs => {
-      const rawTags = (attrs.tags || '').split(' ').filter(Boolean);
+      const rawTags = decodeHtmlEntities(attrs.tags || '').split(' ').filter(Boolean);
       const fileName = attrs.file_name || '';
       let { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(attrs.file_url, fileName, rawTags);
       if (fileName.toLowerCase().endsWith('.mp4') || fileName.toLowerCase().endsWith('.webm')) {

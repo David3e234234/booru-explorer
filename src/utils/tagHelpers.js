@@ -539,3 +539,15 @@ export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilt
 
   return tagList.join(' ');
 }
+
+export function decodeHtmlEntities(str) {
+  if (!str || typeof str !== 'string') return '';
+  return str
+    .replace(/&#039;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+}

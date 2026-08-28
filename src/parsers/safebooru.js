@@ -1,5 +1,5 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 
@@ -72,7 +72,7 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
   const posts = Array.isArray(data) ? data : (data?.post || []);
 
   return await Promise.all(posts.map(async item => {
-    const rawTags = (item.tags || '').split(' ').filter(Boolean);
+    const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
     let fileUrl = item.file_url || '';
     if (fileUrl.startsWith('//')) fileUrl = 'https:' + fileUrl;
     else if (fileUrl.startsWith('/')) fileUrl = 'https://safebooru.org' + fileUrl;
