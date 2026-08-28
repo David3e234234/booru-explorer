@@ -364,10 +364,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   }
 
   function getProcessedPosts() {
+    let postsList = (state.posts || []).filter(p => p && !isPostDisliked(p.id));
     if (!state.videoDurationSort || state.videoDurationSort === 'none') {
-      return state.posts;
+      return postsList;
     }
-    const postsCopy = [...state.posts];
+    const postsCopy = [...postsList];
     if (state.videoDurationSort === 'longest') {
       return postsCopy.sort((a, b) => (b.duration || 0) - (a.duration || 0));
     } else if (state.videoDurationSort === 'shortest') {

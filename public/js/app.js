@@ -201,6 +201,9 @@ async function init() {
     onTagSelect: (tag) => {
       autocompleteInstance.selectTag(tag, true);
     },
+    onDislikeToggle: () => {
+      galleryInstance.renderGallery(false, { preserveScroll: true });
+    },
     showToast
   });
 
@@ -796,7 +799,8 @@ async function performSearch(reset = false, options = {}) {
         return numIdB - numIdA;
       });
 
-      const pageSlice = uniquePosts.slice(0, currentLimit);
+      const filteredPosts = uniquePosts.filter(p => p && p.id && !state.dislikedIds.has(p.id));
+      const pageSlice = filteredPosts.slice(0, currentLimit);
 
       if (reset) {
         state.posts = pageSlice;
@@ -1208,14 +1212,15 @@ async function performSearch(reset = false, options = {}) {
 
     if (res.success && Array.isArray(res.posts)) {
       state.lastSearchFailed = false;
+      const validPosts = res.posts.filter(p => p && p.id && !state.dislikedIds.has(p.id));
       if (reset) {
-        state.posts = res.posts;
+        state.posts = validPosts;
       } else {
         const existingIds = new Set(state.posts.map(p => p.id));
-        const newPosts = res.posts.filter(p => !existingIds.has(p.id));
+        const newPosts = validPosts.filter(p => !existingIds.has(p.id));
         state.posts.push(...newPosts);
       }
-      state.hasMore = res.posts.length > 0;
+      state.hasMore = validPosts.length > 0;
     } else {
       if (reset) state.posts = [];
       state.hasMore = false;

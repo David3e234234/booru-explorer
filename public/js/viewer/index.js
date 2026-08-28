@@ -14,7 +14,7 @@ function isVideoUrl(url) {
   return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.mkv') || clean.endsWith('.avi');
 }
 
-export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect }) {
+export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle }) {
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
   const btnClose = document.getElementById('btnCloseViewer');
@@ -1252,7 +1252,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   async function handleDislikeToggle() {
     if (!currentPost) return;
     haptic(20);
-    const isDislikedNow = toggleDislikeLocally(currentPost);
+    const targetPost = currentPost;
+    const isDislikedNow = toggleDislikeLocally(targetPost);
     if (btnDislikeModal) btnDislikeModal.classList.toggle('active', isDislikedNow);
     if (btnDislikeSidebar) {
       btnDislikeSidebar.classList.toggle('active', isDislikedNow);
@@ -1261,8 +1262,16 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
     showToast(isDislikedNow ? t('vw.postHiddenToast', 'Пост скрыт (рекомендации обновлены)') : t('vw.unhiddenToast', 'Скрытие отменено'));
+    
+    if (isDislikedNow) {
+      state.posts = (state.posts || []).filter(p => p && p.id !== targetPost.id);
+    }
+    if (typeof onDislikeToggle === 'function') {
+      onDislikeToggle(targetPost, isDislikedNow);
+    }
+
     try {
-      await toggleDislikeApi(currentPost);
+      await toggleDislikeApi(targetPost);
     } catch (e) {}
   }
 
