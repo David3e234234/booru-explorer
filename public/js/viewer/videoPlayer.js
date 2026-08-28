@@ -413,19 +413,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     const descText = message || t('vp.unsupportedDesc', 'Браузер не поддерживает воспроизведение этого видео ({ext}). Вы можете скачать файл на устройство и открыть в плеере (VLC, MPV).').replace('{ext}', ext);
     const dlBtnText = t('vp.downloadFile', 'Скачать видео');
 
-    const canTranscode = currentSource !== 'transcode' && !currentPost.isArchive;
-    const transcodeBtnHtml = canTranscode ? `
-      <button type="button" class="btn-transcode-video-fallback" style="margin-right: 8px; background-color: var(--accent-primary, #f97316); color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-          <path d="M3 3v5h5"/>
-          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-          <path d="M16 21h5v-5"/>
-        </svg>
-        <span>${t('vp.fixTranscode', 'Починить через FFmpeg (H.264)')}</span>
-      </button>
-    ` : '';
-
     unsupportedFallbackEl.innerHTML = `
       <div class="video-unsupported-icon">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -436,8 +423,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       </div>
       <div class="video-unsupported-title">${titleText}</div>
       <div class="video-unsupported-desc">${descText}</div>
-      <div class="video-unsupported-actions" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center;">
-        ${transcodeBtnHtml}
+      <div class="video-unsupported-actions">
         <button type="button" class="btn-download-video-fallback">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -457,33 +443,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       });
     }
 
-    const transcodeBtn = unsupportedFallbackEl.querySelector('.btn-transcode-video-fallback');
-    if (transcodeBtn) {
-      transcodeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        startServerTranscode(directMedia || proxyMedia);
-      });
-    }
-
     videoContainer.appendChild(unsupportedFallbackEl);
     setProgress(0, t('vp.unsupportedShort', 'Формат видео не поддерживается. Скачайте файл.'), false, true);
-  };
-
-  const startServerTranscode = (targetUrl) => {
-    if (abortRef.current) abortRef.current.abort();
-    isPreCaching = false;
-    currentSource = 'transcode';
-    if (unsupportedFallbackEl) {
-      unsupportedFallbackEl.remove();
-      unsupportedFallbackEl = null;
-      video.style.display = '';
-    }
-    const rawTarget = currentPost.fileUrl || currentPost.sampleUrl || targetUrl || '';
-    const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(rawTarget)}`;
-    if (switchBtn) switchBtn.textContent = t('vp.directCdn', 'Прямой CDN');
-    setProgress(0, t('vp.serverTranscoding', 'Транскодирование на сервере в H.264/AAC...'), true);
-    video.src = transcodeUrl;
-    safePlay();
   };
 
   const startPreCaching = async (targetUrl) => {
@@ -695,12 +656,12 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       safePlay();
       setTimeout(hideStatus, 1200);
     } catch (err) {
-      // User-initiated aborts or source switches must not fall through to FFmpeg
+      // User-initiated aborts or source switches must not fall through
       if (err.name === 'AbortError' && !internalAbortReason) return;
       clearTimeout(loadTimeout);
-      console.warn('[Client Remux Error, fallback to FFmpeg transcode]', err);
+      console.warn('[Client Remux Error]', err);
       isPreCaching = false;
-      startServerTranscode(proxyMedia || directMedia);
+      showUnsupportedVideoFallback(t('vp.hwCodecFailed', 'Кодек видео не поддерживается браузером. Скачайте файл для просмотра.'));
     }
   };
 
@@ -708,8 +669,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     const cleanExt = (currentPost.fileExt || '').toLowerCase();
     if (state.settings?.enableJsDemuxing !== false && (cleanExt === 'mp4' || cleanExt === 'm4v' || (!cleanExt && directMedia.includes('.mp4')))) {
       startClientRemux(proxyMedia);
-    } else if (cleanExt !== 'zip' && cleanExt !== 'rar') {
-      startServerTranscode(proxyMedia || directMedia);
     } else {
       showUnsupportedVideoFallback();
     }
@@ -755,8 +714,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       safePlay();
     } else if (currentSource === 'proxy' || directMedia.startsWith('/api/')) {
       handleProxySourceFailure();
-    } else if (currentSource === 'remux') {
-      startServerTranscode(proxyMedia || directMedia);
     } else {
       showUnsupportedVideoFallback();
     }
