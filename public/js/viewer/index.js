@@ -290,6 +290,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (resBadge) resBadge.textContent = (activeItem.width && activeItem.height) ? `${activeItem.width} × ${activeItem.height}` : t('vw.original', 'Оригинал');
       if (extBadge) extBadge.textContent = (activeItem.fileExt || 'JPG').toUpperCase();
 
+      renderSidebarContent(activeItem || currentPost);
       loadMediaItem(activeItem);
     }
 
@@ -786,6 +787,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           }
         });
 
+        // Verify that the parsed body contains visible text or links/media
+        const textContent = doc.body.textContent.trim();
+        const hasMediaOrLinks = Boolean(doc.body.querySelector('a, img, video, audio'));
+        if (!textContent && !hasMediaOrLinks) {
+          return '';
+        }
+
         return doc.body.innerHTML;
       } catch {}
     }
@@ -807,7 +815,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const contentEl = document.getElementById('viewerPostContent');
     if (!section || !contentEl) return;
 
-    const rawContent = post?.content || post?.description || '';
+    const rawContent = post?.content || post?.description || currentPost?.content || currentPost?.description || '';
     if (!rawContent || !String(rawContent).trim()) {
       section.style.display = 'none';
       contentEl.innerHTML = '';
