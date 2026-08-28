@@ -284,7 +284,7 @@ export const SITES = {
     supportsDateFilter: true,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#3b82f6',
     description: 'Золотой стандарт каталогизации аниме и манга артов'
   },
@@ -300,7 +300,7 @@ export const SITES = {
     supportsDateFilter: false,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#ef4444',
     description: 'Крупнейший архив 3D/2D видеоанимаций в высоком качестве'
   },
@@ -316,7 +316,7 @@ export const SITES = {
     supportsDateFilter: false,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#ec4899',
     description: 'Высочайшее качество, сканы артбуков и обои без сжатия'
   },
@@ -332,7 +332,7 @@ export const SITES = {
     supportsDateFilter: true,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#10b981',
     description: 'Чистый безопасный каталог без откровенного 18+ контента'
   },
@@ -348,7 +348,7 @@ export const SITES = {
     supportsDateFilter: false,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#f97316',
     description: 'Аниме-обои и иллюстрации сверхвысокого разрешения (включая 18+)'
   },
@@ -364,7 +364,7 @@ export const SITES = {
     supportsDateFilter: true,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#aae5a4',
     description: 'Огромный архив 18+ артов, анимаций и комиксов'
   },
@@ -380,7 +380,7 @@ export const SITES = {
     supportsDateFilter: true,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#6366f1',
     description: 'Каталог артов (поддержка API ключа в Настройках)'
   },
@@ -396,7 +396,7 @@ export const SITES = {
     supportsDateFilter: true,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#f43f5e',
     description: '18+ хентай-архив на движке DAPI с быстрой выдачей'
   },
@@ -412,7 +412,7 @@ export const SITES = {
     supportsDateFilter: true,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'views', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'views', 'top', 'random', 'following', 'recommended'],
     accentColor: '#8b5cf6',
     description: 'Тематический Booru-архив с открытым DAPI каталогом'
   },
@@ -428,7 +428,7 @@ export const SITES = {
     supportsDateFilter: false,
     supportsShapesFilter: true,
     supportsContentHiding: true,
-    supportedCategories: ['new', 'top', 'recommended', 'random'],
+    supportedCategories: ['new', 'top', 'random', 'following', 'recommended'],
     accentColor: '#f59e0b',
     description: 'Крупнейший агрегатор изображений (~19 млн артов), синхронизируется с другими Booru'
   },
@@ -444,7 +444,7 @@ export const SITES = {
     supportsDateFilter: false,
     supportsShapesFilter: false,
     supportsContentHiding: false,
-    supportedCategories: ['new', 'recommended', 'random'],
+    supportedCategories: ['new', 'random', 'following'],
     accentColor: '#f97316',
     description: 'Архив платных подписок (Fanbox, Patreon, Fantia) с поиском по авторам и названиям'
   }

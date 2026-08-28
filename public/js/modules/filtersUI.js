@@ -22,7 +22,7 @@ export function updateSiteCapabilitiesUI(siteId) {
   const currentSiteId = siteId || state.currentSite;
 
   // 1. Categories & navigation tabs (desktop & mobile)
-  const supportedCats = new Set(caps.supportedCategories || ['new', 'views', 'top', 'recommended', 'random']);
+  const supportedCats = new Set(caps.supportedCategories || ['new', 'views', 'top', 'random', 'following', 'recommended']);
   
   document.querySelectorAll('.nav-tab').forEach(tab => {
     const cat = tab.dataset.category;
