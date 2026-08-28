@@ -141,7 +141,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       // For Pawchive posts, resolve full metadata (content, complete attachments, clean tags)
       const targetPostId = currentPost.id;
       const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^pawchive_/, '').split('_')[0];
-      const reqUrl = `/api/resolve-post?site=pawchive&postId=${encodeURIComponent(cleanOrigId)}&seriesKey=${encodeURIComponent(currentPost.seriesKey || '')}&postUrl=${encodeURIComponent(currentPost.postUrl || currentPost.source || '')}`;
+      const targetService = currentPost.service || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[1] : '') || '';
+      const targetUser = currentPost.user || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[2] : '') || '';
+      const reqUrl = `/api/resolve-post?site=pawchive&postId=${encodeURIComponent(cleanOrigId)}&service=${encodeURIComponent(targetService)}&user=${encodeURIComponent(targetUser)}&seriesKey=${encodeURIComponent(currentPost.seriesKey || '')}&postUrl=${encodeURIComponent(currentPost.postUrl || currentPost.source || '')}`;
       
       activeResolvePromise = fetch(reqUrl)
         .then(r => r.json())
@@ -157,6 +159,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
                 if (item) item.content = resolved.content;
               });
             }
+            renderSidebarContent(currentPost);
             changed = true;
           }
 
@@ -1469,6 +1472,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (!authorName || !authorName.trim()) return;
 
     const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+    const authorSite = currentPost.site || 'danbooru';
+    const postService = currentPost.service || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[1] : '') || '';
+    const postUser = currentPost.user || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[2] : '') || '';
     haptic([15, 25, 15]);
 
     try {
@@ -1476,7 +1482,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         name: cleanAuthorTag,
         displayName: authorName,
         previewUrl: currentPost.previewUrl || currentPost.sampleUrl || '',
-        site: currentPost.site || 'danbooru'
+        site: authorSite,
+        service: postService,
+        user: postUser
       });
 
       if (res.success) {
@@ -1487,7 +1495,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             name: cleanAuthorTag,
             displayName: authorName,
             previewUrl: currentPost.previewUrl || currentPost.sampleUrl || '',
-            site: currentPost.site || 'danbooru',
+            site: authorSite,
+            service: postService,
+            user: postUser,
             createdAt: new Date().toISOString()
           });
           showToast(t('vw.authorAdded', 'Автор {name} добавлен в любимые').replace('{name}', authorName));

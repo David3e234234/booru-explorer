@@ -712,20 +712,20 @@ async function performSearch(reset = false, options = {}) {
       // Collect author queries for search
       const authorQueries = [];
       for (const author of followedAuthors) {
-        const rawName = String(author.name || '').trim();
-        if (!rawName) continue;
-        const cleanName = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').trim();
-        if (!cleanName) continue;
+        const rawName = String(author.displayName || author.name || '').trim();
+        const fallbackName = String(author.name || '').trim();
+        const cleanName = (fallbackName || rawName).replace(/^@/, '').replace(/^pixiv:/i, '').trim();
+        if (!cleanName && !rawName) continue;
 
         let queryTag = '';
         if (state.currentSite === 'pawchive') {
           if (author.service && author.user) {
             queryTag = `service:${author.service} user:${author.user}`;
           } else {
-            queryTag = `artist:${cleanName}`;
+            queryTag = `artist:${cleanName || rawName}`;
           }
         } else {
-          queryTag = cleanName;
+          queryTag = cleanName || rawName;
         }
 
         if (queryTag && !authorQueries.includes(queryTag)) {

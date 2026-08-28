@@ -204,20 +204,20 @@ router.get('/resolve-post', async (req, res) => {
       let targetUser = user || null;
 
       if (seriesKey) {
-        const pawchiveMatch = String(seriesKey).match(/^pawchive:([^:]+):([^:]+):(\d+)$/);
+        const pawchiveMatch = String(seriesKey).match(/^pawchive:([^:]+):([^:]+):([^:]+)$/);
         if (pawchiveMatch) {
-          targetService = pawchiveMatch[1];
-          targetUser = pawchiveMatch[2];
-          targetPostId = pawchiveMatch[3];
+          targetService = targetService || pawchiveMatch[1];
+          targetUser = targetUser || pawchiveMatch[2];
+          targetPostId = targetPostId || pawchiveMatch[3];
         }
       }
 
-      if (!targetPostId && postUrl) {
-        const urlMatch = String(postUrl).match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
+      if (postUrl) {
+        const urlMatch = String(postUrl).match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/([^/?#]+)/);
         if (urlMatch) {
-          targetService = urlMatch[1];
-          targetUser = urlMatch[2];
-          targetPostId = urlMatch[3];
+          targetService = targetService || urlMatch[1];
+          targetUser = targetUser || urlMatch[2];
+          targetPostId = targetPostId || urlMatch[3];
         }
       }
 
