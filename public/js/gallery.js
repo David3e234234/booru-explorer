@@ -964,27 +964,30 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   async function handleDislikeClick(post, card) {
     toggleDislikeLocally(post);
 
-    // Collapse the card right away but defer the removal until the undo window closes,
-    // so an accidental hide can be reverted from the snackbar
+    // Fade out smoothly and remove from DOM after the transition (280ms)
+    // so the grid reflows immediately without leaving a blank hole
     card.classList.add('card-hiding');
     let removed = false;
     const removalTimer = setTimeout(() => {
       removed = true;
-      state.posts = state.posts.filter(p => p.id !== post.id);
-      // Full re-render instead of surgical DOM removal: patching indices of remaining
-      // placeholders and mounted cards is error-prone and let hidden posts resurface
-      // when scrolling back through stale chunks of state.displayedPosts
+      state.posts = (state.posts || []).filter(p => p.id !== post.id);
       renderGallery(false, { preserveScroll: true });
-    }, HIDE_UNDO_WINDOW_MS);
+    }, 280);
 
     showActionToast(
       t('gal.postHidden', 'Пост скрыт из рекомендаций'),
       t('gal.undoHide', 'Отменить'),
       async () => {
-        if (removed) return;
         clearTimeout(removalTimer);
         toggleDislikeLocally(post);
-        card.classList.remove('card-hiding');
+        if (removed) {
+          if (!state.posts.some(p => p.id === post.id)) {
+            state.posts.unshift(post);
+          }
+          renderGallery(false, { preserveScroll: true });
+        } else {
+          card.classList.remove('card-hiding');
+        }
         showToast(t('gal.hideUndone', 'Скрытие отменено'));
         try {
           await toggleDislikeApi(post);

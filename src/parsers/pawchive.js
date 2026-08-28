@@ -262,9 +262,35 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
   // has a cover image / playable slides.
   const archiveFields = buildArchiveFields(archiveAttachments);
 
-  const rawContent = item.content || item.body || item.text || item.description || item.caption ||
-                     item.post?.content || item.post?.body || item.post?.text || item.post?.description ||
-                     item.substring || item.post?.substring || '';
+  let rawContent = item.content || item.body || item.text || item.description || item.caption ||
+                   item.post?.content || item.post?.body || item.post?.text || item.post?.description ||
+                   item.substring || item.post?.substring || '';
+
+  // Extract external embeds and download links (e.g. MEGA, Google Drive, Vimeo, YouTube, Patreon links)
+  const rawEmbed = item.embed || item.post?.embed || null;
+  let embedUrl = (rawEmbed && typeof rawEmbed === 'object' && rawEmbed.url) ? String(rawEmbed.url).trim() : '';
+  let embedSubject = (rawEmbed && typeof rawEmbed === 'object' && rawEmbed.subject) ? String(rawEmbed.subject).trim() : '';
+  let embedDescription = (rawEmbed && typeof rawEmbed === 'object' && rawEmbed.description) ? String(rawEmbed.description).trim() : '';
+
+  const rawEmbeds = Array.isArray(item.embeds) ? item.embeds : (Array.isArray(item.post?.embeds) ? item.post.embeds : []);
+  const extraEmbedLinks = [];
+  if (embedUrl) {
+    extraEmbedLinks.push({ url: embedUrl, subject: embedSubject || embedUrl });
+  }
+  for (const emb of rawEmbeds) {
+    if (emb && emb.url && !extraEmbedLinks.some(e => e.url === emb.url)) {
+      extraEmbedLinks.push({ url: String(emb.url).trim(), subject: emb.subject ? String(emb.subject).trim() : String(emb.url).trim() });
+    }
+  }
+
+  if (extraEmbedLinks.length > 0) {
+    const embedLines = extraEmbedLinks
+      .filter(e => e.url && !rawContent.includes(e.url))
+      .map(e => `<p><a href="${e.url}" target="_blank" rel="noopener noreferrer">🔗 ${e.subject || e.url}</a></p>`);
+    if (embedLines.length > 0) {
+      rawContent = rawContent ? `${rawContent}\n${embedLines.join('\n')}` : embedLines.join('\n');
+    }
+  }
 
   // Archive-only post: no playable slides, the viewer unpacks archiveUrls on open
   if (mediaFiles.length === 0) {
@@ -305,6 +331,10 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
       canFetchAlbum: false,
       createdAt,
       isAi,
+      embedUrl: embedUrl || '',
+      embedSubject: embedSubject || '',
+      embedDescription: embedDescription || '',
+      embed: rawEmbed || null,
       ...archiveFields
     };
   }
@@ -416,6 +446,10 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     canFetchAlbum: hasMultiple,
     createdAt,
     isAi,
+    embedUrl: embedUrl || '',
+    embedSubject: embedSubject || '',
+    embedDescription: embedDescription || '',
+    embed: rawEmbed || null,
     ...archiveFields
   };
 }
