@@ -850,14 +850,27 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           }
         });
 
+        // Clean up empty or redundant container blocks (<p><br></p>, <p>&nbsp;</p>, etc.)
+        const blockTags = doc.body.querySelectorAll('p, div');
+        blockTags.forEach(block => {
+          const text = block.textContent.replace(/[\s\u00a0\u200B\u200C\u200D\uFEFF]+/g, '');
+          const hasMedia = Boolean(block.querySelector('img, video, audio, a[href]'));
+          if (!text && !hasMedia) {
+            block.remove();
+          }
+        });
+
         // Verify that the parsed body contains visible text or links/media
-        const textContent = doc.body.textContent.trim();
-        const hasMediaOrLinks = Boolean(doc.body.querySelector('a, img, video, audio'));
+        const textContent = doc.body.textContent.replace(/[\s\u00a0\u200B\u200C\u200D\uFEFF]+/g, '');
+        const hasMediaOrLinks = Boolean(doc.body.querySelector('a[href], img, video, audio'));
         if (!textContent && !hasMediaOrLinks) {
           return '';
         }
 
-        return doc.body.innerHTML;
+        // Clean redundant consecutive <br> tags
+        let inner = doc.body.innerHTML;
+        inner = inner.replace(/(?:<br\s*\/?>\s*){3,}/gi, '<br><br>');
+        return inner.trim();
       } catch {}
     }
 
@@ -868,9 +881,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
 
-    const escaped = escapeHtml(trimmed);
+    // Normalize unicode whitespace
+    const cleanText = trimmed.replace(/[\u00a0\u200B\u200C\u200D\uFEFF]/g, ' ');
+    if (!cleanText.trim()) return '';
+
+    const escaped = escapeHtml(cleanText);
     const urlPattern = /(https?:\/\/[^\s<>"']+)/g;
-    return escaped.replace(urlPattern, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+    const withLinks = escaped.replace(urlPattern, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+    const normalizedNewlines = withLinks.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n{3,}/g, '\n\n');
+    return normalizedNewlines.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
   }
 
   function renderSidebarContent(post) {

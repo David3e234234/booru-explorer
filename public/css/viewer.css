@@ -1232,8 +1232,9 @@
   max-height: 240px;
   overflow-y: auto;
   word-break: break-word;
+  overflow-wrap: break-word;
   user-select: text;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 .viewer-post-content a {
@@ -1248,11 +1249,15 @@
 }
 
 .viewer-post-content p {
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
 }
 
 .viewer-post-content p:last-child {
   margin-bottom: 0;
+}
+
+.viewer-post-content br + br {
+  display: none;
 }
 
 /* Categorized tag cloud */
