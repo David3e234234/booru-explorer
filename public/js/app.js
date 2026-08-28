@@ -691,6 +691,144 @@ async function performSearch(reset = false, options = {}) {
     return;
   }
 
+  // "Following" / Subscriptions feed (posts strictly from followed favorite authors)
+  if (state.currentCategory === 'following') {
+    try {
+      state.isLoading = true;
+      const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+      if (btnRefreshSearch) btnRefreshSearch.classList.add('refreshing');
+
+      const followedAuthors = Array.isArray(state.favoriteAuthors) ? state.favoriteAuthors : [];
+      const currentLimit = state.settings.itemsPerPage || state.limit || 100;
+
+      if (followedAuthors.length === 0) {
+        state.posts = [];
+        state.hasMore = false;
+        galleryInstance.renderGallery(false);
+        renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+        return;
+      }
+
+      // Collect author queries for search
+      const authorQueries = [];
+      for (const author of followedAuthors) {
+        const rawName = String(author.name || '').trim();
+        if (!rawName) continue;
+        const cleanName = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').trim();
+        if (!cleanName) continue;
+
+        let queryTag = '';
+        if (state.currentSite === 'pawchive') {
+          if (author.service && author.user) {
+            queryTag = `service:${author.service} user:${author.user}`;
+          } else {
+            queryTag = `artist:${cleanName}`;
+          }
+        } else {
+          queryTag = cleanName;
+        }
+
+        if (queryTag && !authorQueries.includes(queryTag)) {
+          authorQueries.push(queryTag);
+        }
+      }
+
+      if (authorQueries.length === 0) {
+        state.posts = [];
+        state.hasMore = false;
+        galleryInstance.renderGallery(false);
+        renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+        return;
+      }
+
+      const searchQueryStr = state.searchTags.length > 0 ? state.searchTags.join(' ').trim() : '';
+      const fetchTasks = [];
+
+      for (const aQuery of authorQueries) {
+        const combinedTags = searchQueryStr ? `${aQuery} ${searchQueryStr}` : aQuery;
+        fetchTasks.push(
+          fetchPosts({
+            site: state.currentSite,
+            tags: combinedTags,
+            page: state.page,
+            limit: Math.min(40, currentLimit),
+            category: 'new',
+            pawchiveService: state.currentSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
+            aiFilter: state.aiFilter,
+            ratingFilter: state.ratingFilter,
+            typeFilter: state.typeFilter,
+            ageFilter: state.ageFilter,
+            dateFilter: state.dateFilter,
+            hideFurry: state.hideFurry,
+            hidePregnant: state.hidePregnant,
+            hideLgbt: state.hideLgbt,
+            bustCache: options.bustCache || false
+          }).catch(() => null)
+        );
+      }
+
+      const results = await Promise.allSettled(fetchTasks);
+      if (seq !== searchSeq) return;
+
+      let allFetchedPosts = [];
+      for (const res of results) {
+        if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts)) {
+          allFetchedPosts.push(...res.value.posts);
+        }
+      }
+
+      // Deduplicate posts
+      const seenIds = new Set();
+      const uniquePosts = [];
+      for (const post of allFetchedPosts) {
+        if (!post || !post.id || seenIds.has(post.id)) continue;
+        seenIds.add(post.id);
+        uniquePosts.push(post);
+      }
+
+      // Sort by newest first (created_at date or numeric originalId)
+      uniquePosts.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+        const numIdA = Number(String(a.originalId || a.id).replace(/\D/g, '')) || 0;
+        const numIdB = Number(String(b.originalId || b.id).replace(/\D/g, '')) || 0;
+        return numIdB - numIdA;
+      });
+
+      const pageSlice = uniquePosts.slice(0, currentLimit);
+
+      if (reset) {
+        state.posts = pageSlice;
+      } else {
+        const existingIds = new Set(state.posts.map(p => p.id));
+        const newPosts = pageSlice.filter(p => !existingIds.has(p.id));
+        state.posts.push(...newPosts);
+      }
+      state.hasMore = pageSlice.length > 0;
+
+      galleryInstance.renderGallery(!reset);
+      renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+    } catch (err) {
+      console.error('Ошибка загрузки ленты подписок:', err);
+      if (seq !== searchSeq) return;
+      if (reset) {
+        state.posts = [];
+      } else {
+        state.page--;
+        state.hasMore = true;
+      }
+      galleryInstance.renderGallery(false);
+    } finally {
+      if (seq === searchSeq) {
+        state.isLoading = false;
+        const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+        if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
+      }
+    }
+    return;
+  }
+
   // "For you" recommendations section
   if (state.currentCategory === 'recommended') {
     try {

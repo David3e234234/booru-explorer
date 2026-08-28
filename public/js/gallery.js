@@ -430,6 +430,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       } else if (state.currentCategory === 'favorites') {
         if (emptyTitle) emptyTitle.textContent = t('gal.emptyFavoritesTitle', 'В избранном пока пусто');
         if (emptyDesc) emptyDesc.textContent = t('gal.emptyFavoritesDesc', 'Нажмите на значок закладки на любой карточке, чтобы сохранить пост.');
+      } else if (state.currentCategory === 'following') {
+        if (emptyTitle) emptyTitle.textContent = t('gal.emptyFollowingTitle', 'В подписках пока пусто');
+        if (emptyDesc) emptyDesc.textContent = t('gal.emptyFollowingDesc', 'Добавляйте авторов в избранное на карточках постов или в разделе «Авторы», чтобы видеть их новые публикации.');
       } else {
         if (emptyTitle) emptyTitle.textContent = t('gal.noResultsTitle', 'Ничего не найдено');
         if (emptyDesc) emptyDesc.textContent = t('gal.noResultsDesc', 'Попробуйте изменить теги поиска или переключить Booru-источник.');

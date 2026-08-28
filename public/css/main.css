@@ -277,6 +277,13 @@ select option {
   flex-shrink: 0;
 }
 
+.nav-tabs-personal {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  margin-right: 2px;
+}
+
 .header-status-info {
   display: flex;
   align-items: center;

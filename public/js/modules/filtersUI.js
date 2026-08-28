@@ -299,6 +299,7 @@ export function updateCategoryTabsUI() {
       'views': t('cat.views', 'Просматриваемые'),
       'top': t('cat.top', 'По рейтингу'),
       'popular': t('cat.popular', 'Популярное'),
+      'following': t('cat.following', 'Подписки'),
       'recommended': t('cat.recommended', 'Для вас'),
       'random': t('cat.random', 'Случайно'),
       'favorites': t('cat.favorites', 'Избранное')
