@@ -251,6 +251,7 @@ export const DEFAULT_SETTINGS = {
   konachanPassword: '',
   yandereLogin: '',
   yanderePassword: '',
+  pawchiveSession: '',
   globalProxy: '',
   danbooruProxy: '',
   gelbooruProxy: '',

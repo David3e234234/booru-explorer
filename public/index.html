@@ -1107,6 +1107,23 @@
                   <input type="text" id="inputYanderePassword" class="input-setting" placeholder="Yande.re пароль" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.yanderePassword.placeholder">
                 </div>
               </div>
+
+              <!-- 6. Pawchive -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-pawchive">Pawchive.pw</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestPawchiveAuth" title="Проверить авторизацию">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                    <a href="https://pawchive.pw/" target="_blank" rel="noopener" class="api-key-link" title="Открыть Pawchive" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  </span>
+                </div>
+                <div class="api-keys-grid">
+                  <input type="password" id="inputPawchiveSession" class="input-setting" placeholder="Pawchive Session Token (cookie: session=...)" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.pawchiveSession.placeholder">
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2215,6 +2232,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=11.6"></script>
+  <script type="module" src="js/app.js?v=11.7"></script>
 </body>
 </html>

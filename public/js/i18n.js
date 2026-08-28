@@ -338,6 +338,7 @@ Object.assign(en, {
   'settings.konachanPassword.placeholder': 'Konachan Password',
   'settings.yandereLogin.placeholder': 'Yande.re Username',
   'settings.yanderePassword.placeholder': 'Yande.re Password',
+  'settings.pawchiveSession.placeholder': 'Pawchive Session Token (cookie: session=...)',
 
   'settings.proxyServers': 'Server HTTP / HTTPS / SOCKS5 proxies per site:',
   'settings.proxyServersHint': 'Specify a proxy (e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:1080) for each board individually to bypass IP bans or hosting blocks. If no proxy is set for a site, the global fallback proxy or direct connection is used.',

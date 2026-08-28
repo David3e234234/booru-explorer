@@ -22,6 +22,7 @@ function getAuthHeaders(includeJson = false) {
       konachanPassword: state.settings.konachanPassword || '',
       yandereLogin: state.settings.yandereLogin || '',
       yanderePassword: state.settings.yanderePassword || '',
+      pawchiveSession: state.settings.pawchiveSession || '',
       globalProxy: state.settings.globalProxy || '',
       danbooruProxy: state.settings.danbooruProxy || '',
       gelbooruProxy: state.settings.gelbooruProxy || '',

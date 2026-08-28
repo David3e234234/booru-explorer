@@ -27,7 +27,7 @@ const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
   'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'hideZipPosts', 'customSources',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
-  'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword',
+  'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession',
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
   'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy'
 ];
@@ -161,8 +161,88 @@ async function runAuthTest(site, creds, settings = {}) {
     return { success: false, message: `Rule34: ошибка сайта (HTTP ${res.status})` };
   }
 
+  if (site === 'pawchive') {
+    const rawSession = String(creds.session || settings.pawchiveSession || '').trim();
+    if (!rawSession) return { success: false, message: 'Введите Pawchive Session Token' };
+    const sessionToken = rawSession.replace(/^session=/i, '').trim();
+    let res;
+    try {
+      res = await fetchSafe('https://pawchive.pw/api/v1/account/favorites', { 
+        timeout: AUTH_TEST_TIMEOUT_MS, 
+        headers: {
+          'Cookie': `session=${sessionToken}`
+        },
+        settings, 
+        site: 'pawchive' 
+      });
+    } catch {
+      return { success: false, message: 'Pawchive недоступен' };
+    }
+    if (res.status === 401 || res.status === 403) return { success: false, message: 'Pawchive: неверный Session Token или сессия истекла' };
+    if (res.ok) {
+      const data = await readJsonSafe(res);
+      const count = Array.isArray(data) ? data.length : 0;
+      return { success: true, message: `Pawchive: сессия активна (в избранном постов: ${count})` };
+    }
+    return { success: false, message: `Pawchive: ошибка сайта (HTTP ${res.status})` };
+  }
+
   return { success: false, message: 'Для этого сайта нет данных для проверки' };
 }
+
+// GET /api/resolve-post - resolves full metadata (content, complete attachments, tags) for a post
+router.get('/resolve-post', async (req, res) => {
+  try {
+    const { site, id, postId, service, user, seriesKey, postUrl } = req.query;
+    const clientAuth = parseClientAuth(req);
+    const settings = { ...getSettings(), ...clientAuth };
+    const targetSite = site || 'pawchive';
+
+    if (targetSite === 'pawchive') {
+      let targetPostId = postId || id || '';
+      let targetService = service || null;
+      let targetUser = user || null;
+
+      if (seriesKey) {
+        const pawchiveMatch = String(seriesKey).match(/^pawchive:([^:]+):([^:]+):(\d+)$/);
+        if (pawchiveMatch) {
+          targetService = pawchiveMatch[1];
+          targetUser = pawchiveMatch[2];
+          targetPostId = pawchiveMatch[3];
+        }
+      }
+
+      if (!targetPostId && postUrl) {
+        const urlMatch = String(postUrl).match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
+        if (urlMatch) {
+          targetService = urlMatch[1];
+          targetUser = urlMatch[2];
+          targetPostId = urlMatch[3];
+        }
+      }
+
+      if (targetPostId) {
+        targetPostId = String(targetPostId).replace(/^pawchive_/, '').split('_')[0];
+      }
+
+      if (!targetPostId) {
+        return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      }
+
+      const aiTagsList = settings.aiTags || [];
+      const resolvedPost = await fetchPawchivePostById(targetPostId, targetService, targetUser, aiTagsList, settings);
+      if (resolvedPost) {
+        return res.json({ success: true, post: resolvedPost });
+      }
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    }
+
+    return res.status(400).json({ success: false, message: 'Сайт не поддерживается для resolve-post' });
+  } catch (err) {
+    logError('ResolvePost', 'Ошибка разрешения данных поста', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 router.post('/sites/auth-test', async (req, res) => {
   try {

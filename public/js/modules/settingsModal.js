@@ -240,6 +240,7 @@ export function applySettingsToUIAndState(s) {
   const inputKonachanPassword = document.getElementById('inputKonachanPassword');
   const inputYandereLogin = document.getElementById('inputYandereLogin');
   const inputYanderePassword = document.getElementById('inputYanderePassword');
+  const inputPawchiveSession = document.getElementById('inputPawchiveSession');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
@@ -260,6 +261,7 @@ export function applySettingsToUIAndState(s) {
   if (s.konachanPassword && inputKonachanPassword) inputKonachanPassword.value = s.konachanPassword;
   if (s.yandereLogin && inputYandereLogin) inputYandereLogin.value = s.yandereLogin;
   if (s.yanderePassword && inputYanderePassword) inputYanderePassword.value = s.yanderePassword;
+  if (s.pawchiveSession && inputPawchiveSession) inputPawchiveSession.value = s.pawchiveSession;
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -616,6 +618,7 @@ export function openSettingsModal() {
   const inputKonachanPassword = document.getElementById('inputKonachanPassword');
   const inputYandereLogin = document.getElementById('inputYandereLogin');
   const inputYanderePassword = document.getElementById('inputYanderePassword');
+  const inputPawchiveSession = document.getElementById('inputPawchiveSession');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
@@ -672,6 +675,7 @@ export function openSettingsModal() {
   if (inputKonachanPassword) inputKonachanPassword.value = state.settings.konachanPassword || '';
   if (inputYandereLogin) inputYandereLogin.value = state.settings.yandereLogin || '';
   if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
+  if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -1010,6 +1014,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         const inputKonachanPassword = document.getElementById('inputKonachanPassword');
         const inputYandereLogin = document.getElementById('inputYandereLogin');
         const inputYanderePassword = document.getElementById('inputYanderePassword');
+        const inputPawchiveSession = document.getElementById('inputPawchiveSession');
 
         if (inputRule34ApiKey) inputRule34ApiKey.value = state.settings.rule34ApiKey || '';
         if (inputRule34UserId) inputRule34UserId.value = state.settings.rule34UserId || '';
@@ -1021,6 +1026,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         if (inputKonachanPassword) inputKonachanPassword.value = state.settings.konachanPassword || '';
         if (inputYandereLogin) inputYandereLogin.value = state.settings.yandereLogin || '';
         if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
+        if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
         tempBlacklist = state.settings.blacklist || [];
         tempAiTags = state.settings.aiTags || [];
         tempCurvyTags = state.settings.curvyTags || [...DEFAULT_CURVY_TAGS];
@@ -1100,7 +1106,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     { btnId: 'btnTestGelbooruAuth', site: 'gelbooru', fields: { apiKey: 'inputGelbooruApiKey', userId: 'inputGelbooruUserId' } },
     { btnId: 'btnTestDanbooruAuth', site: 'danbooru', fields: { apiKey: 'inputDanbooruApiKey', login: 'inputDanbooruLogin' } },
     { btnId: 'btnTestKonachanAuth', site: 'konachan', fields: { login: 'inputKonachanLogin', password: 'inputKonachanPassword' } },
-    { btnId: 'btnTestYandereAuth', site: 'yandere', fields: { login: 'inputYandereLogin', password: 'inputYanderePassword' } }
+    { btnId: 'btnTestYandereAuth', site: 'yandere', fields: { login: 'inputYandereLogin', password: 'inputYanderePassword' } },
+    { btnId: 'btnTestPawchiveAuth', site: 'pawchive', fields: { session: 'inputPawchiveSession' } }
   ];
   authTestConfigs.forEach(({ btnId, site, fields }) => {
     const btn = document.getElementById(btnId);
@@ -1326,6 +1333,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputKonachanPassword = document.getElementById('inputKonachanPassword');
       const inputYandereLogin = document.getElementById('inputYandereLogin');
       const inputYanderePassword = document.getElementById('inputYanderePassword');
+      const inputPawchiveSession = document.getElementById('inputPawchiveSession');
 
       const checkTgEnabled = document.getElementById('checkTelegramBackupEnabled');
       const inputTgToken = document.getElementById('inputTelegramBotToken');
@@ -1366,6 +1374,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         konachanPassword: inputKonachanPassword ? inputKonachanPassword.value.trim() : '',
         yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : '',
         yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : '',
+        pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : '',
         globalProxy: document.getElementById('inputGlobalProxy')?.value.trim() || '',
         danbooruProxy: document.getElementById('inputDanbooruProxy')?.value.trim() || '',
         gelbooruProxy: document.getElementById('inputGelbooruProxy')?.value.trim() || '',
@@ -1433,6 +1442,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputKonachanPassword = document.getElementById('inputKonachanPassword');
       const inputYandereLogin = document.getElementById('inputYandereLogin');
       const inputYanderePassword = document.getElementById('inputYanderePassword');
+      const inputPawchiveSession = document.getElementById('inputPawchiveSession');
       const selectPreviewQuality = document.getElementById('selectPreviewQuality');
       const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
       const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
@@ -1457,6 +1467,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (inputKonachanPassword) inputKonachanPassword.value = '';
       if (inputYandereLogin) inputYandereLogin.value = '';
       if (inputYanderePassword) inputYanderePassword.value = '';
+      if (inputPawchiveSession) inputPawchiveSession.value = '';
       const proxyInputIds = [
         'inputGlobalProxy', 'inputDanbooruProxy', 'inputGelbooruProxy', 'inputRule34Proxy',
         'inputYandereProxy', 'inputKonachanProxy', 'inputSafebooruProxy', 'inputRule34videoProxy',

@@ -32,6 +32,36 @@ function isPawchiveArchive(nameOrPath) {
   return PAWCHIVE_ARCHIVE_EXTS.has(ext);
 }
 
+export function getPawchiveAuthHeaders(settings = {}) {
+  const headers = {};
+  const rawSession = String(settings.pawchiveSession || '').trim();
+  if (rawSession) {
+    const token = rawSession.replace(/^session=/i, '').trim();
+    if (token) {
+      headers['Cookie'] = `session=${token}`;
+    }
+  }
+  return headers;
+}
+
+export async function getPawchiveCreatorProfile(service, userId, settings = {}) {
+  if (!service || !userId) return null;
+  try {
+    const authHeaders = getPawchiveAuthHeaders(settings);
+    const res = await fetchSafe(`https://pawchive.pw/api/v1/${service}/user/${userId}/profile`, {
+      timeout: 8000,
+      headers: authHeaders,
+      settings,
+      site: 'pawchive'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.name) return data;
+    }
+  } catch {}
+  return null;
+}
+
 function buildArchiveFields(archiveAttachments) {
   if (!archiveAttachments || archiveAttachments.length === 0) return {};
   return {
@@ -238,7 +268,7 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
       hasSound: false,
       author: authorName,
       title: item.title || '',
-      content: item.content || '',
+      content: item.content || item.substring || '',
       tags: extractedTags,
       tagDetails,
       score: 0,
@@ -296,7 +326,7 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
       hasSound: false,
       author: authorName,
       title: item.title || '',
-      content: item.content || '',
+      content: item.content || item.substring || '',
       tags: extractedTags,
       tagDetails,
       score: 0,
@@ -341,7 +371,7 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     hasSound: mainMedia.hasSound,
     author: authorName,
     title: item.title || '',
-    content: item.content || '',
+    content: item.content || item.substring || '',
     tags: extractedTags,
     tagDetails,
     score: 0,
@@ -372,11 +402,16 @@ export async function fetchPawchivePostById(postId, service, user, aiTagsList = 
   try {
     let targetService = service;
     let targetUser = user;
+    const authHeaders = getPawchiveAuthHeaders(settings);
 
     if (!targetService || !targetUser) {
-      const { list } = await getCreatorsDirectory(settings);
-      // If service or user missing, try searching
-      const resSearch = await fetchSafe(`https://pawchive.pw/api/v1/posts?q=${encodeURIComponent(postId)}`, { timeout: 10000, settings, site: 'pawchive' });
+      // If service or user missing, try searching by post ID in posts search
+      const resSearch = await fetchSafe(`https://pawchive.pw/api/v1/posts?q=${encodeURIComponent(postId)}`, {
+        timeout: 10000,
+        headers: authHeaders,
+        settings,
+        site: 'pawchive'
+      });
       if (resSearch.ok) {
         const found = await resSearch.json();
         const p = Array.isArray(found) ? found.find(x => String(x.id) === String(postId)) : null;
@@ -390,13 +425,28 @@ export async function fetchPawchivePostById(postId, service, user, aiTagsList = 
     if (!targetService || !targetUser) return null;
 
     const url = `https://pawchive.pw/api/v1/${targetService}/user/${targetUser}/post/${postId}`;
-    const res = await fetchSafe(url, { timeout: 10000, settings, site: 'pawchive' });
+    const res = await fetchSafe(url, {
+      timeout: 12000,
+      headers: authHeaders,
+      settings,
+      site: 'pawchive'
+    });
     if (!res.ok) return null;
     const item = await res.json();
     if (!item || !item.id) return null;
 
-    const { map: creatorMap } = await getCreatorsDirectory(settings);
-    return await normalizePawchivePost(item, creatorMap, null, aiTagsList, settings);
+    // Use cached creatorMap if already loaded; otherwise fetch single creator profile quickly
+    let creatorMap = creatorsCache?.map || null;
+    let resolvedCreator = null;
+
+    if (!creatorMap || !creatorMap.has(`${item.service}:${item.user}`)) {
+      const profile = await getPawchiveCreatorProfile(item.service, item.user, settings);
+      if (profile) {
+        resolvedCreator = profile;
+      }
+    }
+
+    return await normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList, settings);
   } catch (err) {
     logError('Pawchive', `Failed to fetch post ${postId}`, err);
     return null;
@@ -420,6 +470,7 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
 
   // Parse query tags for creator or service filters
   const tokens = (tags || '').split(/\s+/).filter(Boolean);
+  let idFilter = null;
   let serviceFilter = null;
   let userFilter = null;
   let authorQuery = null;
@@ -427,7 +478,9 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
 
   for (const token of tokens) {
     const lower = token.toLowerCase();
-    if (lower.startsWith('service:')) {
+    if (lower.startsWith('id:') || lower.startsWith('post:')) {
+      idFilter = token.replace(/^(?:id|post):/i, '').trim();
+    } else if (lower.startsWith('service:')) {
       serviceFilter = token.substring(8).trim().toLowerCase();
     } else if (lower.startsWith('user:')) {
       userFilter = token.substring(5).trim();
@@ -444,6 +497,12 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     serviceFilter = dropdownService;
   }
 
+  // If a direct post ID was queried (e.g. id:12499927), fetch and return the post directly
+  if (idFilter) {
+    const singlePost = await fetchPawchivePostById(idFilter, serviceFilter, userFilter, aiTagsList, settings);
+    return singlePost ? [singlePost] : [];
+  }
+
   // Attempt author resolution if authorQuery is given or if single keyword might match a creator.
   // The selected platform is passed as a preference: the same author name can exist
   // on several services with different content.
@@ -458,12 +517,13 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
   }
 
   const qPart = searchKeywords.length > 0 ? `q=${encodeURIComponent(searchKeywords.join(' '))}&` : '';
+  const authHeaders = getPawchiveAuthHeaders(settings);
 
   // First connect attempt after idle often times out on flaky links, so retry once
   const fetchJsonPage = async (apiUrl) => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const res = await fetchSafe(apiUrl, { timeout: 15000, settings, site: 'pawchive' });
+        const res = await fetchSafe(apiUrl, { timeout: 15000, headers: authHeaders, settings, site: 'pawchive' });
         if (!res.ok) return null;
         const data = safeJsonParse(await res.text(), []);
         return Array.isArray(data) ? data : [];

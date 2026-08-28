@@ -203,6 +203,33 @@ export async function sendBooruLike(site, postId, isLike, settings) {
           }
         }).catch(() => {});
       }
+    } else if (site === 'pawchive' && settings.pawchiveSession) {
+      const token = String(settings.pawchiveSession).replace(/^session=/i, '').trim();
+      if (token) {
+        let service = null;
+        let creatorId = null;
+        let realPostId = String(postId).replace(/^pawchive_/, '').split('_')[0];
+        if (String(postId).includes(':')) {
+          const parts = String(postId).split(':');
+          if (parts.length === 4 && parts[0] === 'pawchive') {
+            service = parts[1];
+            creatorId = parts[2];
+            realPostId = parts[3];
+          }
+        }
+        if (service && creatorId && realPostId) {
+          const method = isLike ? 'POST' : 'DELETE';
+          await fetchSafe(`https://pawchive.pw/api/v1/favorites/post/${service}/${creatorId}/${realPostId}`, {
+            method,
+            headers: {
+              'Cookie': `session=${token}`,
+              'User-Agent': BROWSER_USER_AGENT
+            },
+            settings,
+            site: 'pawchive'
+          }).catch(() => {});
+        }
+      }
     }
   } catch (err) {
     logError('LikeSync', `Ошибка отправки лайка на ${site}:`, err);

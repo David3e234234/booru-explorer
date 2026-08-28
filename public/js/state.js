@@ -128,6 +128,7 @@ export const state = {
     konachanPassword: '',
     yandereLogin: '',
     yanderePassword: '',
+    pawchiveSession: '',
     deepFetchPages: 2,
     prioritizeUserTags: false,
     enableJsDemuxing: true,

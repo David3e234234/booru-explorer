@@ -33,5 +33,6 @@
   "gelbooruApiKey": "",
   "rule34UserId": "",
   "rule34ApiKey": "",
+  "pawchiveSession": "",
   "customProxyUrl": ""
 }

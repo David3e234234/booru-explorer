@@ -137,6 +137,66 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           return data;
         })
         .catch(() => null);
+    } else if (currentPost?.site === 'pawchive' && (currentPost.originalId || currentPost.id)) {
+      // For Pawchive posts, resolve full metadata (content, complete attachments, clean tags)
+      const targetPostId = currentPost.id;
+      const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^pawchive_/, '').split('_')[0];
+      const reqUrl = `/api/resolve-post?site=pawchive&postId=${encodeURIComponent(cleanOrigId)}&seriesKey=${encodeURIComponent(currentPost.seriesKey || '')}&postUrl=${encodeURIComponent(currentPost.postUrl || currentPost.source || '')}`;
+      
+      activeResolvePromise = fetch(reqUrl)
+        .then(r => r.json())
+        .then(data => {
+          if (!data || !data.success || !data.post || currentPost?.id !== targetPostId) return null;
+          const resolved = data.post;
+          let changed = false;
+
+          if (resolved.content && resolved.content !== currentPost.content) {
+            currentPost.content = resolved.content;
+            if (Array.isArray(currentPost.albumItems)) {
+              currentPost.albumItems.forEach(item => {
+                if (item) item.content = resolved.content;
+              });
+            }
+            changed = true;
+          }
+
+          if (resolved.title && !currentPost.title) {
+            currentPost.title = resolved.title;
+            changed = true;
+          }
+
+          if (resolved.author && resolved.author !== currentPost.author && (!currentPost.author || currentPost.author.startsWith('user_'))) {
+            currentPost.author = resolved.author;
+            changed = true;
+          }
+
+          if (resolved.tagDetails && Object.keys(resolved.tagDetails).length > 0) {
+            currentPost.tagDetails = resolved.tagDetails;
+            changed = true;
+          }
+
+          if (Array.isArray(resolved.albumItems) && resolved.albumItems.length > (currentPost.albumItems?.length || 1)) {
+            currentPost.albumItems = resolved.albumItems;
+            currentPost.albumCount = resolved.albumItems.length;
+            currentPost.isAlbum = true;
+            currentPost.hasChildren = true;
+            changed = true;
+          }
+
+          if (Array.isArray(resolved.archiveUrls) && resolved.archiveUrls.length > (currentPost.archiveUrls?.length || 0)) {
+            currentPost.isArchive = true;
+            currentPost.archiveUrls = resolved.archiveUrls;
+            currentPost.archiveNames = resolved.archiveNames;
+            currentPost.archiveSizes = resolved.archiveSizes;
+            changed = true;
+          }
+
+          if (changed) {
+            renderViewerPost(true);
+          }
+          return data;
+        })
+        .catch(() => null);
     } else {
       activeResolvePromise = null;
     }
