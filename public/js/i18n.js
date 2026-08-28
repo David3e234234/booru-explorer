@@ -882,6 +882,8 @@ Object.assign(en, {
   'dl.cancel': 'Cancel download',
   'dl.clear': 'Clear completed',
   'dl.toastSaved': 'Archive "{name}" saved to device',
-  'dl.toastStarted': 'Download "{name}" started in background'
+  'dl.toastStarted': 'Download "{name}" started in background',
+
+  'viewer.contentHeading': 'Description'
 });
 

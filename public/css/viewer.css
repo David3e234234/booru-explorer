@@ -1220,6 +1220,41 @@
   word-break: break-all;
 }
 
+/* Post Content / Description */
+.viewer-post-content {
+  background-color: var(--bg-surface-elevated);
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  max-height: 240px;
+  overflow-y: auto;
+  word-break: break-word;
+  user-select: text;
+  white-space: pre-wrap;
+}
+
+.viewer-post-content a {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
+.viewer-post-content a:hover {
+  filter: brightness(1.15);
+}
+
+.viewer-post-content p {
+  margin: 0 0 8px 0;
+}
+
+.viewer-post-content p:last-child {
+  margin-bottom: 0;
+}
+
 /* Categorized tag cloud */
 .tags-cloud {
   display: flex;

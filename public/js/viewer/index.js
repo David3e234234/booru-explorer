@@ -754,6 +754,77 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       });
     }
 
+  function formatSafePostContent(rawText) {
+    if (!rawText || typeof rawText !== 'string') return '';
+    const trimmed = rawText.trim();
+    if (!trimmed) return '';
+
+    const isHtml = /<[a-z][\s\S]*>/i.test(trimmed);
+
+    if (isHtml) {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(trimmed, 'text/html');
+        const forbidden = doc.querySelectorAll('script, iframe, object, embed, style, form, input, button, svg, meta, link');
+        forbidden.forEach(el => el.remove());
+
+        const allElements = doc.body.querySelectorAll('*');
+        allElements.forEach(el => {
+          Array.from(el.attributes).forEach(attr => {
+            if (attr.name.startsWith('on') || attr.name.toLowerCase() === 'style') {
+              el.removeAttribute(attr.name);
+            }
+          });
+          if (el.tagName === 'A') {
+            const href = el.getAttribute('href') || '';
+            if (/^(javascript:|data:|vbscript:)/i.test(href)) {
+              el.removeAttribute('href');
+            } else {
+              el.setAttribute('target', '_blank');
+              el.setAttribute('rel', 'noopener noreferrer');
+            }
+          }
+        });
+
+        return doc.body.innerHTML;
+      } catch {}
+    }
+
+    const escapeHtml = (str) => str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+    const escaped = escapeHtml(trimmed);
+    const urlPattern = /(https?:\/\/[^\s<>"']+)/g;
+    return escaped.replace(urlPattern, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+  }
+
+  function renderSidebarContent(post) {
+    const section = document.getElementById('viewerSidebarContentSection');
+    const contentEl = document.getElementById('viewerPostContent');
+    if (!section || !contentEl) return;
+
+    const rawContent = post?.content || post?.description || '';
+    if (!rawContent || !String(rawContent).trim()) {
+      section.style.display = 'none';
+      contentEl.innerHTML = '';
+      return;
+    }
+
+    const safeHtml = formatSafePostContent(String(rawContent));
+    if (!safeHtml || !safeHtml.trim()) {
+      section.style.display = 'none';
+      contentEl.innerHTML = '';
+      return;
+    }
+
+    contentEl.innerHTML = safeHtml;
+    section.style.display = 'block';
+  }
+
   function renderViewerPost(skipMediaLoad = false) {
     if (!currentPost) return;
 
@@ -921,6 +992,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     });
 
     renderSidebarArchives(currentPost);
+    renderSidebarContent(currentPost);
     renderAlbumFilmstrip();
 
     if (!skipMediaLoad) {
