@@ -10,7 +10,11 @@ const CREATORS_CACHE_TTL = 3600 * 1000; // 1 hour
 
 const PAWCHIVE_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp']);
 const PAWCHIVE_VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts']);
-const PAWCHIVE_ARCHIVE_EXTS = new Set(['zip', 'rar', '7z']);
+const PAWCHIVE_ARCHIVE_EXTS = new Set([
+  'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz',
+  'psd', 'clip', 'blend', 'sai', 'sai2', 'pdf', 'txt', 'doc', 'docx',
+  'mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac'
+]);
 
 // The global feed (/api/v1/posts) has no server-side service filter, so a
 // platform filter is applied by scanning a window of raw pages client-side.
@@ -22,13 +26,25 @@ const PAWCHIVE_FALLBACK_SERVICES = ['patreon', 'fanbox'];
 
 function isPawchiveVisualMedia(nameOrPath) {
   if (!nameOrPath) return false;
-  const ext = nameOrPath.split('?')[0].split('.').pop()?.toLowerCase();
-  return PAWCHIVE_IMAGE_EXTS.has(ext) || PAWCHIVE_VIDEO_EXTS.has(ext);
+  const str = String(nameOrPath).toLowerCase();
+  if (str.includes('vimeocdn.com') || str.includes('ytimg.com') || str.includes('twimg.com') || str.includes('imgur.com') || str.includes('thumbnail') || str.includes('preview')) {
+    return true;
+  }
+  const clean = str.split('?')[0].split('#')[0];
+  const ext = clean.includes('.') ? clean.split('.').pop() : '';
+  if (PAWCHIVE_IMAGE_EXTS.has(ext) || PAWCHIVE_VIDEO_EXTS.has(ext)) {
+    return true;
+  }
+  if (PAWCHIVE_ARCHIVE_EXTS.has(ext)) {
+    return false;
+  }
+  return !ext || ext.length > 5;
 }
 
 function isPawchiveArchive(nameOrPath) {
   if (!nameOrPath) return false;
-  const ext = nameOrPath.split('?')[0].split('.').pop()?.toLowerCase();
+  const clean = String(nameOrPath).toLowerCase().split('?')[0].split('#')[0];
+  const ext = clean.includes('.') ? clean.split('.').pop() : '';
   return PAWCHIVE_ARCHIVE_EXTS.has(ext);
 }
 
@@ -188,28 +204,25 @@ export async function resolvePawchiveAuthor(authorQuery, preferredService = null
 export async function normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList = [], settings = {}) {
   if (!item || !item.id) return null;
 
-  // Filter attachments to valid visual media (exclude zips, psds, etc.)
+  // Filter attachments to valid visual media (exclude real archives)
   const validAttachments = Array.isArray(item.attachments)
-    ? item.attachments.filter(a => a && a.path && isPawchiveVisualMedia(a.name || a.path))
+    ? item.attachments.filter(a => a && a.path && (isPawchiveVisualMedia(a.name || a.path) || !isPawchiveArchive(a.name || a.path)))
     : [];
 
   // Collect all non-visual downloadable attachments (zips, clips, psds, blends, etc.)
   const allRawAttachments = Array.isArray(item.attachments) ? [...item.attachments] : [];
-  if (item.file && item.file.path && !isPawchiveVisualMedia(item.file.name || item.file.path)) {
+  if (item.file && item.file.path && isPawchiveArchive(item.file.name || item.file.path)) {
     if (!allRawAttachments.some(a => a.path === item.file.path)) {
       allRawAttachments.unshift(item.file);
     }
   }
 
-  // Non-visual downloadable attachments
-  const archiveAttachments = allRawAttachments.filter(a => a && a.path && !isPawchiveVisualMedia(a.name || a.path));
+  // Non-visual downloadable attachments (strictly matching archive formats)
+  const archiveAttachments = allRawAttachments.filter(a => a && a.path && isPawchiveArchive(a.name || a.path));
 
   const mediaFiles = [];
-  if (item.file && item.file.path) {
-    const isCoverMedia = isPawchiveVisualMedia(item.file.name || item.file.path) || Boolean(item.file.preview_only || item.has_full === false);
-    if (isCoverMedia) {
-      mediaFiles.push(item.file);
-    }
+  if (item.file && item.file.path && !isPawchiveArchive(item.file.name || item.file.path)) {
+    mediaFiles.push(item.file);
   }
 
   for (const att of validAttachments) {
@@ -302,7 +315,10 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     const isVid = isVideoMediaUrl(rawFileName) || /\.(mp4|webm|mov|m4v)$/i.test(rawFileName || m.path);
     const isGif = (rawFileName || m.path || '').toLowerCase().endsWith('.gif');
     const isPrevOnly = Boolean(m.preview_only || item.has_full === false);
-    const fileExt = (rawFileName || m.path || '').split('.').pop()?.toLowerCase() || (isVid ? 'mp4' : 'jpg');
+    let fileExt = (rawFileName || m.path || '').split('?')[0].split('.').pop()?.toLowerCase() || '';
+    if (!fileExt || fileExt.length > 5 || fileExt.includes('/') || fileExt.includes(':')) {
+      fileExt = isVid ? 'mp4' : 'jpg';
+    }
     const fileUrl = (isPrevOnly && !isVid)
       ? `https://img.pawchive.pw/thumbnail/data${m.path}`
       : `https://file.pawchive.pw/data${m.path}?f=${encodeURIComponent(rawFileName)}`;
