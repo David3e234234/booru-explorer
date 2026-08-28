@@ -725,7 +725,81 @@ async function performSearch(reset = false, options = {}) {
       } else {
         const fetchTasks = [];
 
-        if (userInterests.length > 0) {
+        if (state.currentSite === 'pawchive') {
+          // Pawchive creator-centric recommendation: extract liked and favorite artists
+          const candidateArtists = [];
+          if (userInterests.length > 0) {
+            const creatorInterests = userInterests.filter(i => i.category === 'artist' || i.score >= 5.0);
+            for (const item of creatorInterests) {
+              const cleanAuthor = item.tag.replace(/^@/, '').replace(/^artist:/i, '').trim();
+              if (cleanAuthor && !candidateArtists.includes(cleanAuthor)) {
+                candidateArtists.push(cleanAuthor);
+              }
+            }
+          }
+          for (const fa of (state.favoriteAuthors || [])) {
+            const raw = (fa.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+            if (raw && !candidateArtists.includes(raw)) {
+              candidateArtists.push(raw);
+            }
+          }
+
+          if (candidateArtists.length > 0) {
+            const shuffledCreators = [...candidateArtists].sort(() => Math.random() - 0.5);
+            for (const creator of shuffledCreators.slice(0, 5)) {
+              fetchTasks.push(
+                fetchPosts({
+                  site: 'pawchive',
+                  tags: `artist:${creator}`,
+                  page: 1 + Math.floor((state.page - 1) / Math.max(1, Math.min(5, shuffledCreators.length))),
+                  limit: 25,
+                  category: 'new',
+                  aiFilter: state.aiFilter,
+                  ratingFilter: state.ratingFilter,
+                  typeFilter: state.typeFilter,
+                  ageFilter: state.ageFilter,
+                  hideFurry: state.hideFurry,
+                  hidePregnant: state.hidePregnant,
+                  hideLgbt: state.hideLgbt,
+                  bustCache: options.bustCache || false
+                }).catch(() => null)
+              );
+            }
+          }
+
+          fetchTasks.push(
+            fetchPosts({
+              site: 'pawchive',
+              tags: '',
+              page: state.page,
+              limit: Math.min(currentLimit, 40),
+              category: 'popular',
+              aiFilter: state.aiFilter,
+              ratingFilter: state.ratingFilter,
+              typeFilter: state.typeFilter,
+              ageFilter: state.ageFilter,
+              hideFurry: state.hideFurry,
+              hidePregnant: state.hidePregnant,
+              hideLgbt: state.hideLgbt,
+              bustCache: options.bustCache || false
+            }).catch(() => null),
+            fetchPosts({
+              site: 'pawchive',
+              tags: '',
+              page: state.page,
+              limit: Math.min(currentLimit, 40),
+              category: 'new',
+              aiFilter: state.aiFilter,
+              ratingFilter: state.ratingFilter,
+              typeFilter: state.typeFilter,
+              ageFilter: state.ageFilter,
+              hideFurry: state.hideFurry,
+              hidePregnant: state.hidePregnant,
+              hideLgbt: state.hideLgbt,
+              bustCache: options.bustCache || false
+            }).catch(() => null)
+          );
+        } else if (userInterests.length > 0) {
           const selectedSeeds = [];
 
           // 1. First take the best pair seed combos (Author + Character / Character + Franchise)
@@ -770,9 +844,7 @@ async function performSearch(reset = false, options = {}) {
               }).catch(() => null)
             );
           }
-        }
 
-        if (userInterests.length > 0) {
           fetchTasks.push(
             fetchPosts({
               site: state.currentSite,

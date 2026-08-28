@@ -279,7 +279,7 @@ const RESERVED_PAREN_WORDS = new Set([
   'fruit', 'food', 'animal', 'vehicle', 'object', 'clothing', 'instrument', 'weapon', 'anatomy', 'pose', 'hair', 'eyes', 'color', 'background', 'furniture', 'disambiguation'
 ]);
 
-async function loadGlobalTagSummary(settings = {}) {
+export async function loadGlobalTagSummary(settings = {}) {
   if (globalTagMap && Date.now() - lastFetchedTime < CACHE_TTL_MS) {
     return globalTagMap;
   }
@@ -395,8 +395,8 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       continue;
     }
 
-    if (lower.startsWith('meta:')) {
-      const clean = originalTag.replace(/^meta:/i, '').trim();
+    if (lower.startsWith('meta:') || lower.startsWith('service:')) {
+      const clean = originalTag.replace(/^(meta|service):/i, '').trim();
       addUnique(meta, clean || originalTag);
       continue;
     }
@@ -437,6 +437,16 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     } else if (type === 6 || META_KEYWORDS.has(lower)) {
       addUnique(meta, originalTag);
       continue;
+    }
+
+    // 3.5. Check if tag matches known initial author
+    if (initialAuthor && typeof initialAuthor === 'string') {
+      const cleanInitial = initialAuthor.replace(/^[@pixiv:]+/, '').trim().toLowerCase().replace(/[\s_.-]+/g, '_');
+      const cleanTagLower = lower.replace(/[\s_.-]+/g, '_');
+      if (cleanInitial && (cleanTagLower === cleanInitial || cleanTagLower === `artist:${cleanInitial}`)) {
+        addUnique(artist, originalTag);
+        continue;
+      }
     }
 
     // 4. Check if tag matches source handle (e.g. source is twitter.com/_yozo and tag is yozo_(stanky) or yozo)

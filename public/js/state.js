@@ -626,9 +626,20 @@ export function getUserInterestSeedPairs(limit = 10) {
   return sortedPairs.slice(0, limit);
 }
 
+const IGNORED_INTEREST_TAGS = new Set([
+  'fanbox', 'patreon', 'fantia', 'boosty', 'subscribestar', 'gumroad', 'afdian', 'discord', 'pawchive',
+  'rule34video', 'danbooru', 'gelbooru', 'safebooru', 'yande.re', 'konachan', 'rule34', 'xbooru', 'hypnohub', 'tbib',
+  'highres', 'absurdres', 'superabsurdres', 'translation_request', 'translated',
+  'tagme', 'bad_id', 'duplicate', 'watermark', 'sample', 'thumbnail', 'reward', 'psd', 'clip', 'zip', 'rar'
+]);
+
 function cleanTagString(str) {
   if (!str) return '';
-  return String(str).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+  const clean = String(str).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/^(?:artist|creator|author|service|meta):/i, '').replace(/\s+/g, '_').trim();
+  if (IGNORED_INTEREST_TAGS.has(clean) || /^user_\d+$/i.test(clean) || clean.startsWith('service_') || clean.startsWith('service:')) {
+    return '';
+  }
+  return clean;
 }
 
 export function excludeInterestTag(tag) {
@@ -747,8 +758,9 @@ export function calculatePostMatchPercent(post, userInterestMap) {
   // Sort matched tags by significance
   matchedTags.sort((a, b) => b.score - a.score);
 
-  const ratio = matchPoints / (matchPoints + 12);
-  const percent = Math.min(99, Math.max(70, Math.round(62 + ratio * 37)));
+  const isCreatorMatch = matchedTags.some(m => m.display.startsWith('@'));
+  const ratio = matchPoints / (matchPoints + (isCreatorMatch ? 6 : 12));
+  const percent = Math.min(99, Math.max(70, Math.round((isCreatorMatch ? 75 : 62) + ratio * (isCreatorMatch ? 24 : 37))));
 
   return {
     percent,

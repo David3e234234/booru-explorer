@@ -108,7 +108,7 @@ export function getTagCategory(tag, tagDetails, author = '') {
     return 'copyright';
   }
 
-  if (clean.startsWith('meta:') || META_KEYWORDS.has(clean) || clean.endsWith('_(medium)') || clean.endsWith('_(style)')) {
+  if (clean.startsWith('meta:') || clean.startsWith('service:') || /^user_\d+$/i.test(clean) || META_KEYWORDS.has(clean) || clean.endsWith('_(medium)') || clean.endsWith('_(style)')) {
     return 'meta';
   }
 

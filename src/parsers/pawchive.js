@@ -1,6 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, normalizeDate } from '../utils/tagHelpers.js';
-import { classifyPostTags } from '../utils/tagClassifier.js';
+import { classifyPostTags, loadGlobalTagSummary } from '../utils/tagClassifier.js';
 import { isVideoMediaUrl } from '../../public/js/modules/uiUtils.js';
 import { logError } from '../utils/logger.js';
 
@@ -201,31 +201,49 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
   const authorTag = authorName.toLowerCase().replace(/[\s_.-]+/g, '_');
   const postUrl = `https://pawchive.pw/${item.service}/user/${item.user}/post/${item.id}`;
 
-  // Extract tags from service, creator name, and words in title
+  // Clean tags: primary author signal + platform meta tag
   const extractedTags = [
-    item.service || 'pawchive',
-    `user_${item.user}`,
     `artist:${authorTag}`
   ];
-  if (authorTag && !extractedTags.includes(authorTag)) {
-    extractedTags.push(authorTag);
+  if (item.service) {
+    extractedTags.push(`service:${item.service.toLowerCase()}`);
   }
 
+  // Extract only genuine copyright or character tags from title if matched in tag dictionary
   if (item.title) {
-    const titleWords = item.title
-      .replace(/[^\p{L}\p{N}_]+/gu, ' ')
-      .trim()
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(w => w.length > 2 && !STOP_TITLE_WORDS.has(w));
-    for (const w of titleWords.slice(0, 10)) {
-      if (!extractedTags.includes(w)) extractedTags.push(w);
-    }
+    try {
+      const tagMap = await loadGlobalTagSummary(settings).catch(() => null);
+      if (tagMap) {
+        const cleanTitle = item.title.replace(/[^\p{L}\p{N}_]+/gu, ' ').toLowerCase();
+        const titleWords = cleanTitle.split(/\s+/).filter(w => w.length > 2 && !STOP_TITLE_WORDS.has(w));
+        for (let i = 0; i < titleWords.length; i++) {
+          const w1 = titleWords[i];
+          const t1 = tagMap.get(w1);
+          if (t1 === 3) {
+            if (!extractedTags.includes(`copyright:${w1}`)) extractedTags.push(`copyright:${w1}`);
+          } else if (t1 === 4) {
+            if (!extractedTags.includes(`character:${w1}`)) extractedTags.push(`character:${w1}`);
+          }
+          if (i < titleWords.length - 1) {
+            const bigram = `${w1}_${titleWords[i + 1]}`;
+            const t2 = tagMap.get(bigram);
+            if (t2 === 3) {
+              if (!extractedTags.includes(`copyright:${bigram}`)) extractedTags.push(`copyright:${bigram}`);
+            } else if (t2 === 4) {
+              if (!extractedTags.includes(`character:${bigram}`)) extractedTags.push(`character:${bigram}`);
+            }
+          }
+        }
+      }
+    } catch {}
   }
 
   const isAi = checkIsAi(extractedTags, aiTagsList);
   const { tagDetails } = await classifyPostTags(extractedTags, postUrl, authorName, settings);
   tagDetails.artist = [authorName];
+  if (item.service && !tagDetails.meta.includes(item.service.toLowerCase())) {
+    tagDetails.meta.push(item.service.toLowerCase());
+  }
   const createdAt = normalizeDate(item.published || item.added);
 
   const seriesKey = `pawchive:${item.service}:${item.user}:${item.id}`;
