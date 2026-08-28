@@ -1,6 +1,6 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, normalizeDate } from '../utils/tagHelpers.js';
-import { classifyPostTags, loadGlobalTagSummary } from '../utils/tagClassifier.js';
+import { classifyPostTags } from '../utils/tagClassifier.js';
 import { isVideoMediaUrl } from '../../public/js/modules/uiUtils.js';
 import { logError } from '../utils/logger.js';
 
@@ -41,12 +41,6 @@ function buildArchiveFields(archiveAttachments) {
     archiveSizes: archiveAttachments.map(a => a.size || 0)
   };
 }
-
-const STOP_TITLE_WORDS = new Set([
-  'psd', 'clip', 'sai', 'c4d', 'blend', 'zip', 'rar', '7z', 'tar', 'r18', 'nsfw', 'sfw', 
-  'reward', 'pack', 'tier', 'wip', 'sketch', 'vol', 'part', 'set', 'ver', 'version', 
-  'alt', 'the', 'and', 'for', 'with', 'from', 'free', 'fanbox', 'patreon', 'fantia', 'boosty'
-]);
 
 /**
  * Fetches and caches creator directory from Pawchive.
@@ -207,35 +201,6 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
   ];
   if (item.service) {
     extractedTags.push(`service:${item.service.toLowerCase()}`);
-  }
-
-  // Extract only genuine copyright or character tags from title if matched in tag dictionary
-  if (item.title) {
-    try {
-      const tagMap = await loadGlobalTagSummary(settings).catch(() => null);
-      if (tagMap) {
-        const cleanTitle = item.title.replace(/[^\p{L}\p{N}_]+/gu, ' ').toLowerCase();
-        const titleWords = cleanTitle.split(/\s+/).filter(w => w.length > 2 && !STOP_TITLE_WORDS.has(w));
-        for (let i = 0; i < titleWords.length; i++) {
-          const w1 = titleWords[i];
-          const t1 = tagMap.get(w1);
-          if (t1 === 3) {
-            if (!extractedTags.includes(`copyright:${w1}`)) extractedTags.push(`copyright:${w1}`);
-          } else if (t1 === 4) {
-            if (!extractedTags.includes(`character:${w1}`)) extractedTags.push(`character:${w1}`);
-          }
-          if (i < titleWords.length - 1) {
-            const bigram = `${w1}_${titleWords[i + 1]}`;
-            const t2 = tagMap.get(bigram);
-            if (t2 === 3) {
-              if (!extractedTags.includes(`copyright:${bigram}`)) extractedTags.push(`copyright:${bigram}`);
-            } else if (t2 === 4) {
-              if (!extractedTags.includes(`character:${bigram}`)) extractedTags.push(`character:${bigram}`);
-            }
-          }
-        }
-      }
-    } catch {}
   }
 
   const isAi = checkIsAi(extractedTags, aiTagsList);

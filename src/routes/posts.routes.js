@@ -290,7 +290,7 @@ router.get('/posts', async (req, res) => {
     };
 
     // groupAlbums changes the response shape (album collapsing), so it belongs in the key
-    const cacheKey = `v2_content:${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
+    const cacheKey = `v3_author_only:${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {

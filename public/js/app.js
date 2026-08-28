@@ -774,30 +774,6 @@ async function performSearch(reset = false, options = {}) {
             }
           }
 
-          // Also query top franchise / character interests on Pawchive if present
-          const franchiseInterests = userInterests
-            .filter(i => i.category === 'copyright' || i.category === 'character')
-            .slice(0, 3);
-          for (const fi of franchiseInterests) {
-            fetchTasks.push(
-              fetchPosts({
-                site: 'pawchive',
-                tags: fi.tag,
-                page: state.page,
-                limit: 25,
-                category: 'new',
-                aiFilter: state.aiFilter,
-                ratingFilter: state.ratingFilter,
-                typeFilter: state.typeFilter,
-                ageFilter: state.ageFilter,
-                hideFurry: state.hideFurry,
-                hidePregnant: state.hidePregnant,
-                hideLgbt: state.hideLgbt,
-                bustCache: options.bustCache || false
-              }).catch(() => null)
-            );
-          }
-
           fetchTasks.push(
             fetchPosts({
               site: 'pawchive',
