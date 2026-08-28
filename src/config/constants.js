@@ -443,7 +443,7 @@ export const SITES = {
     supportsDateFilter: false,
     supportsShapesFilter: false,
     supportsContentHiding: false,
-    supportedCategories: ['new'],
+    supportedCategories: ['new', 'recommended', 'random'],
     accentColor: '#f97316',
     description: 'Архив платных подписок (Fanbox, Patreon, Fantia) с поиском по авторам и названиям'
   }

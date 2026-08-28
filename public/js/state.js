@@ -11,7 +11,7 @@ export const DEFAULT_SITES = [
   { id: 'xbooru', name: 'Xbooru', accentColor: '#f43f5e', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
   { id: 'hypnohub', name: 'Hypnohub', accentColor: '#8b5cf6', rating: 'all', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'views', 'top', 'recommended', 'random'] },
   { id: 'tbib', name: 'TBIB', accentColor: '#f59e0b', rating: 'all', supportsVideo: false, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsDateFilter: false, supportsShapesFilter: true, supportsContentHiding: true, supportedCategories: ['new', 'top', 'recommended', 'random'] },
-  { id: 'pawchive', name: 'Pawchive', accentColor: '#f97316', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsTags: false, supportsAiFilter: false, supportsDateFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportedCategories: ['new'] }
+  { id: 'pawchive', name: 'Pawchive', accentColor: '#f97316', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsTags: false, supportsAiFilter: false, supportsDateFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportedCategories: ['new', 'recommended', 'random'] }
 ];
 
 export function getSiteCapabilities(siteId) {

@@ -440,7 +440,10 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     return [];
   }
 
-  const offset = Math.max(0, (page - 1) * 50);
+  let offset = Math.max(0, (page - 1) * 50);
+  if (params.category === 'random' && !tags) {
+    offset = Math.floor(Math.random() * 200) * 50;
+  }
 
   // Parse query tags for creator or service filters
   const tokens = (tags || '').split(/\s+/).filter(Boolean);
