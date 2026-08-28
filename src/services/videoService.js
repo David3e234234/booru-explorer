@@ -2,12 +2,11 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
+import { THUMBS_DIR, ARCHIVES_DIR } from '../config/constants.js';
 import { getFfmpegHeaders, getProxyForSite, resolveSiteFromUrl } from '../utils/network.js';
 import { getSettings } from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
-const activeTranscodes = new Map();
 const activeThumbnails = new Map();
 
 // Unpacked archive media lives on this server's disk: /api/archive/file?key=<md5>&n=<idx>
@@ -162,114 +161,7 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
 }
 
 export async function handleTranscodeVideoRequest(req, res) {
-  const targetUrl = req.query.url;
-  if (!targetUrl) return res.status(400).send('Требуется параметр url');
-
-  try {
-    const hash = crypto.createHash('md5').update(targetUrl).digest('hex');
-    const videoPath = path.join(VIDEOS_DIR, `${hash}.mp4`);
-    const tempPath = path.join(VIDEOS_DIR, `${hash}_temp.mp4`);
-
-    if (fs.existsSync(videoPath) && fs.statSync(videoPath).size > 0) {
-      return res.sendFile(videoPath, { acceptRanges: true });
-    }
-
-    if (activeTranscodes.has(hash)) {
-      try {
-        await activeTranscodes.get(hash);
-        if (fs.existsSync(videoPath)) {
-          return res.sendFile(videoPath, { acceptRanges: true });
-        }
-      } catch {}
-    }
-
-    logInfo('FFmpeg', `Начало транскодирования видео в H.264/AAC: ${targetUrl}`);
-
-    const currentSettings = getSettings();
-    const { input: ffmpegInput, isLocal } = resolveFfmpegInput(req, targetUrl);
-    const headers = isLocal ? null : getFfmpegHeaders(targetUrl, currentSettings);
-    const site = isLocal ? null : resolveSiteFromUrl(targetUrl);
-    const proxyUrl = site ? getProxyForSite(site, currentSettings) : '';
-
-    const transcodePromise = new Promise((resolve, reject) => {
-      const httpProxyArg = (proxyUrl && (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://'))) ? ['-http_proxy', proxyUrl] : [];
-      const args = [
-        ...httpProxyArg,
-        ...(headers ? ['-headers', headers] : []),
-        '-i', ffmpegInput,
-        '-map', '0:v:0',
-        '-map', '0:a?',
-        '-c:v', 'libx264',
-        '-pix_fmt', 'yuv420p',
-        '-preset', 'ultrafast',
-        '-crf', '23',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-movflags', '+faststart',
-        '-y',
-        tempPath
-      ];
-
-      const env = proxyUrl ? { ...process.env, HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, ALL_PROXY: proxyUrl } : process.env;
-      const proc = spawn('ffmpeg', args, { env });
-
-      // The stderr tail tells an unavailable source apart from a failure on our side
-      let stderrTail = '';
-      proc.stderr?.on('data', (chunk) => {
-        stderrTail = `${stderrTail}${chunk}`.slice(-500);
-      });
-
-      req.on('close', () => {
-        try {
-          if (proc && !proc.killed) proc.kill('SIGKILL');
-        } catch {}
-      });
-
-      proc.on('close', (code) => {
-        if (code === 0 && fs.existsSync(tempPath) && fs.statSync(tempPath).size > 0) {
-          try {
-            fs.renameSync(tempPath, videoPath);
-            logInfo('FFmpeg', `Транскодирование успешно завершено: ${hash}.mp4 (${(fs.statSync(videoPath).size / 1024 / 1024).toFixed(2)} MB)`);
-            resolve(true);
-          } catch (err) {
-            reject(err);
-          }
-        } else {
-          if (fs.existsSync(tempPath)) {
-            try { fs.unlinkSync(tempPath); } catch {}
-          }
-          reject(new Error(`FFmpeg вернул код ошибки ${code}${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`));
-        }
-      });
-
-      proc.on('error', (err) => {
-        if (fs.existsSync(tempPath)) {
-          try { fs.unlinkSync(tempPath); } catch {}
-        }
-        reject(err);
-      });
-    });
-
-    activeTranscodes.set(hash, transcodePromise);
-
-    try {
-      await transcodePromise;
-      return res.sendFile(videoPath, { acceptRanges: true });
-    } finally {
-      // Previously an errored entry stayed in the Map forever (leaked rejected promises)
-      if (activeTranscodes.get(hash) === transcodePromise) {
-        activeTranscodes.delete(hash);
-      }
-    }
-  } catch (err) {
-    logError('FFmpeg', `Ошибка транскодирования ${targetUrl}`, err);
-    if (!res.headersSent) {
-      // An unavailable source (throttling, stale link) is a 503, not our error
-      const upstreamIssue = /\b(?:HTTP error|Server returned)\s+\d{3}\b|\b429\b|Connection (?:refused|timed out)|Failed to resolve|Invalid data found/.test(String(err.message));
-      if (upstreamIssue) {
-        return res.status(503).send('Источник видео недоступен (лимит запросов или истекшая ссылка), попробуйте позже');
-      }
-      return res.status(500).send('Ошибка транскодирования видео: ' + err.message);
-    }
-  }
+  return res.status(410).json({
+    error: 'Серверное транскодирование видео отключено. Скачайте файл для просмотра.'
+  });
 }
