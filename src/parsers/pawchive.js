@@ -301,12 +301,17 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     const isGif = (rawFileName || m.path || '').toLowerCase().endsWith('.gif');
     const isPrevOnly = Boolean(m.preview_only || item.has_full === false);
     const fileExt = (rawFileName || m.path || '').split('.').pop()?.toLowerCase() || (isVid ? 'mp4' : 'jpg');
-    const fileUrl = isPrevOnly
+    const fileUrl = (isPrevOnly && !isVid)
       ? `https://img.pawchive.pw/thumbnail/data${m.path}`
       : `https://file.pawchive.pw/data${m.path}?f=${encodeURIComponent(rawFileName)}`;
-    const previewUrlRaw = `https://img.pawchive.pw/thumbnail/data${m.path}`;
-    const sampleUrl = isPrevOnly ? previewUrlRaw : fileUrl;
+    const previewUrlRaw = isVid
+      ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium`
+      : `https://img.pawchive.pw/thumbnail/data${m.path}`;
+    const sampleUrl = (isPrevOnly && !isVid) ? previewUrlRaw : fileUrl;
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVid);
+    const thumb180 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=low` : previewUrl;
+    const thumb360 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium` : previewUrl;
+    const thumb720 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=high` : previewUrl;
 
     return {
       id: `pawchive_${item.id}_${idx + 1}`,
@@ -316,9 +321,9 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
       previewUrl,
       sampleUrl,
       fileUrl,
-      thumb180: previewUrl,
-      thumb360: previewUrl,
-      thumb720: previewUrl,
+      thumb180,
+      thumb360,
+      thumb720,
       fileExt,
       isVideo: isVid,
       isGif,

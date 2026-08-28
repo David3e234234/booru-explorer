@@ -101,8 +101,13 @@ function build404FallbackCandidates(targetUrl) {
     expandHosts(pahealHosts, [cleanNoHost], isVid ? videoExts : imageExts);
   } else if (targetUrl.includes('pawchive.pw') || targetUrl.includes('pawchive.st')) {
     const cleanNoQuery = targetUrl.split('?')[0];
-    if (cleanNoQuery.includes('file.pawchive.pw/data/')) {
-      pushCandidate(cleanNoQuery.replace('file.pawchive.pw/data/', 'img.pawchive.pw/thumbnail/data/'));
+    const isVid = /\.(mp4|webm|mov|m4v|mkv)$/i.test(cleanNoQuery);
+    if (!isVid) {
+      if (cleanNoQuery.includes('file.pawchive.pw/data/')) {
+        pushCandidate(cleanNoQuery.replace('file.pawchive.pw/data/', 'img.pawchive.pw/thumbnail/data/'));
+      } else if (cleanNoQuery.includes('img.pawchive.pw/thumbnail/data/')) {
+        pushCandidate(cleanNoQuery.replace('img.pawchive.pw/thumbnail/data/', 'file.pawchive.pw/data/'));
+      }
     } else if (cleanNoQuery.includes('img.pawchive.pw/thumbnail/data/')) {
       pushCandidate(cleanNoQuery.replace('img.pawchive.pw/thumbnail/data/', 'file.pawchive.pw/data/'));
     }
