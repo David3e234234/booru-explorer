@@ -1040,6 +1040,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           currentPost.isAlbum = true;
           currentPost.albumItems = res.albumItems;
           currentPost.albumCount = res.albumItems.length;
+          if (!currentPost.content && res.albumItems[0]?.content) {
+            currentPost.content = res.albumItems[0].content;
+          }
           currentAlbumIndex = 0;
 
           // Sync the updated album back into global gallery state

@@ -745,14 +745,21 @@ async function performSearch(reset = false, options = {}) {
           }
 
           if (candidateArtists.length > 0) {
-            const shuffledCreators = [...candidateArtists].sort(() => Math.random() - 0.5);
-            for (const creator of shuffledCreators.slice(0, 5)) {
+            const authorsPerPage = 5;
+            const startIndex = ((state.page - 1) * authorsPerPage) % candidateArtists.length;
+            const selectedAuthors = [];
+            for (let i = 0; i < Math.min(authorsPerPage, candidateArtists.length); i++) {
+              selectedAuthors.push(candidateArtists[(startIndex + i) % candidateArtists.length]);
+            }
+            const authorPageNum = Math.max(1, Math.ceil(state.page / Math.max(1, Math.ceil(candidateArtists.length / authorsPerPage))));
+
+            for (const creator of selectedAuthors) {
               fetchTasks.push(
                 fetchPosts({
                   site: 'pawchive',
                   tags: `artist:${creator}`,
-                  page: 1 + Math.floor((state.page - 1) / Math.max(1, Math.min(5, shuffledCreators.length))),
-                  limit: 25,
+                  page: authorPageNum,
+                  limit: 30,
                   category: 'new',
                   aiFilter: state.aiFilter,
                   ratingFilter: state.ratingFilter,
@@ -767,13 +774,37 @@ async function performSearch(reset = false, options = {}) {
             }
           }
 
+          // Also query top franchise / character interests on Pawchive if present
+          const franchiseInterests = userInterests
+            .filter(i => i.category === 'copyright' || i.category === 'character')
+            .slice(0, 3);
+          for (const fi of franchiseInterests) {
+            fetchTasks.push(
+              fetchPosts({
+                site: 'pawchive',
+                tags: fi.tag,
+                page: state.page,
+                limit: 25,
+                category: 'new',
+                aiFilter: state.aiFilter,
+                ratingFilter: state.ratingFilter,
+                typeFilter: state.typeFilter,
+                ageFilter: state.ageFilter,
+                hideFurry: state.hideFurry,
+                hidePregnant: state.hidePregnant,
+                hideLgbt: state.hideLgbt,
+                bustCache: options.bustCache || false
+              }).catch(() => null)
+            );
+          }
+
           fetchTasks.push(
             fetchPosts({
               site: 'pawchive',
               tags: '',
               page: state.page,
-              limit: Math.min(currentLimit, 40),
-              category: 'popular',
+              limit: Math.min(currentLimit, 50),
+              category: 'new',
               aiFilter: state.aiFilter,
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
@@ -787,8 +818,8 @@ async function performSearch(reset = false, options = {}) {
               site: 'pawchive',
               tags: '',
               page: state.page,
-              limit: Math.min(currentLimit, 40),
-              category: 'new',
+              limit: Math.min(currentLimit, 50),
+              category: 'random',
               aiFilter: state.aiFilter,
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
@@ -1010,7 +1041,7 @@ async function performSearch(reset = false, options = {}) {
         const newPosts = finalRecommended.filter(p => !existingIds.has(p.id));
         state.posts.push(...newPosts);
       }
-      state.hasMore = candidatePosts.length > 0;
+      state.hasMore = candidatePosts.length > 0 || finalRecommended.length > 0;
 
       galleryInstance.renderGallery(!reset);
       renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
