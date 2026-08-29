@@ -5,8 +5,10 @@ import { resolveRule34VideoFullMedia } from '../parsers/rule34video.js';
 
 const router = express.Router();
 
-// GET /api/proxy
+// GET /api/proxy and aliases
 router.get('/proxy', handleProxyRequest);
+router.get('/proxy/thumbnail', handleProxyRequest);
+router.get('/proxy/image', handleProxyRequest);
 
 // GET /api/video-thumbnail
 router.get('/video-thumbnail', handleVideoThumbnailRequest);

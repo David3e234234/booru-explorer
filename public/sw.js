@@ -1,5 +1,5 @@
-const CACHE_NAME = 'booru-explorer-v8.8';
-const MEDIA_CACHE = 'booru-media-v8.8';
+const CACHE_NAME = 'booru-explorer-v8.9';
+const MEDIA_CACHE = 'booru-media-v8.9';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
 
@@ -128,7 +128,7 @@ self.addEventListener('fetch', (event) => {
   // so the gallery opens instantly and works offline
   if (
     url.origin === self.location.origin &&
-    (url.pathname === '/api/proxy' || url.pathname === '/api/video-thumbnail')
+    (url.pathname.startsWith('/api/proxy') || url.pathname === '/api/video-thumbnail')
   ) {
     event.respondWith(safeRespond(event.request, async () => {
       const cache = await caches.open(MEDIA_CACHE);
