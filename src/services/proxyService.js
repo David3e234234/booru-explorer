@@ -384,3 +384,100 @@ export async function handleProxyRequest(req, res) {
     }
   }
 }
+
+/**
+ * Validates binary image signatures (JPEG, PNG, GIF, WebP, AVIF/HEIC, BMP)
+ */
+export function isValidImageBuffer(buf) {
+  if (!buf || !Buffer.isBuffer(buf) || buf.length < 12) return false;
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return true;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true;
+  // GIF: 47 49 46 38
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return true;
+  // WebP: RIFF....WEBP
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true;
+  // AVIF / HEIC (ftyp)
+  if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return true;
+  // BMP: 42 4D
+  if (buf[0] === 0x42 && buf[1] === 0x4D) return true;
+  return false;
+}
+
+/**
+ * Retrieve or safely download an image buffer with disk caching, Referer/User-Agent, and fallback hosts
+ */
+export async function getOrFetchImageBuffer(imageUrl, currentSettings = null) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null;
+  const settings = currentSettings || getSettings();
+  const cleanPath = imageUrl.split('?')[0].toLowerCase();
+  const hash = crypto.createHash('md5').update(imageUrl).digest('hex');
+  const ext = detectImageExt(cleanPath);
+  const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${ext}`);
+
+  // 1. Check disk cache
+  try {
+    const stats = await fs.promises.stat(cacheFilePath);
+    if (stats.size > 0) {
+      const cachedBuf = await fs.promises.readFile(cacheFilePath);
+      if (isValidImageBuffer(cachedBuf)) {
+        return { buffer: cachedBuf, fromDisk: true };
+      }
+    }
+  } catch {}
+
+  // 2. Fetch from upstream with full browser headers and fallback
+  const headers = buildUpstreamHeaders(imageUrl, true, settings);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROXY_ABORT_MS);
+
+  try {
+    let response = await fetchUpstreamWithRetry(imageUrl, headers, controller.signal, settings);
+    let effectiveUrl = imageUrl;
+
+    if (response.status === 404 || !response.ok) {
+      for (const altUrl of build404FallbackCandidates(imageUrl)) {
+        try {
+          const altHeaders = buildUpstreamHeaders(altUrl, true, settings);
+          const altResp = await tryFetch(altUrl, altHeaders, controller.signal, settings);
+          if (altResp.ok || altResp.status === 206) {
+            response = altResp;
+            effectiveUrl = altUrl;
+            break;
+          }
+        } catch {}
+      }
+    }
+
+    if (!response || !response.ok) {
+      return null;
+    }
+
+    const cType = (response.headers.get('content-type') || '').toLowerCase();
+    if (cType.includes('text/html') || cType.includes('text/plain')) {
+      return null;
+    }
+
+    const arrayBuf = await response.arrayBuffer();
+    const buf = Buffer.from(arrayBuf);
+
+    if (!isValidImageBuffer(buf)) {
+      return null;
+    }
+
+    // Save to disk cache
+    if (buf.length <= MAX_CACHED_IMAGE_BYTES) {
+      const saveExt = detectImageExt(effectiveUrl.split('?')[0].toLowerCase());
+      const finalCachePath = path.join(THUMBS_DIR, `${hash}.${saveExt}`);
+      fs.promises.writeFile(finalCachePath, buf).catch(() => {});
+    }
+
+    return { buffer: buf, fromDisk: false };
+  } catch (err) {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

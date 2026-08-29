@@ -5,6 +5,7 @@ import { AI_EMBEDDINGS_FILE, isServerless } from '../config/constants.js';
 import { logInfo, logError, logWarn } from '../utils/logger.js';
 import { fetchSafe } from '../utils/network.js';
 import { getSettings } from './storageService.js';
+import { getOrFetchImageBuffer } from './proxyService.js';
 
 // In-memory embeddings cache
 let embeddingsCache = new Map();
@@ -201,15 +202,13 @@ export async function getEmbedding(imageUrl, postId = '', modelType = 'dinov2') 
 
   try {
     const { RawImage } = await getTransformers();
-    // Fetch image safely through our proxy infrastructure
     const settings = getSettings();
-    const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' };
-    const res = await fetchSafe(imageUrl, { headers }, settings.globalProxy || null);
-    if (!res.ok) {
-      throw new Error(`Upstream image status: ${res.status}`);
+    const imgData = await getOrFetchImageBuffer(imageUrl, settings);
+    if (!imgData || !imgData.buffer) {
+      throw new Error('Не удалось загрузить изображение или получен некорректный формат (HTML/Cloudflare)');
     }
-    const arrayBuf = await res.arrayBuffer();
-    const rawImage = await RawImage.fromBlob(new Blob([arrayBuf]));
+
+    const rawImage = await RawImage.fromBlob(new Blob([imgData.buffer]));
 
     const vector = await enqueueInference(() => currentExtractor.extract(rawImage));
     embeddingsCache.set(cacheKey, vector);
@@ -217,7 +216,7 @@ export async function getEmbedding(imageUrl, postId = '', modelType = 'dinov2') 
 
     return { success: true, embedding: vector, cached: false };
   } catch (err) {
-    logError('AIVision', `Ошибка извлечения эмбеддинга для ${imageUrl}:`, err);
+    logWarn('AIVision', `Пропуск эмбеддинга для ${imageUrl}: ${err.message}`);
     return { success: false, error: err.message };
   }
 }
