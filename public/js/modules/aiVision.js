@@ -198,8 +198,8 @@ async function extractBrowserEmbedding(imageUrl, modelType = 'mobilenet') {
   // Fetch image blob and create object URL or pass to extractor
   // If CORS is restricted, image proxy is used
   let sourceUrl = imageUrl;
-  if (!imageUrl.startsWith('blob:') && !imageUrl.startsWith('data:') && !imageUrl.startsWith('/api/proxy/')) {
-    sourceUrl = `/api/proxy/thumbnail?url=${encodeURIComponent(imageUrl)}`;
+  if (!imageUrl.startsWith('blob:') && !imageUrl.startsWith('data:') && !imageUrl.startsWith('/api/proxy')) {
+    sourceUrl = `/api/proxy?url=${encodeURIComponent(imageUrl)}`;
   }
 
   const { RawImage } = await getBrowserTransformers();
@@ -300,7 +300,7 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
   const results = [];
   const candidatesWithoutTarget = candidatePosts.filter(p => p.id !== targetPost.id);
   
-  const CONCURRENCY = 4;
+  const CONCURRENCY = 2;
   for (let i = 0; i < candidatesWithoutTarget.length; i += CONCURRENCY) {
     const chunk = candidatesWithoutTarget.slice(i, i + CONCURRENCY);
     const chunkResults = await Promise.all(chunk.map(async (candidate) => {
@@ -339,11 +339,11 @@ export async function calculateUserTasteVector(likedPosts, options = {}) {
     return null;
   }
 
-  const modelType = options.modelType || state.settings?.aiVisualModel || 'mobilenet';
+  const modelType = options.modelType || state.settings?.aiVisualModel || 'dinov2';
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
   
-  // Take up to 25 recent liked posts
-  const samplePosts = likedPosts.slice(0, 25);
+  // Take up to 6 recent liked posts for fast and responsive centroid computation
+  const samplePosts = likedPosts.slice(0, 6);
   const vectors = [];
 
   for (const post of samplePosts) {
@@ -382,25 +382,36 @@ export async function scoreCandidatesByVisualTaste(candidates, tasteVector, opti
     return candidates;
   }
 
-  const modelType = options.modelType || state.settings?.aiVisualModel || 'mobilenet';
+  const modelType = options.modelType || state.settings?.aiVisualModel || 'dinov2';
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
 
-  const scored = await Promise.all(candidates.map(async (p) => {
-    try {
-      const vec = await getPostEmbedding(p, { modelType, engine });
-      if (!vec) return { ...p, visualMatchPercent: 0 };
-      const sim = calculateCosineSimilarity(tasteVector, vec);
-      const visualMatchPercent = Math.round(Math.max(0, sim) * 100);
-      return {
-        ...p,
-        visualMatchPercent
-      };
-    } catch {
-      return { ...p, visualMatchPercent: 0 };
-    }
-  }));
+  // Only re-rank top 20 candidate posts to keep performance snappy and CPU load minimal
+  const poolToScore = candidates.slice(0, 20);
+  const remaining = candidates.slice(20);
 
-  return scored;
+  const CONCURRENCY = 2;
+  const scoredTop = [];
+
+  for (let i = 0; i < poolToScore.length; i += CONCURRENCY) {
+    const chunk = poolToScore.slice(i, i + CONCURRENCY);
+    const chunkResults = await Promise.all(chunk.map(async (p) => {
+      try {
+        const vec = await getPostEmbedding(p, { modelType, engine });
+        if (!vec) return { ...p, visualMatchPercent: 0 };
+        const sim = calculateCosineSimilarity(tasteVector, vec);
+        const visualMatchPercent = Math.round(Math.max(0, sim) * 100);
+        return {
+          ...p,
+          visualMatchPercent
+        };
+      } catch {
+        return { ...p, visualMatchPercent: 0 };
+      }
+    }));
+    scoredTop.push(...chunkResults);
+  }
+
+  return [...scoredTop, ...remaining.map(p => ({ ...p, visualMatchPercent: 0 }))];
 }
 
 /**

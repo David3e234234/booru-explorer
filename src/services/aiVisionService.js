@@ -176,10 +176,18 @@ function getCacheKey(modelType, urlOrId) {
   return `${modelType}_${hash}`;
 }
 
+let inferenceQueue = Promise.resolve();
+
+function enqueueInference(taskFn) {
+  const resultPromise = inferenceQueue.then(() => taskFn());
+  inferenceQueue = resultPromise.catch(() => {});
+  return resultPromise;
+}
+
 /**
  * Extract image embedding vector (Float array)
  */
-export async function getEmbedding(imageUrl, postId = '', modelType = 'mobilenet') {
+export async function getEmbedding(imageUrl, postId = '', modelType = 'dinov2') {
   loadEmbeddings();
   const cacheKey = getCacheKey(modelType, postId || imageUrl);
   if (embeddingsCache.has(cacheKey)) {
@@ -203,7 +211,7 @@ export async function getEmbedding(imageUrl, postId = '', modelType = 'mobilenet
     const arrayBuf = await res.arrayBuffer();
     const rawImage = await RawImage.fromBlob(new Blob([arrayBuf]));
 
-    const vector = await currentExtractor.extract(rawImage);
+    const vector = await enqueueInference(() => currentExtractor.extract(rawImage));
     embeddingsCache.set(cacheKey, vector);
     scheduleSaveEmbeddings();
 
