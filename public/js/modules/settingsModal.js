@@ -19,7 +19,8 @@ import {
   sendTelegramBackupNow,
   fetchTelegramBackupStatus,
   apiExportAccount,
-  apiRestoreAccount
+  apiRestoreAccount,
+  syncExternalAccounts
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
@@ -1147,6 +1148,47 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       }
     });
   });
+
+  // Batch external synchronization button
+  const btnSyncExternalAll = document.getElementById('btnSyncExternalAll');
+  const syncExternalStatusText = document.getElementById('syncExternalStatusText');
+  if (btnSyncExternalAll) {
+    btnSyncExternalAll.addEventListener('click', async () => {
+      const originalHtml = btnSyncExternalAll.innerHTML;
+      btnSyncExternalAll.disabled = true;
+      btnSyncExternalAll.classList.add('is-loading');
+      btnSyncExternalAll.innerHTML = `<span>${t('settings.syncing', 'Выгрузка...')}</span>`;
+      if (syncExternalStatusText) {
+        syncExternalStatusText.style.display = 'block';
+        syncExternalStatusText.textContent = t('settings.syncingStatus', 'Отправка данных на внешние серверы (Danbooru, Pawchive)...');
+      }
+
+      try {
+        const res = await syncExternalAccounts({ targetSite: 'all', syncLikes: true, syncFavorites: true, syncAuthors: true });
+        if (res.success) {
+          showToast(res.message || t('settings.syncSuccess', 'Синхронизация успешно выполнена'));
+          if (syncExternalStatusText) {
+            syncExternalStatusText.textContent = res.message || t('settings.syncSuccess', 'Синхронизация успешно выполнена');
+          }
+        } else {
+          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || 'Ошибка синхронизации'));
+          if (syncExternalStatusText) {
+            syncExternalStatusText.textContent = res.message || 'Ошибка синхронизации';
+          }
+        }
+      } catch (err) {
+        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.serverUnreachable', 'Не удалось связаться с сервером')));
+        if (syncExternalStatusText) {
+          syncExternalStatusText.textContent = err.message || 'Сбой связи с сервером';
+        }
+      } finally {
+        btnSyncExternalAll.disabled = false;
+        btnSyncExternalAll.classList.remove('is-loading');
+        btnSyncExternalAll.innerHTML = originalHtml;
+      }
+    });
+  }
+
 
   // Per-site proxy tests
   const proxyTestConfigs = [

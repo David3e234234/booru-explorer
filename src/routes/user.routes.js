@@ -535,4 +535,111 @@ router.get('/backup/telegram/status', (req, res) => {
   });
 });
 
+// POST /api/sync-external - Batch sync existing likes, favorites, and favorite authors to remote services
+router.post('/sync-external', async (req, res) => {
+  try {
+    const userId = req.user?.id || null;
+    const settings = getSettings(userId);
+    const { targetSite = 'all', syncLikes = true, syncFavorites = true, syncAuthors = true } = req.body || {};
+
+    const likes = syncLikes ? getLikes(userId) : [];
+    const favorites = syncFavorites ? getFavorites(userId) : [];
+    const authors = syncAuthors ? getFavoriteAuthors(userId) : [];
+
+    let syncedLikesCount = 0;
+    let syncedFavoritesCount = 0;
+    let syncedAuthorsCount = 0;
+    let skippedCount = 0;
+
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // 1. Sync Likes
+    for (const item of likes) {
+      if (!item || !item.id) continue;
+      const site = item.site || 'danbooru';
+      if (targetSite !== 'all' && site !== targetSite) {
+        skippedCount++;
+        continue;
+      }
+      if (site === 'danbooru' && (!settings.danbooruLogin || !settings.danbooruApiKey)) {
+        skippedCount++;
+        continue;
+      }
+      if (site === 'pawchive' && !settings.pawchiveSession) {
+        skippedCount++;
+        continue;
+      }
+      try {
+        await sendBooruLike(site, item, true, settings);
+        syncedLikesCount++;
+        await delay(120); // rate-limit throttle
+      } catch {
+        skippedCount++;
+      }
+    }
+
+    // 2. Sync Favorites
+    for (const item of favorites) {
+      if (!item || !item.id) continue;
+      const site = item.site || 'danbooru';
+      if (targetSite !== 'all' && site !== targetSite) {
+        skippedCount++;
+        continue;
+      }
+      if (site === 'danbooru' && (!settings.danbooruLogin || !settings.danbooruApiKey)) {
+        skippedCount++;
+        continue;
+      }
+      if (site === 'pawchive' && !settings.pawchiveSession) {
+        skippedCount++;
+        continue;
+      }
+      try {
+        await sendBooruFavorite(site, item, true, settings);
+        syncedFavoritesCount++;
+        await delay(120);
+      } catch {
+        skippedCount++;
+      }
+    }
+
+    // 3. Sync Authors
+    for (const author of authors) {
+      if (!author || (!author.name && !author.id)) continue;
+      const site = author.site || 'danbooru';
+      if (targetSite !== 'all' && site !== targetSite) {
+        skippedCount++;
+        continue;
+      }
+      if (site === 'pawchive' && !settings.pawchiveSession) {
+        skippedCount++;
+        continue;
+      }
+      try {
+        await sendBooruAuthorFollow(site, author, true, settings);
+        syncedAuthorsCount++;
+        await delay(120);
+      } catch {
+        skippedCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Синхронизация завершена: ${syncedLikesCount} лайков, ${syncedFavoritesCount} закладок, ${syncedAuthorsCount} авторов`,
+      stats: {
+        syncedLikesCount,
+        syncedFavoritesCount,
+        syncedAuthorsCount,
+        skippedCount,
+        totalChecked: likes.length + favorites.length + authors.length
+      }
+    });
+  } catch (err) {
+    logError('SyncExternal', 'Ошибка ретроактивной синхронизации:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 export default router;
+

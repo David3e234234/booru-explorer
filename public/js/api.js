@@ -439,3 +439,13 @@ export async function fetchTelegramBackupStatus() {
   if (!res.ok) return { enabled: false, lastBackupAt: null };
   return await res.json();
 }
+
+export async function syncExternalAccounts(options = {}) {
+  const res = await fetch('/api/sync-external', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(options)
+  });
+  return await res.json();
+}
+
