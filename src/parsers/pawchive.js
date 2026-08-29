@@ -149,53 +149,67 @@ export async function getPawchiveServices() {
 }
 
 /**
- * Resolves an author name or query to Pawchive creator { service, user, name }.
- * When preferredService is given, each match stage first looks on that platform
- * (the same name can exist on several services with different content), then
- * falls back to any service.
+ * Resolves an author name or query to one or more Pawchive creators [{ service, user, name }, ...].
+ * When preferredService is given, matching is restricted to that platform.
+ * When preferredService is null/all, matching looks across all platforms.
  */
-export async function resolvePawchiveAuthor(authorQuery, preferredService = null) {
-  if (!authorQuery) return null;
+export async function resolvePawchiveCreators(authorQuery, preferredService = null, settings = {}) {
+  if (!authorQuery) return [];
   const clean = authorQuery
     .replace(/^(?:creator|artist|author|user|uploader):\s*/i, '')
     .replace(/[_+]+/g, ' ')
     .trim();
-  if (!clean) return null;
+  if (!clean) return [];
 
-  const { list } = await getCreatorsDirectory();
-  if (!list || list.length === 0) return null;
+  const { list } = await getCreatorsDirectory(settings);
+  if (!list || list.length === 0) return [];
 
   const cleanLower = clean.toLowerCase();
   const cleanNoSpace = cleanLower.replace(/[\s_.-]+/g, '');
-  const preferred = preferredService ? String(preferredService).toLowerCase() : null;
+  const targetService = (preferredService && preferredService !== 'all')
+    ? String(preferredService).toLowerCase()
+    : null;
 
-  const findBy = (pred) => {
-    if (preferred) {
-      const inPreferred = list.find(c => (c.service || '').toLowerCase() === preferred && pred(c));
-      if (inPreferred) return inPreferred;
+  const candidates = targetService
+    ? list.filter(c => (c.service || '').toLowerCase() === targetService)
+    : list;
+
+  if (candidates.length === 0) return [];
+
+  // 1. Exact name match first (across all candidate platforms)
+  let matches = candidates.filter(c => (c.name || '').toLowerCase() === cleanLower);
+
+  // 2. Normalized no-space match
+  if (matches.length === 0) {
+    matches = candidates.filter(c => (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '') === cleanNoSpace);
+  }
+
+  // 3. ID match or substring match
+  if (matches.length === 0) {
+    const idMatches = candidates.filter(c => String(c.id) === clean);
+    if (idMatches.length > 0) {
+      matches = idMatches;
+    } else if (cleanLower.length >= 3) {
+      matches = candidates.filter(c => (c.name || '').toLowerCase().includes(cleanLower));
     }
-    return list.find(pred);
-  };
-
-  // Exact name match first
-  let match = findBy(c => (c.name || '').toLowerCase() === cleanLower);
-  if (!match) {
-    // Normalized no-space match
-    match = findBy(c => (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '') === cleanNoSpace);
-  }
-  if (!match) {
-    // ID match or contains match
-    match = findBy(c => String(c.id) === clean || (c.name || '').toLowerCase().includes(cleanLower));
   }
 
-  if (match) {
-    return {
-      service: match.service,
-      user: match.id,
-      name: match.name
-    };
-  }
-  return null;
+  // Sort matches by favorited count descending
+  matches.sort((a, b) => (b.favorited || 0) - (a.favorited || 0));
+
+  return matches.map(m => ({
+    service: m.service,
+    user: m.id,
+    name: m.name
+  }));
+}
+
+/**
+ * Resolves an author query to the top matching Pawchive creator { service, user, name }.
+ */
+export async function resolvePawchiveAuthor(authorQuery, preferredService = null, settings = {}) {
+  const creators = await resolvePawchiveCreators(authorQuery, preferredService, settings);
+  return creators[0] || null;
 }
 
 /**
@@ -559,7 +573,10 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     if (lower.startsWith('id:') || lower.startsWith('post:')) {
       idFilter = token.replace(/^(?:id|post):/i, '').trim();
     } else if (lower.startsWith('service:')) {
-      serviceFilter = token.substring(8).trim().toLowerCase();
+      const svc = token.substring(8).trim().toLowerCase();
+      if (svc && svc !== 'all') {
+        serviceFilter = svc;
+      }
     } else if (lower.startsWith('user:')) {
       userFilter = token.substring(5).trim();
     } else if (lower.startsWith('artist:') || lower.startsWith('author:') || lower.startsWith('creator:')) {
@@ -572,7 +589,7 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
   // Platform dropdown value (explicit UI choice) overrides the service: token
   const dropdownService = String(pawchiveService || '').trim().toLowerCase();
   if (/^[a-z0-9_-]+$/.test(dropdownService)) {
-    serviceFilter = dropdownService;
+    serviceFilter = dropdownService === 'all' ? null : dropdownService;
   }
 
   // If a direct post ID was queried (e.g. id:12499927), fetch and return the post directly
@@ -581,21 +598,21 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     return singlePost ? [singlePost] : [];
   }
 
-  // Attempt author resolution if authorQuery is given or if single keyword might match a creator.
-  // The selected platform is passed as a preference: the same author name can exist
-  // on several services with different content.
-  let resolvedCreator = null;
+  // Attempt author resolution across all platforms (or within selected platform).
+  let resolvedCreators = [];
   if (authorQuery) {
-    resolvedCreator = await resolvePawchiveAuthor(authorQuery, serviceFilter);
+    resolvedCreators = await resolvePawchiveCreators(authorQuery, serviceFilter, settings);
   } else if (searchKeywords.length === 1 && !userFilter) {
-    const candidate = await resolvePawchiveAuthor(searchKeywords[0], serviceFilter);
-    if (candidate && candidate.name.toLowerCase().replace(/[\s_.-]+/g, '') === searchKeywords[0].toLowerCase().replace(/[\s_.-]+/g, '')) {
-      resolvedCreator = candidate;
+    const candidates = await resolvePawchiveCreators(searchKeywords[0], serviceFilter, settings);
+    const kwNoSpace = searchKeywords[0].toLowerCase().replace(/[\s_.-]+/g, '');
+    const exactOrNormalized = candidates.filter(c => c.name.toLowerCase().replace(/[\s_.-]+/g, '') === kwNoSpace);
+    if (exactOrNormalized.length > 0) {
+      resolvedCreators = exactOrNormalized;
     }
   }
 
   const effectiveKeywords = [...searchKeywords];
-  if (authorQuery && !resolvedCreator && !effectiveKeywords.includes(authorQuery)) {
+  if (authorQuery && resolvedCreators.length === 0 && !effectiveKeywords.includes(authorQuery)) {
     effectiveKeywords.push(authorQuery);
   }
   const qPart = effectiveKeywords.length > 0 ? `q=${encodeURIComponent(effectiveKeywords.join(' '))}&` : '';
@@ -620,8 +637,26 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
   let items = [];
 
   try {
-    if (resolvedCreator) {
-      items = (await fetchJsonPage(`https://pawchive.pw/api/v1/${resolvedCreator.service}/user/${resolvedCreator.user}/posts?o=${offset}`)) || [];
+    if (resolvedCreators.length > 0) {
+      // Fetch posts for all matching creators across platforms in parallel
+      const creatorFetches = resolvedCreators.map(async (creator) => {
+        const pageData = await fetchJsonPage(`https://pawchive.pw/api/v1/${creator.service}/user/${creator.user}/posts?o=${offset}`);
+        return Array.isArray(pageData) ? pageData : [];
+      });
+      const settled = await Promise.allSettled(creatorFetches);
+      const rawItems = [];
+      for (const res of settled) {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          rawItems.push(...res.value);
+        }
+      }
+      // Sort all combined posts chronologically by publish / addition date descending
+      rawItems.sort((a, b) => {
+        const timeA = new Date(a.published || a.added || 0).getTime() || 0;
+        const timeB = new Date(b.published || b.added || 0).getTime() || 0;
+        return timeB - timeA;
+      });
+      items = rawItems;
     } else if (serviceFilter && userFilter) {
       items = (await fetchJsonPage(`https://pawchive.pw/api/v1/${serviceFilter}/user/${userFilter}/posts?o=${offset}`)) || [];
     } else if (serviceFilter) {
@@ -652,7 +687,8 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     const { map: creatorMap } = await getCreatorsDirectory(settings);
 
     const results = await Promise.all(items.map(async item => {
-      return await normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList, settings);
+      const creatorForPost = resolvedCreators.find(c => c.service === item.service && String(c.user) === String(item.user)) || null;
+      return await normalizePawchivePost(item, creatorMap, creatorForPost, aiTagsList, settings);
     }));
 
     let validPosts = results.filter(Boolean);
