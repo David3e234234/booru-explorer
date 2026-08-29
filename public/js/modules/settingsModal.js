@@ -813,6 +813,37 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
   if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
 
+  // Auto-sync AI & Recommendation mode dropdowns immediately on change
+  const selectRecommendationMode = document.getElementById('selectRecommendationMode');
+  if (selectRecommendationMode) {
+    selectRecommendationMode.addEventListener('change', () => {
+      const val = selectRecommendationMode.value;
+      state.settings.recommendationMode = val;
+      state.settings.enableRecommendations = val !== 'off';
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+      if (onSettingsChanged) onSettingsChanged();
+    });
+  }
+
+  const selectAiVisualEngine = document.getElementById('selectAiVisualEngine');
+  if (selectAiVisualEngine) {
+    selectAiVisualEngine.addEventListener('change', () => {
+      state.settings.aiVisualEngine = selectAiVisualEngine.value;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiVisualModel = document.getElementById('selectAiVisualModel');
+  if (selectAiVisualModel) {
+    selectAiVisualModel.addEventListener('change', () => {
+      state.settings.aiVisualModel = selectAiVisualModel.value;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
   // Generic tag input handler for tag groups
   const setupTagInput = (inputId, wrapperId, getList, setList) => {
     const input = document.getElementById(inputId);

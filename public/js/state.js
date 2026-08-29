@@ -56,6 +56,72 @@ export function getSiteCapabilities(siteId) {
   };
 }
 
+export const DEFAULT_CLIENT_SETTINGS = {
+  theme: 'kotobox',
+  itemsPerPage: 100,
+  proxyThumbnails: true,
+  proxyFullImages: true,
+  proxyVideos: true,
+  proxyDownloads: true,
+  proxyVideoDefault: true,
+  aiTags: [],
+  blacklist: [],
+  curvyTags: [],
+  petiteTags: [],
+  furryTags: [],
+  pregnantTags: [],
+  lgbtTags: [],
+  ratingFilter: 'all',
+  typeFilter: 'all',
+  ageFilter: 'all',
+  dateFilter: 'all',
+  pawchiveService: 'all',
+  hideFurry: true,
+  hidePregnant: true,
+  hideLgbt: false,
+  hideZipPosts: false,
+  unpackArchivesOnDownload: false,
+  excludedInterestTags: [],
+  videoAutoplayHover: true,
+  videoAutoplayMobile: true,
+  videoAutoplayViewer: true,
+  previewQuality: 'medium',
+  rule34ApiKey: '',
+  rule34UserId: '',
+  gelbooruApiKey: '',
+  gelbooruUserId: '',
+  danbooruApiKey: '',
+  danbooruLogin: '',
+  konachanLogin: '',
+  konachanPassword: '',
+  yandereLogin: '',
+  yanderePassword: '',
+  pawchiveSession: '',
+  deepFetchPages: 2,
+  prioritizeUserTags: false,
+  enableJsDemuxing: true,
+  customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
+  maxServerCacheMb: 1500,
+  recommendationMode: 'hybrid', // 'hybrid' | 'ai-only' | 'tags-only' | 'off'
+  enableRecommendations: true,
+  aiVisualEngine: 'browser',
+  aiVisualModel: 'dinov2',
+  aiVisualThreshold: 0.35
+};
+
+export function getInitialSettings() {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('booru_settings') : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        return { ...DEFAULT_CLIENT_SETTINGS, ...parsed };
+      }
+    }
+  } catch (e) {}
+  return { ...DEFAULT_CLIENT_SETTINGS };
+}
+
 export const state = {
   sites: [...DEFAULT_SITES],
   currentSite: 'danbooru',
@@ -70,6 +136,9 @@ export const state = {
   hideFurry: true,
   hidePregnant: true,
   hideLgbt: false,
+  hideZipPosts: false,
+  unpackArchivesOnDownload: false,
+  excludedInterestTags: [],
   searchTags: [],
   page: 1,
   limit: 100,
@@ -88,58 +157,7 @@ export const state = {
   authToken: null,
   favoriteAuthors: [],
   favoriteAuthorNames: new Set(),
-  settings: {
-    theme: 'kotobox',
-    itemsPerPage: 100,
-    proxyThumbnails: true,
-    proxyFullImages: true,
-    proxyVideos: true,
-    proxyDownloads: true,
-    proxyVideoDefault: true,
-    aiTags: [],
-    blacklist: [],
-    curvyTags: [],
-    petiteTags: [],
-    furryTags: [],
-    pregnantTags: [],
-    lgbtTags: [],
-    ratingFilter: 'all',
-    typeFilter: 'all',
-    ageFilter: 'all',
-    dateFilter: 'all',
-    pawchiveService: 'all',
-    hideFurry: true,
-    hidePregnant: true,
-    hideLgbt: false,
-    hideZipPosts: false,
-    unpackArchivesOnDownload: false,
-    excludedInterestTags: [],
-    videoAutoplayHover: true,
-    videoAutoplayMobile: true,
-    videoAutoplayViewer: true,
-    previewQuality: 'medium',
-    rule34ApiKey: '',
-    rule34UserId: '',
-    gelbooruApiKey: '',
-    gelbooruUserId: '',
-    danbooruApiKey: '',
-    danbooruLogin: '',
-    konachanLogin: '',
-    konachanPassword: '',
-    yandereLogin: '',
-    yanderePassword: '',
-    pawchiveSession: '',
-    deepFetchPages: 2,
-    prioritizeUserTags: false,
-    enableJsDemuxing: true,
-    customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
-    maxServerCacheMb: 1500,
-    recommendationMode: 'hybrid', // 'hybrid' | 'ai-only' | 'tags-only' | 'off'
-    enableRecommendations: true,
-    aiVisualEngine: 'browser',
-    aiVisualModel: 'dinov2',
-    aiVisualThreshold: 0.35
-  },
+  settings: getInitialSettings(),
   currentViewerIndex: -1,
   isLoading: false,
   hasMore: true
