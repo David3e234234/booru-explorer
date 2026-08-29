@@ -93,6 +93,10 @@ let pendingPostId = null;
 let searchSeq = 0;
 
 async function init() {
+  if ('scrollRestoration' in history) {
+    try { history.scrollRestoration = 'manual'; } catch {}
+  }
+
   // Apply the saved language to all static markup before anything renders
   applyStaticTranslations();
 

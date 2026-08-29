@@ -11,8 +11,8 @@
 
 html, body {
   width: 100%;
-  min-height: 100%;
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden;
   background-color: var(--bg-main);
   color: var(--text-primary);
   font-family: var(--font-main);
@@ -327,10 +327,11 @@ select option {
 /* ── Main layout with left sidebar ── */
 .app-layout {
   display: flex;
-  min-height: calc(100vh - 56px);
+  height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
   width: 100%;
   max-width: 100vw;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .sidebar-search {
@@ -342,9 +343,7 @@ select option {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  height: calc(100vh - 56px);
-  position: sticky;
-  top: 56px;
+  height: 100%;
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -986,6 +985,7 @@ input.search-input:focus,
 /* Main content area on the right */
 .main-content {
   flex: 1;
+  height: 100%;
   padding: 16px 20px 40px;
   overflow-y: auto;
   min-width: 0;
@@ -1485,6 +1485,13 @@ input.search-input:focus,
 }
 
 @media (max-width: 800px) {
+  html, body {
+    height: auto;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
   .desktop-only {
     display: none !important;
   }
@@ -1558,6 +1565,9 @@ input.search-input:focus,
 
   .app-layout {
     flex-direction: column;
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
 
   /* Mobile sidebar (slide-out drawer) */
@@ -1614,6 +1624,7 @@ input.search-input:focus,
   }
 
   .main-content {
+    height: auto;
     padding: 10px 10px calc(65px + max(16px, env(safe-area-inset-bottom, 20px))) 10px;
   }
 }
