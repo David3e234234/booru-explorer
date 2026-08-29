@@ -59,6 +59,8 @@ export function applyStaticTranslations(root = document) {
 Object.assign(en, {
   'app.title': 'Booru Explorer: media & video search',
 
+  'nav.feed': 'Feed',
+  'nav.feed.title': 'Main posts feed',
   'nav.fresh': 'Fresh',
   'nav.fresh.title': 'Latest posts (by date)',
   'nav.views': 'Most viewed',
@@ -77,8 +79,6 @@ Object.assign(en, {
   'rec.focusCharacters.title': 'Focus on characters and franchises',
   'rec.focusDiscovery': 'Discovery',
   'rec.focusDiscovery.title': 'Discover new art and trending content',
-  'nav.random': 'Random',
-  'nav.random.title': 'Random selection',
   'header.login': 'Sign in',
   'header.profile.title': 'Account',
   'header.site.title': 'Click to change source',
@@ -92,6 +92,7 @@ Object.assign(en, {
 
   'sidebar.filters': 'Search & filters',
   'sidebar.close': 'Close',
+  'sidebar.postSort': 'Sorting',
   'sidebar.searchTags': 'Tag search',
   'sidebar.search.placeholder': 'Enter a tag (1girl, video)...',
   'sidebar.search.placeholderPawchive': 'Search by author or title...',
@@ -195,7 +196,7 @@ Object.assign(en, {
 
   'scrollTop.title': 'Back to top',
 
-  'mobileNav.feed': 'New',
+  'mobileNav.feed': 'Feed',
   'mobileNav.feed.title': 'Feed and sections',
   'mobileNav.filters': 'Search',
   'mobileNav.filters.title': 'Search and filters',
@@ -204,19 +205,18 @@ Object.assign(en, {
   'mobileNav.profile': 'Profile',
   'mobileNav.profile.title': 'Profile',
 
+  'cat.feed': 'Feed',
+  'cat.following': 'Following',
+  'cat.recommended': 'For you',
+  'cat.favorites': 'Bookmarks',
+
   'sheet.categories': 'Feed sections',
-  'sheet.catFresh.name': 'Fresh',
-  'sheet.catFresh.desc': 'Latest publications',
-  'sheet.catViews.name': 'Most viewed',
-  'sheet.catViews.desc': 'By views and interest',
-  'sheet.catTop.name': 'Top rated',
-  'sheet.catTop.desc': 'Best by user scores',
+  'sheet.catFeed.name': 'Feed',
+  'sheet.catFeed.desc': 'Main posts feed',
   'sheet.catFollowing.name': 'Following',
   'sheet.catFollowing.desc': 'Posts from followed creators',
   'sheet.catRecommended.name': 'For you',
   'sheet.catRecommended.desc': 'Recommendations by taste',
-  'sheet.catRandom.name': 'Random',
-  'sheet.catRandom.desc': 'Random selection',
   'sheet.sources': 'Booru sources',
 
   'viewer.albumBadge.title': 'Album / set page',

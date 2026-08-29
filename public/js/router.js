@@ -2,7 +2,7 @@
 // bar via the History API and restores it on popstate / deep links.
 import { state } from './state.js';
 
-const CATEGORIES = ['new', 'views', 'top', 'recommended', 'random', 'favorites', 'profile'];
+const CATEGORIES = ['feed', 'following', 'recommended', 'favorites', 'profile'];
 
 const KNOWN_SITES = new Set([
   'danbooru', 'gelbooru', 'rule34', 'yandere', 'konachan',
@@ -10,6 +10,7 @@ const KNOWN_SITES = new Set([
 ]);
 
 const ENUMS = {
+  sort: ['new', 'views', 'top'],
   ai: ['all', 'no-ai', 'only-ai'],
   rating: ['all', 'nsfw', 'questionable', 'sfw'],
   type: ['all', 'video', 'image'],
@@ -41,7 +42,10 @@ function buildQuery() {
   if (state.currentSite && state.currentSite !== 'danbooru') {
     parts.push(`site=${enc(state.currentSite)}`);
   }
-  if (state.currentCategory && state.currentCategory !== 'new') {
+  if (state.postSort && state.postSort !== 'new') {
+    parts.push(`sort=${enc(state.postSort)}`);
+  }
+  if (state.currentCategory && state.currentCategory !== 'feed' && state.currentCategory !== 'new') {
     parts.push(`cat=${enc(state.currentCategory)}`);
   }
   if (state.currentCategory === 'favorites' && state.favoritesSubTab !== 'posts') {
@@ -68,7 +72,7 @@ function buildUrl(postId) {
 
 export function parseParams(searchStr = window.location.search) {
   const sp = new URLSearchParams(searchStr || '');
-  const out = { tags: [], site: null, cat: null, favtab: null, ptab: null, post: null };
+  const out = { tags: [], site: null, sort: null, cat: null, favtab: null, ptab: null, post: null };
 
   const tagsRaw = sp.get('tags');
   if (tagsRaw !== null) {
@@ -82,8 +86,20 @@ export function parseParams(searchStr = window.location.search) {
   const site = sp.get('site');
   out.site = site && KNOWN_SITES.has(site) ? site : null;
 
-  const cat = sp.get('cat');
-  out.cat = CATEGORIES.includes(cat) ? cat : null;
+  const rawCat = sp.get('cat');
+  if (rawCat === 'new' || rawCat === 'views' || rawCat === 'top') {
+    out.cat = 'feed';
+    out.sort = rawCat;
+  } else if (rawCat === 'random') {
+    out.cat = 'feed';
+  } else {
+    out.cat = CATEGORIES.includes(rawCat) ? rawCat : null;
+  }
+
+  const sort = sp.get('sort');
+  if (sort && ENUMS.sort.includes(sort)) {
+    out.sort = sort;
+  }
 
   const favtab = sp.get('favtab');
   out.favtab = favtab === 'authors' || favtab === 'posts' ? favtab : null;
@@ -92,6 +108,7 @@ export function parseParams(searchStr = window.location.search) {
   out.ptab = ['likes', 'favorites', 'authors', 'analytics'].includes(ptab) ? ptab : null;
 
   for (const key of Object.keys(ENUMS)) {
+    if (key === 'sort') continue;
     const val = sp.get(key);
     out[key] = val && ENUMS[key].includes(val) ? val : null;
   }
@@ -113,6 +130,10 @@ export function applyUrlToState(p) {
   }
   if (p.site && p.site !== state.currentSite) {
     state.currentSite = p.site;
+    changed = true;
+  }
+  if (p.sort && p.sort !== state.postSort) {
+    state.postSort = p.sort;
     changed = true;
   }
   if (p.cat && p.cat !== state.currentCategory) {

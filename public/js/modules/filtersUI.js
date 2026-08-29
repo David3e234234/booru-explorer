@@ -22,7 +22,7 @@ export function updateSiteCapabilitiesUI(siteId) {
   const currentSiteId = siteId || state.currentSite;
 
   // 1. Categories & navigation tabs (desktop & mobile)
-  const supportedCats = new Set(caps.supportedCategories || ['new', 'views', 'top', 'random', 'following', 'recommended']);
+  const supportedCats = new Set(caps.supportedCategories || ['feed', 'following', 'recommended']);
   if (state.settings?.recommendationMode === 'off' || state.settings?.enableRecommendations === false) {
     supportedCats.delete('recommended');
   }
@@ -30,20 +30,20 @@ export function updateSiteCapabilitiesUI(siteId) {
   document.querySelectorAll('.nav-tab').forEach(tab => {
     const cat = tab.dataset.category;
     if (cat) {
-      tab.style.display = supportedCats.has(cat) ? '' : 'none';
+      tab.style.display = (supportedCats.has(cat) || (cat === 'feed' && supportedCats.has('feed'))) ? '' : 'none';
     }
   });
 
   document.querySelectorAll('.category-card').forEach(card => {
     const cat = card.dataset.category;
     if (cat) {
-      card.style.display = supportedCats.has(cat) ? '' : 'none';
+      card.style.display = (supportedCats.has(cat) || (cat === 'feed' && supportedCats.has('feed'))) ? '' : 'none';
     }
   });
 
   if (state.currentCategory !== 'favorites' && state.currentCategory !== 'profile') {
     if (!supportedCats.has(state.currentCategory)) {
-      state.currentCategory = (caps.supportedCategories && caps.supportedCategories[0]) || 'new';
+      state.currentCategory = (caps.supportedCategories && caps.supportedCategories[0]) || 'feed';
     }
   }
 
@@ -145,6 +145,7 @@ export function updateSiteCapabilitiesUI(siteId) {
 
   // 11. Update active pill indicators
   updateCategoryTabsUI();
+  updatePostSortUI();
   updateAiFilterUI();
   updateRatingFilterUI();
   updateTypeFilterUI();
@@ -152,6 +153,13 @@ export function updateSiteCapabilitiesUI(siteId) {
   updateDateFilterUI();
   updatePawchiveServiceUI();
   updateVideoSortUI();
+  updateFilterActiveDot();
+}
+
+export function updatePostSortUI() {
+  document.querySelectorAll('.sort-pill').forEach(pill => {
+    pill.classList.toggle('active', pill.dataset.sort === (state.postSort || 'new'));
+  });
   updateFilterActiveDot();
 }
 
@@ -236,7 +244,8 @@ export function updateFilterActiveDot() {
   const filterActiveDot = document.getElementById('filterActiveDot');
   if (!filterActiveDot) return;
   const caps = getSiteCapabilities(state.currentSite);
-  const isCustom = (caps.supportsAiFilter && state.aiFilter !== 'no-ai' && state.aiFilter !== 'all') ||
+  const isCustom = (state.postSort && state.postSort !== 'new') ||
+                   (caps.supportsAiFilter && state.aiFilter !== 'no-ai' && state.aiFilter !== 'all') ||
                    (caps.rating === 'all' && state.ratingFilter !== 'all') ||
                    (caps.supportsVideo && caps.supportsImages && state.typeFilter !== 'all') ||
                    (caps.supportsShapesFilter && state.ageFilter !== 'all') ||
@@ -255,10 +264,14 @@ export function updateCategoryTabsUI() {
   const userProfileSection = document.getElementById('userProfileSection');
 
   document.querySelectorAll('.nav-tab').forEach(tab => {
-    tab.classList.toggle('active', tab.dataset.category === state.currentCategory);
+    const tabCat = tab.dataset.category;
+    const isFeedActive = (state.currentCategory === 'feed' || state.currentCategory === 'new' || state.currentCategory === 'views' || state.currentCategory === 'top') && (tabCat === 'feed' || tabCat === 'new');
+    tab.classList.toggle('active', tabCat === state.currentCategory || isFeedActive);
   });
   document.querySelectorAll('.category-card').forEach(card => {
-    card.classList.toggle('active', card.dataset.category === state.currentCategory);
+    const cardCat = card.dataset.category;
+    const isFeedActive = (state.currentCategory === 'feed' || state.currentCategory === 'new' || state.currentCategory === 'views' || state.currentCategory === 'top') && (cardCat === 'feed' || cardCat === 'new');
+    card.classList.toggle('active', cardCat === state.currentCategory || isFeedActive);
   });
   document.querySelectorAll('.mobile-nav-item').forEach(item => {
     if (state.currentCategory === 'favorites') {
@@ -302,13 +315,9 @@ export function updateCategoryTabsUI() {
   const mobileNavFeedLabel = document.getElementById('mobileNavFeedLabel');
   if (mobileNavFeedLabel) {
     const catMap = {
-      'new': t('cat.new', 'Свежие'),
-      'views': t('cat.views', 'Просматриваемые'),
-      'top': t('cat.top', 'По рейтингу'),
-      'popular': t('cat.popular', 'Популярное'),
+      'feed': t('cat.feed', 'Лента'),
       'following': t('cat.following', 'Подписки'),
       'recommended': t('cat.recommended', 'Для вас'),
-      'random': t('cat.random', 'Случайно'),
       'favorites': t('cat.favorites', 'Избранное')
     };
     if (state.currentCategory !== 'profile') {

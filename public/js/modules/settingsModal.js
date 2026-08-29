@@ -24,7 +24,7 @@ import {
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
-import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI, updatePawchiveServiceUI } from './filtersUI.js';
+import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI, updatePawchiveServiceUI } from './filtersUI.js';
 import { updateHeaderAuthUI } from './authModal.js';
 import { getLocalCacheCount, clearAllEmbeddingsCache } from './aiVision.js';
 
@@ -192,6 +192,10 @@ export function applySettingsToUIAndState(s) {
   const savedSite = s.defaultSite || localStorage.getItem('booru_selected_site');
   if (savedSite) {
     state.currentSite = savedSite;
+  }
+  if (s.postSort) {
+    state.postSort = s.postSort;
+    updatePostSortUI();
   }
   if (s.aiFilter) {
     state.aiFilter = s.aiFilter;

@@ -43,6 +43,7 @@ import { isMyLiveDemoHost, isVercelHost, showToast, haptic } from './modules/uiU
 import { openDrawer, closeAllDrawers, setDrawerCallbacks } from './modules/drawers.js';
 import { 
   updateSiteCapabilitiesUI,
+  updatePostSortUI,
   updateAiFilterUI, 
   updateRatingFilterUI, 
   updateTypeFilterUI, 
@@ -135,7 +136,7 @@ async function init() {
       updateHeaderAuthUI();
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
-      selectCategory('new');
+      selectCategory('feed');
     },
     onOpenProfile: () => {
       selectCategory('profile');
@@ -149,7 +150,7 @@ async function init() {
         state.searchTags = [];
         addSearchTag(val);
         autocompleteInstance?.renderTagsChips();
-        selectCategory('new');
+        selectCategory('feed');
       } else if (type === 'profile-subtab') {
         if (val === 'authors') {
           renderFavoriteAuthors();
@@ -164,7 +165,7 @@ async function init() {
       updateHeaderAuthUI();
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
-      selectCategory('new');
+      selectCategory('feed');
     }
   });
 
@@ -489,7 +490,7 @@ function handleExploreAuthor(author) {
   if (autocompleteInstance) {
     autocompleteInstance.renderTagsChips();
   }
-  selectCategory('new');
+  selectCategory('feed');
   showToast(`${t('app.authorSearch', 'Поиск работ автора:')} ${author.displayName || author.name}`);
 }
 
@@ -503,7 +504,7 @@ function selectSite(siteId) {
   state.currentSite = siteId;
   persistSettings({ defaultSite: siteId });
   if (state.currentCategory === 'favorites') {
-    state.currentCategory = 'new';
+    state.currentCategory = 'feed';
   }
   updateSiteCapabilitiesUI(siteId);
   updateCurrentSiteLabel();
@@ -1359,7 +1360,7 @@ async function performSearch(reset = false, options = {}) {
       tags: state.searchTags.join(' '),
       page: state.page,
       limit: currentLimit,
-      category: state.currentCategory,
+      category: (state.currentCategory === 'feed' || state.currentCategory === 'new' || !state.currentCategory) ? (state.postSort || 'new') : state.currentCategory,
       aiFilter: state.aiFilter,
       ratingFilter: state.ratingFilter,
       typeFilter: state.typeFilter,
@@ -1419,6 +1420,19 @@ function setupEventListeners() {
     tab.addEventListener('click', () => {
       const cat = tab.dataset.category;
       if (cat) selectCategory(cat);
+    });
+  });
+
+  // Post sorting (new / views / top)
+  document.querySelectorAll('.sort-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const sort = pill.dataset.sort;
+      if (state.postSort === sort) return;
+      state.postSort = sort;
+      updatePostSortUI();
+      persistSettings({ postSort: sort });
+      syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 
@@ -1618,7 +1632,7 @@ function setupEventListeners() {
   if (btnLogo) {
     btnLogo.addEventListener('click', () => {
       state.searchTags = [];
-      state.currentCategory = 'new';
+      state.currentCategory = 'feed';
       state.currentSite = 'danbooru';
       autocompleteInstance.renderTagsChips();
       updateCategoryTabsUI();

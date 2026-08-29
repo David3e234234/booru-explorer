@@ -475,7 +475,7 @@ input.search-input:focus,
 }
 
 /* Filter toggles */
-.ai-filter-toggle, .rating-filter-toggle, .type-filter-toggle, .age-filter-toggle, .video-sort-toggle {
+.ai-filter-toggle, .rating-filter-toggle, .type-filter-toggle, .age-filter-toggle, .video-sort-toggle, .post-sort-toggle {
   display: flex;
   background-color: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
@@ -484,7 +484,7 @@ input.search-input:focus,
   gap: 2px;
 }
 
-.ai-pill, .rating-pill, .type-pill, .age-pill, .video-sort-pill {
+.ai-pill, .rating-pill, .type-pill, .age-pill, .video-sort-pill, .sort-pill {
   flex: 1;
   border: none;
   background: transparent;
@@ -500,16 +500,16 @@ input.search-input:focus,
   white-space: nowrap;
 }
 
-.ai-pill:hover, .rating-pill:hover, .type-pill:hover, .age-pill:hover, .video-sort-pill:hover {
+.ai-pill:hover, .rating-pill:hover, .type-pill:hover, .age-pill:hover, .video-sort-pill:hover, .sort-pill:hover {
   color: var(--text-primary);
 }
 
-.ai-pill:focus-visible, .rating-pill:focus-visible, .type-pill:focus-visible, .age-pill:focus-visible, .video-sort-pill:focus-visible {
+.ai-pill:focus-visible, .rating-pill:focus-visible, .type-pill:focus-visible, .age-pill:focus-visible, .video-sort-pill:focus-visible, .sort-pill:focus-visible {
   outline: 2px solid var(--accent-primary);
   outline-offset: 1px;
 }
 
-.ai-pill.active, .rating-pill.active, .type-pill.active, .age-pill.active, .video-sort-pill.active {
+.ai-pill.active, .rating-pill.active, .type-pill.active, .age-pill.active, .video-sort-pill.active, .sort-pill.active {
   background-color: var(--bg-surface-hover);
   color: var(--text-primary);
   font-weight: 600;
