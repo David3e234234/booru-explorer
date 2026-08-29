@@ -288,6 +288,17 @@ export function updateCategoryTabsUI() {
     }
   }
 
+  const recommendationsHeaderBar = document.getElementById('recommendationsHeaderBar');
+  if (recommendationsHeaderBar) {
+    recommendationsHeaderBar.style.display = state.currentCategory === 'recommended' ? 'flex' : 'none';
+    if (state.currentCategory === 'recommended') {
+      const curFocus = state.recommendationFocus || state.settings?.recommendationFocus || 'all';
+      recommendationsHeaderBar.querySelectorAll('.rec-focus-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-focus') === curFocus);
+      });
+    }
+  }
+
   const mobileNavFeedLabel = document.getElementById('mobileNavFeedLabel');
   if (mobileNavFeedLabel) {
     const catMap = {

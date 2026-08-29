@@ -1100,7 +1100,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         const useEl = btn.querySelector('use');
         if (res.isFavorite) {
           state.favoriteIds.add(post.id);
-          state.favorites.unshift(post);
+          state.favorites.unshift({ ...post, favoritedAt: new Date().toISOString() });
           btn.classList.add('active');
           if (useEl) useEl.setAttribute('href', '#ic-bookmark-filled');
         } else {

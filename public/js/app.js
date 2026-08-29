@@ -17,6 +17,7 @@ import {
   clearLocalAuth,
   getUserInterestTags,
   getUserInterestSeedPairs,
+  getRecommendationSeeds,
   calculatePostMatchPercent
 } from './state.js';
 import { 
@@ -921,7 +922,8 @@ async function performSearch(reset = false, options = {}) {
       const btnRefreshSearch = document.getElementById('btnRefreshSearch');
       if (btnRefreshSearch) btnRefreshSearch.classList.add('refreshing');
 
-      const userInterests = getUserInterestTags();
+      const focusMode = state.recommendationFocus || state.settings?.recommendationFocus || 'all';
+      const userInterests = getUserInterestTags(null, { focusMode });
       const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
       const currentLimit = state.settings.itemsPerPage || state.limit || 100;
       let candidatePosts = [];
@@ -1034,28 +1036,12 @@ async function performSearch(reset = false, options = {}) {
             }).catch(() => null)
           );
         } else if (userInterests.length > 0) {
-          const selectedSeeds = [];
-
-          // 1. First take the best pair seed combos (Author + Character / Character + Franchise)
-          const seedPairs = getUserInterestSeedPairs(8);
-          if (seedPairs.length > 0) {
-            // Shuffle top pairs for fresher results
-            const shuffledPairs = [...seedPairs].sort(() => Math.random() - 0.5);
-            for (const pair of shuffledPairs) {
-              if (selectedSeeds.length >= 2) break;
-              selectedSeeds.push(pair);
-            }
-          }
-
-          // 2. Top up with single top interests (top 15)
-          const topInterests = userInterests.slice(0, 15);
-          const shuffledTop = [...topInterests].sort(() => Math.random() - 0.5);
-          for (const item of shuffledTop) {
-            if (selectedSeeds.length >= 4) break;
-            if (!selectedSeeds.includes(item.tag) && !selectedSeeds.some(s => s.includes(item.tag))) {
-              selectedSeeds.push(item.tag);
-            }
-          }
+          // Dynamic Multi-Tier seeds rotated with page offset
+          const selectedSeeds = getRecommendationSeeds({
+            limit: 4,
+            page: state.page,
+            focusMode
+          });
 
           for (const rawSeed of selectedSeeds) {
             const cleanSeedTag = rawSeed.replace(/[()]/g, '').trim();
@@ -1065,7 +1051,7 @@ async function performSearch(reset = false, options = {}) {
                 site: state.currentSite,
                 tags: cleanSeedTag,
                 page: 1 + Math.floor((state.page - 1) / Math.max(1, selectedSeeds.length)),
-                limit: 25,
+                limit: 28,
                 category: 'new',
                 aiFilter: state.aiFilter,
                 ratingFilter: state.ratingFilter,
@@ -1080,13 +1066,15 @@ async function performSearch(reset = false, options = {}) {
             );
           }
 
+          // Serendipity / discovery stream
+          const discoveryCategory = (focusMode === 'discovery') ? 'random' : 'popular';
           fetchTasks.push(
             fetchPosts({
               site: state.currentSite,
               tags: '',
               page: state.page,
-              limit: Math.min(currentLimit, 40),
-              category: 'popular',
+              limit: Math.min(currentLimit, 35),
+              category: discoveryCategory,
               aiFilter: state.aiFilter,
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
@@ -1099,6 +1087,7 @@ async function performSearch(reset = false, options = {}) {
             }).catch(() => null)
           );
         } else {
+          // Cold start / No interest history
           fetchTasks.push(
             fetchPosts({
               site: state.currentSite,
@@ -1182,10 +1171,12 @@ async function performSearch(reset = false, options = {}) {
       const scoredCandidates = filteredCandidates.map(p => {
         let basePercent = 0;
         let matchedTags = [];
+        let matchExplanation = '';
         if (useTags) {
           const matchResult = calculatePostMatchPercent(p, interestMap);
           basePercent = typeof matchResult === 'object' ? matchResult.percent : matchResult;
           matchedTags = typeof matchResult === 'object' ? matchResult.matchedTags : [];
+          matchExplanation = typeof matchResult === 'object' ? matchResult.matchExplanation : '';
         }
         const isViewed = state.viewedIds.has(p.id);
         if (isViewed && basePercent > 0) {
@@ -1195,6 +1186,7 @@ async function performSearch(reset = false, options = {}) {
           ...p,
           matchPercent: basePercent,
           matchedTags,
+          matchExplanation,
           isViewed
         };
       });
@@ -1240,9 +1232,13 @@ async function performSearch(reset = false, options = {}) {
         }
       }
 
+      // 🎯 Multi-Attribute MMR Diversification (Authors, Characters, Franchises)
       const finalRecommended = [];
       const authorCountMap = new Map();
+      const characterCountMap = new Map();
+      const copyrightCountMap = new Map();
       let lastAuthor = null;
+      let lastCharacter = null;
       const candidatePool = [...scoredCandidates];
 
       while (candidatePool.length > 0 && finalRecommended.length < currentLimit) {
@@ -1253,17 +1249,33 @@ async function performSearch(reset = false, options = {}) {
           const item = candidatePool[i];
           const rawAuthor = item.author || (item.tagDetails?.artist?.[0]) || 'unknown';
           const cleanAuthor = String(rawAuthor).toLowerCase().trim();
-          const seenCount = authorCountMap.get(cleanAuthor) || 0;
+          const seenAuthorCount = authorCountMap.get(cleanAuthor) || 0;
 
           let authorPenalty = 1.0;
           if (cleanAuthor !== 'unknown') {
-            if (seenCount === 1) authorPenalty = 0.65;
-            else if (seenCount === 2) authorPenalty = 0.35;
-            else if (seenCount >= 3) authorPenalty = 0.10;
+            if (seenAuthorCount === 1) authorPenalty = 0.65;
+            else if (seenAuthorCount === 2) authorPenalty = 0.35;
+            else if (seenAuthorCount >= 3) authorPenalty = 0.10;
           }
+          const adjacentAuthorPenalty = (cleanAuthor !== 'unknown' && cleanAuthor === lastAuthor) ? 0.35 : 1.0;
 
-          const adjacentPenalty = (cleanAuthor !== 'unknown' && cleanAuthor === lastAuthor) ? 0.3 : 1.0;
-          const effectiveScore = (item.matchPercent || 0) * authorPenalty * adjacentPenalty;
+          // Character diversity penalty
+          const primaryChar = item.tagDetails?.character?.[0] ? String(item.tagDetails.character[0]).toLowerCase().trim() : 'unknown';
+          const seenCharCount = characterCountMap.get(primaryChar) || 0;
+          let charPenalty = 1.0;
+          if (primaryChar !== 'unknown') {
+            if (seenCharCount === 1) charPenalty = 0.75;
+            else if (seenCharCount === 2) charPenalty = 0.45;
+            else if (seenCharCount >= 3) charPenalty = 0.20;
+          }
+          const adjacentCharPenalty = (primaryChar !== 'unknown' && primaryChar === lastCharacter) ? 0.50 : 1.0;
+
+          // Franchise diversity penalty
+          const primaryCp = item.tagDetails?.copyright?.[0] ? String(item.tagDetails.copyright[0]).toLowerCase().trim() : 'unknown';
+          const seenCpCount = copyrightCountMap.get(primaryCp) || 0;
+          const cpPenalty = (primaryCp !== 'unknown' && seenCpCount >= 3) ? 0.65 : 1.0;
+
+          const effectiveScore = (item.matchPercent || 0) * authorPenalty * adjacentAuthorPenalty * charPenalty * adjacentCharPenalty * cpPenalty;
 
           if (effectiveScore > bestScore) {
             bestScore = effectiveScore;
@@ -1274,6 +1286,7 @@ async function performSearch(reset = false, options = {}) {
         if (bestIndex !== -1) {
           const [selected] = candidatePool.splice(bestIndex, 1);
           finalRecommended.push(selected);
+
           const rawAuthor = selected.author || (selected.tagDetails?.artist?.[0]) || 'unknown';
           const cleanAuthor = String(rawAuthor).toLowerCase().trim();
           if (cleanAuthor !== 'unknown') {
@@ -1281,6 +1294,19 @@ async function performSearch(reset = false, options = {}) {
             lastAuthor = cleanAuthor;
           } else {
             lastAuthor = null;
+          }
+
+          const primaryChar = selected.tagDetails?.character?.[0] ? String(selected.tagDetails.character[0]).toLowerCase().trim() : 'unknown';
+          if (primaryChar !== 'unknown') {
+            characterCountMap.set(primaryChar, (characterCountMap.get(primaryChar) || 0) + 1);
+            lastCharacter = primaryChar;
+          } else {
+            lastCharacter = null;
+          }
+
+          const primaryCp = selected.tagDetails?.copyright?.[0] ? String(selected.tagDetails.copyright[0]).toLowerCase().trim() : 'unknown';
+          if (primaryCp !== 'unknown') {
+            copyrightCountMap.set(primaryCp, (copyrightCountMap.get(primaryCp) || 0) + 1);
           }
         } else {
           break;
@@ -1638,6 +1664,21 @@ function setupEventListeners() {
       showToast(t('app.feedShuffled', 'Лента перемешана'));
     });
   }
+
+  // Recommendation focus toolbar buttons
+  const recFocusButtons = document.querySelectorAll('.rec-focus-btn');
+  recFocusButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const focus = btn.getAttribute('data-focus') || 'all';
+      if (state.recommendationFocus === focus) return;
+      haptic(10);
+      state.recommendationFocus = focus;
+      if (state.settings) state.settings.recommendationFocus = focus;
+      saveLocalSettings({ recommendationFocus: focus });
+      recFocusButtons.forEach(b => b.classList.toggle('active', b === btn));
+      performSearch(1, { bustCache: false, showLoading: true });
+    });
+  });
 
   // Favorites sub-tabs
   const btnFavSubPosts = document.getElementById('btnFavSubPosts');

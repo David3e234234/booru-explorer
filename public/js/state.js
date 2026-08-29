@@ -103,6 +103,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
   maxServerCacheMb: 1500,
   recommendationMode: 'hybrid', // 'hybrid' | 'ai-only' | 'tags-only' | 'off'
+  recommendationFocus: 'all', // 'all' | 'artists' | 'characters' | 'discovery'
+  recommendationDecayDays: 25, // half-life for temporal interest decay
   enableRecommendations: true,
   aiVisualEngine: 'browser',
   aiVisualModel: 'dinov2',
@@ -137,6 +139,7 @@ export const state = {
   sites: [...DEFAULT_SITES],
   currentSite: 'danbooru',
   currentCategory: 'new', // 'new', 'views', 'top', 'recommended', 'random', 'favorites'
+  recommendationFocus: 'all', // 'all' | 'artists' | 'characters' | 'discovery'
   aiFilter: 'no-ai', // 'all', 'no-ai', 'only-ai'
   ratingFilter: 'all', // 'all', 'nsfw' (18+), 'questionable' (16+), 'sfw' (safe)
   typeFilter: 'all', // 'all', 'video', 'image'
@@ -556,26 +559,109 @@ export function isAuthorFavorite(name) {
   return state.favoriteAuthorNames.has(clean);
 }
 
-// 🧠 Algorithm for extracting the user's interest map
-export function getUserInterestTags(limit = null) {
+// 🛡️ Broad composition/generic tags that should NOT be wiped out by single dislikes
+const GENERIC_DISLIKE_PROTECTED_TAGS = new Set([
+  'solo', '1girl', '1boy', '2girls', '2boys', 'multiple_girls', 'multiple_boys',
+  'looking_at_viewer', 'smile', 'open_mouth', 'closed_eyes', 'blush', 'sitting', 'standing', 'lying',
+  'long_hair', 'short_hair', 'medium_hair', 'blonde_hair', 'black_hair', 'brown_hair', 'blue_hair', 'white_hair', 'pink_hair', 'red_hair', 'green_hair', 'purple_hair',
+  'blue_eyes', 'red_eyes', 'brown_eyes', 'green_eyes', 'purple_eyes', 'yellow_eyes', 'black_eyes',
+  'breasts', 'large_breasts', 'medium_breasts', 'small_breasts',
+  'simple_background', 'white_background', 'transparent_background', 'full_body', 'upper_body', 'portrait', 'cowboy_shot',
+  'highres', 'absurdres', 'superabsurdres', 'comic', 'monochrome', 'greyscale'
+]);
+
+// ⏳ Calculate exponential half-life decay for timestamps
+function getTemporalDecayFactor(dateString, halfLifeDays = 25) {
+  if (!dateString) return 0.65;
+  try {
+    const itemDate = new Date(dateString).getTime();
+    if (isNaN(itemDate)) return 0.65;
+    const now = Date.now();
+    const daysDiff = Math.max(0, (now - itemDate) / (1000 * 60 * 60 * 24));
+    // Half-life formula: 2^(-t / halfLife) with 0.20 floor so historical preferences persist as a subtle base
+    return Math.max(0.20, Math.pow(2, -daysDiff / Math.max(1, halfLifeDays)));
+  } catch (e) {
+    return 0.65;
+  }
+}
+
+// ⏱️ Short-term in-session interaction tracking
+const sessionInterests = new Map(); // tag -> { score, category, lastSeen }
+
+export function recordSessionInteraction(post, interactionType = 'view') {
+  if (!post) return;
+  const now = Date.now();
+  const baseWeight = interactionType === 'similar' ? 1.2 : interactionType === 'zoom' ? 0.8 : 0.4;
+
+  const addSessionTag = (rawTag, cat, mult = 1.0) => {
+    const clean = cleanTagString(rawTag);
+    if (!clean || GENERIC_DISLIKE_PROTECTED_TAGS.has(clean)) return;
+    const prev = sessionInterests.get(clean) || { score: 0, category: cat, lastSeen: now };
+    prev.score = Math.min(5.0, prev.score + baseWeight * mult);
+    prev.lastSeen = now;
+    sessionInterests.set(clean, prev);
+  };
+
+  if (post.author) addSessionTag(post.author, 'artist', 2.0);
+  const td = post.tagDetails || {};
+  if (Array.isArray(td.artist)) td.artist.forEach(a => addSessionTag(a, 'artist', 2.0));
+  if (Array.isArray(td.character)) td.character.forEach(c => addSessionTag(c, 'character', 1.6));
+  if (Array.isArray(td.copyright)) td.copyright.forEach(cp => addSessionTag(cp, 'copyright', 1.3));
+  if (Array.isArray(td.general)) td.general.slice(0, 4).forEach(g => addSessionTag(g, 'general', 0.6));
+}
+
+export function getSessionInterests() {
+  const now = Date.now();
+  const ONE_HOUR = 3600 * 1000;
+  const valid = [];
+  for (const [tag, data] of sessionInterests.entries()) {
+    if (now - data.lastSeen < ONE_HOUR) {
+      valid.push({ tag, score: data.score, category: data.category });
+    } else {
+      sessionInterests.delete(tag);
+    }
+  }
+  return valid;
+}
+
+export function clearSessionInterests() {
+  sessionInterests.clear();
+}
+
+// 🧠 Advanced algorithm for extracting the user's interest map with temporal decay and category balancing
+export function getUserInterestTags(limit = null, options = {}) {
   const counts = new Map(); // tag -> positive weight sum
   const dislikeCounts = new Map(); // tag -> negative penalty sum
   const weights = new Map(); // tag -> baseWeight
   const catMap = new Map(); // tag -> category
 
-  // 1. Analyze all liked posts (weight × 2.0)
+  const halfLife = state.settings?.recommendationDecayDays || 25;
+  const focusMode = options.focusMode || state.recommendationFocus || state.settings?.recommendationFocus || 'all';
+
+  // 1. Analyze all liked posts (weight 2.2 × temporal decay)
   for (const post of state.likes) {
-    extractTagsFromPost(post, counts, weights, catMap, 2.0);
+    const decay = getTemporalDecayFactor(post.likedAt, halfLife);
+    extractTagsFromPost(post, counts, weights, catMap, 2.2 * decay);
   }
 
-  // 2. Analyze favorites (weight × 1.5)
+  // 2. Analyze favorites (weight 1.8 × temporal decay with slightly longer half-life)
   for (const post of state.favorites) {
-    extractTagsFromPost(post, counts, weights, catMap, 1.5);
+    const decay = getTemporalDecayFactor(post.favoritedAt || post.likedAt, halfLife * 1.4);
+    extractTagsFromPost(post, counts, weights, catMap, 1.8 * decay);
   }
 
-  // 3. Analyze hidden / disliked posts (penalty × 1.8)
+  // 3. Analyze hidden / disliked posts (penalty 2.0 × temporal decay with generic protection)
   for (const post of (state.dislikes || [])) {
-    extractTagsFromPost(post, dislikeCounts, weights, catMap, 1.8);
+    const decay = getTemporalDecayFactor(post.dislikedAt, halfLife * 1.5);
+    extractTagsFromPost(post, dislikeCounts, weights, catMap, 2.0 * decay, true);
+  }
+
+  // 4. Inject short-term session signals (boost up to +0.8)
+  const sessionList = getSessionInterests();
+  for (const item of sessionList) {
+    counts.set(item.tag, (counts.get(item.tag) || 0) + item.score * 0.8);
+    if (!catMap.has(item.tag)) catMap.set(item.tag, item.category);
+    if (!weights.has(item.tag)) weights.set(item.tag, 1.2);
   }
 
   const scores = new Map();
@@ -584,18 +670,30 @@ export function getUserInterestTags(limit = null) {
   for (const [tag, count] of counts.entries()) {
     const penalty = dislikeCounts.get(tag) || 0;
     const netCount = count - penalty;
-    if (netCount <= 0.1) continue; // Tag fully suppressed by dislikes
+    if (netCount <= 0.08) continue; // Tag suppressed by dislikes
 
-    const baseWeight = weights.get(tag) || 1.0;
+    let baseWeight = weights.get(tag) || 1.0;
+    const category = catMap.get(tag) || 'general';
+
+    // Focus mode multipliers
+    if (focusMode === 'artists' && category === 'artist') {
+      baseWeight *= 2.2;
+    } else if (focusMode === 'characters' && (category === 'character' || category === 'copyright')) {
+      baseWeight *= 2.0;
+    } else if (focusMode === 'discovery' && category === 'general') {
+      baseWeight *= 1.4;
+    }
+
     const score = baseWeight * Math.log2(1 + netCount);
     scores.set(tag, score);
   }
 
-  // 4. Analyze favorite authors (weight × 5.0) -> fixed bonus
+  // 5. Favorite authors bonus
   for (const author of state.favoriteAuthors) {
     const raw = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
     if (raw) {
-      scores.set(raw, (scores.get(raw) || 0) + 10.0);
+      const bonus = (focusMode === 'artists' ? 16.0 : 10.0);
+      scores.set(raw, (scores.get(raw) || 0) + bonus);
       catMap.set(raw, 'artist');
     }
   }
@@ -612,14 +710,14 @@ export function getUserInterestTags(limit = null) {
   return (typeof limit === 'number' && limit > 0) ? list.slice(0, limit) : list;
 }
 
-// 🔗 Extract stable tag pair combinations (Author + Character, Character + Franchise) for seed queries
-export function getUserInterestSeedPairs(limit = 10) {
+// 🔗 Extract stable tag pair combinations for seed queries
+export function getUserInterestSeedPairs(limit = 12) {
   const userInterests = getUserInterestTags();
   if (userInterests.length === 0) return [];
 
   const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
   const excludedSet = new Set((state.settings.excludedInterestTags || []).map(t => String(t).toLowerCase().trim()));
-  const pairScores = new Map(); // "tag1 tag2" -> score
+  const pairScores = new Map();
 
   const postsPool = [...state.likes, ...state.favorites];
   for (const post of postsPool) {
@@ -643,9 +741,8 @@ export function getUserInterestSeedPairs(limit = 10) {
       pairScores.set(sortedPair, (pairScores.get(sortedPair) || 0) + pairScore);
     };
 
-    // Highest-quality seed result combinations
     for (const a of artists) {
-      for (const c of characters) addPair(a, c, 2.5);
+      for (const c of characters) addPair(a, c, 2.6);
       for (const cp of copyrights) addPair(a, cp, 2.0);
     }
     for (const c of characters) {
@@ -659,6 +756,67 @@ export function getUserInterestSeedPairs(limit = 10) {
     .map(entry => entry[0]);
 
   return sortedPairs.slice(0, limit);
+}
+
+// 🎲 Smart Multi-Tier Seed Generation with Page Rotation and Exploration
+export function getRecommendationSeeds({ limit = 5, page = 1, focusMode = 'all' } = {}) {
+  const userInterests = getUserInterestTags(40, { focusMode });
+  if (userInterests.length === 0) return [];
+
+  const seedPairs = getUserInterestSeedPairs(20);
+  const selectedSeeds = [];
+
+  if (focusMode === 'artists') {
+    const artistInterests = userInterests.filter(i => i.category === 'artist' || i.score >= 5.0);
+    if (artistInterests.length > 0) {
+      const offset = ((page - 1) * 3) % artistInterests.length;
+      for (let i = 0; i < Math.min(limit, artistInterests.length); i++) {
+        selectedSeeds.push(artistInterests[(offset + i) % artistInterests.length].tag);
+      }
+    }
+  } else if (focusMode === 'characters') {
+    const charInterests = userInterests.filter(i => i.category === 'character' || i.category === 'copyright');
+    if (charInterests.length > 0) {
+      const offset = ((page - 1) * 3) % charInterests.length;
+      for (let i = 0; i < Math.min(limit, charInterests.length); i++) {
+        selectedSeeds.push(charInterests[(offset + i) % charInterests.length].tag);
+      }
+    }
+  } else if (focusMode === 'discovery') {
+    // Discovery mode: mix top pair with second-tier interests and broad seeds
+    if (seedPairs.length > 0) {
+      const pairIdx = (page - 1) % seedPairs.length;
+      selectedSeeds.push(seedPairs[pairIdx]);
+    }
+    const midInterests = userInterests.slice(5, 30);
+    if (midInterests.length > 0) {
+      const shuffled = [...midInterests].sort(() => Math.random() - 0.5);
+      for (const item of shuffled) {
+        if (selectedSeeds.length >= limit) break;
+        if (!selectedSeeds.includes(item.tag)) selectedSeeds.push(item.tag);
+      }
+    }
+  } else {
+    // Balanced "all" mode: Page-aware rotation of top pairs + single tags
+    if (seedPairs.length > 0) {
+      const pairOffset = ((page - 1) * 2) % seedPairs.length;
+      selectedSeeds.push(seedPairs[pairOffset]);
+      if (seedPairs.length > 1) {
+        selectedSeeds.push(seedPairs[(pairOffset + 1) % seedPairs.length]);
+      }
+    }
+
+    const singleOffset = ((page - 1) * 3) % Math.min(userInterests.length, 25);
+    for (let i = 0; i < userInterests.length; i++) {
+      if (selectedSeeds.length >= limit) break;
+      const candidate = userInterests[(singleOffset + i) % userInterests.length];
+      if (!selectedSeeds.includes(candidate.tag) && !selectedSeeds.some(s => s.includes(candidate.tag))) {
+        selectedSeeds.push(candidate.tag);
+      }
+    }
+  }
+
+  return selectedSeeds;
 }
 
 const IGNORED_INTEREST_TAGS = new Set([
@@ -699,16 +857,22 @@ export function resetExcludedInterestTags() {
   state.settings.excludedInterestTags = [];
 }
 
-function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {
+function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0, isDislike = false) {
   if (!post) return;
 
   const addTag = (rawTag, category, baseWeight) => {
     if (!rawTag) return;
     const clean = cleanTagString(String(rawTag).split(',')[0]);
     if (!clean) return;
-    
-    counts.set(clean, (counts.get(clean) || 0) + multiplier);
-    
+
+    // Apply generic tag protection for dislikes to avoid killing common composition tags
+    let effMult = multiplier;
+    if (isDislike && GENERIC_DISLIKE_PROTECTED_TAGS.has(clean)) {
+      effMult = multiplier * 0.10;
+    }
+
+    counts.set(clean, (counts.get(clean) || 0) + effMult);
+
     const currentWeight = weights.get(clean) || 0;
     if (baseWeight > currentWeight) {
       weights.set(clean, baseWeight);
@@ -738,12 +902,13 @@ function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0) {
   }
 }
 
-// 🎯 Compute a post's relevance percentage and its list of matched tags
+// 🎯 Compute a post's relevance percentage and rich matched tags breakdown with explanation
 export function calculatePostMatchPercent(post, userInterestMap) {
   if (!post || !userInterestMap || userInterestMap.size === 0) {
     return {
       percent: 0,
       matchedTags: [],
+      matchExplanation: '',
       valueOf() { return 0; },
       toString() { return '0'; }
     };
@@ -753,7 +918,7 @@ export function calculatePostMatchPercent(post, userInterestMap) {
   const matchedTags = [];
   const addedSet = new Set();
 
-  const checkTag = (tag, weightMultiplier = 1.0, displayPrefix = '') => {
+  const checkTag = (tag, weightMultiplier = 1.0, displayPrefix = '', category = 'general') => {
     if (!tag) return;
     const clean = cleanTagString(tag);
     if (!clean) return;
@@ -765,26 +930,28 @@ export function calculatePostMatchPercent(post, userInterestMap) {
         matchedTags.push({
           tag: clean,
           display: displayPrefix ? `${displayPrefix}${clean}` : clean,
+          category,
           score
         });
       }
     }
   };
 
-  if (post.author) checkTag(post.author, 4.0, '@');
+  if (post.author) checkTag(post.author, 4.5, '@', 'artist');
   if (post.tagDetails) {
-    if (Array.isArray(post.tagDetails.artist)) post.tagDetails.artist.forEach(a => checkTag(a, 4.0, '@'));
-    if (Array.isArray(post.tagDetails.character)) post.tagDetails.character.forEach(c => checkTag(c, 3.0));
-    if (Array.isArray(post.tagDetails.copyright)) post.tagDetails.copyright.forEach(cp => checkTag(cp, 2.5));
-    if (Array.isArray(post.tagDetails.general)) post.tagDetails.general.forEach(g => checkTag(g, 1.0));
+    if (Array.isArray(post.tagDetails.artist)) post.tagDetails.artist.forEach(a => checkTag(a, 4.5, '@', 'artist'));
+    if (Array.isArray(post.tagDetails.character)) post.tagDetails.character.forEach(c => checkTag(c, 3.5, '', 'character'));
+    if (Array.isArray(post.tagDetails.copyright)) post.tagDetails.copyright.forEach(cp => checkTag(cp, 2.8, '', 'copyright'));
+    if (Array.isArray(post.tagDetails.general)) post.tagDetails.general.forEach(g => checkTag(g, 1.0, '', 'general'));
   } else if (Array.isArray(post.tags)) {
-    for (const t of post.tags) checkTag(t, 1.0);
+    for (const t of post.tags) checkTag(t, 1.0, '', 'general');
   }
 
   if (matchPoints === 0) {
     return {
       percent: 0,
       matchedTags: [],
+      matchExplanation: '',
       valueOf() { return 0; },
       toString() { return '0'; }
     };
@@ -793,16 +960,25 @@ export function calculatePostMatchPercent(post, userInterestMap) {
   // Sort matched tags by significance
   matchedTags.sort((a, b) => b.score - a.score);
 
-  const isCreatorMatch = matchedTags.some(m => m.display.startsWith('@'));
-  const ratio = matchPoints / (matchPoints + (isCreatorMatch ? 6 : 12));
-  const percent = Math.min(99, Math.max(70, Math.round((isCreatorMatch ? 75 : 62) + ratio * (isCreatorMatch ? 24 : 37))));
+  const hasArtist = matchedTags.some(m => m.category === 'artist');
+  const hasChar = matchedTags.some(m => m.category === 'character');
+  const isKeyMatch = hasArtist || hasChar;
+
+  const ratio = matchPoints / (matchPoints + (isKeyMatch ? 7 : 14));
+  const percent = Math.min(99, Math.max(55, Math.round((isKeyMatch ? 72 : 55) + ratio * (isKeyMatch ? 27 : 38))));
+
+  // Build human-friendly explanation
+  const displayTags = matchedTags.map(m => m.display).slice(0, 4);
+  const matchExplanation = displayTags.join(', ');
 
   return {
     percent,
-    matchedTags: matchedTags.map(m => m.display).slice(0, 4),
+    matchedTags: displayTags,
+    matchExplanation,
     valueOf() { return this.percent; },
     toString() { return String(this.percent); }
   };
 }
+
 
 

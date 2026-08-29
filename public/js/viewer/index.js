@@ -1,4 +1,4 @@
-import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors } from '../state.js';
+import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors, recordSessionInteraction } from '../state.js';
 import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
@@ -922,6 +922,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     if (currentPost.id) {
       markPostViewed(currentPost.id);
+      recordSessionInteraction(currentPost, 'view');
     }
 
     if (siteBadge) siteBadge.textContent = currentPost.siteName || currentPost.site;
@@ -1308,7 +1309,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (res.success) {
           if (res.isFavorite) {
             state.favoriteIds.add(currentPost.id);
-            state.favorites.unshift(currentPost);
+            state.favorites.unshift({ ...currentPost, favoritedAt: new Date().toISOString() });
             btnFavModal.classList.add('active');
             btnFavModal.querySelector('svg')?.setAttribute('fill', 'currentColor');
             showToast(t('vw.savedToFavs', 'Сохранено в закладки'));
