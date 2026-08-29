@@ -1416,13 +1416,13 @@ input.search-input:focus,
 }
 
 /* ── Responsive adjustments for intermediate desktop window sizes (801px - 1600px) ── */
-@media (max-width: 1550px) {
+@media (max-width: 1600px) {
   .btn-action-shuffle span.desktop-only {
     display: none !important;
   }
 }
 
-@media (max-width: 1400px) {
+@media (max-width: 1460px) {
   .results-count.desktop-only {
     display: none !important;
   }
@@ -1436,7 +1436,7 @@ input.search-input:focus,
   }
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1280px) {
   .nav-tab[data-category="following"] span,
   .nav-tab[data-category="recommended"] span {
     display: none;
@@ -1451,7 +1451,7 @@ input.search-input:focus,
   }
 }
 
-@media (max-width: 1050px) {
+@media (max-width: 1120px) {
   .nav-tab span {
     display: none;
   }
