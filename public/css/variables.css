@@ -185,3 +185,7 @@
   --shadow-lg: 0 14px 30px -8px rgba(60, 40, 20, 0.2);
   --shadow-viewer: 0 25px 55px -12px rgba(40, 25, 10, 0.42);
 }
+
+.mobile-only {
+  display: none !important;
+}
