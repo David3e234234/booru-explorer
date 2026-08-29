@@ -856,6 +856,7 @@ async function performSearch(reset = false, options = {}) {
           ratingFilter: state.ratingFilter,
           typeFilter: state.typeFilter,
           ageFilter: state.ageFilter,
+          dateFilter: state.dateFilter,
           hideFurry: state.hideFurry,
           hidePregnant: state.hidePregnant,
           hideLgbt: state.hideLgbt,
@@ -907,6 +908,7 @@ async function performSearch(reset = false, options = {}) {
                   ratingFilter: state.ratingFilter,
                   typeFilter: state.typeFilter,
                   ageFilter: state.ageFilter,
+                  dateFilter: state.dateFilter,
                   hideFurry: state.hideFurry,
                   hidePregnant: state.hidePregnant,
                   hideLgbt: state.hideLgbt,
@@ -927,6 +929,7 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
+              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -942,6 +945,7 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
+              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -986,6 +990,7 @@ async function performSearch(reset = false, options = {}) {
                 ratingFilter: state.ratingFilter,
                 typeFilter: state.typeFilter,
                 ageFilter: state.ageFilter,
+                dateFilter: state.dateFilter,
                 hideFurry: state.hideFurry,
                 hidePregnant: state.hidePregnant,
                 hideLgbt: state.hideLgbt,
@@ -1005,6 +1010,7 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
+              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1023,6 +1029,7 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
+              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1038,6 +1045,7 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
+              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1053,6 +1061,7 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
+              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1329,6 +1338,7 @@ function setupEventListeners() {
         persistSettings({ dateFilter: dateVal });
         dateFilterDropdown.classList.remove('open');
         btnDateFilterToggle.setAttribute('aria-expanded', 'false');
+        syncSearchUrl('replace');
       });
     });
 
