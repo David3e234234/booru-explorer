@@ -1458,8 +1458,13 @@
         <!-- 5. TAB: AI & VISION RECOMMENDATIONS -->
         <div class="settings-tab-pane" id="tabPane-ai" style="display: none;">
           <div class="settings-group">
-            <label class="settings-label" data-i18n="settings.aiHeading">Система рекомендаций и ИИ:</label>
-            <p class="settings-hint" data-i18n="settings.aiHint">Настройка персональной ленты «Для вас» и сканирования изображений нейросетью для поиска визуально похожих артов.</p>
+            <label class="settings-label" data-i18n="settings.aiHeading">Система рекомендаций и нейросеть (ИИ):</label>
+            <p class="settings-hint" data-i18n="settings.aiHint">Персонализация ленты «Для вас», визуальный поиск похожих изображений и управление нейросетевыми моделями.</p>
+          </div>
+
+          <!-- Section 1: Balance & Algorithm -->
+          <div class="settings-section-title" style="font-size: 13px; font-weight: 700; color: var(--accent-primary); margin: 16px 0 8px; text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.aiSecAlgorithm">
+            1. Баланс и алгоритм рекомендаций
           </div>
 
           <!-- Recommendation Mode Selection -->
@@ -1473,14 +1478,79 @@
             </select>
           </div>
 
+          <!-- Hybrid Weight Balance -->
+          <div class="settings-group" id="groupAiHybridWeight">
+            <label class="settings-label" for="selectAiHybridWeight" data-i18n="settings.aiHybridWeight">Баланс гибридного режима (Теги vs ИИ):</label>
+            <p class="settings-hint" data-i18n="settings.aiHybridWeightHint">Пропорция влияния истории тегов и визуального сходства нейросети при формировании ленты.</p>
+            <select id="selectAiHybridWeight" class="input-setting">
+              <option value="0.2">80% Теги / 20% ИИ (Акцент на теги)</option>
+              <option value="0.4" selected>60% Теги / 40% ИИ (Сбалансированный)</option>
+              <option value="0.5">50% Теги / 50% ИИ (Равный)</option>
+              <option value="0.7">30% Теги / 70% ИИ (Акцент на визуал)</option>
+              <option value="0.85">15% Теги / 85% ИИ (Почти полностью визуал)</option>
+            </select>
+          </div>
+
+          <!-- Similarity Threshold -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiVisualThreshold" data-i18n="settings.aiThreshold">Порог сходства (минимальный % совпадения):</label>
+            <p class="settings-hint" data-i18n="settings.aiThresholdHint">Отсекает арты, визуальное совпадение которых ниже выбранного процента.</p>
+            <select id="selectAiVisualThreshold" class="input-setting">
+              <option value="0.20">20% (Мягкий — больше вариантов)</option>
+              <option value="0.30" selected>30% (Оптимальный, по умолчанию)</option>
+              <option value="0.40">40% (Строгий)</option>
+              <option value="0.50">50% (Высокое сходство)</option>
+              <option value="0.65">65% (Максимальное совпадение)</option>
+            </select>
+          </div>
+
+          <!-- Taste History Sample Size -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiTasteHistorySize" data-i18n="settings.aiTasteHistory">Размер выборки лайков для вкуса:</label>
+            <p class="settings-hint" data-i18n="settings.aiTasteHistoryHint">Сколько последних понравившихся артов используется для построения вкусового профиля.</p>
+            <select id="selectAiTasteHistorySize" class="input-setting">
+              <option value="5">5 последних артов (Быстро)</option>
+              <option value="10" selected>10 последних артов (По умолчанию)</option>
+              <option value="20">20 последних артов (Расширенный)</option>
+              <option value="50">50 последних артов (Глубокий)</option>
+            </select>
+          </div>
+
+          <!-- Candidate Pool Size Selection -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiCandidatePool" data-i18n="settings.aiCandidatePool">Глубина анализа кандидатов:</label>
+            <p class="settings-hint" data-i18n="settings.aiCandidatePoolHint">Количество постов, которые система отбирает и сканирует для рекомендаций и поиска похожих.</p>
+            <select id="selectAiCandidatePool" class="input-setting">
+              <option value="20">20 постов (Быстро)</option>
+              <option value="40" selected>40 постов (По умолчанию)</option>
+              <option value="60">60 постов (Глубокий)</option>
+              <option value="100">100 постов (Максимальный)</option>
+            </select>
+          </div>
+
+          <!-- Negative Taste from Dislikes Toggle -->
+          <div class="settings-group">
+            <label class="toggle-row" title="Использовать дизлайки для отталкивания нежелательного контента">
+              <input type="checkbox" id="checkAiUseNegativeTaste" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name" data-i18n="settings.aiNegativeTaste">Учитывать дизлайки (Негативный вектор вкуса)</span>
+            </label>
+            <p class="settings-hint" style="margin-left: 36px;" data-i18n="settings.aiNegativeTasteHint">Штрафует и отталкивает из персональной ленты посты, визуально похожие на те, которые вы дизлайкнули.</p>
+          </div>
+
+          <!-- Section 2: Performance & Hardware Acceleration -->
+          <div class="settings-section-title" style="font-size: 13px; font-weight: 700; color: var(--accent-primary); margin: 24px 0 8px; text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.aiSecPerformance">
+            2. Производительность, аппаратное ускорение и кэш
+          </div>
+
           <!-- Execution environment selection -->
           <div class="settings-group">
             <label class="settings-label" for="selectAiVisualEngine" data-i18n="settings.aiEngine">Среда выполнения нейросети:</label>
             <select id="selectAiVisualEngine" class="input-setting">
-              <option value="auto" data-i18n="settings.aiEngineAuto">Автоматически (Сервер если доступен, иначе браузер)</option>
-              <option value="browser" selected data-i18n="settings.aiEngineBrowser">В браузере (WebAssembly / WebGPU, 0% нагрузки на сервер)</option>
-              <option value="server" data-i18n="settings.aiEngineServer">На сервере (Node.js ONNX, экономит батарею и трафик клиента)</option>
-              <option value="off" data-i18n="settings.aiEngineOff">Выключено</option>
+              <option value="auto">Автоматически (Сервер если доступен, иначе браузер)</option>
+              <option value="browser" selected>В браузере (WebGPU / WASM, 0% нагрузки на сервер)</option>
+              <option value="server">На сервере (Node.js ONNX, экономит ресурсы клиента)</option>
+              <option value="off">Выключено</option>
             </select>
           </div>
 
@@ -1488,34 +1558,99 @@
           <div class="settings-group">
             <label class="settings-label" for="selectAiVisualModel" data-i18n="settings.aiModel">Модель визуального анализа:</label>
             <select id="selectAiVisualModel" class="input-setting">
-              <option value="dinov2" selected data-i18n="settings.aiModelDinov2">DINOv2 (Vision Transformer для сходств, ~20 МБ)</option>
-              <option value="clip" data-i18n="settings.aiModelClip">CLIP Vision (Глубокое понимание сцен и стиля, ~30 МБ)</option>
+              <option value="dinov2" selected>DINOv2 (Vision Transformer для сходств, ~20 МБ)</option>
+              <option value="clip">CLIP Vision (Глубокое понимание сцен и стиля, ~30 МБ)</option>
             </select>
           </div>
 
-          <!-- Candidate Pool Size Selection -->
+          <!-- Browser Backend (WebGPU / WASM) -->
+          <div class="settings-group" id="groupAiBrowserBackend">
+            <label class="settings-label" for="selectAiBrowserBackend" data-i18n="settings.aiBackend">Аппаратное ускорение в браузере:</label>
+            <select id="selectAiBrowserBackend" class="input-setting">
+              <option value="webgpu" selected>WebGPU (Максимальная скорость на видеокарте / GPU)</option>
+              <option value="wasm">WASM (Многопоточный процессор CPU)</option>
+              <option value="cpu">CPU (Базовый WebAssembly)</option>
+            </select>
+          </div>
+
+          <!-- Concurrency -->
           <div class="settings-group">
-            <label class="settings-label" for="selectAiCandidatePool" data-i18n="settings.aiCandidatePool">Глубина анализа постов (кандидаты):</label>
-            <p class="settings-hint" data-i18n="settings.aiCandidatePoolHint">Количество постов, которые система отбирает и сканирует для рекомендаций «Для вас» и поиска похожих. Больше постов = качественнее выборка, но выше нагрузка.</p>
-            <select id="selectAiCandidatePool" class="input-setting">
-              <option value="20" data-i18n="settings.aiPool20">20 постов (быстро)</option>
-              <option value="40" selected data-i18n="settings.aiPool40">40 постов (по умолчанию)</option>
-              <option value="60" data-i18n="settings.aiPool60">60 постов (глубокий анализ)</option>
-              <option value="100" data-i18n="settings.aiPool100">100 постов (максимальный)</option>
+            <label class="settings-label" for="selectAiConcurrency" data-i18n="settings.aiConcurrency">Параллелизм сканирования (потоки):</label>
+            <select id="selectAiConcurrency" class="input-setting">
+              <option value="1">1 поток (Для слабых смартфонов / экономия батареи)</option>
+              <option value="2" selected>2 потока (Оптимально, по умолчанию)</option>
+              <option value="4">4 потока (Для мощных ПК)</option>
+            </select>
+          </div>
+
+          <!-- AI Input Quality -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiInputQuality" data-i18n="settings.aiInputQuality">Качество входного превью для ИИ:</label>
+            <p class="settings-hint" data-i18n="settings.aiInputQualityHint">180px работает быстрее всего; 360px и 720px точнее определяют мелкие детали и стиль.</p>
+            <select id="selectAiInputQuality" class="input-setting">
+              <option value="180">180px (Миниатюра — сверхбыстро)</option>
+              <option value="360" selected>360px (Среднее — оптимальный баланс)</option>
+              <option value="720">720px (Высокое — максимальная точность)</option>
+            </select>
+          </div>
+
+          <!-- Max Cache Vectors -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiMaxCacheVectors" data-i18n="settings.aiMaxCache">Лимит кэша векторов (IndexedDB):</label>
+            <p class="settings-hint" data-i18n="settings.aiMaxCacheHint">При заполнении лимита самые старые неиспользуемые векторы автоматически удаляются.</p>
+            <select id="selectAiMaxCacheVectors" class="input-setting">
+              <option value="500">500 векторов (~500 КБ)</option>
+              <option value="2000" selected>2 000 векторов (~2 МБ, по умолчанию)</option>
+              <option value="5000">5 000 векторов (~5 МБ)</option>
+              <option value="10000">10 000 векторов (~10 МБ)</option>
+              <option value="0">Без ограничений</option>
             </select>
           </div>
 
           <!-- Embeddings cache stats & clear button -->
-          <div class="settings-group" style="margin-top: 14px; padding: 14px; background: var(--bg-surface-secondary, rgba(255,255,255,0.04)); border: 1px solid var(--border-color); border-radius: 10px;">
+          <div class="settings-group" style="margin-top: 14px; padding: 14px; background: var(--bg-surface-secondary, rgba(255,255,255,0.04)); border: 1px solid var(--border-medium, rgba(229,169,104,0.2)); border-radius: var(--radius-lg, 8px);">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
               <div>
                 <span style="font-size: 13px; font-weight: 600;" data-i18n="settings.aiCacheCount">Закэшировано векторов:</span>
-                <span id="aiEmbeddingsCacheCount" style="margin-left: 6px; font-weight: 700; color: var(--accent-primary);">0</span>
+                <span id="aiEmbeddingsCacheCount" style="margin-left: 6px; font-weight: 700; color: var(--accent-primary); font-family: var(--font-mono, monospace);">0</span>
               </div>
-              <button type="button" class="btn-primary" id="btnClearAiCache" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;" data-i18n="settings.aiClearCache">
+              <button type="button" class="btn-primary btn-sm" id="btnClearAiCache" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;" data-i18n="settings.aiClearCache">
                 Очистить кэш эмбеддингов
               </button>
             </div>
+          </div>
+
+          <!-- Section 3: UI & Display -->
+          <div class="settings-section-title" style="font-size: 13px; font-weight: 700; color: var(--accent-primary); margin: 24px 0 8px; text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.aiSecUi">
+            3. Отображение и интерфейс (UI)
+          </div>
+
+          <!-- Match Badge Toggle -->
+          <div class="settings-group">
+            <label class="toggle-row" title="Показывать бейдж совпадения на карточках постов">
+              <input type="checkbox" id="checkShowAiMatchBadge" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name" data-i18n="settings.showAiMatchBadge">Показывать процент схожести на карточках («✨ Match %»)</span>
+            </label>
+          </div>
+
+          <!-- Widget Mode -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiStatusWidgetMode" data-i18n="settings.aiWidgetMode">Виджет активности ИИ (в правом нижнем углу):</label>
+            <select id="selectAiStatusWidgetMode" class="input-setting">
+              <option value="full" selected>Полный статус (Индикатор + Счётчик + Описание)</option>
+              <option value="compact">Компактный индикатор (Только значок и счётчик)</option>
+              <option value="silent">Скрывать полностью (Тихий фоновый режим)</option>
+            </select>
+          </div>
+
+          <!-- Similar Sort Mode -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiSimilarSort" data-i18n="settings.aiSimilarSort">Сортировка выдачи «Похожих артов»:</label>
+            <select id="selectAiSimilarSort" class="input-setting">
+              <option value="similarity" selected>Строго по убыванию сходства (Максимально похожие первыми)</option>
+              <option value="mixed">Случайное перемешивание среди топ-совпадений (Для разнообразия)</option>
+            </select>
           </div>
         </div>
 
@@ -2360,6 +2495,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=14.0"></script>
+  <script type="module" src="js/app.js?v=14.1"></script>
 </body>
 </html>

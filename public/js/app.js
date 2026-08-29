@@ -1223,10 +1223,12 @@ async function performSearch(reset = false, options = {}) {
                     const isViewed = scoredCandidates[i].isViewed;
                     scoredCandidates[i].matchPercent = isViewed ? Math.round(vis * 0.6) : vis;
                   } else {
+                    const aiWeight = state.settings?.aiHybridWeight !== undefined ? Number(state.settings.aiHybridWeight) : 0.4;
+                    const tagWeight = Math.max(0, 1 - aiWeight);
                     if (scoredCandidates[i].matchPercent > 0) {
-                      scoredCandidates[i].matchPercent = Math.round(scoredCandidates[i].matchPercent * 0.6 + vis * 0.4);
+                      scoredCandidates[i].matchPercent = Math.round(scoredCandidates[i].matchPercent * tagWeight + vis * aiWeight);
                     } else {
-                      scoredCandidates[i].matchPercent = Math.round(vis * 0.85);
+                      scoredCandidates[i].matchPercent = Math.round(vis * Math.max(0.7, aiWeight + 0.3));
                     }
                   }
                 }

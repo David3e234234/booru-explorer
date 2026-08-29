@@ -106,8 +106,18 @@ export const DEFAULT_CLIENT_SETTINGS = {
   enableRecommendations: true,
   aiVisualEngine: 'browser',
   aiVisualModel: 'dinov2',
-  aiVisualThreshold: 0.35,
-  aiCandidatePool: 40
+  aiCandidatePool: 40,
+  aiHybridWeight: 0.4,
+  aiVisualThreshold: 0.30,
+  aiTasteHistorySize: 10,
+  aiUseNegativeTaste: true,
+  aiBrowserBackend: 'webgpu',
+  aiConcurrency: 2,
+  aiInputQuality: '360',
+  aiMaxCacheVectors: 2000,
+  showAiMatchBadge: true,
+  aiStatusWidgetMode: 'full',
+  aiSimilarSort: 'similarity'
 };
 
 export function getInitialSettings() {

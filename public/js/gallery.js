@@ -703,14 +703,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
 
     let matchBadge = '';
-    if (post.similarityPercent && post.similarityPercent > 0) {
-      matchBadge = `<span class="badge-format match-percent" style="background: linear-gradient(135deg, rgba(139,92,246,0.9), rgba(59,130,246,0.9)); font-weight: 700;" title="${t('gal.similarityBadge', '{p}% сходства').replace('{p}', post.similarityPercent)}">✨ ${post.similarityPercent}%</span>`;
-    } else if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
-      const matchedInfo = (Array.isArray(post.matchedTags) && post.matchedTags.length > 0)
-        ? `&#10;${t('gal.matchTagsInfo', 'Совпало: {tags}').replace('{tags}', post.matchedTags.join(', '))}`
-        : '';
-      const visualInfo = post.visualMatchPercent ? ` (✨ ${post.visualMatchPercent}%)` : '';
-      matchBadge = `<span class="badge-format match-percent" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%${visualInfo}</span>`;
+    const canShowBadge = state.settings?.showAiMatchBadge !== false;
+    if (canShowBadge) {
+      if (post.similarityPercent && post.similarityPercent > 0) {
+        matchBadge = `<span class="badge-format match-percent" style="background: var(--accent-primary-subtle, rgba(229,169,104,0.18)); color: var(--accent-primary, #e5a968); border: 1px solid var(--border-medium); font-weight: 700;" title="${t('gal.similarityBadge', '{p}% сходства').replace('{p}', post.similarityPercent)}">✨ ${post.similarityPercent}%</span>`;
+      } else if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
+        const matchedInfo = (Array.isArray(post.matchedTags) && post.matchedTags.length > 0)
+          ? `&#10;${t('gal.matchTagsInfo', 'Совпало: {tags}').replace('{tags}', post.matchedTags.join(', '))}`
+          : '';
+        const visualInfo = post.visualMatchPercent ? ` (✨ ${post.visualMatchPercent}%)` : '';
+        matchBadge = `<span class="badge-format match-percent" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%${visualInfo}</span>`;
+      }
     }
 
     let albumBadge = '';

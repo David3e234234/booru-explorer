@@ -27,6 +27,9 @@ const memoryEmbeddings = new Map();
 let aiStatusDismissTimer = null;
 
 export function showAiStatus(text, options = {}) {
+  const widgetMode = state.settings?.aiStatusWidgetMode || 'full';
+  if (widgetMode === 'silent') return;
+
   const widget = document.getElementById('aiStatusWidget');
   if (!widget) return;
   if (aiStatusDismissTimer) {
@@ -62,7 +65,11 @@ export function showAiStatus(text, options = {}) {
     }
   }
 
-  widget.classList.remove('ai-status-hidden', 'is-done', 'is-error');
+  widget.classList.remove('ai-status-hidden', 'is-done', 'is-error', 'is-compact');
+  if (widgetMode === 'compact') {
+    widget.classList.add('is-compact');
+  }
+
   if (options.status === 'done') {
     widget.classList.add('is-done');
   } else if (options.status === 'error') {
@@ -95,7 +102,7 @@ export function hideAiStatus(immediate = false) {
   widget.classList.add('ai-status-hidden');
   aiStatusDismissTimer = setTimeout(() => {
     widget.style.display = 'none';
-    widget.classList.remove('is-done', 'is-error');
+    widget.classList.remove('is-done', 'is-error', 'is-compact');
   }, 300);
 }
 
@@ -111,7 +118,8 @@ function getDB() {
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+        store.createIndex('timestamp', 'timestamp', { unique: false });
       }
     };
     request.onsuccess = (e) => resolve(e.target.result);
@@ -121,6 +129,39 @@ function getDB() {
     };
   });
   return dbPromise;
+}
+
+/**
+ * Trim old embeddings from IndexedDB if exceeding max limit (LRU)
+ */
+async function trimOldEmbeddings(maxAllowed) {
+  if (!maxAllowed || maxAllowed <= 0) return;
+  const db = await getDB();
+  if (!db) return;
+
+  try {
+    const tx = db.transaction([STORE_NAME], 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const countReq = store.count();
+    countReq.onsuccess = () => {
+      const count = countReq.result || 0;
+      if (count > maxAllowed) {
+        const toDelete = count - maxAllowed;
+        let deleted = 0;
+        const cursorReq = store.openCursor();
+        cursorReq.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor && deleted < toDelete) {
+            cursor.delete();
+            deleted++;
+            cursor.continue();
+          }
+        };
+      }
+    };
+  } catch (err) {
+    console.warn('[AIVision] LRU cache trim warning:', err.message);
+  }
 }
 
 /**
@@ -161,6 +202,11 @@ async function saveStoredEmbedding(key, vector) {
   const db = await getDB();
   if (!db) return;
 
+  const maxAllowed = state.settings?.aiMaxCacheVectors !== undefined ? Number(state.settings.aiMaxCacheVectors) : 2000;
+  if (maxAllowed > 0 && Math.random() < 0.05) {
+    trimOldEmbeddings(maxAllowed).catch(() => {});
+  }
+
   return new Promise((resolve) => {
     try {
       const tx = db.transaction([STORE_NAME], 'readwrite');
@@ -182,6 +228,19 @@ async function getBrowserTransformers() {
   try {
     const mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
     mod.env.allowLocalModels = false;
+
+    // Check backend acceleration setting (WebGPU / WASM / CPU)
+    const backend = state.settings?.aiBrowserBackend || 'webgpu';
+    if (backend === 'wasm') {
+      mod.env.backends.onnx.wasm.simd = true;
+      mod.env.backends.onnx.wasm.numThreads = Math.min(4, (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2);
+    } else if (backend === 'cpu') {
+      mod.env.backends.onnx.wasm.simd = false;
+      mod.env.backends.onnx.wasm.numThreads = 1;
+    } else {
+      // webgpu (default)
+      mod.env.backends.onnx.wasm.simd = true;
+    }
 
     // Check if CacheStorage is actually available and working (only in secure context https or localhost)
     let hasCache = false;
@@ -319,11 +378,18 @@ export function calculateCosineSimilarity(vecA, vecB) {
 }
 
 /**
- * Get best thumbnail or preview URL from post
+ * Get best thumbnail or preview URL from post based on configured AI quality
  */
-export function getPostImageUrl(post) {
+export function getPostImageUrl(post, options = {}) {
   if (!post) return '';
-  return post.previewUrl || post.thumb180 || post.sampleUrl || post.thumb360 || post.fileUrl || '';
+  const quality = options.quality || state.settings?.aiInputQuality || '360';
+  if (quality === '180') {
+    return post.thumb180 || post.previewUrl || post.thumb360 || post.sampleUrl || post.fileUrl || '';
+  }
+  if (quality === '720') {
+    return post.thumb720 || post.sampleUrl || post.fileUrl || post.thumb360 || post.previewUrl || '';
+  }
+  return post.thumb360 || post.previewUrl || post.sampleUrl || post.thumb180 || post.fileUrl || '';
 }
 
 /**
@@ -331,12 +397,13 @@ export function getPostImageUrl(post) {
  */
 export async function getPostEmbedding(post, options = {}) {
   if (!post) return null;
-  const imageUrl = getPostImageUrl(post);
+  const imageUrl = getPostImageUrl(post, options);
   if (!imageUrl) return null;
 
   const modelType = options.modelType || state.settings?.aiVisualModel || 'mobilenet';
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
-  const key = `${modelType}_${post.id || imageUrl}`;
+  const quality = options.quality || state.settings?.aiInputQuality || '360';
+  const key = `${modelType}_${quality}_${post.id || imageUrl}`;
 
   // 1. Check in-memory and IndexedDB cache
   const cached = await getStoredEmbedding(key);
@@ -400,7 +467,8 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
 
   const modelType = options.modelType || state.settings?.aiVisualModel || 'mobilenet';
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
-  const minSimilarity = options.minSimilarity ?? 0.30;
+  const minSimilarity = options.minSimilarity ?? (state.settings?.aiVisualThreshold !== undefined ? Number(state.settings.aiVisualThreshold) : 0.30);
+  const CONCURRENCY = options.concurrency || state.settings?.aiConcurrency || 2;
 
   showAiStatus(t('ai.analyzingTarget', 'Анализ целевого арта...'), { model: modelType });
 
@@ -417,7 +485,6 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
   const candidatesWithoutTarget = candidatePosts.filter(p => p.id !== targetPost.id).slice(0, candidateLimit);
   const total = candidatesWithoutTarget.length;
   
-  const CONCURRENCY = 2;
   for (let i = 0; i < total; i += CONCURRENCY) {
     const chunk = candidatesWithoutTarget.slice(i, i + CONCURRENCY);
     const processed = Math.min(i + CONCURRENCY, total);
@@ -451,8 +518,23 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
     }
   }
 
-  // Sort descending by similarity
+  // Sort descending by similarity, or apply mixed shuffle among top matches if configured
+  const sortMode = options.sortMode || state.settings?.aiSimilarSort || 'similarity';
   results.sort((a, b) => b.similarity - a.similarity);
+
+  if (sortMode === 'mixed' && results.length > 3) {
+    // Keep absolute top match first, shuffle remaining top candidates
+    const topCount = Math.max(1, Math.floor(results.length * 0.25));
+    const topPart = results.slice(0, topCount);
+    const restPart = results.slice(topCount);
+    for (let i = restPart.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [restPart[i], restPart[j]] = [restPart[j], restPart[i]];
+    }
+    results.length = 0;
+    results.push(...topPart, ...restPart);
+  }
+
   showAiStatus(t('ai.similarDone', 'Найдено {n} похожих артов!').replace('{n}', results.length), {
     model: modelType,
     status: 'done',
@@ -473,9 +555,9 @@ export async function calculateUserTasteVector(likedPosts, options = {}) {
 
   const modelType = options.modelType || state.settings?.aiVisualModel || 'dinov2';
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
+  const sampleSize = options.sampleSize || state.settings?.aiTasteHistorySize || 10;
   
-  // Take up to 6 recent liked posts for fast and responsive centroid computation
-  const samplePosts = likedPosts.slice(0, 6);
+  const samplePosts = likedPosts.slice(0, sampleSize);
   const total = samplePosts.length;
   const vectors = [];
 
@@ -530,13 +612,22 @@ export async function scoreCandidatesByVisualTaste(candidates, tasteVector, opti
   const modelType = options.modelType || state.settings?.aiVisualModel || 'dinov2';
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
   const candidateLimit = options.candidateLimit || state.settings?.aiCandidatePool || 40;
+  const CONCURRENCY = options.concurrency || state.settings?.aiConcurrency || 2;
+
+  // Compute negative dislike vector if enabled
+  let dislikeVector = null;
+  const useNegative = state.settings?.aiUseNegativeTaste !== false;
+  if (useNegative && Array.isArray(state.dislikes) && state.dislikes.length > 0) {
+    try {
+      dislikeVector = await calculateUserTasteVector(state.dislikes, { sampleSize: 6, modelType, engine });
+    } catch {}
+  }
 
   // Re-rank candidate posts according to user configured pool size
   const poolToScore = candidates.slice(0, candidateLimit);
   const remaining = candidates.slice(candidateLimit);
   const total = poolToScore.length;
 
-  const CONCURRENCY = 2;
   const scoredTop = [];
 
   showAiStatus(t('ai.scoringFeed', 'Визуальный анализ ленты...'), { model: modelType, counter: `0/${total}` });
@@ -555,8 +646,13 @@ export async function scoreCandidatesByVisualTaste(candidates, tasteVector, opti
       try {
         const vec = await getPostEmbedding(p, { modelType, engine });
         if (!vec) return { ...p, visualMatchPercent: 0 };
-        const sim = calculateCosineSimilarity(tasteVector, vec);
-        const visualMatchPercent = Math.round(Math.max(0, sim) * 100);
+        const positiveSim = calculateCosineSimilarity(tasteVector, vec);
+        let negativeSim = 0;
+        if (dislikeVector) {
+          negativeSim = calculateCosineSimilarity(dislikeVector, vec);
+        }
+        const finalSim = Math.max(0, positiveSim - (negativeSim > 0 ? 0.45 * negativeSim : 0));
+        const visualMatchPercent = Math.round(Math.max(0, finalSim) * 100);
         return {
           ...p,
           visualMatchPercent

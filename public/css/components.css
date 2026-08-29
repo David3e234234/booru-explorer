@@ -1218,6 +1218,21 @@
   pointer-events: none;
 }
 
+.ai-status-widget.is-compact {
+  min-width: 0;
+  max-width: fit-content;
+  padding: 6px 10px;
+}
+
+.ai-status-widget.is-compact .ai-status-text,
+.ai-status-widget.is-compact .ai-status-progress-track {
+  display: none !important;
+}
+
+.ai-status-widget.is-compact .ai-status-counter {
+  margin-left: 6px;
+}
+
 .ai-status-icon-wrap {
   width: 26px;
   height: 26px;

@@ -360,6 +360,94 @@ export function applySettingsToUIAndState(s) {
     selectAiCandidatePool.value = String(state.settings.aiCandidatePool);
   }
 
+  if (s.aiHybridWeight !== undefined) {
+    state.settings.aiHybridWeight = Number(s.aiHybridWeight);
+  }
+  const selectAiHybridWeight = document.getElementById('selectAiHybridWeight');
+  if (selectAiHybridWeight && state.settings.aiHybridWeight !== undefined) {
+    selectAiHybridWeight.value = String(state.settings.aiHybridWeight);
+  }
+
+  if (s.aiVisualThreshold !== undefined) {
+    state.settings.aiVisualThreshold = Number(s.aiVisualThreshold);
+  }
+  const selectAiVisualThreshold = document.getElementById('selectAiVisualThreshold');
+  if (selectAiVisualThreshold && state.settings.aiVisualThreshold !== undefined) {
+    selectAiVisualThreshold.value = String(state.settings.aiVisualThreshold);
+  }
+
+  if (s.aiTasteHistorySize !== undefined) {
+    state.settings.aiTasteHistorySize = Number(s.aiTasteHistorySize);
+  }
+  const selectAiTasteHistorySize = document.getElementById('selectAiTasteHistorySize');
+  if (selectAiTasteHistorySize && state.settings.aiTasteHistorySize) {
+    selectAiTasteHistorySize.value = String(state.settings.aiTasteHistorySize);
+  }
+
+  if (s.aiUseNegativeTaste !== undefined) {
+    state.settings.aiUseNegativeTaste = Boolean(s.aiUseNegativeTaste);
+  }
+  const checkAiUseNegativeTaste = document.getElementById('checkAiUseNegativeTaste');
+  if (checkAiUseNegativeTaste && state.settings.aiUseNegativeTaste !== undefined) {
+    checkAiUseNegativeTaste.checked = state.settings.aiUseNegativeTaste !== false;
+  }
+
+  if (s.aiBrowserBackend) {
+    state.settings.aiBrowserBackend = s.aiBrowserBackend;
+  }
+  const selectAiBrowserBackend = document.getElementById('selectAiBrowserBackend');
+  if (selectAiBrowserBackend && state.settings.aiBrowserBackend) {
+    selectAiBrowserBackend.value = state.settings.aiBrowserBackend;
+  }
+
+  if (s.aiConcurrency !== undefined) {
+    state.settings.aiConcurrency = Number(s.aiConcurrency);
+  }
+  const selectAiConcurrency = document.getElementById('selectAiConcurrency');
+  if (selectAiConcurrency && state.settings.aiConcurrency) {
+    selectAiConcurrency.value = String(state.settings.aiConcurrency);
+  }
+
+  if (s.aiInputQuality) {
+    state.settings.aiInputQuality = s.aiInputQuality;
+  }
+  const selectAiInputQuality = document.getElementById('selectAiInputQuality');
+  if (selectAiInputQuality && state.settings.aiInputQuality) {
+    selectAiInputQuality.value = state.settings.aiInputQuality;
+  }
+
+  if (s.aiMaxCacheVectors !== undefined) {
+    state.settings.aiMaxCacheVectors = Number(s.aiMaxCacheVectors);
+  }
+  const selectAiMaxCacheVectors = document.getElementById('selectAiMaxCacheVectors');
+  if (selectAiMaxCacheVectors && state.settings.aiMaxCacheVectors !== undefined) {
+    selectAiMaxCacheVectors.value = String(state.settings.aiMaxCacheVectors);
+  }
+
+  if (s.showAiMatchBadge !== undefined) {
+    state.settings.showAiMatchBadge = Boolean(s.showAiMatchBadge);
+  }
+  const checkShowAiMatchBadge = document.getElementById('checkShowAiMatchBadge');
+  if (checkShowAiMatchBadge && state.settings.showAiMatchBadge !== undefined) {
+    checkShowAiMatchBadge.checked = state.settings.showAiMatchBadge !== false;
+  }
+
+  if (s.aiStatusWidgetMode) {
+    state.settings.aiStatusWidgetMode = s.aiStatusWidgetMode;
+  }
+  const selectAiStatusWidgetMode = document.getElementById('selectAiStatusWidgetMode');
+  if (selectAiStatusWidgetMode && state.settings.aiStatusWidgetMode) {
+    selectAiStatusWidgetMode.value = state.settings.aiStatusWidgetMode;
+  }
+
+  if (s.aiSimilarSort) {
+    state.settings.aiSimilarSort = s.aiSimilarSort;
+  }
+  const selectAiSimilarSort = document.getElementById('selectAiSimilarSort');
+  if (selectAiSimilarSort && state.settings.aiSimilarSort) {
+    selectAiSimilarSort.value = state.settings.aiSimilarSort;
+  }
+
   // Telegram auto-backup
   const checkTelegramBackupEnabled = document.getElementById('checkTelegramBackupEnabled');
   const inputTelegramBotToken = document.getElementById('inputTelegramBotToken');
@@ -762,6 +850,39 @@ export function openSettingsModal() {
   const selectAiCandidatePoolModal = document.getElementById('selectAiCandidatePool');
   if (selectAiCandidatePoolModal) selectAiCandidatePoolModal.value = String(state.settings.aiCandidatePool || 40);
 
+  const selectAiHybridWeight = document.getElementById('selectAiHybridWeight');
+  if (selectAiHybridWeight) selectAiHybridWeight.value = String(state.settings.aiHybridWeight !== undefined ? state.settings.aiHybridWeight : 0.4);
+
+  const selectAiVisualThreshold = document.getElementById('selectAiVisualThreshold');
+  if (selectAiVisualThreshold) selectAiVisualThreshold.value = String(state.settings.aiVisualThreshold !== undefined ? state.settings.aiVisualThreshold : 0.30);
+
+  const selectAiTasteHistorySize = document.getElementById('selectAiTasteHistorySize');
+  if (selectAiTasteHistorySize) selectAiTasteHistorySize.value = String(state.settings.aiTasteHistorySize || 10);
+
+  const checkAiUseNegativeTaste = document.getElementById('checkAiUseNegativeTaste');
+  if (checkAiUseNegativeTaste) checkAiUseNegativeTaste.checked = state.settings.aiUseNegativeTaste !== false;
+
+  const selectAiBrowserBackend = document.getElementById('selectAiBrowserBackend');
+  if (selectAiBrowserBackend) selectAiBrowserBackend.value = state.settings.aiBrowserBackend || 'webgpu';
+
+  const selectAiConcurrency = document.getElementById('selectAiConcurrency');
+  if (selectAiConcurrency) selectAiConcurrency.value = String(state.settings.aiConcurrency || 2);
+
+  const selectAiInputQuality = document.getElementById('selectAiInputQuality');
+  if (selectAiInputQuality) selectAiInputQuality.value = state.settings.aiInputQuality || '360';
+
+  const selectAiMaxCacheVectors = document.getElementById('selectAiMaxCacheVectors');
+  if (selectAiMaxCacheVectors) selectAiMaxCacheVectors.value = String(state.settings.aiMaxCacheVectors !== undefined ? state.settings.aiMaxCacheVectors : 2000);
+
+  const checkShowAiMatchBadge = document.getElementById('checkShowAiMatchBadge');
+  if (checkShowAiMatchBadge) checkShowAiMatchBadge.checked = state.settings.showAiMatchBadge !== false;
+
+  const selectAiStatusWidgetMode = document.getElementById('selectAiStatusWidgetMode');
+  if (selectAiStatusWidgetMode) selectAiStatusWidgetMode.value = state.settings.aiStatusWidgetMode || 'full';
+
+  const selectAiSimilarSort = document.getElementById('selectAiSimilarSort');
+  if (selectAiSimilarSort) selectAiSimilarSort.value = state.settings.aiSimilarSort || 'similarity';
+
   // Update AI embeddings count
   const aiEmbeddingsCacheCount = document.getElementById('aiEmbeddingsCacheCount');
   if (aiEmbeddingsCacheCount) {
@@ -857,6 +978,106 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (selectAiCandidatePool) {
     selectAiCandidatePool.addEventListener('change', () => {
       state.settings.aiCandidatePool = Number(selectAiCandidatePool.value) || 40;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiHybridWeight = document.getElementById('selectAiHybridWeight');
+  if (selectAiHybridWeight) {
+    selectAiHybridWeight.addEventListener('change', () => {
+      state.settings.aiHybridWeight = Number(selectAiHybridWeight.value);
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiVisualThreshold = document.getElementById('selectAiVisualThreshold');
+  if (selectAiVisualThreshold) {
+    selectAiVisualThreshold.addEventListener('change', () => {
+      state.settings.aiVisualThreshold = Number(selectAiVisualThreshold.value);
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiTasteHistorySize = document.getElementById('selectAiTasteHistorySize');
+  if (selectAiTasteHistorySize) {
+    selectAiTasteHistorySize.addEventListener('change', () => {
+      state.settings.aiTasteHistorySize = Number(selectAiTasteHistorySize.value);
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const checkAiUseNegativeTaste = document.getElementById('checkAiUseNegativeTaste');
+  if (checkAiUseNegativeTaste) {
+    checkAiUseNegativeTaste.addEventListener('change', () => {
+      state.settings.aiUseNegativeTaste = checkAiUseNegativeTaste.checked;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiBrowserBackend = document.getElementById('selectAiBrowserBackend');
+  if (selectAiBrowserBackend) {
+    selectAiBrowserBackend.addEventListener('change', () => {
+      state.settings.aiBrowserBackend = selectAiBrowserBackend.value;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiConcurrency = document.getElementById('selectAiConcurrency');
+  if (selectAiConcurrency) {
+    selectAiConcurrency.addEventListener('change', () => {
+      state.settings.aiConcurrency = Number(selectAiConcurrency.value);
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiInputQuality = document.getElementById('selectAiInputQuality');
+  if (selectAiInputQuality) {
+    selectAiInputQuality.addEventListener('change', () => {
+      state.settings.aiInputQuality = selectAiInputQuality.value;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiMaxCacheVectors = document.getElementById('selectAiMaxCacheVectors');
+  if (selectAiMaxCacheVectors) {
+    selectAiMaxCacheVectors.addEventListener('change', () => {
+      state.settings.aiMaxCacheVectors = Number(selectAiMaxCacheVectors.value);
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const checkShowAiMatchBadge = document.getElementById('checkShowAiMatchBadge');
+  if (checkShowAiMatchBadge) {
+    checkShowAiMatchBadge.addEventListener('change', () => {
+      state.settings.showAiMatchBadge = checkShowAiMatchBadge.checked;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+      if (onSettingsChanged) onSettingsChanged();
+    });
+  }
+
+  const selectAiStatusWidgetMode = document.getElementById('selectAiStatusWidgetMode');
+  if (selectAiStatusWidgetMode) {
+    selectAiStatusWidgetMode.addEventListener('change', () => {
+      state.settings.aiStatusWidgetMode = selectAiStatusWidgetMode.value;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiSimilarSort = document.getElementById('selectAiSimilarSort');
+  if (selectAiSimilarSort) {
+    selectAiSimilarSort.addEventListener('change', () => {
+      state.settings.aiSimilarSort = selectAiSimilarSort.value;
       saveLocalSettings(state.settings);
       saveSettings(state.settings).catch(() => {});
     });
@@ -1556,6 +1777,17 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         aiVisualEngine: document.getElementById('selectAiVisualEngine')?.value || 'browser',
         aiVisualModel: document.getElementById('selectAiVisualModel')?.value || 'dinov2',
         aiCandidatePool: Number(document.getElementById('selectAiCandidatePool')?.value) || 40,
+        aiHybridWeight: Number(document.getElementById('selectAiHybridWeight')?.value !== undefined ? document.getElementById('selectAiHybridWeight')?.value : 0.4),
+        aiVisualThreshold: Number(document.getElementById('selectAiVisualThreshold')?.value !== undefined ? document.getElementById('selectAiVisualThreshold')?.value : 0.30),
+        aiTasteHistorySize: Number(document.getElementById('selectAiTasteHistorySize')?.value) || 10,
+        aiUseNegativeTaste: document.getElementById('checkAiUseNegativeTaste') ? document.getElementById('checkAiUseNegativeTaste').checked : true,
+        aiBrowserBackend: document.getElementById('selectAiBrowserBackend')?.value || 'webgpu',
+        aiConcurrency: Number(document.getElementById('selectAiConcurrency')?.value) || 2,
+        aiInputQuality: document.getElementById('selectAiInputQuality')?.value || '360',
+        aiMaxCacheVectors: Number(document.getElementById('selectAiMaxCacheVectors')?.value !== undefined ? document.getElementById('selectAiMaxCacheVectors')?.value : 2000),
+        showAiMatchBadge: document.getElementById('checkShowAiMatchBadge') ? document.getElementById('checkShowAiMatchBadge').checked : true,
+        aiStatusWidgetMode: document.getElementById('selectAiStatusWidgetMode')?.value || 'full',
+        aiSimilarSort: document.getElementById('selectAiSimilarSort')?.value || 'similarity',
       };
 
       saveLocalSettings(updated);
