@@ -15,7 +15,9 @@ import {
   getDislikes, 
   saveDislikes, 
   clearDislikes, 
-  sendBooruLike
+  sendBooruLike,
+  sendBooruFavorite,
+  sendBooruAuthorFollow
 } from '../services/storageService.js';
 import { 
   apiPostsCache, 
@@ -97,16 +99,23 @@ router.post('/favorites', (req, res) => {
   const userId = req.user?.id || null;
   const favorites = getFavorites(userId);
   const existsIndex = favorites.findIndex(f => f.id === post.id);
+  const settings = getSettings(userId);
+  let isFavorite = false;
 
   if (existsIndex >= 0) {
     favorites.splice(existsIndex, 1);
     saveFavorites(favorites, userId);
-    return res.json({ success: true, isFavorite: false, count: favorites.length });
+    isFavorite = false;
   } else {
     favorites.unshift({ ...sanitizeStoredPost(post), savedAt: new Date().toISOString() });
     saveFavorites(favorites, userId);
-    return res.json({ success: true, isFavorite: true, count: favorites.length });
+    isFavorite = true;
   }
+
+  // Background push to the Booru API
+  sendBooruFavorite(post.site || 'danbooru', post, isFavorite, settings).catch(() => {});
+
+  return res.json({ success: true, isFavorite, count: favorites.length });
 });
 
 // POST /api/favorites/sync
@@ -131,8 +140,15 @@ router.delete('/favorites/:id', (req, res) => {
   const id = req.params.id;
   const userId = req.user?.id || null;
   const favorites = getFavorites(userId);
+  const target = favorites.find(f => f.id === id);
   const filtered = favorites.filter(f => f.id !== id);
   saveFavorites(filtered, userId);
+
+  if (target) {
+    const settings = getSettings(userId);
+    sendBooruFavorite(target.site || 'danbooru', target, false, settings).catch(() => {});
+  }
+
   res.json({ success: true, count: filtered.length });
 });
 
@@ -155,14 +171,18 @@ router.post('/favorite-authors', (req, res) => {
   const displayName = body.displayName ? body.displayName.trim() : rawName;
   const previewUrl = body.previewUrl || '';
   const site = body.site || 'danbooru';
+  const service = body.service || '';
 
   const userId = req.user?.id || null;
   const authors = getFavoriteAuthors(userId);
   const existsIndex = authors.findIndex(a => (a.name || '').toLowerCase() === cleanName);
+  const settings = getSettings(userId);
 
   if (existsIndex >= 0) {
+    const removedAuthor = authors[existsIndex];
     authors.splice(existsIndex, 1);
     saveFavoriteAuthors(authors, userId);
+    sendBooruAuthorFollow(site, removedAuthor || cleanName, false, settings).catch(() => {});
     return res.json({ success: true, isFavorite: false, count: authors.length, authors });
   } else {
     const newAuthor = {
@@ -171,10 +191,12 @@ router.post('/favorite-authors', (req, res) => {
       displayName: displayName,
       previewUrl: previewUrl,
       site: site,
+      service: service,
       createdAt: new Date().toISOString()
     };
     authors.unshift(newAuthor);
     saveFavoriteAuthors(authors, userId);
+    sendBooruAuthorFollow(site, newAuthor, true, settings).catch(() => {});
     return res.json({ success: true, isFavorite: true, count: authors.length, authors, author: newAuthor });
   }
 });
@@ -201,8 +223,13 @@ router.delete('/favorite-authors/:name', (req, res) => {
   const rawName = (req.params.name || '').trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').toLowerCase();
   const userId = req.user?.id || null;
   const authors = getFavoriteAuthors(userId);
+  const target = authors.find(a => (a.name || '').toLowerCase() === rawName);
   const filtered = authors.filter(a => (a.name || '').toLowerCase() !== rawName);
   saveFavoriteAuthors(filtered, userId);
+
+  const settings = getSettings(userId);
+  sendBooruAuthorFollow(target?.site || 'danbooru', target || rawName, false, settings).catch(() => {});
+
   res.json({ success: true, count: filtered.length, authors: filtered });
 });
 
@@ -283,7 +310,7 @@ router.post('/like', async (req, res) => {
   }
 
   // Background push to the Booru API
-  sendBooruLike(post.site || 'danbooru', post.id, isLiked, settings).catch(() => {});
+  sendBooruLike(post.site || 'danbooru', post, isLiked, settings).catch(() => {});
 
   return res.json({ success: true, isLiked, count: likes.length });
 });

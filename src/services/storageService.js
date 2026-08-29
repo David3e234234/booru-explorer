@@ -12,6 +12,7 @@ import {
   DATA_DIR 
 } from '../config/constants.js';
 import { logError } from '../utils/logger.js';
+import { fetchSafe } from '../utils/network.js';
 import { getUserDataDir } from './userService.js';
 
 const pendingWrites = new Map();
@@ -173,44 +174,56 @@ export function saveAuthorFeedState(state, userId = null) {
   writeJsonFileAsync(filePath, state);
 }
 
-export async function sendBooruLike(site, postId, isLike, settings) {
+export async function sendBooruLike(site, postOrId, isLike, settings) {
   try {
-    if (site === 'danbooru' && settings.danbooruLogin && settings.danbooruApiKey) {
+    const postObj = (postOrId && typeof postOrId === 'object') ? postOrId : { id: postOrId };
+    const rawId = postObj.originalId || postObj.id || '';
+    const cleanId = String(rawId).replace(/^[a-z0-9]+_/i, '').trim();
+    const effectiveSite = postObj.site || site || 'danbooru';
+
+    if (effectiveSite === 'danbooru' && settings.danbooruLogin && settings.danbooruApiKey) {
+      if (!cleanId) return;
       const auth = Buffer.from(`${settings.danbooruLogin}:${settings.danbooruApiKey}`).toString('base64');
+      const authHeaders = {
+        'Authorization': `Basic ${auth}`,
+        'User-Agent': BROWSER_USER_AGENT
+      };
+
       if (isLike) {
-        await fetch(`https://danbooru.donmai.us/favorites.json?post_id=${encodeURIComponent(postId)}`, {
+        await fetchSafe(`https://danbooru.donmai.us/favorites.json?post_id=${encodeURIComponent(cleanId)}`, {
           method: 'POST',
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'User-Agent': BROWSER_USER_AGENT
-          }
+          headers: authHeaders,
+          settings,
+          site: 'danbooru'
         }).catch(() => {});
-        await fetch(`https://danbooru.donmai.us/posts/${encodeURIComponent(postId)}/votes.json`, {
+
+        await fetchSafe(`https://danbooru.donmai.us/posts/${encodeURIComponent(cleanId)}/votes.json`, {
           method: 'POST',
           headers: {
-            'Authorization': `Basic ${auth}`,
-            'Content-Type': 'application/json',
-            'User-Agent': BROWSER_USER_AGENT
+            ...authHeaders,
+            'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ score: 1 })
+          body: JSON.stringify({ score: 1 }),
+          settings,
+          site: 'danbooru'
         }).catch(() => {});
       } else {
-        await fetch(`https://danbooru.donmai.us/favorites/${encodeURIComponent(postId)}.json`, {
+        await fetchSafe(`https://danbooru.donmai.us/favorites/${encodeURIComponent(cleanId)}.json`, {
           method: 'DELETE',
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'User-Agent': BROWSER_USER_AGENT
-          }
+          headers: authHeaders,
+          settings,
+          site: 'danbooru'
         }).catch(() => {});
       }
-    } else if (site === 'pawchive' && settings.pawchiveSession) {
+    } else if (effectiveSite === 'pawchive' && settings.pawchiveSession) {
       const token = String(settings.pawchiveSession).replace(/^session=/i, '').trim();
       if (token) {
-        let service = null;
-        let creatorId = null;
-        let realPostId = String(postId).replace(/^pawchive_/, '').split('_')[0];
-        if (String(postId).includes(':')) {
-          const parts = String(postId).split(':');
+        let service = postObj.service || null;
+        let creatorId = postObj.user || null;
+        let realPostId = cleanId.split('_')[0];
+
+        if (String(rawId).includes(':')) {
+          const parts = String(rawId).split(':');
           if (parts.length === 4 && parts[0] === 'pawchive') {
             service = parts[1];
             creatorId = parts[2];
@@ -235,3 +248,48 @@ export async function sendBooruLike(site, postId, isLike, settings) {
     logError('LikeSync', `Ошибка отправки лайка на ${site}:`, err);
   }
 }
+
+export async function sendBooruFavorite(site, postOrId, isFavorite, settings) {
+  // Synchronize favorites with remote boorus that support favorites
+  return sendBooruLike(site, postOrId, isFavorite, settings);
+}
+
+export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settings) {
+  try {
+    const rawName = typeof authorOrName === 'object' ? (authorOrName.name || authorOrName.id || '') : String(authorOrName || '');
+    const cleanName = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+    if (!cleanName) return;
+
+    const targetSite = (typeof authorOrName === 'object' && authorOrName.site) ? authorOrName.site : (site || 'danbooru');
+
+    if (targetSite === 'pawchive' && settings.pawchiveSession) {
+      const token = String(settings.pawchiveSession).replace(/^session=/i, '').trim();
+      if (token) {
+        let service = (typeof authorOrName === 'object' && authorOrName.service) || '';
+        let creatorId = cleanName;
+        if (cleanName.includes(':')) {
+          const parts = cleanName.split(':');
+          if (parts.length >= 2) {
+            service = parts[0];
+            creatorId = parts[1];
+          }
+        }
+        if (service && creatorId) {
+          const method = isFollow ? 'POST' : 'DELETE';
+          await fetchSafe(`https://pawchive.pw/api/v1/favorites/creator/${encodeURIComponent(service)}/${encodeURIComponent(creatorId)}`, {
+            method,
+            headers: {
+              'Cookie': `session=${token}`,
+              'User-Agent': BROWSER_USER_AGENT
+            },
+            settings,
+            site: 'pawchive'
+          }).catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    logError('AuthorFollowSync', `Ошибка синхронизации автора на ${site}:`, err);
+  }
+}
+
