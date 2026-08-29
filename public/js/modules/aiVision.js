@@ -106,7 +106,17 @@ async function getBrowserTransformers() {
   try {
     const mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
     mod.env.allowLocalModels = false;
-    mod.env.useBrowserCache = true;
+
+    // Check if CacheStorage is actually available and working (only in secure context https or localhost)
+    let hasCache = false;
+    try {
+      hasCache = typeof window !== 'undefined' && 'caches' in window && Boolean(window.caches) && Boolean(window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+    } catch (_) {
+      hasCache = false;
+    }
+
+    mod.env.useBrowserCache = hasCache;
+    mod.env.useCustomCache = hasCache;
     browserTransformers = mod;
     return mod;
   } catch (err) {
@@ -246,27 +256,41 @@ export async function getPostEmbedding(post, options = {}) {
     return cached;
   }
 
-  // 2. Compute via Server or Browser
+  // 2. Compute via Server or Browser with seamless fallback
   let vector = null;
 
-  if (engine === 'server' || engine === 'auto') {
-    try {
-      const serverRes = await fetchServerEmbedding(imageUrl, post.id, modelType);
-      if (serverRes.success && Array.isArray(serverRes.embedding)) {
-        vector = serverRes.embedding;
-      }
-    } catch (err) {
-      if (engine === 'server') {
-        console.warn('[AIVision] Server embedding failed:', err.message);
-      }
-    }
-  }
-
-  if (!vector && (engine === 'browser' || engine === 'auto' || engine === 'server')) {
+  if (engine === 'browser') {
     try {
       vector = await extractBrowserEmbedding(imageUrl, modelType);
     } catch (err) {
-      console.warn('[AIVision] Browser embedding failed:', err.message);
+      console.warn('[AIVision] Browser embedding failed, falling back to server:', err.message);
+    }
+    if (!vector) {
+      try {
+        const serverRes = await fetchServerEmbedding(imageUrl, post.id, modelType);
+        if (serverRes && serverRes.success && Array.isArray(serverRes.embedding)) {
+          vector = serverRes.embedding;
+        }
+      } catch (serverErr) {
+        console.warn('[AIVision] Server fallback embedding failed:', serverErr.message);
+      }
+    }
+  } else {
+    // engine === 'server' or 'auto'
+    try {
+      const serverRes = await fetchServerEmbedding(imageUrl, post.id, modelType);
+      if (serverRes && serverRes.success && Array.isArray(serverRes.embedding)) {
+        vector = serverRes.embedding;
+      }
+    } catch (err) {
+      console.warn('[AIVision] Server embedding failed, falling back to browser:', err.message);
+    }
+    if (!vector) {
+      try {
+        vector = await extractBrowserEmbedding(imageUrl, modelType);
+      } catch (browserErr) {
+        console.warn('[AIVision] Browser fallback embedding failed:', browserErr.message);
+      }
     }
   }
 
