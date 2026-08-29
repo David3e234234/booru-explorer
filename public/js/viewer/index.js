@@ -1103,8 +1103,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
 
-    // Automatically trigger full album/set load in background if not already expanded
-    if (!currentPost.isAlbum && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:')) || currentPost.pixiv_id)) {
+    // Automatically trigger full album/set load in background if not already fully fetched
+    if (!currentPost._albumFullyFetched && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:')) || currentPost.pixiv_id)) {
       loadFullAlbumForPost(currentPost, false);
     }
   }
@@ -1135,6 +1135,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (currentSeq !== albumFetchSeq && currentPost?.id !== targetPost.id) {
         return;
       }
+
+      targetPost._albumFullyFetched = true;
 
       if (res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
         const prevAlbumCount = targetPost.albumItems?.length || 1;
