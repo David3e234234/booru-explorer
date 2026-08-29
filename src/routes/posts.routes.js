@@ -454,6 +454,13 @@ router.get('/posts/album', async (req, res) => {
     const seriesKey = req.query.seriesKey || '';
     const parentId = req.query.parentId || '';
     const originalId = req.query.originalId || '';
+    const postUrl = req.query.postUrl || '';
+
+    const albumCacheKey = `album_v1:${site}:${seriesKey}:${parentId}:${originalId}:${postUrl}`;
+    const cachedAlbum = apiPostsCache.get(albumCacheKey);
+    if (cachedAlbum) {
+      return res.json(cachedAlbum);
+    }
 
     const settings = {
       ...getSettings(),
@@ -530,7 +537,7 @@ router.get('/posts/album', async (req, res) => {
 
     if ((site === 'pawchive' || seriesKey.startsWith('pawchive:')) && foundPostsMap.size === 0) {
       const pawchiveMatch = seriesKey.match(/^pawchive:([^:]+):([^:]+):(\d+)$/) ||
-        (req.query.postUrl || '').match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
+        (postUrl).match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
       const targetPostId = pawchiveMatch ? pawchiveMatch[3] : (originalId || parentId || '').replace(/^pawchive_/, '').split('_')[0];
       const targetService = pawchiveMatch ? pawchiveMatch[1] : null;
       const targetUser = pawchiveMatch ? pawchiveMatch[2] : null;
@@ -586,14 +593,20 @@ router.get('/posts/album', async (req, res) => {
 
     logInfo('AlbumSearch', `Успешно найдено ${items.length} частей серии для site=${site}`);
 
-    res.json({
+    const responsePayload = {
       success: true,
       site,
       seriesKey,
       parentId,
       albumCount: items.length,
       albumItems: items
-    });
+    };
+
+    if (items.length > 0) {
+      apiPostsCache.set(albumCacheKey, responsePayload);
+    }
+
+    res.json(responsePayload);
   } catch (err) {
     logError('AlbumSearch', `Ошибка при поиске альбома`, err);
     res.json({

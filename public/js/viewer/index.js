@@ -1102,82 +1102,131 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         loadMediaItem(activeMediaItem);
       }
     }
+
+    // Automatically trigger full album/set load in background if not already expanded
+    if (!currentPost.isAlbum && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:')) || currentPost.pixiv_id)) {
+      loadFullAlbumForPost(currentPost, false);
+    }
+  }
+
+  let albumFetchSeq = 0;
+
+  async function loadFullAlbumForPost(targetPost, isUserExplicit = false) {
+    if (!targetPost) return;
+    const canFetch = Boolean(targetPost.canFetchAlbum || targetPost.hasChildren || targetPost.parentId || (targetPost.seriesKey && !targetPost.seriesKey.startsWith('pawchive:')) || targetPost.pixiv_id);
+    if (!canFetch) return;
+    if (targetPost._albumFetchInProgress) return;
+
+    targetPost._albumFetchInProgress = true;
+    const currentSeq = ++albumFetchSeq;
+
+    if (btnFetchFullAlbum) btnFetchFullAlbum.disabled = true;
+    if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = t('vw.searchingSeries', 'Поиск серии...');
+
+    try {
+      const res = await fetchAlbumPosts({
+        site: targetPost.site,
+        seriesKey: targetPost.seriesKey || '',
+        parentId: targetPost.parentId || '',
+        originalId: targetPost.originalId || '',
+        postUrl: targetPost.postUrl || ''
+      });
+
+      if (currentSeq !== albumFetchSeq && currentPost?.id !== targetPost.id) {
+        return;
+      }
+
+      if (res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
+        const prevAlbumCount = targetPost.albumItems?.length || 1;
+        targetPost.isAlbum = true;
+        targetPost.albumItems = res.albumItems;
+        targetPost.albumCount = res.albumItems.length;
+        if (!targetPost.content && res.albumItems[0]?.content) {
+          targetPost.content = res.albumItems[0].content;
+        }
+
+        // Keep current viewed image positioned correctly in the album
+        if (targetPost.originalId || targetPost.id) {
+          const matchIdx = res.albumItems.findIndex(item => 
+            String(item.originalId) === String(targetPost.originalId) || 
+            String(item.id) === String(targetPost.id)
+          );
+          if (matchIdx !== -1) {
+            currentAlbumIndex = matchIdx;
+          }
+        }
+
+        // Sync the updated album back into global gallery state
+        const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+        if (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length && list[state.currentViewerIndex]?.id === targetPost.id) {
+          list[state.currentViewerIndex] = targetPost;
+        }
+        if (Array.isArray(state.posts)) {
+          const origIdx = state.posts.findIndex(p => p.id === targetPost.id);
+          if (origIdx !== -1) {
+            state.posts[origIdx] = targetPost;
+          }
+        }
+
+        // Update the card badge in the gallery DOM
+        const cardEl = document.querySelector(`.media-card[data-post-id="${targetPost.id}"]`);
+        if (cardEl) {
+          cardEl.classList.add('is-album-card');
+          const topGroup = cardEl.querySelector('.badge-group-top > div');
+          let badgeAlbum = topGroup ? topGroup.querySelector('.badge-album') : null;
+          if (!badgeAlbum && topGroup) {
+            badgeAlbum = document.createElement('span');
+            badgeAlbum.className = 'badge-format badge-album';
+            const siteBadgeEl = topGroup.querySelector('.badge-site');
+            if (siteBadgeEl) {
+              topGroup.insertBefore(badgeAlbum, siteBadgeEl.nextSibling);
+            } else {
+              topGroup.prepend(badgeAlbum);
+            }
+          }
+          if (badgeAlbum) {
+            badgeAlbum.title = t('gal.albumBadge.title', 'Альбом: {n} изображений').replace('{n}', res.albumItems.length);
+            badgeAlbum.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24"><use href="#ic-album"/></svg> <span>${res.albumItems.length}</span>`;
+          }
+        }
+
+        // Re-render viewer UI if the user is currently viewing this post
+        if (currentPost?.id === targetPost.id) {
+          renderAlbumFilmstrip();
+          if (viewerAlbumPageText) {
+            viewerAlbumPageText.textContent = `${currentAlbumIndex + 1} / ${targetPost.albumItems.length}`;
+          }
+          if (btnFetchFullAlbumText) {
+            btnFetchFullAlbumText.textContent = t('vw.refreshSet', 'Обновить сет ({n} фото)').replace('{n}', targetPost.albumItems.length);
+          }
+          if (isUserExplicit && res.albumItems.length > prevAlbumCount) {
+            showToast(t('vw.seriesFound', 'Найдено {n} изображений серии!').replace('{n}', res.albumItems.length));
+          }
+        }
+      } else {
+        if (isUserExplicit) {
+          showToast(t('vw.seriesNone', 'Дополнительные части серии не найдены'));
+        }
+        if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = t('vw.seriesPartsNone', 'Части серии не найдены');
+      }
+    } catch (err) {
+      console.error('Ошибка поиска альбома:', err);
+      if (isUserExplicit) {
+        showToast(t('vw.seriesSearchFailed', 'Не удалось выполнить поиск частей серии'));
+      }
+    } finally {
+      targetPost._albumFetchInProgress = false;
+      if (btnFetchFullAlbum) btnFetchFullAlbum.disabled = false;
+    }
   }
 
   // Load all series parts via the sidebar button
   if (btnFetchFullAlbum) {
-    btnFetchFullAlbum.addEventListener('click', async (e) => {
+    btnFetchFullAlbum.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!currentPost) return;
       haptic(15);
-      btnFetchFullAlbum.disabled = true;
-      if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = t('vw.searchingSeries', 'Поиск серии...');
-
-      try {
-        const res = await fetchAlbumPosts({
-          site: currentPost.site,
-          seriesKey: currentPost.seriesKey || '',
-          parentId: currentPost.parentId || '',
-          originalId: currentPost.originalId || ''
-        });
-
-        if (res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
-          currentPost.isAlbum = true;
-          currentPost.albumItems = res.albumItems;
-          currentPost.albumCount = res.albumItems.length;
-          if (!currentPost.content && res.albumItems[0]?.content) {
-            currentPost.content = res.albumItems[0].content;
-          }
-          currentAlbumIndex = 0;
-
-          // Sync the updated album back into global gallery state
-          const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-          if (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length) {
-            list[state.currentViewerIndex] = currentPost;
-          }
-          if (Array.isArray(state.posts)) {
-            const origIdx = state.posts.findIndex(p => p.id === currentPost.id);
-            if (origIdx !== -1) {
-              state.posts[origIdx] = currentPost;
-            }
-          }
-
-          // Update the card badge in the gallery DOM.
-          // Cards are .media-card[data-post-id] with badges inside .badge-group-top > div;
-          // the old .post-card[data-id] selector matched nothing.
-          const cardEl = document.querySelector(`.media-card[data-post-id="${currentPost.id}"]`);
-          if (cardEl) {
-            cardEl.classList.add('is-album-card');
-            const topGroup = cardEl.querySelector('.badge-group-top > div');
-            let badgeAlbum = topGroup ? topGroup.querySelector('.badge-album') : null;
-            if (!badgeAlbum && topGroup) {
-              badgeAlbum = document.createElement('span');
-              badgeAlbum.className = 'badge-format badge-album';
-              const siteBadgeEl = topGroup.querySelector('.badge-site');
-              if (siteBadgeEl) {
-                topGroup.insertBefore(badgeAlbum, siteBadgeEl.nextSibling);
-              } else {
-                topGroup.prepend(badgeAlbum);
-              }
-            }
-            if (badgeAlbum) {
-              badgeAlbum.title = t('gal.albumBadge.title', 'Альбом: {n} изображений').replace('{n}', res.albumItems.length);
-              badgeAlbum.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24"><use href="#ic-album"/></svg> <span>${res.albumItems.length}</span>`;
-            }
-          }
-
-          renderViewerPost();
-          showToast(t('vw.seriesFound', 'Найдено {n} изображений серии!').replace('{n}', res.albumItems.length));
-        } else {
-          showToast(t('vw.seriesNone', 'Дополнительные части серии не найдены'));
-          if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = t('vw.seriesPartsNone', 'Части серии не найдены');
-        }
-      } catch (err) {
-        console.error('Ошибка поиска альбома:', err);
-        showToast(t('vw.seriesSearchFailed', 'Не удалось выполнить поиск частей серии'));
-      } finally {
-        btnFetchFullAlbum.disabled = false;
-      }
+      loadFullAlbumForPost(currentPost, true);
     });
   }
 
