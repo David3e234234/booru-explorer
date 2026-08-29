@@ -1164,7 +1164,32 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       }
 
       try {
-        const res = await syncExternalAccounts({ targetSite: 'all', syncLikes: true, syncFavorites: true, syncAuthors: true });
+        const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
+        const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
+        const inputKonachanLogin = document.getElementById('inputKonachanLogin');
+        const inputKonachanPassword = document.getElementById('inputKonachanPassword');
+        const inputYandereLogin = document.getElementById('inputYandereLogin');
+        const inputYanderePassword = document.getElementById('inputYanderePassword');
+        const inputPawchiveSession = document.getElementById('inputPawchiveSession');
+
+        const activeSettings = {
+          ...(state.settings || {}),
+          danbooruApiKey: inputDanbooruApiKey ? inputDanbooruApiKey.value.trim() : (state.settings?.danbooruApiKey || ''),
+          danbooruLogin: inputDanbooruLogin ? inputDanbooruLogin.value.trim() : (state.settings?.danbooruLogin || ''),
+          konachanLogin: inputKonachanLogin ? inputKonachanLogin.value.trim() : (state.settings?.konachanLogin || ''),
+          konachanPassword: inputKonachanPassword ? inputKonachanPassword.value.trim() : (state.settings?.konachanPassword || ''),
+          yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : (state.settings?.yandereLogin || ''),
+          yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : (state.settings?.yanderePassword || ''),
+          pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : (state.settings?.pawchiveSession || '')
+        };
+
+        const res = await syncExternalAccounts({ 
+          targetSite: 'all', 
+          syncLikes: true, 
+          syncFavorites: true, 
+          syncAuthors: true,
+          settings: activeSettings
+        });
         if (res.success) {
           showToast(res.message || t('settings.syncSuccess', 'Синхронизация успешно выполнена'));
           if (syncExternalStatusText) {

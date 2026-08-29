@@ -99,7 +99,8 @@ router.post('/favorites', (req, res) => {
   const userId = req.user?.id || null;
   const favorites = getFavorites(userId);
   const existsIndex = favorites.findIndex(f => f.id === post.id);
-  const settings = getSettings(userId);
+  const clientAuth = parseClientAuth(req);
+  const settings = { ...getSettings(userId), ...clientAuth, ...(req.body?.settings || {}) };
   let isFavorite = false;
 
   if (existsIndex >= 0) {
@@ -145,7 +146,8 @@ router.delete('/favorites/:id', (req, res) => {
   saveFavorites(filtered, userId);
 
   if (target) {
-    const settings = getSettings(userId);
+    const clientAuth = parseClientAuth(req);
+    const settings = { ...getSettings(userId), ...clientAuth };
     sendBooruFavorite(target.site || 'danbooru', target, false, settings).catch(() => {});
   }
 
@@ -176,7 +178,8 @@ router.post('/favorite-authors', (req, res) => {
   const userId = req.user?.id || null;
   const authors = getFavoriteAuthors(userId);
   const existsIndex = authors.findIndex(a => (a.name || '').toLowerCase() === cleanName);
-  const settings = getSettings(userId);
+  const clientAuth = parseClientAuth(req);
+  const settings = { ...getSettings(userId), ...clientAuth, ...(req.body?.settings || {}) };
 
   if (existsIndex >= 0) {
     const removedAuthor = authors[existsIndex];
@@ -227,7 +230,8 @@ router.delete('/favorite-authors/:name', (req, res) => {
   const filtered = authors.filter(a => (a.name || '').toLowerCase() !== rawName);
   saveFavoriteAuthors(filtered, userId);
 
-  const settings = getSettings(userId);
+  const clientAuth = parseClientAuth(req);
+  const settings = { ...getSettings(userId), ...clientAuth };
   sendBooruAuthorFollow(target?.site || 'danbooru', target || rawName, false, settings).catch(() => {});
 
   res.json({ success: true, count: filtered.length, authors: filtered });
@@ -296,7 +300,8 @@ router.post('/like', async (req, res) => {
   const userId = req.user?.id || null;
   const likes = getLikes(userId);
   const existsIndex = likes.findIndex(l => l.id === post.id);
-  const settings = getSettings(userId);
+  const clientAuth = parseClientAuth(req);
+  const settings = { ...getSettings(userId), ...clientAuth, ...(req.body?.settings || {}) };
   let isLiked = false;
 
   if (existsIndex >= 0) {
@@ -535,11 +540,25 @@ router.get('/backup/telegram/status', (req, res) => {
   });
 });
 
+function parseClientAuth(req) {
+  let clientAuth = {};
+  if (req.headers['x-booru-auth']) {
+    try {
+      clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
+    } catch {
+      try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
+    }
+  }
+  return clientAuth;
+}
+
 // POST /api/sync-external - Batch sync existing likes, favorites, and favorite authors to remote services
 router.post('/sync-external', async (req, res) => {
   try {
     const userId = req.user?.id || null;
-    const settings = getSettings(userId);
+    const clientAuth = parseClientAuth(req);
+    const bodySettings = (req.body && typeof req.body.settings === 'object') ? req.body.settings : {};
+    const settings = { ...getSettings(userId), ...clientAuth, ...bodySettings };
     const { targetSite = 'all', syncLikes = true, syncFavorites = true, syncAuthors = true } = req.body || {};
 
     const likes = syncLikes ? getLikes(userId) : [];
@@ -551,6 +570,8 @@ router.post('/sync-external', async (req, res) => {
     let syncedAuthorsCount = 0;
     let skippedCount = 0;
 
+    logInfo('SyncExternal', `Запуск батч-синхронизации: likes=${likes.length}, favorites=${favorites.length}, authors=${authors.length}, targetSite=${targetSite}`);
+
     const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     // 1. Sync Likes
@@ -561,19 +582,12 @@ router.post('/sync-external', async (req, res) => {
         skippedCount++;
         continue;
       }
-      if (site === 'danbooru' && (!settings.danbooruLogin || !settings.danbooruApiKey)) {
-        skippedCount++;
-        continue;
-      }
-      if (site === 'pawchive' && !settings.pawchiveSession) {
-        skippedCount++;
-        continue;
-      }
       try {
         await sendBooruLike(site, item, true, settings);
         syncedLikesCount++;
         await delay(120); // rate-limit throttle
-      } catch {
+      } catch (err) {
+        logError('SyncExternal', `Ошибка при синхронизации лайка [${item.id}]:`, err);
         skippedCount++;
       }
     }
@@ -586,19 +600,12 @@ router.post('/sync-external', async (req, res) => {
         skippedCount++;
         continue;
       }
-      if (site === 'danbooru' && (!settings.danbooruLogin || !settings.danbooruApiKey)) {
-        skippedCount++;
-        continue;
-      }
-      if (site === 'pawchive' && !settings.pawchiveSession) {
-        skippedCount++;
-        continue;
-      }
       try {
         await sendBooruFavorite(site, item, true, settings);
         syncedFavoritesCount++;
         await delay(120);
-      } catch {
+      } catch (err) {
+        logError('SyncExternal', `Ошибка при синхронизации закладки [${item.id}]:`, err);
         skippedCount++;
       }
     }
@@ -611,18 +618,17 @@ router.post('/sync-external', async (req, res) => {
         skippedCount++;
         continue;
       }
-      if (site === 'pawchive' && !settings.pawchiveSession) {
-        skippedCount++;
-        continue;
-      }
       try {
         await sendBooruAuthorFollow(site, author, true, settings);
         syncedAuthorsCount++;
         await delay(120);
-      } catch {
+      } catch (err) {
+        logError('SyncExternal', `Ошибка при синхронизации автора [${author.name || author.id}]:`, err);
         skippedCount++;
       }
     }
+
+    logInfo('SyncExternal', `Итог синхронизации: likes=${syncedLikesCount}, favs=${syncedFavoritesCount}, authors=${syncedAuthorsCount}, skipped=${skippedCount}`);
 
     res.json({
       success: true,

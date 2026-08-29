@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { 
   DEFAULT_SETTINGS, 
   SETTINGS_FILE, 
@@ -11,7 +12,7 @@ import {
   BROWSER_USER_AGENT,
   DATA_DIR 
 } from '../config/constants.js';
-import { logError } from '../utils/logger.js';
+import { logInfo, logError } from '../utils/logger.js';
 import { fetchSafe } from '../utils/network.js';
 import { getUserDataDir } from './userService.js';
 
@@ -174,6 +175,8 @@ export function saveAuthorFeedState(state, userId = null) {
   writeJsonFileAsync(filePath, state);
 }
 
+const MOEBOORU_PASSWORD_SALT = 'So-I-Heard-You-Like-Mupkids-?--';
+
 export async function sendBooruLike(site, postOrId, isLike, settings) {
   try {
     const postObj = (postOrId && typeof postOrId === 'object') ? postOrId : { id: postOrId };
@@ -181,8 +184,11 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
     const cleanId = String(rawId).replace(/^[a-z0-9]+_/i, '').trim();
     const effectiveSite = postObj.site || site || 'danbooru';
 
+    // 1. Danbooru
     if (effectiveSite === 'danbooru' && settings.danbooruLogin && settings.danbooruApiKey) {
       if (!cleanId) return;
+      const login = encodeURIComponent(settings.danbooruLogin);
+      const apiKey = encodeURIComponent(settings.danbooruApiKey);
       const auth = Buffer.from(`${settings.danbooruLogin}:${settings.danbooruApiKey}`).toString('base64');
       const authHeaders = {
         'Authorization': `Basic ${auth}`,
@@ -190,14 +196,16 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
       };
 
       if (isLike) {
-        await fetchSafe(`https://danbooru.donmai.us/favorites.json?post_id=${encodeURIComponent(cleanId)}`, {
+        const favUrl = `https://danbooru.donmai.us/favorites.json?post_id=${encodeURIComponent(cleanId)}&login=${login}&api_key=${apiKey}`;
+        const favRes = await fetchSafe(favUrl, {
           method: 'POST',
           headers: authHeaders,
           settings,
           site: 'danbooru'
-        }).catch(() => {});
+        }).catch(err => ({ ok: false, error: err.message }));
 
-        await fetchSafe(`https://danbooru.donmai.us/posts/${encodeURIComponent(cleanId)}/votes.json`, {
+        const voteUrl = `https://danbooru.donmai.us/posts/${encodeURIComponent(cleanId)}/votes.json?score=1&login=${login}&api_key=${apiKey}`;
+        const voteRes = await fetchSafe(voteUrl, {
           method: 'POST',
           headers: {
             ...authHeaders,
@@ -206,16 +214,41 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
           body: JSON.stringify({ score: 1 }),
           settings,
           site: 'danbooru'
-        }).catch(() => {});
+        }).catch(err => ({ ok: false, error: err.message }));
+
+        logInfo('Sync', `Danbooru like [${cleanId}]: fav status=${favRes?.status || (favRes?.ok ? 200 : 'err')}, vote status=${voteRes?.status || (voteRes?.ok ? 200 : 'err')}`);
       } else {
-        await fetchSafe(`https://danbooru.donmai.us/favorites/${encodeURIComponent(cleanId)}.json`, {
+        const delUrl = `https://danbooru.donmai.us/favorites/${encodeURIComponent(cleanId)}.json?login=${login}&api_key=${apiKey}`;
+        await fetchSafe(delUrl, {
           method: 'DELETE',
           headers: authHeaders,
           settings,
           site: 'danbooru'
         }).catch(() => {});
       }
-    } else if (effectiveSite === 'pawchive' && settings.pawchiveSession) {
+    } 
+    // 2. Yande.re & Konachan (Moebooru)
+    else if ((effectiveSite === 'yandere' || effectiveSite === 'konachan')) {
+      const isYandere = effectiveSite === 'yandere';
+      const baseUrl = isYandere ? 'https://yande.re' : 'https://konachan.com';
+      const login = String(isYandere ? (settings.yandereLogin || '') : (settings.konachanLogin || '')).trim();
+      const pass = String(isYandere ? (settings.yanderePassword || '') : (settings.konachanPassword || '')).trim();
+
+      if (login && pass && cleanId) {
+        const passHash = crypto.createHash('sha1').update(`${MOEBOORU_PASSWORD_SALT}${pass}--`).digest('hex');
+        const score = isLike ? 3 : 0;
+        const voteUrl = `${baseUrl}/post/vote.json?id=${encodeURIComponent(cleanId)}&score=${score}&login=${encodeURIComponent(login)}&password_hash=${passHash}`;
+        const voteRes = await fetchSafe(voteUrl, {
+          method: 'POST',
+          headers: { 'User-Agent': BROWSER_USER_AGENT },
+          settings,
+          site: effectiveSite
+        }).catch(err => ({ ok: false, error: err.message }));
+        logInfo('Sync', `${effectiveSite} vote [${cleanId}]: status=${voteRes?.status || (voteRes?.ok ? 200 : 'err')}`);
+      }
+    }
+    // 3. Pawchive
+    else if (effectiveSite === 'pawchive' && settings.pawchiveSession) {
       const token = String(settings.pawchiveSession).replace(/^session=/i, '').trim();
       if (token) {
         let service = postObj.service || null;
@@ -232,7 +265,7 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
         }
         if (service && creatorId && realPostId) {
           const method = isLike ? 'POST' : 'DELETE';
-          await fetchSafe(`https://pawchive.pw/api/v1/favorites/post/${service}/${creatorId}/${realPostId}`, {
+          const pawRes = await fetchSafe(`https://pawchive.pw/api/v1/favorites/post/${service}/${creatorId}/${realPostId}`, {
             method,
             headers: {
               'Cookie': `session=${token}`,
@@ -240,7 +273,8 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
             },
             settings,
             site: 'pawchive'
-          }).catch(() => {});
+          }).catch(err => ({ ok: false, error: err.message }));
+          logInfo('Sync', `Pawchive like [${realPostId}]: status=${pawRes?.status || (pawRes?.ok ? 200 : 'err')}`);
         }
       }
     }
@@ -276,7 +310,7 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
         }
         if (service && creatorId) {
           const method = isFollow ? 'POST' : 'DELETE';
-          await fetchSafe(`https://pawchive.pw/api/v1/favorites/creator/${encodeURIComponent(service)}/${encodeURIComponent(creatorId)}`, {
+          const res = await fetchSafe(`https://pawchive.pw/api/v1/favorites/creator/${encodeURIComponent(service)}/${encodeURIComponent(creatorId)}`, {
             method,
             headers: {
               'Cookie': `session=${token}`,
@@ -285,6 +319,7 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
             settings,
             site: 'pawchive'
           }).catch(() => {});
+          logInfo('Sync', `Pawchive follow [${service}:${creatorId}]: status=${res?.status || (res?.ok ? 200 : 'err')}`);
         }
       }
     }
