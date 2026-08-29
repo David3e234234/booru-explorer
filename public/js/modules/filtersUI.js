@@ -23,6 +23,9 @@ export function updateSiteCapabilitiesUI(siteId) {
 
   // 1. Categories & navigation tabs (desktop & mobile)
   const supportedCats = new Set(caps.supportedCategories || ['new', 'views', 'top', 'random', 'following', 'recommended']);
+  if (state.settings?.enableRecommendations === false) {
+    supportedCats.delete('recommended');
+  }
   
   document.querySelectorAll('.nav-tab').forEach(tab => {
     const cat = tab.dataset.category;

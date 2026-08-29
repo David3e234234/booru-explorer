@@ -331,6 +331,10 @@ export function applySettingsToUIAndState(s) {
     selectMaxServerCache.value = String(s.maxServerCacheMb);
   }
 
+  const checkEnableRecommendations = document.getElementById('checkEnableRecommendations');
+  if (checkEnableRecommendations && typeof s.enableRecommendations === 'boolean') {
+    checkEnableRecommendations.checked = s.enableRecommendations;
+  }
   const selectAiVisualEngine = document.getElementById('selectAiVisualEngine');
   if (selectAiVisualEngine && s.aiVisualEngine) {
     selectAiVisualEngine.value = s.aiVisualEngine;
@@ -737,6 +741,8 @@ export function openSettingsModal() {
     selectMaxServerCacheModal.value = String(state.settings.maxServerCacheMb);
   }
 
+  const checkEnableRecommendations = document.getElementById('checkEnableRecommendations');
+  if (checkEnableRecommendations) checkEnableRecommendations.checked = state.settings.enableRecommendations !== false;
   const selectAiVisualEngine = document.getElementById('selectAiVisualEngine');
   if (selectAiVisualEngine) selectAiVisualEngine.value = state.settings.aiVisualEngine || 'browser';
   const selectAiVisualModel = document.getElementById('selectAiVisualModel');
@@ -1493,6 +1499,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         enableJsDemuxing: enableJsDemuxingVal,
         hideZipPosts: hideZipPostsVal,
         unpackArchivesOnDownload: unpackArchivesOnDownloadVal,
+        enableRecommendations: document.getElementById('checkEnableRecommendations')?.checked !== false,
         aiVisualEngine: document.getElementById('selectAiVisualEngine')?.value || 'browser',
         aiVisualModel: document.getElementById('selectAiVisualModel')?.value || 'mobilenet',
         aiVisualBoostFeed: document.getElementById('checkAiVisualBoostFeed')?.checked !== false

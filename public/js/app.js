@@ -323,6 +323,8 @@ async function init() {
 
   initSettingsModal({
     onSettingsChanged: () => {
+      updateSiteCapabilitiesUI();
+      updateCategoryTabsUI();
       if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
           (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
         renderFavoriteAuthors();

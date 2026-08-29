@@ -19,16 +19,24 @@ let isModelLoading = false;
 
 const MODEL_CONFIGS = {
   mobilenet: {
-    name: 'Xenova/mobilenet_v3_small',
-    type: 'vision',
+    name: 'onnx-community/mobilenetv4_conv_small.e1200_r224_in1k',
+    type: 'pipeline',
     dim: 1000
   },
   clip: {
     name: 'Xenova/clip-vit-base-patch32',
     type: 'clip',
     dim: 512
+  },
+  dinov2: {
+    name: 'Xenova/dinov2-small',
+    type: 'pipeline',
+    dim: 384
   }
 };
+
+let lastModelError = null;
+let lastModelErrorTime = 0;
 
 /**
  * Load persisted embeddings from JSON file
@@ -94,6 +102,12 @@ export async function initModel(modelType = 'mobilenet') {
     return { success: true, model: config.name };
   }
 
+  // Prevent spamming repeated downloads if failed recently (30s cooldown)
+  const now = Date.now();
+  if (lastModelError && (now - lastModelErrorTime < 30000)) {
+    return { success: false, error: lastModelError };
+  }
+
   if (isModelLoading) {
     let waited = 0;
     while (isModelLoading && waited < 40) {
@@ -141,9 +155,12 @@ export async function initModel(modelType = 'mobilenet') {
     }
 
     currentModelName = config.name;
+    lastModelError = null;
     logInfo('AIVision', `AI модель ${config.name} успешно инициализирована`);
     return { success: true, model: config.name };
   } catch (err) {
+    lastModelError = err.message;
+    lastModelErrorTime = Date.now();
     logError('AIVision', `Ошибка инициализации модели ${config.name}:`, err);
     return { success: false, error: err.message };
   } finally {
@@ -183,8 +200,8 @@ export async function getEmbedding(imageUrl, postId = '', modelType = 'mobilenet
     if (!res.ok) {
       throw new Error(`Upstream image status: ${res.status}`);
     }
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const rawImage = await RawImage.read(buffer);
+    const arrayBuf = await res.arrayBuffer();
+    const rawImage = await RawImage.fromBlob(new Blob([arrayBuf]));
 
     const vector = await currentExtractor.extract(rawImage);
     embeddingsCache.set(cacheKey, vector);

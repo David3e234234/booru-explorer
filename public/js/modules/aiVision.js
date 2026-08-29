@@ -158,8 +158,22 @@ export async function initBrowserModel(modelType = 'mobilenet', onProgress = nul
             return raw.map(v => v / norm);
           }
         };
+      } else if (modelType === 'dinov2') {
+        const modelId = 'Xenova/dinov2-small';
+        const extractor = await pipeline('image-feature-extraction', modelId, { 
+          quantized: true, 
+          progress_callback: progressCallback 
+        });
+        
+        browserExtractor = {
+          type: 'pipeline',
+          async extract(imageInput) {
+            const output = await extractor(imageInput, { pooling: 'mean', normalize: true });
+            return Array.from(output.data);
+          }
+        };
       } else {
-        const modelId = 'Xenova/mobilenet_v3_small';
+        const modelId = 'onnx-community/mobilenetv4_conv_small.e1200_r224_in1k';
         const extractor = await pipeline('image-feature-extraction', modelId, { 
           quantized: true, 
           progress_callback: progressCallback 
@@ -261,7 +275,7 @@ export async function getPostEmbedding(post, options = {}) {
     }
   }
 
-  if (!vector && (engine === 'browser' || engine === 'auto')) {
+  if (!vector && (engine === 'browser' || engine === 'auto' || engine === 'server')) {
     try {
       vector = await extractBrowserEmbedding(imageUrl, modelType);
     } catch (err) {

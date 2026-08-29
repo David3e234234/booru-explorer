@@ -134,6 +134,7 @@ export const state = {
     enableJsDemuxing: true,
     customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
     maxServerCacheMb: 1500,
+    enableRecommendations: true,
     aiVisualEngine: 'browser',
     aiVisualModel: 'mobilenet',
     aiVisualBoostFeed: true,

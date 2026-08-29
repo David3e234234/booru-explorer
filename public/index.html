@@ -17,7 +17,7 @@
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.3">
   <link rel="stylesheet" href="css/main.css?v=8.8">
-  <link rel="stylesheet" href="css/components.css?v=9.7">
+  <link rel="stylesheet" href="css/components.css?v=9.8">
   <link rel="stylesheet" href="css/viewer.css?v=11.4">
   <script src="js/mp4box.all.min.js"></script>
 </head>
@@ -1458,8 +1458,19 @@
         <!-- 5. TAB: AI & VISION RECOMMENDATIONS -->
         <div class="settings-tab-pane" id="tabPane-ai" style="display: none;">
           <div class="settings-group">
-            <label class="settings-label" data-i18n="settings.aiHeading">Нейросетевые рекомендации (Эксперимент):</label>
-            <p class="settings-hint" data-i18n="settings.aiHint">Сканирование изображений легковесной нейросетью для поиска визуально похожих артов и умной персонализации ленты.</p>
+            <label class="settings-label" data-i18n="settings.aiHeading">Система рекомендаций и ИИ:</label>
+            <p class="settings-hint" data-i18n="settings.aiHint">Настройка персональной ленты «Для вас» и сканирования изображений нейросетью для поиска визуально похожих артов.</p>
+          </div>
+
+          <!-- Enable Recommendations Feed Toggle -->
+          <div class="settings-group">
+            <div class="toggles-list" style="margin-top: 4px;">
+              <label class="toggle-row" title="Показывать категорию 'Для вас' и рассчитывать персональные рекомендации на основе лайков и истории" data-i18n-title="settings.enableRecs.title">
+                <input type="checkbox" id="checkEnableRecommendations" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name" data-i18n="settings.enableRecs">Включить вкладку и систему рекомендаций («Для вас»)</span>
+              </label>
+            </div>
           </div>
 
           <!-- Execution environment selection -->
@@ -1477,7 +1488,7 @@
           <div class="settings-group">
             <label class="settings-label" for="selectAiVisualModel" data-i18n="settings.aiModel">Модель визуального анализа:</label>
             <select id="selectAiVisualModel" class="input-setting">
-              <option value="mobilenet" selected data-i18n="settings.aiModelMobilenet">MobileNetV3 (Быстрая и легкая, ~10 МБ)</option>
+              <option value="mobilenet" selected data-i18n="settings.aiModelMobilenet">MobileNetV4 (Быстрая и легкая, ~8 МБ)</option>
               <option value="clip" data-i18n="settings.aiModelClip">CLIP Vision (Глубокое понимание сцен и стиля, ~30 МБ)</option>
             </select>
           </div>
@@ -2327,6 +2338,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=13.0"></script>
+  <script type="module" src="js/app.js?v=13.1"></script>
 </body>
 </html>
