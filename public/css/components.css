@@ -396,6 +396,12 @@
   outline-offset: 2px;
 }
 
+.btn-card-similar:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(59, 130, 246, 0.95));
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
 .btn-card-dislike:hover {
   background-color: rgba(220, 60, 80, 0.9);
   color: #ffffff;

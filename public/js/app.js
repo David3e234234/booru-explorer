@@ -37,6 +37,7 @@ import {
 import { initAutocomplete } from './autocomplete.js';
 import { initGallery } from './gallery.js';
 import { initViewer } from './viewer.js';
+import { findSimilarPosts, calculateUserTasteVector, scoreCandidatesByVisualTaste } from './modules/aiVision.js';
 import { isMyLiveDemoHost, isVercelHost, showToast, haptic } from './modules/uiUtils.js';
 import { openDrawer, closeAllDrawers, setDrawerCallbacks } from './modules/drawers.js';
 import { 
@@ -172,6 +173,75 @@ async function init() {
 
   let lastLoadMoreTime = 0;
 
+  async function handleFindVisuallySimilar(targetPost) {
+    if (!targetPost) return;
+
+    if (state.settings.aiVisualEngine === 'off') {
+      showToast(t('ai.disabledInSettings', 'Нейросетевой анализ выключен в Настройках -> ИИ'));
+      return;
+    }
+
+    showToast(t('ai.scanningSimilar', '✨ Сканирование нейросетью и поиск похожих артов...'));
+    try {
+      state.isLoading = true;
+      galleryInstance.showScrollLoading();
+
+      // Gather candidates from current posts + fetch additional candidates if pool is small
+      let candidates = [...(state.posts || [])];
+      if (candidates.length < 40) {
+        try {
+          const res = await fetchPosts({
+            site: state.currentSite,
+            category: 'new',
+            page: 1,
+            limit: 80,
+            aiFilter: state.aiFilter,
+            ratingFilter: state.ratingFilter,
+            typeFilter: state.typeFilter
+          });
+          if (res.success && Array.isArray(res.posts)) {
+            const existing = new Set(candidates.map(p => p.id));
+            for (const p of res.posts) {
+              if (!existing.has(p.id)) candidates.push(p);
+            }
+          }
+        } catch {}
+      }
+
+      const similarResults = await findSimilarPosts(targetPost, candidates, {
+        modelType: state.settings.aiVisualModel || 'mobilenet',
+        engine: state.settings.aiVisualEngine || 'browser',
+        minSimilarity: 0.30
+      });
+
+      state.isLoading = false;
+      galleryInstance.hideScrollLoading();
+
+      if (similarResults.length === 0) {
+        showToast(t('ai.noSimilarFound', 'Похожих артов среди загруженных постов не найдено'));
+        return;
+      }
+
+      // Add target post at the top followed by similar matches
+      const targetWithBadge = { ...targetPost, similarityPercent: 100 };
+      const rankedPosts = [
+        targetWithBadge,
+        ...similarResults.map(r => ({ ...r.post, similarityPercent: r.matchPercent, similarityScore: r.similarity }))
+      ];
+
+      state.posts = rankedPosts;
+      state.displayedPosts = rankedPosts;
+      state.hasMore = false;
+      galleryInstance.renderGallery(true);
+      showToast(t('ai.similarFoundCount', 'Найдено {n} визуально похожих артов!').replace('{n}', similarResults.length));
+    } catch (err) {
+      state.isLoading = false;
+      galleryInstance.hideScrollLoading();
+      console.error('[AIVision] Find similar failed:', err);
+      showToast(err.message || t('ai.findSimilarError', 'Не удалось выполнить поиск похожих'));
+    }
+  }
+
   galleryInstance = initGallery({
     onOpenViewer: (index) => viewerInstance.openViewer(index),
     onFavoriteToggle: updateFavoritesBadge,
@@ -193,7 +263,8 @@ async function init() {
     },
     onRefresh: () => {
       performSearch(true);
-    }
+    },
+    onFindSimilar: handleFindVisuallySimilar
   });
 
   viewerInstance = initViewer({
@@ -213,6 +284,7 @@ async function init() {
     onDislikeToggle: () => {
       galleryInstance.renderGallery(false, { preserveScroll: true });
     },
+    onFindSimilar: handleFindVisuallySimilar,
     showToast
   });
 
@@ -1118,6 +1190,38 @@ async function performSearch(reset = false, options = {}) {
           isViewed
         };
       });
+
+      // Neural Visual Taste Personalization (Hybrid scoring)
+      if (state.settings?.aiVisualBoostFeed !== false && state.settings?.aiVisualEngine !== 'off') {
+        const likedPool = (state.likes && state.likes.length > 0) ? state.likes : state.favorites;
+        if (Array.isArray(likedPool) && likedPool.length > 0) {
+          try {
+            const tasteVector = await calculateUserTasteVector(likedPool, {
+              modelType: state.settings?.aiVisualModel || 'mobilenet',
+              engine: state.settings?.aiVisualEngine || 'browser'
+            });
+            if (tasteVector) {
+              const visualScored = await scoreCandidatesByVisualTaste(scoredCandidates, tasteVector, {
+                modelType: state.settings?.aiVisualModel || 'mobilenet',
+                engine: state.settings?.aiVisualEngine || 'browser'
+              });
+              for (let i = 0; i < scoredCandidates.length; i++) {
+                const vis = visualScored[i]?.visualMatchPercent || 0;
+                if (vis > 0) {
+                  scoredCandidates[i].visualMatchPercent = vis;
+                  if (scoredCandidates[i].matchPercent > 0) {
+                    scoredCandidates[i].matchPercent = Math.round(scoredCandidates[i].matchPercent * 0.6 + vis * 0.4);
+                  } else {
+                    scoredCandidates[i].matchPercent = Math.round(vis * 0.85);
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('[AIVision] Feed personalization error:', e);
+          }
+        }
+      }
 
       const finalRecommended = [];
       const authorCountMap = new Map();

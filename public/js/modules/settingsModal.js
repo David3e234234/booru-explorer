@@ -26,6 +26,7 @@ import { showToast, formatBytes } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { updateCategoryTabsUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI, updatePawchiveServiceUI } from './filtersUI.js';
 import { updateHeaderAuthUI } from './authModal.js';
+import { getLocalCacheCount, clearAllEmbeddingsCache } from './aiVision.js';
 
 export const DEFAULT_AI_TAGS = [
   'ai_generated',
@@ -328,6 +329,19 @@ export function applySettingsToUIAndState(s) {
   const selectMaxServerCache = document.getElementById('selectMaxServerCache');
   if (selectMaxServerCache && s.maxServerCacheMb !== undefined) {
     selectMaxServerCache.value = String(s.maxServerCacheMb);
+  }
+
+  const selectAiVisualEngine = document.getElementById('selectAiVisualEngine');
+  if (selectAiVisualEngine && s.aiVisualEngine) {
+    selectAiVisualEngine.value = s.aiVisualEngine;
+  }
+  const selectAiVisualModel = document.getElementById('selectAiVisualModel');
+  if (selectAiVisualModel && s.aiVisualModel) {
+    selectAiVisualModel.value = s.aiVisualModel;
+  }
+  const checkAiVisualBoostFeed = document.getElementById('checkAiVisualBoostFeed');
+  if (checkAiVisualBoostFeed && typeof s.aiVisualBoostFeed === 'boolean') {
+    checkAiVisualBoostFeed.checked = s.aiVisualBoostFeed;
   }
 
   // Telegram auto-backup
@@ -721,6 +735,21 @@ export function openSettingsModal() {
   const selectMaxServerCacheModal = document.getElementById('selectMaxServerCache');
   if (selectMaxServerCacheModal && state.settings.maxServerCacheMb !== undefined) {
     selectMaxServerCacheModal.value = String(state.settings.maxServerCacheMb);
+  }
+
+  const selectAiVisualEngine = document.getElementById('selectAiVisualEngine');
+  if (selectAiVisualEngine) selectAiVisualEngine.value = state.settings.aiVisualEngine || 'browser';
+  const selectAiVisualModel = document.getElementById('selectAiVisualModel');
+  if (selectAiVisualModel) selectAiVisualModel.value = state.settings.aiVisualModel || 'mobilenet';
+  const checkAiVisualBoostFeed = document.getElementById('checkAiVisualBoostFeed');
+  if (checkAiVisualBoostFeed) checkAiVisualBoostFeed.checked = state.settings.aiVisualBoostFeed !== false;
+
+  // Update AI embeddings count
+  const aiEmbeddingsCacheCount = document.getElementById('aiEmbeddingsCacheCount');
+  if (aiEmbeddingsCacheCount) {
+    getLocalCacheCount().then(cnt => {
+      if (aiEmbeddingsCacheCount) aiEmbeddingsCacheCount.textContent = String(cnt || 0);
+    }).catch(() => {});
   }
 
   const currentTheme = document.documentElement.getAttribute('data-theme') || 'kotobox';
@@ -1463,7 +1492,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         enablePaheal: enablePahealVal,
         enableJsDemuxing: enableJsDemuxingVal,
         hideZipPosts: hideZipPostsVal,
-        unpackArchivesOnDownload: unpackArchivesOnDownloadVal
+        unpackArchivesOnDownload: unpackArchivesOnDownloadVal,
+        aiVisualEngine: document.getElementById('selectAiVisualEngine')?.value || 'browser',
+        aiVisualModel: document.getElementById('selectAiVisualModel')?.value || 'mobilenet',
+        aiVisualBoostFeed: document.getElementById('checkAiVisualBoostFeed')?.checked !== false
       };
 
       saveLocalSettings(updated);
@@ -1588,6 +1620,27 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         enableJsDemuxing: true
       });
       showToast(t('set.allReset', 'Значения сброшены к стандартным'));
+    });
+  }
+
+  // Clear AI Embeddings Cache Button
+  const btnClearAiCache = document.getElementById('btnClearAiCache');
+  if (btnClearAiCache) {
+    btnClearAiCache.addEventListener('click', async () => {
+      const origText = btnClearAiCache.textContent;
+      btnClearAiCache.disabled = true;
+      btnClearAiCache.textContent = t('set.clearing', 'Очистка...');
+      try {
+        await clearAllEmbeddingsCache();
+        const cntEl = document.getElementById('aiEmbeddingsCacheCount');
+        if (cntEl) cntEl.textContent = '0';
+        showToast(t('settings.aiCleared', 'Кэш эмбеддингов успешно очищен'));
+      } catch (err) {
+        showToast(t('set.clearFailed', 'Ошибка очистки кэша'));
+      } finally {
+        btnClearAiCache.disabled = false;
+        btnClearAiCache.textContent = origText;
+      }
     });
   }
 }

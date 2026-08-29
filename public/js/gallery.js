@@ -3,7 +3,7 @@ import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } f
 import { showToast, showActionToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
 import { t } from './i18n.js';
 
-export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh }) {
+export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh, onFindSimilar }) {
   const galleryGrid = document.getElementById('galleryGrid');
   const loadingSpinner = document.getElementById('loadingSpinner');
   const emptyState = document.getElementById('emptyState');
@@ -703,11 +703,14 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
 
     let matchBadge = '';
-    if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
+    if (post.similarityPercent && post.similarityPercent > 0) {
+      matchBadge = `<span class="badge-format match-percent" style="background: linear-gradient(135deg, rgba(139,92,246,0.9), rgba(59,130,246,0.9)); font-weight: 700;" title="${t('gal.similarityBadge', '{p}% сходства').replace('{p}', post.similarityPercent)}">✨ ${post.similarityPercent}%</span>`;
+    } else if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
       const matchedInfo = (Array.isArray(post.matchedTags) && post.matchedTags.length > 0)
         ? `&#10;${t('gal.matchTagsInfo', 'Совпало: {tags}').replace('{tags}', post.matchedTags.join(', '))}`
         : '';
-      matchBadge = `<span class="badge-format match-percent" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%</span>`;
+      const visualInfo = post.visualMatchPercent ? ` (✨ ${post.visualMatchPercent}%)` : '';
+      matchBadge = `<span class="badge-format match-percent" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%${visualInfo}</span>`;
     }
 
     let albumBadge = '';
@@ -782,6 +785,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             ` : '')}
           </div>
           <div class="card-action-btns">
+            <button class="btn-card-action btn-card-similar" data-post-id="${post.id}" title="${t('gal.findSimilar.title', 'Найти визуально похожие арты с помощью нейросети')}">
+              <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
+            </button>
             <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="${t('viewer.dislike.title', 'Не интересно (скрыть и меньше рекомендовать)')}">
               <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-dislike"/></svg>
             </button>
@@ -899,6 +905,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const post = card._post;
     if (!post) return;
 
+    const similarBtn = e.target.closest('.btn-card-similar');
+    if (similarBtn) {
+      e.stopPropagation();
+      if (!isDriftedTouch(e)) {
+        haptic([20, 30]);
+        if (onFindSimilar) {
+          onFindSimilar(post);
+        }
+      }
+      return;
+    }
     const dislikeBtn = e.target.closest('.btn-card-dislike');
     if (dislikeBtn) {
       e.stopPropagation();

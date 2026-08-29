@@ -449,3 +449,36 @@ export async function syncExternalAccounts(options = {}) {
   return await res.json();
 }
 
+export async function fetchAiStatus() {
+  const res = await fetch('/api/ai/status');
+  if (!res.ok) return { success: false };
+  return await res.json();
+}
+
+export async function fetchServerEmbedding(url, postId = '', model = 'mobilenet') {
+  const res = await fetch('/api/ai/embedding', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ url, postId, model })
+  });
+  return await res.json();
+}
+
+export async function fetchBatchServerEmbeddings(items, model = 'mobilenet') {
+  const res = await fetch('/api/ai/batch-embeddings', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ items, model })
+  });
+  return await res.json();
+}
+
+export async function clearServerAiCache() {
+  const res = await fetch('/api/ai/clear-cache', {
+    method: 'POST',
+    headers: getAuthHeaders(true)
+  });
+  return await res.json();
+}
+
+

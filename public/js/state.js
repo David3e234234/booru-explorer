@@ -133,7 +133,11 @@ export const state = {
     prioritizeUserTags: false,
     enableJsDemuxing: true,
     customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
-    maxServerCacheMb: 1500
+    maxServerCacheMb: 1500,
+    aiVisualEngine: 'browser',
+    aiVisualModel: 'mobilenet',
+    aiVisualBoostFeed: true,
+    aiVisualThreshold: 0.35
   },
   currentViewerIndex: -1,
   isLoading: false,

@@ -17,7 +17,7 @@
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.3">
   <link rel="stylesheet" href="css/main.css?v=8.8">
-  <link rel="stylesheet" href="css/components.css?v=9.6">
+  <link rel="stylesheet" href="css/components.css?v=9.7">
   <link rel="stylesheet" href="css/viewer.css?v=11.4">
   <script src="js/mp4box.all.min.js"></script>
 </head>
@@ -33,6 +33,7 @@
     <symbol id="ic-star-filled" viewBox="0 0 24 24"><polygon fill="currentColor" stroke="currentColor" points="12 2 15.09 8.26 22 9.27 17 14.14 28.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
     <symbol id="ic-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></g></symbol>
     <symbol id="ic-album" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.5"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></g></symbol>
+    <symbol id="ic-sparkles" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M19 3v4M21 5h-4M5 19v2M6 20H4"/></symbol>
   </svg>
 
   <!-- Top navigation bar -->
@@ -661,6 +662,10 @@
           <button class="viewer-btn" id="btnFavModal" title="Сохранить в закладки (Избранное)" data-i18n-title="viewer.fav.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
           </button>
+          <!-- Visually similar (AI neural network search) -->
+          <button class="viewer-btn" id="btnFindSimilarVision" title="Найти визуально похожие арты с помощью нейросети" data-i18n-title="viewer.similarVision.title">
+            <svg width="18" height="18" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
+          </button>
           <button class="viewer-btn mobile-only" id="btnViewerTagsToggle" title="Теги и информация" data-i18n-title="viewer.tagsToggle.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
             <span class="viewer-tags-badge" id="viewerTagsBadgeCount">0</span>
@@ -765,6 +770,13 @@
                   <span id="btnDislikeSidebarText" data-i18n="viewer.hideFromFeed">Скрыть из ленты</span>
                 </button>
               </div>
+              <div class="info-item" id="infoSimilarRow">
+                <span class="info-label" data-i18n="viewer.labelSimilar">Похожие:</span>
+                <button class="btn-album-fetch" id="btnFindSimilarSidebar" title="Найти визуально похожие арты с помощью нейросети" data-i18n-title="viewer.similarVision.title">
+                  <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
+                  <span data-i18n="viewer.similarVision">Найти похожие</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -820,6 +832,9 @@
         </button>
         <button type="button" class="settings-nav-tab" data-tab="proxy" title="Настройки проксирования и сети" data-i18n-title="settings.tabProxy.title">
           <span class="tab-label" data-i18n="settings.tabProxy">Прокси</span>
+        </button>
+        <button type="button" class="settings-nav-tab" data-tab="ai" title="Нейросетевые рекомендации и визуальный анализ" data-i18n-title="settings.tabAi.title">
+          <span class="tab-label" data-i18n="settings.tabAi">ИИ / Реком.</span>
         </button>
         <button type="button" class="settings-nav-tab" data-tab="storage" title="Кэш, память и перенос данных" data-i18n-title="settings.tabStorage.title">
           <span class="tab-label" data-i18n="settings.tabStorage">Память</span>
@@ -1436,6 +1451,58 @@
                 <span class="toggle-slider"></span>
                 <span class="toggle-name" data-i18n="settings.unpackArchivesOnDownload">Распаковывать архивы на сервере при скачивании</span>
               </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. TAB: AI & VISION RECOMMENDATIONS -->
+        <div class="settings-tab-pane" id="tabPane-ai" style="display: none;">
+          <div class="settings-group">
+            <label class="settings-label" data-i18n="settings.aiHeading">Нейросетевые рекомендации (Эксперимент):</label>
+            <p class="settings-hint" data-i18n="settings.aiHint">Сканирование изображений легковесной нейросетью для поиска визуально похожих артов и умной персонализации ленты.</p>
+          </div>
+
+          <!-- Execution environment selection -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiVisualEngine" data-i18n="settings.aiEngine">Среда выполнения нейросети:</label>
+            <select id="selectAiVisualEngine" class="input-setting">
+              <option value="auto" data-i18n="settings.aiEngineAuto">Автоматически (Сервер если доступен, иначе браузер)</option>
+              <option value="browser" selected data-i18n="settings.aiEngineBrowser">В браузере (WebAssembly / WebGPU, 0% нагрузки на сервер)</option>
+              <option value="server" data-i18n="settings.aiEngineServer">На сервере (Node.js ONNX, экономит батарею и трафик клиента)</option>
+              <option value="off" data-i18n="settings.aiEngineOff">Выключено</option>
+            </select>
+          </div>
+
+          <!-- Neural model selection -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiVisualModel" data-i18n="settings.aiModel">Модель визуального анализа:</label>
+            <select id="selectAiVisualModel" class="input-setting">
+              <option value="mobilenet" selected data-i18n="settings.aiModelMobilenet">MobileNetV3 (Быстрая и легкая, ~10 МБ)</option>
+              <option value="clip" data-i18n="settings.aiModelClip">CLIP Vision (Глубокое понимание сцен и стиля, ~30 МБ)</option>
+            </select>
+          </div>
+
+          <!-- Visual feed re-ranking boost -->
+          <div class="settings-group">
+            <div class="toggles-list" style="margin-top: 4px;">
+              <label class="toggle-row" title="Анализировать визуальные признаки понравившихся артов и учитывать их в ленте рекомендаций" data-i18n-title="settings.aiBoostFeed.title">
+                <input type="checkbox" id="checkAiVisualBoostFeed" checked>
+                <span class="toggle-slider"></span>
+                <span class="toggle-name" data-i18n="settings.aiBoostFeed">Персонализировать ленту «Для вас» по стилю артов</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Embeddings cache stats & clear button -->
+          <div class="settings-group" style="margin-top: 14px; padding: 14px; background: var(--bg-surface-secondary, rgba(255,255,255,0.04)); border: 1px solid var(--border-color); border-radius: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <span style="font-size: 13px; font-weight: 600;" data-i18n="settings.aiCacheCount">Закэшировано векторов:</span>
+                <span id="aiEmbeddingsCacheCount" style="margin-left: 6px; font-weight: 700; color: var(--accent-primary);">0</span>
+              </div>
+              <button type="button" class="btn-primary" id="btnClearAiCache" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; cursor: pointer;" data-i18n="settings.aiClearCache">
+                Очистить кэш эмбеддингов
+              </button>
             </div>
           </div>
         </div>
@@ -2260,6 +2327,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=12.9"></script>
+  <script type="module" src="js/app.js?v=13.0"></script>
 </body>
 </html>

@@ -29,6 +29,7 @@ export const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json'
 export const LIKES_FILE = path.join(DATA_DIR, 'likes.json');
 export const DISLIKES_FILE = path.join(DATA_DIR, 'dislikes.json');
 export const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+export const AI_EMBEDDINGS_FILE = path.join(DATA_DIR, 'ai_embeddings.json');
 
 // Favorite-author check state (key site:name -> knownIds/newIds)
 export const AUTHOR_FEED_STATE_FILE = path.join(DATA_DIR, 'author_feed_state.json');
