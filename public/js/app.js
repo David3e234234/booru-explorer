@@ -37,7 +37,7 @@ import {
 import { initAutocomplete } from './autocomplete.js';
 import { initGallery } from './gallery.js';
 import { initViewer } from './viewer.js';
-import { findSimilarPosts, calculateUserTasteVector, scoreCandidatesByVisualTaste } from './modules/aiVision.js';
+import { findSimilarPosts, calculateUserTasteVector, scoreCandidatesByVisualTaste, showAiStatus, hideAiStatus } from './modules/aiVision.js';
 import { isMyLiveDemoHost, isVercelHost, showToast, haptic } from './modules/uiUtils.js';
 import { openDrawer, closeAllDrawers, setDrawerCallbacks } from './modules/drawers.js';
 import { 
@@ -1898,6 +1898,15 @@ function setupEventListeners() {
       }
     }
   });
+
+  // AI Status Widget close button
+  const btnAiStatusClose = document.getElementById('btnAiStatusClose');
+  if (btnAiStatusClose) {
+    btnAiStatusClose.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideAiStatus(true);
+    });
+  }
 }
 
 init();

@@ -23,6 +23,77 @@ let browserLoadPromise = null;
 // Memory cache for active session
 const memoryEmbeddings = new Map();
 
+// Status widget timer
+let aiStatusDismissTimer = null;
+
+export function showAiStatus(text, options = {}) {
+  const widget = document.getElementById('aiStatusWidget');
+  if (!widget) return;
+  if (aiStatusDismissTimer) {
+    clearTimeout(aiStatusDismissTimer);
+    aiStatusDismissTimer = null;
+  }
+
+  const modelBadge = document.getElementById('aiStatusModelBadge');
+  const textEl = document.getElementById('aiStatusText');
+  const trackEl = document.getElementById('aiStatusProgressTrack');
+  const barEl = document.getElementById('aiStatusProgressBar');
+
+  if (modelBadge) {
+    const model = options.model || (state.settings?.aiVisualModel === 'clip' ? 'CLIP' : 'DINOv2');
+    modelBadge.textContent = model.toUpperCase();
+  }
+
+  if (textEl && text) {
+    textEl.textContent = text;
+  }
+
+  if (trackEl && barEl) {
+    if (typeof options.progress === 'number' && options.progress >= 0 && options.progress <= 100) {
+      trackEl.style.display = 'block';
+      barEl.style.width = `${Math.round(options.progress)}%`;
+    } else {
+      trackEl.style.display = 'none';
+    }
+  }
+
+  widget.classList.remove('ai-status-hidden', 'is-done', 'is-error');
+  if (options.status === 'done') {
+    widget.classList.add('is-done');
+  } else if (options.status === 'error') {
+    widget.classList.add('is-error');
+  }
+
+  widget.style.display = 'flex';
+
+  if (options.autoHideMs) {
+    aiStatusDismissTimer = setTimeout(() => {
+      hideAiStatus();
+    }, options.autoHideMs);
+  }
+}
+
+export function hideAiStatus(immediate = false) {
+  const widget = document.getElementById('aiStatusWidget');
+  if (!widget) return;
+  if (aiStatusDismissTimer) {
+    clearTimeout(aiStatusDismissTimer);
+    aiStatusDismissTimer = null;
+  }
+
+  if (immediate) {
+    widget.style.display = 'none';
+    widget.classList.add('ai-status-hidden');
+    return;
+  }
+
+  widget.classList.add('ai-status-hidden');
+  aiStatusDismissTimer = setTimeout(() => {
+    widget.style.display = 'none';
+    widget.classList.remove('is-done', 'is-error');
+  }, 300);
+}
+
 // Open or get IndexedDB connection
 let dbPromise = null;
 function getDB() {
@@ -139,11 +210,21 @@ export async function initBrowserModel(modelType = 'dinov2', onProgress = null) 
   }
 
   isBrowserModelLoading = true;
+  showAiStatus(t('ai.loadingModel', 'Загрузка модели нейросети...'), { model: normType });
+
   browserLoadPromise = (async () => {
     try {
       const { pipeline, AutoProcessor, CLIPVisionModelWithProjection } = await getBrowserTransformers();
       
       const progressCallback = (data) => {
+        if (data && data.status === 'progress' && typeof data.progress === 'number') {
+          const pct = Math.round(data.progress);
+          const fName = data.file ? ` (${data.file})` : '';
+          showAiStatus(t('ai.downloadingModel', 'Загрузка весов ИИ: {pct}%{f}').replace('{pct}', pct).replace('{f}', fName), {
+            model: normType,
+            progress: pct
+          });
+        }
         if (onProgress && typeof onProgress === 'function') {
           onProgress(data);
         }
@@ -187,9 +268,11 @@ export async function initBrowserModel(modelType = 'dinov2', onProgress = null) 
 
       browserCurrentModel = normType;
       console.log(`[AIVision Browser] Model ${normType} loaded successfully`);
+      showAiStatus(t('ai.modelReady', 'Модель ИИ готова к анализу'), { model: normType, progress: 100, autoHideMs: 1500 });
       return browserExtractor;
     } catch (err) {
       console.error(`[AIVision Browser] Failed to load model ${normType}:`, err);
+      showAiStatus(t('ai.modelLoadFailed', 'Не удалось загрузить модель ИИ'), { model: normType, status: 'error', autoHideMs: 3000 });
       throw err;
     } finally {
       isBrowserModelLoading = false;
@@ -250,7 +333,7 @@ export async function getPostEmbedding(post, options = {}) {
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
   const key = `${modelType}_${post.id || imageUrl}`;
 
-  // 1. Check local cache (Memory + IndexedDB)
+  // 1. Check in-memory and IndexedDB cache
   const cached = await getStoredEmbedding(key);
   if (cached) {
     return cached;
@@ -312,21 +395,32 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
 
   const modelType = options.modelType || state.settings?.aiVisualModel || 'mobilenet';
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
-  const minSimilarity = options.minSimilarity ?? 0.35; // Min 35% similarity
+  const minSimilarity = options.minSimilarity ?? 0.30;
+
+  showAiStatus(t('ai.analyzingTarget', 'Анализ целевого арта...'), { model: modelType });
 
   // 1. Extract target embedding
   const targetVector = await getPostEmbedding(targetPost, { modelType, engine });
   if (!targetVector) {
+    showAiStatus(t('ai.targetEmbedError', 'Не удалось извлечь признаки из арта'), { model: modelType, status: 'error', autoHideMs: 3000 });
     throw new Error(t('ai.targetEmbedError', 'Не удалось извлечь визуальные признаки из целевого арта'));
   }
 
   // 2. Extract embeddings for candidates (with concurrency limiter)
   const results = [];
   const candidatesWithoutTarget = candidatePosts.filter(p => p.id !== targetPost.id);
+  const total = candidatesWithoutTarget.length;
   
   const CONCURRENCY = 2;
-  for (let i = 0; i < candidatesWithoutTarget.length; i += CONCURRENCY) {
+  for (let i = 0; i < total; i += CONCURRENCY) {
     const chunk = candidatesWithoutTarget.slice(i, i + CONCURRENCY);
+    const processed = Math.min(i + CONCURRENCY, total);
+    const pct = Math.round((processed / total) * 100);
+    showAiStatus(t('ai.similarProgress', 'Поиск похожих: {i}/{n}').replace('{i}', processed).replace('{n}', total), {
+      model: modelType,
+      progress: pct
+    });
+
     const chunkResults = await Promise.all(chunk.map(async (candidate) => {
       try {
         const vec = await getPostEmbedding(candidate, { modelType, engine });
@@ -352,6 +446,12 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
 
   // Sort descending by similarity
   results.sort((a, b) => b.similarity - a.similarity);
+  showAiStatus(t('ai.similarDone', 'Найдено {n} похожих артов!').replace('{n}', results.length), {
+    model: modelType,
+    status: 'done',
+    progress: 100,
+    autoHideMs: 2500
+  });
   return results;
 }
 
@@ -368,14 +468,26 @@ export async function calculateUserTasteVector(likedPosts, options = {}) {
   
   // Take up to 6 recent liked posts for fast and responsive centroid computation
   const samplePosts = likedPosts.slice(0, 6);
+  const total = samplePosts.length;
   const vectors = [];
 
-  for (const post of samplePosts) {
+  showAiStatus(t('ai.computingTaste', 'Вычисление вкуса по {n} артам...').replace('{n}', total), { model: modelType });
+
+  for (let idx = 0; idx < total; idx++) {
+    const post = samplePosts[idx];
+    const pct = Math.round(((idx + 1) / total) * 100);
+    showAiStatus(t('ai.tasteProgress', 'Анализ любимых артов: {i}/{n}').replace('{i}', idx + 1).replace('{n}', total), {
+      model: modelType,
+      progress: pct
+    });
     const vec = await getPostEmbedding(post, { modelType, engine });
     if (vec) vectors.push(vec);
   }
 
-  if (vectors.length === 0) return null;
+  if (vectors.length === 0) {
+    hideAiStatus();
+    return null;
+  }
 
   const dim = vectors[0].length;
   const meanVector = new Float32Array(dim);
@@ -412,12 +524,22 @@ export async function scoreCandidatesByVisualTaste(candidates, tasteVector, opti
   // Only re-rank top 20 candidate posts to keep performance snappy and CPU load minimal
   const poolToScore = candidates.slice(0, 20);
   const remaining = candidates.slice(20);
+  const total = poolToScore.length;
 
   const CONCURRENCY = 2;
   const scoredTop = [];
 
-  for (let i = 0; i < poolToScore.length; i += CONCURRENCY) {
+  showAiStatus(t('ai.scoringFeed', 'Визуальный анализ ленты...'), { model: modelType });
+
+  for (let i = 0; i < total; i += CONCURRENCY) {
     const chunk = poolToScore.slice(i, i + CONCURRENCY);
+    const processed = Math.min(i + CONCURRENCY, total);
+    const pct = Math.round((processed / total) * 100);
+    showAiStatus(t('ai.scoringProgress', 'Сканирование ленты: {i}/{n}').replace('{i}', processed).replace('{n}', total), {
+      model: modelType,
+      progress: pct
+    });
+
     const chunkResults = await Promise.all(chunk.map(async (p) => {
       try {
         const vec = await getPostEmbedding(p, { modelType, engine });
@@ -434,6 +556,13 @@ export async function scoreCandidatesByVisualTaste(candidates, tasteVector, opti
     }));
     scoredTop.push(...chunkResults);
   }
+
+  showAiStatus(t('ai.scoringDone', 'Ранжирование завершено!'), {
+    model: modelType,
+    status: 'done',
+    progress: 100,
+    autoHideMs: 2000
+  });
 
   return [...scoredTop, ...remaining.map(p => ({ ...p, visualMatchPercent: 0 }))];
 }
