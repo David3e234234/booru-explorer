@@ -16,7 +16,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/variables.css?v=8.2">
-  <link rel="stylesheet" href="css/main.css?v=8.3">
+  <link rel="stylesheet" href="css/main.css?v=8.4">
   <link rel="stylesheet" href="css/components.css?v=9.5">
   <link rel="stylesheet" href="css/viewer.css?v=11.4">
   <script src="js/mp4box.all.min.js"></script>
@@ -46,7 +46,7 @@
       </div>
 
       <!-- Category and sorting tabs (desktop) -->
-      <nav class="nav-tabs desktop-only">
+      <nav class="nav-tabs desktop-only" id="mainNavTabs">
         <button class="nav-tab active" data-category="new" title="Свежие публикации (по дате)" data-i18n-title="nav.fresh.title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           <span data-i18n="nav.fresh">Свежие</span>
@@ -63,13 +63,7 @@
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><circle cx="15.5" cy="15.5" r="1.5"/></svg>
           <span data-i18n="nav.random">Случайно</span>
         </button>
-      </nav>
-    </div>
-
-    <!-- Right side: options and settings -->
-    <div class="header-right">
-      <!-- Personal navigation tabs (desktop) -->
-      <nav class="nav-tabs nav-tabs-personal desktop-only" id="personalNavTabs">
+        <div class="nav-tabs-divider"></div>
         <button class="nav-tab" data-category="following" title="Публикации авторов, на которых вы подписаны" data-i18n-title="nav.following.title">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           <span data-i18n="nav.following">Подписки</span>
@@ -79,7 +73,10 @@
           <span data-i18n="nav.recommended">Для вас</span>
         </button>
       </nav>
+    </div>
 
+    <!-- Right side: options and settings -->
+    <div class="header-right">
       <button class="btn-user-profile desktop-only" id="btnHeaderAuth" title="Личный кабинет" data-i18n-title="header.profile.title">
         <div class="user-avatar-mini" id="headerUserAvatar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
