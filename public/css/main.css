@@ -338,10 +338,10 @@ select option {
   min-width: 280px;
   background-color: var(--bg-surface);
   border-right: 1px solid var(--border-subtle);
-  padding: 18px 16px 28px;
+  padding: 12px 14px 24px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
   height: calc(100vh - 56px);
   position: sticky;
   top: 56px;
@@ -360,8 +360,7 @@ select option {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+  gap: 7px;
   padding-bottom: 8px;
   margin-bottom: 2px;
   border-bottom: 1px solid var(--border-subtle);
@@ -879,6 +878,7 @@ input.search-input:focus,
 
 /* Dynamic tags from the page */
 .tags-sidebar-count {
+  margin-left: auto;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;

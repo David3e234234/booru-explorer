@@ -3197,28 +3197,6 @@
    WIKI & SEARCH GUIDE MODAL
    ══════════════════════════════════════════════════════════════════════════ */
 
-.btn-sidebar-wiki-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  background-color: var(--bg-surface-raised, rgba(255, 255, 255, 0.05));
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
-  border-radius: var(--radius-sm, 6px);
-  color: var(--text-secondary, #a8a29e);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-sidebar-wiki-hint:hover {
-  background-color: var(--accent-subtle, rgba(249, 115, 22, 0.15));
-  border-color: var(--accent, #f97316);
-  color: var(--text-primary, #ffffff);
-  transform: translateY(-1px);
-}
-
 .modal-dialog-wiki {
   max-width: 860px;
   width: 95vw;

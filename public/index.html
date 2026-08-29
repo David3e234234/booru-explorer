@@ -16,8 +16,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/variables.css?v=8.2">
-  <link rel="stylesheet" href="css/main.css?v=8.5">
-  <link rel="stylesheet" href="css/components.css?v=9.5">
+  <link rel="stylesheet" href="css/main.css?v=8.6">
+  <link rel="stylesheet" href="css/components.css?v=9.6">
   <link rel="stylesheet" href="css/viewer.css?v=11.4">
   <script src="js/mp4box.all.min.js"></script>
 </head>
@@ -154,16 +154,10 @@
 
       <!-- 1. Tag search -->
       <div class="sidebar-block" id="searchBlock">
-        <div class="sidebar-title-row">
-          <h3 class="sidebar-title">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <span data-i18n="sidebar.searchTags">Поиск по тегам</span>
-          </h3>
-          <button class="btn-sidebar-wiki-hint" id="btnSidebarWikiHint" title="Справка по тегам и источникам (Wiki)" data-i18n-title="sidebar.wikiHint.title">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span data-i18n="sidebar.wikiHint">Wiki</span>
-          </button>
-        </div>
+        <h3 class="sidebar-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span data-i18n="sidebar.searchTags">Поиск по тегам</span>
+        </h3>
         <div class="sidebar-search-box">
           <div class="search-tags-wrapper" id="searchTagsWrapper">
             <input type="text" id="searchInput" class="search-input" placeholder="Введите тег (1girl, video)..." data-i18n-placeholder="sidebar.search.placeholder" autocomplete="off" spellcheck="false">

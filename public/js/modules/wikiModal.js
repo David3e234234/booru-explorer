@@ -5,7 +5,6 @@ export function initWikiModal({ onSelectTag, onSwitchSite }) {
   const modalBackdrop = document.getElementById('modalWikiBackdrop');
   const btnClose = document.getElementById('btnCloseWikiModal');
   const btnHeaderWiki = document.getElementById('btnHeaderWiki');
-  const btnSidebarWikiHint = document.getElementById('btnSidebarWikiHint');
   const wikiTabs = modalBackdrop?.querySelectorAll('.wiki-tab-btn');
   const wikiPanes = modalBackdrop?.querySelectorAll('.wiki-tab-pane');
   const wikiSearchInput = document.getElementById('wikiSearchInput');
@@ -52,7 +51,6 @@ export function initWikiModal({ onSelectTag, onSwitchSite }) {
 
   // Event Listeners
   btnHeaderWiki?.addEventListener('click', () => openWiki('tag-basics'));
-  btnSidebarWikiHint?.addEventListener('click', () => openWiki('tag-basics'));
   btnClose?.addEventListener('click', closeWiki);
 
   modalBackdrop?.addEventListener('click', (e) => {

@@ -90,7 +90,6 @@ export function updateSiteCapabilitiesUI(siteId) {
   }
 
   if (typeFilterBlock) {
-    // If a site only supports images or only video, we still keep or simplify type block
     const hasMultipleMediaTypes = caps.supportsVideo && caps.supportsImages;
     typeFilterBlock.style.display = hasMultipleMediaTypes ? '' : 'none';
   }
@@ -131,13 +130,7 @@ export function updateSiteCapabilitiesUI(siteId) {
     pawchiveServiceBlock.style.display = currentSiteId === 'pawchive' ? '' : 'none';
   }
 
-  // 10. Wiki Hint button
-  const btnSidebarWikiHint = document.getElementById('btnSidebarWikiHint');
-  if (btnSidebarWikiHint) {
-    btnSidebarWikiHint.style.display = caps.supportsTags ? '' : 'none';
-  }
-
-  // 11. Search input placeholder
+  // 10. Search input placeholder
   const searchInput = document.getElementById('searchInput');
   if (searchInput) {
     if (!caps.supportsTags) {
@@ -147,7 +140,7 @@ export function updateSiteCapabilitiesUI(siteId) {
     }
   }
 
-  // 12. Update active pill indicators
+  // 11. Update active pill indicators
   updateCategoryTabsUI();
   updateAiFilterUI();
   updateRatingFilterUI();
