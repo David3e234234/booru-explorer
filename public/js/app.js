@@ -1687,17 +1687,27 @@ function setupEventListeners() {
 
   // "Scroll to top" button
   const btnScrollToTop = document.getElementById('btnScrollToTop');
+  const mainContentEl = document.getElementById('mainContent');
   if (btnScrollToTop) {
-    window.addEventListener('scroll', () => {
-      if (window.scrollY > 350) {
+    const updateScrollTopBtn = () => {
+      const scrollY = (mainContentEl ? mainContentEl.scrollTop : 0) || window.scrollY || 0;
+      if (scrollY > 350) {
         btnScrollToTop.classList.add('visible');
       } else {
         btnScrollToTop.classList.remove('visible');
       }
-    }, { passive: true });
+    };
+
+    window.addEventListener('scroll', updateScrollTopBtn, { passive: true });
+    if (mainContentEl) {
+      mainContentEl.addEventListener('scroll', updateScrollTopBtn, { passive: true });
+    }
 
     btnScrollToTop.addEventListener('click', () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (mainContentEl) {
+        mainContentEl.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     });
   }
 

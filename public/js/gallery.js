@@ -17,6 +17,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   let observer = null;
   let mobileVideoObserver = null;
   let videoMetadataObserver = null;
+  let autoFillAttempts = 0;
 
   // Custom Pull-to-Refresh
   if (mainContent) {
@@ -174,17 +175,45 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     });
   }
 
+  function getScrollContainerInfo() {
+    const isDesktopScroller = window.innerWidth > 800 && mainContent && mainContent.clientHeight > 0;
+    if (isDesktopScroller) {
+      const scrollTop = mainContent.scrollTop;
+      const scrollHeight = mainContent.scrollHeight;
+      const clientHeight = mainContent.clientHeight;
+      return {
+        scrollTop,
+        scrollHeight,
+        clientHeight,
+        isNearBottom: (margin = 700) => (scrollHeight - (scrollTop + clientHeight)) <= margin,
+        hasOverflow: (margin = 100) => scrollHeight > (clientHeight + margin)
+      };
+    }
+    const scrollH = Math.max(document.documentElement.scrollHeight, document.body.scrollHeight);
+    const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    const clientH = window.innerHeight || document.documentElement.clientHeight;
+    return {
+      scrollTop: scrollY,
+      scrollHeight: scrollH,
+      clientHeight: clientH,
+      isNearBottom: (margin = 700) => (scrollH - (scrollY + clientH)) <= margin,
+      hasOverflow: (margin = 100) => scrollH > (clientH + margin)
+    };
+  }
+
   const handleScrollCheck = () => {
     if (!state.isLoading && state.hasMore && state.posts.length > 0 && state.currentCategory !== 'favorites') {
-      // The body is the only real scroller at every breakpoint (.main-content has no
-      // height constraint), so proximity must be measured against document height
-      if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 700) {
+      const info = getScrollContainerInfo();
+      if (info.isNearBottom(700)) {
         onLoadMore();
       }
     }
   };
 
   window.addEventListener('scroll', handleScrollCheck, { passive: true });
+  if (mainContent) {
+    mainContent.addEventListener('scroll', handleScrollCheck, { passive: true });
+  }
 
   const loadMoreContainer = document.getElementById('loadMoreContainer');
   const btnLoadMore = document.getElementById('btnLoadMore');
@@ -263,7 +292,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       virtScanFrom = 0;
       virtLastVh = vh;
     }
-    const scrollY = window.scrollY || 0;
+    const scrollY = getScrollContainerInfo().scrollTop;
     if (scrollY < virtLastScrollY) {
       virtScanFrom = 0;
     }
@@ -462,6 +491,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const prevScrollTop = mainContent ? mainContent.scrollTop : 0;
 
     if (!append) {
+      autoFillAttempts = 0;
       // Full re-render: first placeholders for all posts (stable feed height),
       // then restore scroll and mount chunks around the visible area
       stopHoverPreview();
@@ -497,11 +527,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    // Auto-load: if there are so few posts that there's no scrollbar
+    // Auto-load: if there are so few posts that there's no scrollbar (e.g. initial small batch)
     setTimeout(() => {
       if (state.hasMore && !state.isLoading && state.posts.length > 0 && state.currentCategory !== 'favorites') {
-        const hasScrollbar = document.body.scrollHeight > window.innerHeight + 100;
-        if (!hasScrollbar) {
+        const info = getScrollContainerInfo();
+        if (!info.hasOverflow(100) && autoFillAttempts < 3) {
+          autoFillAttempts++;
           console.log('[Gallery] Экран не заполнен, продолжаем глубокий поиск...');
           onLoadMore();
         }
