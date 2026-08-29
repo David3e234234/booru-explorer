@@ -451,7 +451,7 @@ export const SITES = {
     supportsDateFilter: false,
     supportsShapesFilter: false,
     supportsContentHiding: false,
-    supportedCategories: ['new', 'random', 'following'],
+    supportedCategories: ['new', 'random', 'following', 'recommended'],
     accentColor: '#f97316',
     description: 'Архив платных подписок (Fanbox, Patreon, Fantia) с поиском по авторам и названиям'
   }
