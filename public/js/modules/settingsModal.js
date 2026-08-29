@@ -331,9 +331,9 @@ export function applySettingsToUIAndState(s) {
     selectMaxServerCache.value = String(s.maxServerCacheMb);
   }
 
-  const checkEnableRecommendations = document.getElementById('checkEnableRecommendations');
-  if (checkEnableRecommendations && typeof s.enableRecommendations === 'boolean') {
-    checkEnableRecommendations.checked = s.enableRecommendations;
+  const selectRecommendationMode = document.getElementById('selectRecommendationMode');
+  if (selectRecommendationMode && s.recommendationMode) {
+    selectRecommendationMode.value = s.recommendationMode;
   }
   const selectAiVisualEngine = document.getElementById('selectAiVisualEngine');
   if (selectAiVisualEngine && s.aiVisualEngine) {
@@ -341,11 +341,7 @@ export function applySettingsToUIAndState(s) {
   }
   const selectAiVisualModel = document.getElementById('selectAiVisualModel');
   if (selectAiVisualModel && s.aiVisualModel) {
-    selectAiVisualModel.value = s.aiVisualModel;
-  }
-  const checkAiVisualBoostFeed = document.getElementById('checkAiVisualBoostFeed');
-  if (checkAiVisualBoostFeed && typeof s.aiVisualBoostFeed === 'boolean') {
-    checkAiVisualBoostFeed.checked = s.aiVisualBoostFeed;
+    selectAiVisualModel.value = (s.aiVisualModel === 'clip') ? 'clip' : 'dinov2';
   }
 
   // Telegram auto-backup
@@ -741,14 +737,12 @@ export function openSettingsModal() {
     selectMaxServerCacheModal.value = String(state.settings.maxServerCacheMb);
   }
 
-  const checkEnableRecommendations = document.getElementById('checkEnableRecommendations');
-  if (checkEnableRecommendations) checkEnableRecommendations.checked = state.settings.enableRecommendations !== false;
+  const selectRecommendationMode = document.getElementById('selectRecommendationMode');
+  if (selectRecommendationMode) selectRecommendationMode.value = state.settings.recommendationMode || 'hybrid';
   const selectAiVisualEngine = document.getElementById('selectAiVisualEngine');
   if (selectAiVisualEngine) selectAiVisualEngine.value = state.settings.aiVisualEngine || 'browser';
   const selectAiVisualModel = document.getElementById('selectAiVisualModel');
-  if (selectAiVisualModel) selectAiVisualModel.value = state.settings.aiVisualModel || 'mobilenet';
-  const checkAiVisualBoostFeed = document.getElementById('checkAiVisualBoostFeed');
-  if (checkAiVisualBoostFeed) checkAiVisualBoostFeed.checked = state.settings.aiVisualBoostFeed !== false;
+  if (selectAiVisualModel) selectAiVisualModel.value = (state.settings.aiVisualModel === 'clip') ? 'clip' : 'dinov2';
 
   // Update AI embeddings count
   const aiEmbeddingsCacheCount = document.getElementById('aiEmbeddingsCacheCount');
@@ -1499,10 +1493,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         enableJsDemuxing: enableJsDemuxingVal,
         hideZipPosts: hideZipPostsVal,
         unpackArchivesOnDownload: unpackArchivesOnDownloadVal,
-        enableRecommendations: document.getElementById('checkEnableRecommendations')?.checked !== false,
+        recommendationMode: document.getElementById('selectRecommendationMode')?.value || 'hybrid',
+        enableRecommendations: document.getElementById('selectRecommendationMode')?.value !== 'off',
         aiVisualEngine: document.getElementById('selectAiVisualEngine')?.value || 'browser',
-        aiVisualModel: document.getElementById('selectAiVisualModel')?.value || 'mobilenet',
-        aiVisualBoostFeed: document.getElementById('checkAiVisualBoostFeed')?.checked !== false
+        aiVisualModel: document.getElementById('selectAiVisualModel')?.value || 'dinov2',
       };
 
       saveLocalSettings(updated);

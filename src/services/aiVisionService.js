@@ -18,17 +18,17 @@ let currentModelName = null;
 let isModelLoading = false;
 
 const MODEL_CONFIGS = {
-  mobilenet: {
-    name: 'onnx-community/mobilenetv4_conv_small.e1200_r224_in1k',
+  dinov2: {
+    name: 'Xenova/dinov2-small',
     type: 'pipeline',
-    dim: 1000
+    dim: 384
   },
   clip: {
     name: 'Xenova/clip-vit-base-patch32',
     type: 'clip',
     dim: 512
   },
-  dinov2: {
+  mobilenet: {
     name: 'Xenova/dinov2-small',
     type: 'pipeline',
     dim: 384
@@ -96,8 +96,8 @@ async function getTransformers() {
 /**
  * Initialize model pipeline
  */
-export async function initModel(modelType = 'mobilenet') {
-  const config = MODEL_CONFIGS[modelType] || MODEL_CONFIGS.mobilenet;
+export async function initModel(modelType = 'dinov2') {
+  const config = MODEL_CONFIGS[modelType] || MODEL_CONFIGS.dinov2;
   if (currentExtractor && currentModelName === config.name) {
     return { success: true, model: config.name };
   }

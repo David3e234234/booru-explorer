@@ -118,8 +118,9 @@ async function getBrowserTransformers() {
 /**
  * Initialize model in the browser
  */
-export async function initBrowserModel(modelType = 'mobilenet', onProgress = null) {
-  if (browserExtractor && browserCurrentModel === modelType) {
+export async function initBrowserModel(modelType = 'dinov2', onProgress = null) {
+  const normType = (modelType === 'clip') ? 'clip' : 'dinov2';
+  if (browserExtractor && browserCurrentModel === normType) {
     return browserExtractor;
   }
 
@@ -138,7 +139,7 @@ export async function initBrowserModel(modelType = 'mobilenet', onProgress = nul
         }
       };
 
-      if (modelType === 'clip') {
+      if (normType === 'clip') {
         const modelId = 'Xenova/clip-vit-base-patch32';
         const processor = await AutoProcessor.from_pretrained(modelId, { progress_callback: progressCallback });
         const visionModel = await CLIPVisionModelWithProjection.from_pretrained(modelId, { 
@@ -158,22 +159,8 @@ export async function initBrowserModel(modelType = 'mobilenet', onProgress = nul
             return raw.map(v => v / norm);
           }
         };
-      } else if (modelType === 'dinov2') {
-        const modelId = 'Xenova/dinov2-small';
-        const extractor = await pipeline('image-feature-extraction', modelId, { 
-          quantized: true, 
-          progress_callback: progressCallback 
-        });
-        
-        browserExtractor = {
-          type: 'pipeline',
-          async extract(imageInput) {
-            const output = await extractor(imageInput, { pooling: 'mean', normalize: true });
-            return Array.from(output.data);
-          }
-        };
       } else {
-        const modelId = 'onnx-community/mobilenetv4_conv_small.e1200_r224_in1k';
+        const modelId = 'Xenova/dinov2-small';
         const extractor = await pipeline('image-feature-extraction', modelId, { 
           quantized: true, 
           progress_callback: progressCallback 
@@ -188,11 +175,11 @@ export async function initBrowserModel(modelType = 'mobilenet', onProgress = nul
         };
       }
 
-      browserCurrentModel = modelType;
-      console.log(`[AIVision Browser] Model ${modelType} loaded successfully`);
+      browserCurrentModel = normType;
+      console.log(`[AIVision Browser] Model ${normType} loaded successfully`);
       return browserExtractor;
     } catch (err) {
-      console.error(`[AIVision Browser] Failed to load model ${modelType}:`, err);
+      console.error(`[AIVision Browser] Failed to load model ${normType}:`, err);
       throw err;
     } finally {
       isBrowserModelLoading = false;

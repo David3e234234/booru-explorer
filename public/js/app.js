@@ -209,7 +209,7 @@ async function init() {
       }
 
       const similarResults = await findSimilarPosts(targetPost, candidates, {
-        modelType: state.settings.aiVisualModel || 'mobilenet',
+        modelType: state.settings.aiVisualModel || 'dinov2',
         engine: state.settings.aiVisualEngine || 'browser',
         minSimilarity: 0.30
       });
@@ -1177,12 +1177,20 @@ async function performSearch(reset = false, options = {}) {
         filteredCandidates.push(p);
       });
 
+      const recMode = state.settings?.recommendationMode || 'hybrid';
+      const useTags = recMode === 'hybrid' || recMode === 'tags-only';
+      const useAi = (recMode === 'hybrid' || recMode === 'ai-only') && state.settings?.aiVisualEngine !== 'off';
+
       const scoredCandidates = filteredCandidates.map(p => {
-        const matchResult = calculatePostMatchPercent(p, interestMap);
-        let basePercent = typeof matchResult === 'object' ? matchResult.percent : matchResult;
-        const matchedTags = typeof matchResult === 'object' ? matchResult.matchedTags : [];
+        let basePercent = 0;
+        let matchedTags = [];
+        if (useTags) {
+          const matchResult = calculatePostMatchPercent(p, interestMap);
+          basePercent = typeof matchResult === 'object' ? matchResult.percent : matchResult;
+          matchedTags = typeof matchResult === 'object' ? matchResult.matchedTags : [];
+        }
         const isViewed = state.viewedIds.has(p.id);
-        if (isViewed) {
+        if (isViewed && basePercent > 0) {
           basePercent = Math.round(basePercent * 0.55);
         }
         return {
@@ -1193,28 +1201,33 @@ async function performSearch(reset = false, options = {}) {
         };
       });
 
-      // Neural Visual Taste Personalization (Hybrid scoring)
-      if (state.settings?.aiVisualBoostFeed !== false && state.settings?.aiVisualEngine !== 'off') {
+      // Neural Visual Taste Personalization (Hybrid / AI-Only)
+      if (useAi) {
         const likedPool = (state.likes && state.likes.length > 0) ? state.likes : state.favorites;
         if (Array.isArray(likedPool) && likedPool.length > 0) {
           try {
             const tasteVector = await calculateUserTasteVector(likedPool, {
-              modelType: state.settings?.aiVisualModel || 'mobilenet',
+              modelType: state.settings?.aiVisualModel || 'dinov2',
               engine: state.settings?.aiVisualEngine || 'browser'
             });
             if (tasteVector) {
               const visualScored = await scoreCandidatesByVisualTaste(scoredCandidates, tasteVector, {
-                modelType: state.settings?.aiVisualModel || 'mobilenet',
+                modelType: state.settings?.aiVisualModel || 'dinov2',
                 engine: state.settings?.aiVisualEngine || 'browser'
               });
               for (let i = 0; i < scoredCandidates.length; i++) {
                 const vis = visualScored[i]?.visualMatchPercent || 0;
                 if (vis > 0) {
                   scoredCandidates[i].visualMatchPercent = vis;
-                  if (scoredCandidates[i].matchPercent > 0) {
-                    scoredCandidates[i].matchPercent = Math.round(scoredCandidates[i].matchPercent * 0.6 + vis * 0.4);
+                  if (recMode === 'ai-only') {
+                    const isViewed = scoredCandidates[i].isViewed;
+                    scoredCandidates[i].matchPercent = isViewed ? Math.round(vis * 0.6) : vis;
                   } else {
-                    scoredCandidates[i].matchPercent = Math.round(vis * 0.85);
+                    if (scoredCandidates[i].matchPercent > 0) {
+                      scoredCandidates[i].matchPercent = Math.round(scoredCandidates[i].matchPercent * 0.6 + vis * 0.4);
+                    } else {
+                      scoredCandidates[i].matchPercent = Math.round(vis * 0.85);
+                    }
                   }
                 }
               }

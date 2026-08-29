@@ -23,7 +23,7 @@ export function updateSiteCapabilitiesUI(siteId) {
 
   // 1. Categories & navigation tabs (desktop & mobile)
   const supportedCats = new Set(caps.supportedCategories || ['new', 'views', 'top', 'random', 'following', 'recommended']);
-  if (state.settings?.enableRecommendations === false) {
+  if (state.settings?.recommendationMode === 'off' || state.settings?.enableRecommendations === false) {
     supportedCats.delete('recommended');
   }
   

@@ -1462,15 +1462,15 @@
             <p class="settings-hint" data-i18n="settings.aiHint">Настройка персональной ленты «Для вас» и сканирования изображений нейросетью для поиска визуально похожих артов.</p>
           </div>
 
-          <!-- Enable Recommendations Feed Toggle -->
+          <!-- Recommendation Mode Selection -->
           <div class="settings-group">
-            <div class="toggles-list" style="margin-top: 4px;">
-              <label class="toggle-row" title="Показывать категорию 'Для вас' и рассчитывать персональные рекомендации на основе лайков и истории" data-i18n-title="settings.enableRecs.title">
-                <input type="checkbox" id="checkEnableRecommendations" checked>
-                <span class="toggle-slider"></span>
-                <span class="toggle-name" data-i18n="settings.enableRecs">Включить вкладку и систему рекомендаций («Для вас»)</span>
-              </label>
-            </div>
+            <label class="settings-label" for="selectRecommendationMode" data-i18n="settings.recMode">Режим ленты «Для вас»:</label>
+            <select id="selectRecommendationMode" class="input-setting">
+              <option value="hybrid" selected data-i18n="settings.recModeHybrid">Гибридный (Теги + Нейросеть ИИ)</option>
+              <option value="ai-only" data-i18n="settings.recModeAiOnly">Только нейросеть (ИИ / Визуальный вкус)</option>
+              <option value="tags-only" data-i18n="settings.recModeTagsOnly">Только по тегам (Классический алгоритм)</option>
+              <option value="off" data-i18n="settings.recModeOff">Отключить категорию «Для вас»</option>
+            </select>
           </div>
 
           <!-- Execution environment selection -->
@@ -1488,20 +1488,9 @@
           <div class="settings-group">
             <label class="settings-label" for="selectAiVisualModel" data-i18n="settings.aiModel">Модель визуального анализа:</label>
             <select id="selectAiVisualModel" class="input-setting">
-              <option value="mobilenet" selected data-i18n="settings.aiModelMobilenet">MobileNetV4 (Быстрая и легкая, ~8 МБ)</option>
+              <option value="dinov2" selected data-i18n="settings.aiModelDinov2">DINOv2 (Vision Transformer для сходств, ~20 МБ)</option>
               <option value="clip" data-i18n="settings.aiModelClip">CLIP Vision (Глубокое понимание сцен и стиля, ~30 МБ)</option>
             </select>
-          </div>
-
-          <!-- Visual feed re-ranking boost -->
-          <div class="settings-group">
-            <div class="toggles-list" style="margin-top: 4px;">
-              <label class="toggle-row" title="Анализировать визуальные признаки понравившихся артов и учитывать их в ленте рекомендаций" data-i18n-title="settings.aiBoostFeed.title">
-                <input type="checkbox" id="checkAiVisualBoostFeed" checked>
-                <span class="toggle-slider"></span>
-                <span class="toggle-name" data-i18n="settings.aiBoostFeed">Персонализировать ленту «Для вас» по стилю артов</span>
-              </label>
-            </div>
           </div>
 
           <!-- Embeddings cache stats & clear button -->
@@ -2338,6 +2327,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=13.1"></script>
+  <script type="module" src="js/app.js?v=13.2"></script>
 </body>
 </html>

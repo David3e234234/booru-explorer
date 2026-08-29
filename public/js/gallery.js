@@ -1312,9 +1312,15 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       scrollLoader.style.display = 'none';
       resultsCount.textContent = t('gal.searching', 'Идёт поиск...');
     },
+    hideLoading: () => {
+      loadingSpinner.style.display = 'none';
+    },
     showScrollLoading: () => {
       scrollLoader.style.display = 'flex';
       resultsCount.textContent = t('gal.loadingMore', 'Загрузка следующих постов...');
+    },
+    hideScrollLoading: () => {
+      scrollLoader.style.display = 'none';
     }
   };
 }

@@ -134,10 +134,10 @@ export const state = {
     enableJsDemuxing: true,
     customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
     maxServerCacheMb: 1500,
+    recommendationMode: 'hybrid', // 'hybrid' | 'ai-only' | 'tags-only' | 'off'
     enableRecommendations: true,
     aiVisualEngine: 'browser',
-    aiVisualModel: 'mobilenet',
-    aiVisualBoostFeed: true,
+    aiVisualModel: 'dinov2',
     aiVisualThreshold: 0.35
   },
   currentViewerIndex: -1,
