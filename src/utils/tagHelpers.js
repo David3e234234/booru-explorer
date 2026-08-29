@@ -79,6 +79,12 @@ export function isPostMatchingFilters(post, criteria = {}) {
     if (!post.isVideo && !post.isGif) return false;
   } else if (typeFilter === 'image') {
     if (post.isVideo || post.isGif) return false;
+    const fileUrl = (post.fileUrl || '').toLowerCase();
+    const sampleUrl = (post.sampleUrl || '').toLowerCase();
+    if (/\.(mp4|webm|gif|mov|m4v|flv|avi|mkv)(\?.*)?$/i.test(fileUrl) ||
+        /\.(mp4|webm|gif|mov|m4v|flv|avi|mkv)(\?.*)?$/i.test(sampleUrl)) {
+      return false;
+    }
   }
 
   const postTagSet = new Set(Array.isArray(post.tags)

@@ -1445,6 +1445,7 @@ function setupEventListeners() {
       updateAiFilterUI();
       persistSettings({ aiFilter: filter });
       syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 
@@ -1457,6 +1458,7 @@ function setupEventListeners() {
       updateRatingFilterUI();
       persistSettings({ ratingFilter: rating });
       syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 
@@ -1469,6 +1471,7 @@ function setupEventListeners() {
       updateTypeFilterUI();
       persistSettings({ typeFilter: type });
       syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 
@@ -1481,6 +1484,7 @@ function setupEventListeners() {
       updateAgeFilterUI();
       persistSettings({ ageFilter: age });
       syncSearchUrl('replace');
+      performSearch(true);
     });
   });
 
@@ -1509,6 +1513,7 @@ function setupEventListeners() {
         dateFilterDropdown.classList.remove('open');
         btnDateFilterToggle.setAttribute('aria-expanded', 'false');
         syncSearchUrl('replace');
+        performSearch(true);
       });
     });
 
@@ -1556,6 +1561,7 @@ function setupEventListeners() {
         persistSettings({ pawchiveService: serviceVal });
         pawchiveServiceDropdown.classList.remove('open');
         btnPawchiveServiceToggle.setAttribute('aria-expanded', 'false');
+        performSearch(true);
       });
     }
 
@@ -1593,6 +1599,7 @@ function setupEventListeners() {
       state.hideFurry = checkHideFurry.checked;
       persistSettings({ hideFurry: state.hideFurry });
       updateFilterActiveDot();
+      performSearch(true);
     });
   }
 
@@ -1602,6 +1609,7 @@ function setupEventListeners() {
       state.hidePregnant = checkHidePregnant.checked;
       persistSettings({ hidePregnant: state.hidePregnant });
       updateFilterActiveDot();
+      performSearch(true);
     });
   }
 
@@ -1611,6 +1619,7 @@ function setupEventListeners() {
       state.hideLgbt = checkHideLgbt.checked;
       persistSettings({ hideLgbt: state.hideLgbt });
       updateFilterActiveDot();
+      performSearch(true);
     });
   }
 

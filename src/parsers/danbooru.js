@@ -2,10 +2,13 @@ import {
   CURVY_INCLUDE_TAGS, 
   CURVY_EXCLUDE_TAGS, 
   PETITE_INCLUDE_TAGS, 
-  PETITE_EXCLUDE_TAGS 
+  PETITE_EXCLUDE_TAGS,
+  FURRY_TAGS,
+  PREGNANT_TAGS,
+  LGBT_TAGS
 } from '../config/constants.js';
 import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, isPostMatchingFilters } from '../utils/tagHelpers.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logInfo, logError } from '../utils/logger.js';
 
@@ -92,6 +95,32 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     else if (ratingFilter === 'sfw') queryTags.push('rating:g');
   }
 
+  const targetLimit = parseInt(params.limit, 10) || 40;
+  const negativeTokens = (tags || '')
+    .split(/\s+/)
+    .filter(t => t.startsWith('-') && t.length > 1)
+    .map(t => t.substring(1).toLowerCase().replace(/_/g, ' '));
+  const hasUserPositiveTags = Boolean(userTagList.some(t => !t.startsWith('-') && !t.includes(':')));
+
+  const filterCriteria = {
+    typeFilter: params.typeFilter || 'all',
+    ageFilter: params.ageFilter || 'all',
+    aiFilter: params.aiFilter || 'no-ai',
+    ratingFilter: params.ratingFilter || 'all',
+    dateFilter: params.dateFilter || 'all',
+    hideFurry: params.hideFurry || settings?.hideFurry,
+    hidePregnant: params.hidePregnant || settings?.hidePregnant,
+    hideLgbt: params.hideLgbt || settings?.hideLgbt,
+    blacklist: settings?.blacklist || [],
+    negativeTokens,
+    activeCurvyTags: (Array.isArray(settings?.curvyTags) && settings.curvyTags.length > 0) ? settings.curvyTags : CURVY_INCLUDE_TAGS,
+    activePetiteTags: (Array.isArray(settings?.petiteTags) && settings.petiteTags.length > 0) ? settings.petiteTags : PETITE_INCLUDE_TAGS,
+    activeFurryTags: (Array.isArray(settings?.furryTags) && settings.furryTags.length > 0) ? settings.furryTags : FURRY_TAGS,
+    activePregnantTags: (Array.isArray(settings?.pregnantTags) && settings.pregnantTags.length > 0) ? settings.pregnantTags : PREGNANT_TAGS,
+    activeLgbtTags: (Array.isArray(settings?.lgbtTags) && settings.lgbtTags.length > 0) ? settings.lgbtTags : LGBT_TAGS,
+    hasUserPositiveTags
+  };
+
   const isTagsDropped = userTagList.length + (typeFilter !== 'all' ? 1 : 0) + (ratingFilter !== 'all' ? 1 : 0) > 2;
   const shouldDeepFetch = isTagsDropped || deepFetchPagesSetting > 1;
   const fetchLimit = shouldDeepFetch ? Math.max(limit, 200) : limit;
@@ -124,6 +153,12 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       const isVidExt = item.file_ext === 'mp4' || item.file_ext === 'webm' || item.file_ext === 'zip' || (item.file_url && (item.file_url.endsWith('.mp4') || item.file_url.endsWith('.webm')));
       const isAnimTag = rawTags.includes('animated') || rawTags.includes('video') || rawTags.includes('ugoira');
       if (!hasVideoVariant && !isVidExt && !isAnimTag) return false;
+    } else if (typeFilter === 'image') {
+      const variants = item.media_asset?.variants || [];
+      const hasVideoVariant = variants.some(v => v.file_ext === 'mp4' || v.file_ext === 'webm' || v.url?.includes('.mp4') || v.url?.includes('.webm'));
+      const isVidExt = item.file_ext === 'mp4' || item.file_ext === 'webm' || (item.file_url && (item.file_url.endsWith('.mp4') || item.file_url.endsWith('.webm')));
+      const isAnimTag = rawTags.includes('animated') || rawTags.includes('video') || rawTags.includes('ugoira') || rawTags.includes('webm');
+      if (hasVideoVariant || isVidExt || isAnimTag || item.file_ext === 'gif' || item.file_ext === 'mp4' || item.file_ext === 'webm') return false;
     }
     if (ratingFilter === 'nsfw') {
       const r = (item.rating || '').toLowerCase();
@@ -294,7 +329,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   // Shaping posts is expensive (tag splits, variant scans); drop items that fail
   // the cheap checks first. isPostMatch is a subset of the route-level filtering,
   // so pre-filtering with it cannot change the final result set.
-  return validItems.filter(isPostMatch).map(item => {
+  const shaped = validItems.filter(isPostMatch).map(item => {
     const rawTags = (item.tag_string || '').split(' ').filter(Boolean);
     const variants = item.media_asset?.variants || [];
     
@@ -387,5 +422,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       createdAt: item.created_at || '',
       isAi
     };
-  }).filter(p => p.fileUrl || p.sampleUrl || p.previewUrl);
+  }).filter(p => (p.fileUrl || p.sampleUrl || p.previewUrl) && isPostMatchingFilters(p, filterCriteria));
+
+  return shaped.slice(0, targetLimit);
 }
