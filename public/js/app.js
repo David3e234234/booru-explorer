@@ -232,7 +232,10 @@ async function init() {
       state.posts = rankedPosts;
       state.displayedPosts = rankedPosts;
       state.hasMore = false;
-      galleryInstance.renderGallery(true);
+      galleryInstance.renderGallery(false);
+      const mainContent = document.getElementById('mainContent');
+      if (mainContent) mainContent.scrollTop = 0;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       showToast(t('ai.similarFoundCount', 'Найдено {n} визуально похожих артов!').replace('{n}', similarResults.length));
     } catch (err) {
       state.isLoading = false;
