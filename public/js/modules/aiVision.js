@@ -36,12 +36,17 @@ export function showAiStatus(text, options = {}) {
 
   const modelBadge = document.getElementById('aiStatusModelBadge');
   const textEl = document.getElementById('aiStatusText');
+  const counterEl = document.getElementById('aiStatusCounter');
   const trackEl = document.getElementById('aiStatusProgressTrack');
   const barEl = document.getElementById('aiStatusProgressBar');
 
   if (modelBadge) {
     const model = options.model || (state.settings?.aiVisualModel === 'clip' ? 'CLIP' : 'DINOv2');
     modelBadge.textContent = model.toUpperCase();
+  }
+
+  if (counterEl) {
+    counterEl.textContent = options.counter || (typeof options.progress === 'number' ? `${Math.round(options.progress)}%` : '');
   }
 
   if (textEl && text) {
@@ -408,7 +413,8 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
 
   // 2. Extract embeddings for candidates (with concurrency limiter)
   const results = [];
-  const candidatesWithoutTarget = candidatePosts.filter(p => p.id !== targetPost.id);
+  const candidateLimit = options.candidateLimit || state.settings?.aiCandidatePool || 40;
+  const candidatesWithoutTarget = candidatePosts.filter(p => p.id !== targetPost.id).slice(0, candidateLimit);
   const total = candidatesWithoutTarget.length;
   
   const CONCURRENCY = 2;
@@ -418,7 +424,8 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
     const pct = Math.round((processed / total) * 100);
     showAiStatus(t('ai.similarProgress', 'Поиск похожих: {i}/{n}').replace('{i}', processed).replace('{n}', total), {
       model: modelType,
-      progress: pct
+      progress: pct,
+      counter: `${processed}/${total}`
     });
 
     const chunkResults = await Promise.all(chunk.map(async (candidate) => {
@@ -450,6 +457,7 @@ export async function findSimilarPosts(targetPost, candidatePosts, options = {})
     model: modelType,
     status: 'done',
     progress: 100,
+    counter: `${results.length}`,
     autoHideMs: 2500
   });
   return results;
@@ -471,14 +479,15 @@ export async function calculateUserTasteVector(likedPosts, options = {}) {
   const total = samplePosts.length;
   const vectors = [];
 
-  showAiStatus(t('ai.computingTaste', 'Вычисление вкуса по {n} артам...').replace('{n}', total), { model: modelType });
+  showAiStatus(t('ai.computingTaste', 'Вычисление вкуса по {n} артам...').replace('{n}', total), { model: modelType, counter: `0/${total}` });
 
   for (let idx = 0; idx < total; idx++) {
     const post = samplePosts[idx];
     const pct = Math.round(((idx + 1) / total) * 100);
     showAiStatus(t('ai.tasteProgress', 'Анализ любимых артов: {i}/{n}').replace('{i}', idx + 1).replace('{n}', total), {
       model: modelType,
-      progress: pct
+      progress: pct,
+      counter: `${idx + 1}/${total}`
     });
     const vec = await getPostEmbedding(post, { modelType, engine });
     if (vec) vectors.push(vec);
@@ -520,16 +529,17 @@ export async function scoreCandidatesByVisualTaste(candidates, tasteVector, opti
 
   const modelType = options.modelType || state.settings?.aiVisualModel || 'dinov2';
   const engine = options.engine || state.settings?.aiVisualEngine || 'browser';
+  const candidateLimit = options.candidateLimit || state.settings?.aiCandidatePool || 40;
 
-  // Only re-rank top 20 candidate posts to keep performance snappy and CPU load minimal
-  const poolToScore = candidates.slice(0, 20);
-  const remaining = candidates.slice(20);
+  // Re-rank candidate posts according to user configured pool size
+  const poolToScore = candidates.slice(0, candidateLimit);
+  const remaining = candidates.slice(candidateLimit);
   const total = poolToScore.length;
 
   const CONCURRENCY = 2;
   const scoredTop = [];
 
-  showAiStatus(t('ai.scoringFeed', 'Визуальный анализ ленты...'), { model: modelType });
+  showAiStatus(t('ai.scoringFeed', 'Визуальный анализ ленты...'), { model: modelType, counter: `0/${total}` });
 
   for (let i = 0; i < total; i += CONCURRENCY) {
     const chunk = poolToScore.slice(i, i + CONCURRENCY);
@@ -537,7 +547,8 @@ export async function scoreCandidatesByVisualTaste(candidates, tasteVector, opti
     const pct = Math.round((processed / total) * 100);
     showAiStatus(t('ai.scoringProgress', 'Сканирование ленты: {i}/{n}').replace('{i}', processed).replace('{n}', total), {
       model: modelType,
-      progress: pct
+      progress: pct,
+      counter: `${processed}/${total}`
     });
 
     const chunkResults = await Promise.all(chunk.map(async (p) => {

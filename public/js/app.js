@@ -187,14 +187,15 @@ async function init() {
       galleryInstance.showScrollLoading();
 
       // Gather candidates from current posts + fetch additional candidates if pool is small
+      const poolLimit = state.settings?.aiCandidatePool || 40;
       let candidates = [...(state.posts || [])];
-      if (candidates.length < 40) {
+      if (candidates.length < poolLimit) {
         try {
           const res = await fetchPosts({
-            site: state.currentSite,
+            site: targetPost.site || state.currentSite,
             category: 'new',
             page: 1,
-            limit: 80,
+            limit: Math.max(80, poolLimit + 20),
             aiFilter: state.aiFilter,
             ratingFilter: state.ratingFilter,
             typeFilter: state.typeFilter
@@ -211,6 +212,7 @@ async function init() {
       const similarResults = await findSimilarPosts(targetPost, candidates, {
         modelType: state.settings.aiVisualModel || 'dinov2',
         engine: state.settings.aiVisualEngine || 'browser',
+        candidateLimit: poolLimit,
         minSimilarity: 0.30
       });
 
@@ -1207,9 +1209,11 @@ async function performSearch(reset = false, options = {}) {
               engine: state.settings?.aiVisualEngine || 'browser'
             });
             if (tasteVector) {
+              const poolLimit = state.settings?.aiCandidatePool || 40;
               const visualScored = await scoreCandidatesByVisualTaste(scoredCandidates, tasteVector, {
                 modelType: state.settings?.aiVisualModel || 'dinov2',
-                engine: state.settings?.aiVisualEngine || 'browser'
+                engine: state.settings?.aiVisualEngine || 'browser',
+                candidateLimit: poolLimit
               });
               for (let i = 0; i < scoredCandidates.length; i++) {
                 const vis = visualScored[i]?.visualMatchPercent || 0;

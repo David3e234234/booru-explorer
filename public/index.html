@@ -1493,6 +1493,18 @@
             </select>
           </div>
 
+          <!-- Candidate Pool Size Selection -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectAiCandidatePool" data-i18n="settings.aiCandidatePool">Глубина анализа постов (кандидаты):</label>
+            <p class="settings-hint" data-i18n="settings.aiCandidatePoolHint">Количество постов, которые система отбирает и сканирует для рекомендаций «Для вас» и поиска похожих. Больше постов = качественнее выборка, но выше нагрузка.</p>
+            <select id="selectAiCandidatePool" class="input-setting">
+              <option value="20" data-i18n="settings.aiPool20">20 постов (быстро)</option>
+              <option value="40" selected data-i18n="settings.aiPool40">40 постов (по умолчанию)</option>
+              <option value="60" data-i18n="settings.aiPool60">60 постов (глубокий анализ)</option>
+              <option value="100" data-i18n="settings.aiPool100">100 постов (максимальный)</option>
+            </select>
+          </div>
+
           <!-- Embeddings cache stats & clear button -->
           <div class="settings-group" style="margin-top: 14px; padding: 14px; background: var(--bg-surface-secondary, rgba(255,255,255,0.04)); border: 1px solid var(--border-color); border-radius: 10px;">
             <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
@@ -2325,27 +2337,29 @@
     </div>
   </div>
 
-  <!-- Persistent bottom-left AI Status Widget -->
+  <!-- AI Activity Status Dock (Bottom-Right) -->
   <div id="aiStatusWidget" class="ai-status-widget" style="display: none;" aria-live="polite">
     <div class="ai-status-icon-wrap">
-      <svg class="ai-status-sparkle" width="18" height="18" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
-      <span class="ai-status-pulse"></span>
+      <svg class="ai-status-icon" width="14" height="14" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
     </div>
-    <div class="ai-status-content">
+    <div class="ai-status-body">
       <div class="ai-status-header">
-        <span class="ai-status-title" data-i18n="ai.statusTitle">Нейросеть ИИ</span>
-        <span class="ai-status-model" id="aiStatusModelBadge">DINOv2</span>
+        <span class="ai-status-title" data-i18n="ai.statusTitle">ИИ АНАЛИЗ</span>
+        <span class="ai-status-model" id="aiStatusModelBadge">DINOV2</span>
+        <span class="ai-status-counter" id="aiStatusCounter"></span>
       </div>
       <div class="ai-status-text" id="aiStatusText">Инициализация...</div>
       <div class="ai-status-progress-track" id="aiStatusProgressTrack" style="display: none;">
         <div class="ai-status-progress-bar" id="aiStatusProgressBar" style="width: 0%;"></div>
       </div>
     </div>
-    <button class="ai-status-close" id="btnAiStatusClose" title="Скрыть" aria-label="Скрыть статус">×</button>
+    <button type="button" class="ai-status-close" id="btnAiStatusClose" title="Скрыть" aria-label="Скрыть статус">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=13.8"></script>
+  <script type="module" src="js/app.js?v=13.9"></script>
 </body>
 </html>

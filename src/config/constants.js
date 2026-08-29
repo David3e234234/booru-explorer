@@ -274,7 +274,8 @@ export const DEFAULT_SETTINGS = {
   enableRecommendations: true,
   aiVisualEngine: 'browser',
   aiVisualModel: 'dinov2',
-  aiVisualThreshold: 0.35
+  aiVisualThreshold: 0.35,
+  aiCandidatePool: 40
 };
 
 export const SITES = {

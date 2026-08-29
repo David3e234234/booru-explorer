@@ -106,7 +106,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   enableRecommendations: true,
   aiVisualEngine: 'browser',
   aiVisualModel: 'dinov2',
-  aiVisualThreshold: 0.35
+  aiVisualThreshold: 0.35,
+  aiCandidatePool: 40
 };
 
 export function getInitialSettings() {

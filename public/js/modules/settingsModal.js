@@ -352,6 +352,13 @@ export function applySettingsToUIAndState(s) {
   if (selectAiVisualModel && state.settings.aiVisualModel) {
     selectAiVisualModel.value = state.settings.aiVisualModel;
   }
+  if (s.aiCandidatePool !== undefined) {
+    state.settings.aiCandidatePool = Number(s.aiCandidatePool) || 40;
+  }
+  const selectAiCandidatePool = document.getElementById('selectAiCandidatePool');
+  if (selectAiCandidatePool && state.settings.aiCandidatePool) {
+    selectAiCandidatePool.value = String(state.settings.aiCandidatePool);
+  }
 
   // Telegram auto-backup
   const checkTelegramBackupEnabled = document.getElementById('checkTelegramBackupEnabled');
@@ -752,6 +759,8 @@ export function openSettingsModal() {
   if (selectAiVisualEngine) selectAiVisualEngine.value = state.settings.aiVisualEngine || 'browser';
   const selectAiVisualModel = document.getElementById('selectAiVisualModel');
   if (selectAiVisualModel) selectAiVisualModel.value = (state.settings.aiVisualModel === 'clip') ? 'clip' : 'dinov2';
+  const selectAiCandidatePoolModal = document.getElementById('selectAiCandidatePool');
+  if (selectAiCandidatePoolModal) selectAiCandidatePoolModal.value = String(state.settings.aiCandidatePool || 40);
 
   // Update AI embeddings count
   const aiEmbeddingsCacheCount = document.getElementById('aiEmbeddingsCacheCount');
@@ -839,6 +848,15 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (selectAiVisualModel) {
     selectAiVisualModel.addEventListener('change', () => {
       state.settings.aiVisualModel = selectAiVisualModel.value;
+      saveLocalSettings(state.settings);
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  const selectAiCandidatePool = document.getElementById('selectAiCandidatePool');
+  if (selectAiCandidatePool) {
+    selectAiCandidatePool.addEventListener('change', () => {
+      state.settings.aiCandidatePool = Number(selectAiCandidatePool.value) || 40;
       saveLocalSettings(state.settings);
       saveSettings(state.settings).catch(() => {});
     });
@@ -1537,6 +1555,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         enableRecommendations: document.getElementById('selectRecommendationMode')?.value !== 'off',
         aiVisualEngine: document.getElementById('selectAiVisualEngine')?.value || 'browser',
         aiVisualModel: document.getElementById('selectAiVisualModel')?.value || 'dinov2',
+        aiCandidatePool: Number(document.getElementById('selectAiCandidatePool')?.value) || 40,
       };
 
       saveLocalSettings(updated);
