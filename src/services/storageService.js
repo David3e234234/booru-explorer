@@ -185,8 +185,13 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
     const effectiveSite = postObj.site || site || 'danbooru';
 
     // 1. Danbooru
-    if (effectiveSite === 'danbooru' && settings.danbooruLogin && settings.danbooruApiKey) {
-      if (!cleanId) return;
+    if (effectiveSite === 'danbooru') {
+      if (!settings.danbooruLogin || !settings.danbooruApiKey) {
+        return { success: false, site: 'danbooru', message: 'Не указаны логин или API ключ Danbooru' };
+      }
+      if (!cleanId) {
+        return { success: false, site: 'danbooru', message: 'Не указан ID поста Danbooru' };
+      }
       const login = encodeURIComponent(settings.danbooruLogin);
       const apiKey = encodeURIComponent(settings.danbooruApiKey);
       const auth = Buffer.from(`${settings.danbooruLogin}:${settings.danbooruApiKey}`).toString('base64');
@@ -202,7 +207,7 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
           headers: authHeaders,
           settings,
           site: 'danbooru'
-        }).catch(err => ({ ok: false, error: err.message }));
+        }).catch(err => ({ ok: false, status: 'network_error', error: err.message }));
 
         const voteUrl = `https://danbooru.donmai.us/posts/${encodeURIComponent(cleanId)}/votes.json?score=1&login=${login}&api_key=${apiKey}`;
         const voteRes = await fetchSafe(voteUrl, {
@@ -214,72 +219,102 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
           body: JSON.stringify({ score: 1 }),
           settings,
           site: 'danbooru'
-        }).catch(err => ({ ok: false, error: err.message }));
+        }).catch(err => ({ ok: false, status: 'network_error', error: err.message }));
 
-        logInfo('Sync', `Danbooru like [${cleanId}]: fav status=${favRes?.status || (favRes?.ok ? 200 : 'err')}, vote status=${voteRes?.status || (voteRes?.ok ? 200 : 'err')}`);
+        const isFavOk = favRes?.ok || favRes?.status === 200 || favRes?.status === 201 || favRes?.status === 422;
+        const isVoteOk = voteRes?.ok || voteRes?.status === 200 || voteRes?.status === 201 || voteRes?.status === 422;
+
+        logInfo('Sync', `Danbooru like [${cleanId}]: fav status=${favRes?.status || 'err'}, vote status=${voteRes?.status || 'err'}`);
+
+        if (isFavOk || isVoteOk) {
+          return { success: true, site: 'danbooru', id: cleanId, status: favRes?.status || voteRes?.status };
+        }
+        return { 
+          success: false, 
+          site: 'danbooru', 
+          id: cleanId, 
+          status: favRes?.status || voteRes?.status, 
+          message: `Danbooru вернул статус ${favRes?.status || voteRes?.status || 'network_error'}` 
+        };
       } else {
         const delUrl = `https://danbooru.donmai.us/favorites/${encodeURIComponent(cleanId)}.json?login=${login}&api_key=${apiKey}`;
-        await fetchSafe(delUrl, {
+        const delRes = await fetchSafe(delUrl, {
           method: 'DELETE',
           headers: authHeaders,
           settings,
           site: 'danbooru'
-        }).catch(() => {});
+        }).catch(err => ({ ok: false, error: err.message }));
+        return { success: delRes?.ok || delRes?.status === 200 || delRes?.status === 204, site: 'danbooru', id: cleanId };
       }
     } 
     // 2. Yande.re & Konachan (Moebooru)
-    else if ((effectiveSite === 'yandere' || effectiveSite === 'konachan')) {
+    else if (effectiveSite === 'yandere' || effectiveSite === 'konachan') {
       const isYandere = effectiveSite === 'yandere';
       const baseUrl = isYandere ? 'https://yande.re' : 'https://konachan.com';
       const login = String(isYandere ? (settings.yandereLogin || '') : (settings.konachanLogin || '')).trim();
       const pass = String(isYandere ? (settings.yanderePassword || '') : (settings.konachanPassword || '')).trim();
 
-      if (login && pass && cleanId) {
-        const passHash = crypto.createHash('sha1').update(`${MOEBOORU_PASSWORD_SALT}${pass}--`).digest('hex');
-        const score = isLike ? 3 : 0;
-        const voteUrl = `${baseUrl}/post/vote.json?id=${encodeURIComponent(cleanId)}&score=${score}&login=${encodeURIComponent(login)}&password_hash=${passHash}`;
-        const voteRes = await fetchSafe(voteUrl, {
-          method: 'POST',
-          headers: { 'User-Agent': BROWSER_USER_AGENT },
-          settings,
-          site: effectiveSite
-        }).catch(err => ({ ok: false, error: err.message }));
-        logInfo('Sync', `${effectiveSite} vote [${cleanId}]: status=${voteRes?.status || (voteRes?.ok ? 200 : 'err')}`);
+      if (!login || !pass) {
+        return { success: false, site: effectiveSite, message: `Не указан логин или пароль ${effectiveSite}` };
       }
+      if (!cleanId) {
+        return { success: false, site: effectiveSite, message: `Не указан ID поста ${effectiveSite}` };
+      }
+
+      const passHash = crypto.createHash('sha1').update(`${MOEBOORU_PASSWORD_SALT}${pass}--`).digest('hex');
+      const score = isLike ? 3 : 0;
+      const voteUrl = `${baseUrl}/post/vote.json?id=${encodeURIComponent(cleanId)}&score=${score}&login=${encodeURIComponent(login)}&password_hash=${passHash}`;
+      const voteRes = await fetchSafe(voteUrl, {
+        method: 'POST',
+        headers: { 'User-Agent': BROWSER_USER_AGENT },
+        settings,
+        site: effectiveSite
+      }).catch(err => ({ ok: false, error: err.message }));
+
+      logInfo('Sync', `${effectiveSite} vote [${cleanId}]: status=${voteRes?.status || (voteRes?.ok ? 200 : 'err')}`);
+      const isOk = voteRes?.ok || voteRes?.status === 200;
+      return { success: isOk, site: effectiveSite, id: cleanId, status: voteRes?.status };
     }
     // 3. Pawchive
-    else if (effectiveSite === 'pawchive' && settings.pawchiveSession) {
+    else if (effectiveSite === 'pawchive') {
+      if (!settings.pawchiveSession) {
+        return { success: false, site: 'pawchive', message: 'Не указан Session Token Pawchive' };
+      }
       const token = String(settings.pawchiveSession).replace(/^session=/i, '').trim();
-      if (token) {
-        let service = postObj.service || null;
-        let creatorId = postObj.user || null;
-        let realPostId = cleanId.split('_')[0];
+      let service = postObj.service || null;
+      let creatorId = postObj.user || null;
+      let realPostId = cleanId.split('_')[0];
 
-        if (String(rawId).includes(':')) {
-          const parts = String(rawId).split(':');
-          if (parts.length === 4 && parts[0] === 'pawchive') {
-            service = parts[1];
-            creatorId = parts[2];
-            realPostId = parts[3];
-          }
-        }
-        if (service && creatorId && realPostId) {
-          const method = isLike ? 'POST' : 'DELETE';
-          const pawRes = await fetchSafe(`https://pawchive.pw/api/v1/favorites/post/${service}/${creatorId}/${realPostId}`, {
-            method,
-            headers: {
-              'Cookie': `session=${token}`,
-              'User-Agent': BROWSER_USER_AGENT
-            },
-            settings,
-            site: 'pawchive'
-          }).catch(err => ({ ok: false, error: err.message }));
-          logInfo('Sync', `Pawchive like [${realPostId}]: status=${pawRes?.status || (pawRes?.ok ? 200 : 'err')}`);
+      if (String(rawId).includes(':')) {
+        const parts = String(rawId).split(':');
+        if (parts.length === 4 && parts[0] === 'pawchive') {
+          service = parts[1];
+          creatorId = parts[2];
+          realPostId = parts[3];
         }
       }
+      if (service && creatorId && realPostId) {
+        const method = isLike ? 'POST' : 'DELETE';
+        const pawRes = await fetchSafe(`https://pawchive.pw/api/v1/favorites/post/${service}/${creatorId}/${realPostId}`, {
+          method,
+          headers: {
+            'Cookie': `session=${token}`,
+            'User-Agent': BROWSER_USER_AGENT
+          },
+          settings,
+          site: 'pawchive'
+        }).catch(err => ({ ok: false, error: err.message }));
+        logInfo('Sync', `Pawchive like [${realPostId}]: status=${pawRes?.status || (pawRes?.ok ? 200 : 'err')}`);
+        const isOk = pawRes?.ok || pawRes?.status === 200 || pawRes?.status === 201;
+        return { success: isOk, site: 'pawchive', id: realPostId, status: pawRes?.status };
+      }
+      return { success: false, site: 'pawchive', message: 'Недостаточно данных поста Pawchive' };
     }
+
+    return { success: false, site: effectiveSite, message: `Сайт ${effectiveSite} не поддерживает синхронизацию` };
   } catch (err) {
     logError('LikeSync', `Ошибка отправки лайка на ${site}:`, err);
+    return { success: false, site, error: err.message };
   }
 }
 
@@ -292,39 +327,46 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
   try {
     const rawName = typeof authorOrName === 'object' ? (authorOrName.name || authorOrName.id || '') : String(authorOrName || '');
     const cleanName = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
-    if (!cleanName) return;
+    if (!cleanName) return { success: false, message: 'Пустое имя автора' };
 
     const targetSite = (typeof authorOrName === 'object' && authorOrName.site) ? authorOrName.site : (site || 'danbooru');
 
-    if (targetSite === 'pawchive' && settings.pawchiveSession) {
+    if (targetSite === 'pawchive') {
+      if (!settings.pawchiveSession) {
+        return { success: false, site: 'pawchive', message: 'Не указан Session Token Pawchive' };
+      }
       const token = String(settings.pawchiveSession).replace(/^session=/i, '').trim();
-      if (token) {
-        let service = (typeof authorOrName === 'object' && authorOrName.service) || '';
-        let creatorId = cleanName;
-        if (cleanName.includes(':')) {
-          const parts = cleanName.split(':');
-          if (parts.length >= 2) {
-            service = parts[0];
-            creatorId = parts[1];
-          }
-        }
-        if (service && creatorId) {
-          const method = isFollow ? 'POST' : 'DELETE';
-          const res = await fetchSafe(`https://pawchive.pw/api/v1/favorites/creator/${encodeURIComponent(service)}/${encodeURIComponent(creatorId)}`, {
-            method,
-            headers: {
-              'Cookie': `session=${token}`,
-              'User-Agent': BROWSER_USER_AGENT
-            },
-            settings,
-            site: 'pawchive'
-          }).catch(() => {});
-          logInfo('Sync', `Pawchive follow [${service}:${creatorId}]: status=${res?.status || (res?.ok ? 200 : 'err')}`);
+      let service = (typeof authorOrName === 'object' && authorOrName.service) || '';
+      let creatorId = cleanName;
+      if (cleanName.includes(':')) {
+        const parts = cleanName.split(':');
+        if (parts.length >= 2) {
+          service = parts[0];
+          creatorId = parts[1];
         }
       }
+      if (service && creatorId) {
+        const method = isFollow ? 'POST' : 'DELETE';
+        const res = await fetchSafe(`https://pawchive.pw/api/v1/favorites/creator/${encodeURIComponent(service)}/${encodeURIComponent(creatorId)}`, {
+          method,
+          headers: {
+            'Cookie': `session=${token}`,
+            'User-Agent': BROWSER_USER_AGENT
+          },
+          settings,
+          site: 'pawchive'
+        }).catch(err => ({ ok: false, error: err.message }));
+        logInfo('Sync', `Pawchive follow [${service}:${creatorId}]: status=${res?.status || (res?.ok ? 200 : 'err')}`);
+        const isOk = res?.ok || res?.status === 200 || res?.status === 201;
+        return { success: isOk, site: 'pawchive', service, creatorId, status: res?.status };
+      }
+      return { success: false, site: 'pawchive', message: 'Не указан сервис и автор Pawchive' };
     }
+
+    return { success: false, site: targetSite, message: `Сайт ${targetSite} не поддерживает отслеживание авторов через API` };
   } catch (err) {
     logError('AuthorFollowSync', `Ошибка синхронизации автора на ${site}:`, err);
+    return { success: false, site, error: err.message };
   }
 }
 

@@ -569,6 +569,7 @@ router.post('/sync-external', async (req, res) => {
     let syncedFavoritesCount = 0;
     let syncedAuthorsCount = 0;
     let skippedCount = 0;
+    const errorsList = [];
 
     logInfo('SyncExternal', `Запуск батч-синхронизации: likes=${likes.length}, favorites=${favorites.length}, authors=${authors.length}, targetSite=${targetSite}`);
 
@@ -583,8 +584,15 @@ router.post('/sync-external', async (req, res) => {
         continue;
       }
       try {
-        await sendBooruLike(site, item, true, settings);
-        syncedLikesCount++;
+        const result = await sendBooruLike(site, item, true, settings);
+        if (result && result.success) {
+          syncedLikesCount++;
+        } else {
+          skippedCount++;
+          if (result && result.message && !errorsList.includes(result.message)) {
+            errorsList.push(`${site}: ${result.message}`);
+          }
+        }
         await delay(120); // rate-limit throttle
       } catch (err) {
         logError('SyncExternal', `Ошибка при синхронизации лайка [${item.id}]:`, err);
@@ -601,8 +609,15 @@ router.post('/sync-external', async (req, res) => {
         continue;
       }
       try {
-        await sendBooruFavorite(site, item, true, settings);
-        syncedFavoritesCount++;
+        const result = await sendBooruFavorite(site, item, true, settings);
+        if (result && result.success) {
+          syncedFavoritesCount++;
+        } else {
+          skippedCount++;
+          if (result && result.message && !errorsList.includes(result.message)) {
+            errorsList.push(`${site}: ${result.message}`);
+          }
+        }
         await delay(120);
       } catch (err) {
         logError('SyncExternal', `Ошибка при синхронизации закладки [${item.id}]:`, err);
@@ -619,8 +634,15 @@ router.post('/sync-external', async (req, res) => {
         continue;
       }
       try {
-        await sendBooruAuthorFollow(site, author, true, settings);
-        syncedAuthorsCount++;
+        const result = await sendBooruAuthorFollow(site, author, true, settings);
+        if (result && result.success) {
+          syncedAuthorsCount++;
+        } else {
+          skippedCount++;
+          if (result && result.message && !errorsList.includes(result.message)) {
+            errorsList.push(`${site}: ${result.message}`);
+          }
+        }
         await delay(120);
       } catch (err) {
         logError('SyncExternal', `Ошибка при синхронизации автора [${author.name || author.id}]:`, err);
@@ -630,14 +652,20 @@ router.post('/sync-external', async (req, res) => {
 
     logInfo('SyncExternal', `Итог синхронизации: likes=${syncedLikesCount}, favs=${syncedFavoritesCount}, authors=${syncedAuthorsCount}, skipped=${skippedCount}`);
 
+    let summary = `Выгружено: ${syncedLikesCount} лайков, ${syncedFavoritesCount} закладок, ${syncedAuthorsCount} авторов`;
+    if (errorsList.length > 0 && (syncedLikesCount + syncedFavoritesCount + syncedAuthorsCount === 0)) {
+      summary = `Синхронизация не выполнена. ${errorsList.join('; ')}`;
+    }
+
     res.json({
-      success: true,
-      message: `Синхронизация завершена: ${syncedLikesCount} лайков, ${syncedFavoritesCount} закладок, ${syncedAuthorsCount} авторов`,
+      success: (syncedLikesCount + syncedFavoritesCount + syncedAuthorsCount > 0) || skippedCount === 0,
+      message: summary,
       stats: {
         syncedLikesCount,
         syncedFavoritesCount,
         syncedAuthorsCount,
         skippedCount,
+        errors: errorsList,
         totalChecked: likes.length + favorites.length + authors.length
       }
     });
