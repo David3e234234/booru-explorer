@@ -170,6 +170,8 @@ async function init() {
     onSearch: () => performSearch(true)
   });
 
+  let lastLoadMoreTime = 0;
+
   galleryInstance = initGallery({
     onOpenViewer: (index) => viewerInstance.openViewer(index),
     onFavoriteToggle: updateFavoritesBadge,
@@ -180,7 +182,10 @@ async function init() {
       autocompleteInstance.selectTag(tag, true);
     },
     onLoadMore: () => {
+      const now = Date.now();
+      if (now - lastLoadMoreTime < 450) return;
       if (!state.isLoading && state.hasMore) {
+        lastLoadMoreTime = now;
         state.page++;
         galleryInstance.showScrollLoading();
         performSearch(false);

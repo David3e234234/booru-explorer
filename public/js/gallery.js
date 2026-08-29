@@ -94,19 +94,31 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   }
 
   // Seamless infinite scrolling
-  if ('IntersectionObserver' in window) {
+  function setupInfiniteObserver() {
+    if (!('IntersectionObserver' in window) || !infiniteScrollTrigger) return;
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+    const isDesktop = window.innerWidth > 800 && mainContent && mainContent.clientHeight > 0;
     observer = new IntersectionObserver((entries) => {
       const first = entries[0];
-      if (first.isIntersecting && !state.isLoading && state.hasMore && state.posts.length > 0 && state.currentCategory !== 'favorites') {
-        onLoadMore();
+      if (first && first.isIntersecting && !state.isLoading && state.hasMore && state.posts.length > 0 && state.currentCategory !== 'favorites') {
+        const info = getScrollContainerInfo();
+        if (info.scrollTop > 40 || info.hasOverflow(50)) {
+          onLoadMore();
+        }
       }
     }, {
-      root: null,
-      rootMargin: '600px',
+      root: isDesktop ? mainContent : null,
+      rootMargin: '250px',
       threshold: 0.05
     });
     observer.observe(infiniteScrollTrigger);
+  }
+  setupInfiniteObserver();
 
+  if ('IntersectionObserver' in window) {
     // Mobile autoplay of muted videos when scrolled into focus
     mobileVideoObserver = new IntersectionObserver((entries) => {
       if (window.innerWidth > 800) return;
@@ -185,7 +197,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         scrollTop,
         scrollHeight,
         clientHeight,
-        isNearBottom: (margin = 700) => (scrollHeight - (scrollTop + clientHeight)) <= margin,
+        isNearBottom: (margin = 350) => (scrollHeight - (scrollTop + clientHeight)) <= margin,
         hasOverflow: (margin = 100) => scrollHeight > (clientHeight + margin)
       };
     }
@@ -196,7 +208,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       scrollTop: scrollY,
       scrollHeight: scrollH,
       clientHeight: clientH,
-      isNearBottom: (margin = 700) => (scrollH - (scrollY + clientH)) <= margin,
+      isNearBottom: (margin = 350) => (scrollH - (scrollY + clientH)) <= margin,
       hasOverflow: (margin = 100) => scrollH > (clientH + margin)
     };
   }
@@ -204,7 +216,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   const handleScrollCheck = () => {
     if (!state.isLoading && state.hasMore && state.posts.length > 0 && state.currentCategory !== 'favorites') {
       const info = getScrollContainerInfo();
-      if (info.isNearBottom(700)) {
+      if (info.scrollTop > 50 && info.isNearBottom(350)) {
         onLoadMore();
       }
     }
@@ -382,7 +394,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     mainContent.addEventListener('scroll', scheduleVirtualUpdate, { passive: true });
   }
   window.addEventListener('scroll', scheduleVirtualUpdate, { passive: true });
-  window.addEventListener('resize', scheduleVirtualUpdate, { passive: true });
+  window.addEventListener('resize', () => {
+    scheduleVirtualUpdate();
+    setupInfiniteObserver();
+  }, { passive: true });
   if ('ResizeObserver' in window) {
     const gridResizeObserver = new ResizeObserver(() => {
       // Grid box changed (append, 1col image loads): vertical offsets are stale
@@ -527,17 +542,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    // Auto-load: if there are so few posts that there's no scrollbar (e.g. initial small batch)
+    // Auto-load: if there are so few posts that there's no scrollbar (e.g. initial tiny batch)
     setTimeout(() => {
       if (state.hasMore && !state.isLoading && state.posts.length > 0 && state.currentCategory !== 'favorites') {
         const info = getScrollContainerInfo();
-        if (!info.hasOverflow(100) && autoFillAttempts < 3) {
+        if (!info.hasOverflow(100) && autoFillAttempts < 2) {
           autoFillAttempts++;
           console.log('[Gallery] Экран не заполнен, продолжаем глубокий поиск...');
           onLoadMore();
         }
       }
-    }, 200);
+    }, 350);
   }
 
   function createMediaCard(post, index) {
