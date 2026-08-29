@@ -331,17 +331,26 @@ export function applySettingsToUIAndState(s) {
     selectMaxServerCache.value = String(s.maxServerCacheMb);
   }
 
+  if (s.recommendationMode) {
+    state.settings.recommendationMode = s.recommendationMode;
+  }
   const selectRecommendationMode = document.getElementById('selectRecommendationMode');
-  if (selectRecommendationMode && s.recommendationMode) {
-    selectRecommendationMode.value = s.recommendationMode;
+  if (selectRecommendationMode && state.settings.recommendationMode) {
+    selectRecommendationMode.value = state.settings.recommendationMode;
+  }
+  if (s.aiVisualEngine) {
+    state.settings.aiVisualEngine = s.aiVisualEngine;
   }
   const selectAiVisualEngine = document.getElementById('selectAiVisualEngine');
-  if (selectAiVisualEngine && s.aiVisualEngine) {
-    selectAiVisualEngine.value = s.aiVisualEngine;
+  if (selectAiVisualEngine && state.settings.aiVisualEngine) {
+    selectAiVisualEngine.value = state.settings.aiVisualEngine;
+  }
+  if (s.aiVisualModel) {
+    state.settings.aiVisualModel = (s.aiVisualModel === 'clip') ? 'clip' : 'dinov2';
   }
   const selectAiVisualModel = document.getElementById('selectAiVisualModel');
-  if (selectAiVisualModel && s.aiVisualModel) {
-    selectAiVisualModel.value = (s.aiVisualModel === 'clip') ? 'clip' : 'dinov2';
+  if (selectAiVisualModel && state.settings.aiVisualModel) {
+    selectAiVisualModel.value = state.settings.aiVisualModel;
   }
 
   // Telegram auto-backup

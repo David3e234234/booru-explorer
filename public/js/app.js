@@ -554,22 +554,15 @@ function selectCategory(category) {
 
 async function loadUserSettings() {
   try {
-    if (state.currentUser) {
-      const data = await fetchSettings();
-      const serverSettings = data?.settings || {};
-      applySettingsToUIAndState(serverSettings);
-      saveLocalSettings(serverSettings);
-    } else {
-      const local = loadLocalSettings();
-      if (local) {
-        applySettingsToUIAndState(local);
-      }
-      const data = await fetchSettings();
-      const serverSettings = data?.settings || {};
-      const merged = { ...serverSettings, ...(local || {}) };
-      applySettingsToUIAndState(merged);
-      saveLocalSettings(merged);
+    const local = loadLocalSettings() || {};
+    if (Object.keys(local).length > 0) {
+      applySettingsToUIAndState(local);
     }
+    const data = await fetchSettings();
+    const serverSettings = data?.settings || {};
+    const merged = { ...serverSettings, ...local };
+    applySettingsToUIAndState(merged);
+    saveLocalSettings(merged);
   } catch (err) {
     console.error('Ошибка настроек:', err);
   }

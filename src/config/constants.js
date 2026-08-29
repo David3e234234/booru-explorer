@@ -269,7 +269,12 @@ export const DEFAULT_SETTINGS = {
   telegramBotToken: '',
   telegramChatId: '',
   telegramBackupInterval: 'daily', // 'daily', 'every_3_days', 'weekly'
-  telegramLastBackupAt: null
+  telegramLastBackupAt: null,
+  recommendationMode: 'hybrid', // 'hybrid', 'ai-only', 'tags-only', 'off'
+  enableRecommendations: true,
+  aiVisualEngine: 'browser',
+  aiVisualModel: 'dinov2',
+  aiVisualThreshold: 0.35
 };
 
 export const SITES = {
