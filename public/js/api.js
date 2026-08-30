@@ -41,7 +41,9 @@ function getAuthHeaders(includeJson = false) {
       pregnantTags: state.settings.pregnantTags || [],
       lgbtTags: state.settings.lgbtTags || [],
       aiTags: state.settings.aiTags || [],
-      blacklist: state.settings.blacklist || []
+      blacklist: state.settings.blacklist || [],
+      groupAlbums: state.settings.groupAlbums !== false,
+      hideZipPosts: state.settings.hideZipPosts || false
     };
     headers['x-booru-auth'] = encodeURIComponent(JSON.stringify(authData));
   }

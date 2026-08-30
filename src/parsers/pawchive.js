@@ -268,8 +268,14 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
   }
   const createdAt = normalizeDate(item.published || item.added);
 
-  const seriesKey = `pawchive:${item.service}:${item.user}:${item.id}`;
-  const allSeriesKeys = [seriesKey, `${item.service}:${item.id}`];
+  const hasValidService = Boolean(item.service && String(item.service).trim() && item.service !== 'undefined' && item.service !== 'null');
+  const hasValidUser = Boolean(item.user && String(item.user).trim() && item.user !== 'undefined' && item.user !== 'null');
+  const hasValidId = Boolean(item.id && String(item.id).trim() && item.id !== 'undefined' && item.id !== 'null');
+
+  const seriesKey = (hasValidService && hasValidUser && hasValidId) ? `pawchive:${item.service}:${item.user}:${item.id}` : null;
+  const allSeriesKeys = [];
+  if (seriesKey) allSeriesKeys.push(seriesKey);
+  if (hasValidService && hasValidId) allSeriesKeys.push(`${item.service}:${item.id}`);
 
   // Posts with zip/rar attachments carry archive fields in both branches:
   // the viewer unpacks archiveUrls on open, whether or not the post also

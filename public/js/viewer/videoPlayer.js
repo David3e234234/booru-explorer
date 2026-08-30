@@ -268,6 +268,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   video.autoplay = shouldAutoplay;
   video.loop = true;
   video.playsInline = true;
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
   video.preload = shouldAutoplay ? 'auto' : 'metadata';
 
   // Restore the saved volume level and mute state
@@ -404,6 +406,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (unsupportedFallbackEl) return;
     clearTimeout(loadTimeout);
     isPreCaching = false;
+    try { video.pause(); } catch {}
+    video.removeAttribute('src');
+    try { video.load(); } catch {}
     video.style.display = 'none';
 
     unsupportedFallbackEl = document.createElement('div');
@@ -667,7 +672,14 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   const startRemuxOrFallback = () => {
     const cleanExt = (currentPost.fileExt || '').toLowerCase();
-    if (state.settings?.enableJsDemuxing !== false && (cleanExt === 'mp4' || cleanExt === 'm4v' || (!cleanExt && directMedia.includes('.mp4')))) {
+    const hasMseSupport = Boolean(
+      typeof window !== 'undefined' &&
+      window.MediaSource &&
+      typeof MediaSource.isTypeSupported === 'function' &&
+      MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E"')
+    );
+
+    if (hasMseSupport && state.settings?.enableJsDemuxing !== false && (cleanExt === 'mp4' || cleanExt === 'm4v' || (!cleanExt && directMedia.includes('.mp4')))) {
       startClientRemux(proxyMedia);
     } else {
       showUnsupportedVideoFallback();
@@ -701,9 +713,12 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   const handleVideoError = () => {
     if (isPreCaching) return;
+    if (video.error && video.error.code === 1) return; // MEDIA_ERR_ABORTED
+    if (video.currentTime > 0 || video.readyState >= 2) return;
+
     // Errors arrive in bursts per single switch: debounce so we don't hammer the source
     const now = Date.now();
-    if (now - lastFallbackTime < 1200) return;
+    if (now - lastFallbackTime < 1500) return;
     lastFallbackTime = now;
 
     if (currentSource === 'direct' && !directMedia.startsWith('/api/')) {
@@ -758,7 +773,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         console.warn('[Video Timeout] Прямая загрузка CDN не ответила, переход на прокси');
         handleVideoError();
       }
-    }, 2500);
+    }, 8000);
   });
 
   video.addEventListener('progress', () => {
@@ -847,6 +862,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   video.addEventListener('error', () => {
     clearTimeout(loadTimeout);
     if (!isPreCaching) {
+      if (video.error && video.error.code === 1) return; // MEDIA_ERR_ABORTED
+      if (video.currentTime > 0 || video.readyState >= 2) return;
       console.warn('[Video Error] Ошибка тега video, запуск обработчика fallback');
       handleVideoError();
     }
@@ -871,6 +888,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     video,
     destroy: () => {
       clearTimeout(loadTimeout);
+      try { video.pause(); } catch {}
+      video.removeAttribute('src');
+      try { video.load(); } catch {}
       if (statusBanner && typeof statusBanner._destroyDrag === 'function') {
         statusBanner._destroyDrag();
       }

@@ -399,6 +399,8 @@ Object.assign(en, {
   'settings.hideZipPosts.title': 'Hide Pawchive posts that contain no images or videos (only ZIP archives)',
   'settings.unpackArchivesOnDownload': 'Unpack archives on server when downloading',
   'settings.unpackArchivesOnDownload.title': 'When clicking download on a ZIP archive, unpack it on the server and download extracted files individually',
+  'settings.groupAlbums': 'Group multi-image posts into albums',
+  'settings.groupAlbums.title': 'Automatically combine multi-page posts and post series into browsable albums',
 
   'settings.storageHeading': 'Device cache and memory:',
   'settings.storageHint': 'Cached media files and requests for instant offline/online work.',

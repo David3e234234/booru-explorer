@@ -5,6 +5,17 @@
 
 import { logInfo, logError } from './logger.js';
 
+function isValidRelationKey(key) {
+  if (!key || typeof key !== 'string') return false;
+  if (key.includes('undefined') || key.includes('null') || key.includes('NaN')) return false;
+  if (key.endsWith(':') || key.startsWith(':')) return false;
+  const parts = key.split(':');
+  if (parts.length < 2) return false;
+  if (parts.some(p => !p || p.trim() === '')) return false;
+  if (parts[0] === 'parent' && parts[2] && (parts[2].length < 2 || parts[2] === '0')) return false;
+  return true;
+}
+
 /**
  * Extracts ALL possible series/album keys from post metadata
  * @param {Object} post - Normalized or raw post object
@@ -79,7 +90,7 @@ export function extractAllSeriesKeys(post, site = '') {
 
   // 7. Pawchive
   const pawchiveMatch = source.match(/pawchive\.pw\/([a-z0-9_-]+)\/user\/(\d+)\/post\/(\d+)/i);
-  if (pawchiveMatch) {
+  if (pawchiveMatch && pawchiveMatch[1] && pawchiveMatch[2] && pawchiveMatch[3]) {
     keys.add(`pawchive:${pawchiveMatch[1]}:${pawchiveMatch[2]}:${pawchiveMatch[3]}`);
     keys.add(`${pawchiveMatch[1]}:${pawchiveMatch[3]}`);
   }
@@ -134,8 +145,11 @@ export function extractAllSeriesKeys(post, site = '') {
   // When the post itself has children
   const hasChildren = Boolean(post.hasChildren || post.has_children || post.has_active_children);
   if (hasChildren && (post.originalId || post.id)) {
-    const rootId = String(post.originalId || post.id).replace(/^[a-z0-9_]+_/, '');
-    keys.add(`parent:${siteId}:${rootId}`);
+    const rawIdStr = String(post.originalId || post.id || '');
+    const rootId = rawIdStr.replace(/^[a-z0-9]+_/, '');
+    if (rootId && rootId !== '0' && rootId !== 'null' && rootId.length >= 2) {
+      keys.add(`parent:${siteId}:${rootId}`);
+    }
   }
 
   // 18. Pool - series/chapters/collections
@@ -154,7 +168,7 @@ export function extractAllSeriesKeys(post, site = '') {
     if (poolTagMatch && poolTagMatch[1]) keys.add(`pool:${siteId}:${poolTagMatch[1]}`);
   }
 
-  return Array.from(keys);
+  return Array.from(keys).filter(isValidRelationKey);
 }
 
 /**
@@ -286,6 +300,15 @@ export function groupPostsIntoAlbums(posts, options = {}) {
     const { items } = cluster;
 
     if (items.length > 1) {
+      // Guard against runaway transitive merging of too many separate posts
+      const distinctRootPosts = new Set(items.map(it => String(it.originalId || it.id).replace(/^[a-z0-9]+_/, '').split('_')[0]));
+      if (distinctRootPosts.size > 20) {
+        items.forEach((item, itemIdx) => {
+          resultMap.set(rootIndex + itemIdx * 0.001, item);
+        });
+        return;
+      }
+
       // Multiple items clustered together
       const flattenedItems = [];
       items.forEach(item => {

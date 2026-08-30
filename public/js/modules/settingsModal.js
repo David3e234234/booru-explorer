@@ -329,6 +329,10 @@ export function applySettingsToUIAndState(s) {
   if (checkUnpackArchivesApply && typeof s.unpackArchivesOnDownload === 'boolean') {
     checkUnpackArchivesApply.checked = s.unpackArchivesOnDownload;
   }
+  const checkGroupAlbumsApply = document.getElementById('checkGroupAlbums');
+  if (checkGroupAlbumsApply && typeof s.groupAlbums === 'boolean') {
+    checkGroupAlbumsApply.checked = s.groupAlbums;
+  }
 
   const selectMaxServerCache = document.getElementById('selectMaxServerCache');
   if (selectMaxServerCache && s.maxServerCacheMb !== undefined) {
@@ -829,6 +833,8 @@ export function openSettingsModal() {
   if (checkHideZipPostsModal) checkHideZipPostsModal.checked = state.settings.hideZipPosts === true;
   const checkUnpackArchivesModal = document.getElementById('checkUnpackArchivesOnDownload');
   if (checkUnpackArchivesModal) checkUnpackArchivesModal.checked = state.settings.unpackArchivesOnDownload === true;
+  const checkGroupAlbumsModal = document.getElementById('checkGroupAlbums');
+  if (checkGroupAlbumsModal) checkGroupAlbumsModal.checked = state.settings.groupAlbums !== false;
   const checkEnableJsDemuxingModal = document.getElementById('checkEnableJsDemuxing');
   if (checkEnableJsDemuxingModal) checkEnableJsDemuxingModal.checked = state.settings.enableJsDemuxing !== false;
   if (selectDeepFetchPages) selectDeepFetchPages.value = String(state.settings.deepFetchPages || 2);
@@ -1702,6 +1708,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkUnpackArchives = document.getElementById('checkUnpackArchivesOnDownload');
       const unpackArchivesOnDownloadVal = checkUnpackArchives ? checkUnpackArchives.checked : false;
 
+      const checkGroupAlbums = document.getElementById('checkGroupAlbums');
+      const groupAlbumsVal = checkGroupAlbums ? checkGroupAlbums.checked : true;
+
       const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
       const inputRule34UserId = document.getElementById('inputRule34UserId');
       const inputGelbooruApiKey = document.getElementById('inputGelbooruApiKey');
@@ -1776,6 +1785,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         enableJsDemuxing: enableJsDemuxingVal,
         hideZipPosts: hideZipPostsVal,
         unpackArchivesOnDownload: unpackArchivesOnDownloadVal,
+        groupAlbums: groupAlbumsVal,
         recommendationMode: document.getElementById('selectRecommendationMode')?.value || 'hybrid',
         enableRecommendations: document.getElementById('selectRecommendationMode')?.value !== 'off',
         aiVisualEngine: document.getElementById('selectAiVisualEngine')?.value || 'browser',

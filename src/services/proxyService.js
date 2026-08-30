@@ -117,20 +117,28 @@ function build404FallbackCandidates(targetUrl) {
 }
 
 function fixContentType(res, targetUrl) {
-  const normalizedPath = targetUrl.split('?')[0].replace(/\/+$/, '').toLowerCase();
-  let currentType = res.getHeader('content-type') || '';
-  if (!currentType || currentType.includes('octet-stream') || currentType.includes('text/plain') || currentType.includes('text/html')) {
-    if (normalizedPath.includes('.mp4') || normalizedPath.includes('.m4v') || targetUrl.toLowerCase().includes('.mp4')) {
+  const fullLower = targetUrl.toLowerCase();
+  const normalizedPath = fullLower.split('?')[0].replace(/\/+$/, '');
+  let currentType = (res.getHeader('content-type') || '').toLowerCase();
+
+  // Strip charset from media content types (Safari WebKit rejects video MIME types with charset)
+  if (currentType.startsWith('video/') && currentType.includes(';')) {
+    currentType = currentType.split(';')[0].trim();
+    res.setHeader('Content-Type', currentType);
+  }
+
+  if (!currentType || currentType.includes('octet-stream') || currentType.includes('text/plain') || currentType.includes('text/html') || currentType === 'application/unknown') {
+    if (normalizedPath.includes('.mp4') || normalizedPath.includes('.m4v') || fullLower.includes('.mp4') || fullLower.includes('.m4v')) {
       res.setHeader('Content-Type', 'video/mp4');
-    } else if (normalizedPath.includes('.webm') || targetUrl.toLowerCase().includes('.webm')) {
+    } else if (normalizedPath.includes('.webm') || fullLower.includes('.webm')) {
       res.setHeader('Content-Type', 'video/webm');
-    } else if (normalizedPath.endsWith('.gif')) {
+    } else if (normalizedPath.endsWith('.gif') || fullLower.includes('.gif')) {
       res.setHeader('Content-Type', 'image/gif');
-    } else if (normalizedPath.endsWith('.png')) {
+    } else if (normalizedPath.endsWith('.png') || fullLower.includes('.png')) {
       res.setHeader('Content-Type', 'image/png');
-    } else if (normalizedPath.endsWith('.webp')) {
+    } else if (normalizedPath.endsWith('.webp') || fullLower.includes('.webp')) {
       res.setHeader('Content-Type', 'image/webp');
-    } else if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg')) {
+    } else if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg') || fullLower.includes('.jpg') || fullLower.includes('.jpeg')) {
       res.setHeader('Content-Type', 'image/jpeg');
     }
   }

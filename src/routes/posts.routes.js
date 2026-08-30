@@ -25,7 +25,7 @@ const router = express.Router();
 // Client settings fields that affect filtering results - they are part of the cache key
 const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
-  'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'hideZipPosts', 'customSources',
+  'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'hideZipPosts', 'groupAlbums', 'customSources',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
   'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession',
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
@@ -408,7 +408,7 @@ router.get('/posts', async (req, res) => {
     }
 
     // Automatically group related images into albums
-    const shouldGroupAlbums = req.query.groupAlbums !== 'false';
+    const shouldGroupAlbums = req.query.groupAlbums !== 'false' && clientAuth.groupAlbums !== false && settings.groupAlbums !== false;
     if (shouldGroupAlbums && posts.length > 0) {
       posts = groupPostsIntoAlbums(posts, { enabled: true });
     }

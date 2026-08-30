@@ -81,6 +81,7 @@ export const DEFAULT_CLIENT_SETTINGS = {
   hideLgbt: false,
   hideZipPosts: false,
   unpackArchivesOnDownload: false,
+  groupAlbums: true,
   excludedInterestTags: [],
   videoAutoplayHover: true,
   videoAutoplayMobile: true,
