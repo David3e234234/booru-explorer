@@ -470,6 +470,37 @@ router.get('/posts/album', async (req, res) => {
 
     let foundPostsMap = new Map();
 
+    // Pawchive posts are self-contained archives; do not query Booru-style parent: or source: tags
+    if (site === 'pawchive' || seriesKey.startsWith('pawchive:')) {
+      const pawchiveMatch = seriesKey.match(/^pawchive:([^:]+):([^:]+):(\d+)$/) ||
+        (postUrl).match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
+      const targetPostId = pawchiveMatch ? pawchiveMatch[3] : (originalId || parentId || '').replace(/^pawchive_/, '').split('_')[0];
+      const targetService = pawchiveMatch ? pawchiveMatch[1] : null;
+      const targetUser = pawchiveMatch ? pawchiveMatch[2] : null;
+
+      if (targetPostId) {
+        const pPost = await fetchPawchivePostById(targetPostId, targetService, targetUser, aiTagsList, settings);
+        if (pPost && Array.isArray(pPost.albumItems) && pPost.albumItems.length > 1) {
+          pPost.albumItems.forEach(item => {
+            if (item && item.id && !foundPostsMap.has(item.id)) {
+              const clean = { ...item, content: item.content || pPost.content || '' };
+              delete clean.albumItems;
+              foundPostsMap.set(item.id, clean);
+            }
+          });
+        }
+      }
+
+      const items = Array.from(foundPostsMap.values());
+      const responsePayload = {
+        success: items.length > 0,
+        count: items.length,
+        albumItems: items
+      };
+      apiPostsCache.set(albumCacheKey, responsePayload);
+      return res.json(responsePayload);
+    }
+
     const fetchAndCollect = async (tagQuery) => {
       if (!tagQuery) return;
       try {
@@ -533,25 +564,6 @@ router.get('/posts/album', async (req, res) => {
     } else if (seriesKey.startsWith('patreon:') && foundPostsMap.size === 0) {
       const ptId = seriesKey.replace('patreon:', '');
       await fetchAndCollect(`patreon:${ptId}`);
-    }
-
-    if ((site === 'pawchive' || seriesKey.startsWith('pawchive:')) && foundPostsMap.size === 0) {
-      const pawchiveMatch = seriesKey.match(/^pawchive:([^:]+):([^:]+):(\d+)$/) ||
-        (postUrl).match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
-      const targetPostId = pawchiveMatch ? pawchiveMatch[3] : (originalId || parentId || '').replace(/^pawchive_/, '').split('_')[0];
-      const targetService = pawchiveMatch ? pawchiveMatch[1] : null;
-      const targetUser = pawchiveMatch ? pawchiveMatch[2] : null;
-
-      const pPost = await fetchPawchivePostById(targetPostId, targetService, targetUser, aiTagsList, settings);
-      if (pPost && Array.isArray(pPost.albumItems) && pPost.albumItems.length > 0) {
-        pPost.albumItems.forEach(item => {
-          if (item && item.id && !foundPostsMap.has(item.id)) {
-            const clean = { ...item, content: item.content || pPost.content || '' };
-            delete clean.albumItems;
-            foundPostsMap.set(item.id, clean);
-          }
-        });
-      }
     }
 
     let items = Array.from(foundPostsMap.values());

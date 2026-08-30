@@ -372,7 +372,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
       const keys = postKeysList[rootIndex] || [];
       const hasChildren = Boolean(singlePost.hasChildren || singlePost.has_children || singlePost.has_active_children);
       const hasParent = Boolean(singlePost.parentId && String(singlePost.parentId) !== '0');
-      const hasExternalSet = keys.some(k => k.startsWith('pixiv:') || k.startsWith('twitter:') || k.startsWith('fanbox:') || k.startsWith('pawchive:'));
+      const hasExternalSet = keys.some(k => k.startsWith('pixiv:') || k.startsWith('twitter:') || k.startsWith('fanbox:') || k.startsWith('fantia:') || k.startsWith('patreon:'));
 
       if (singlePost.isAlbum && Array.isArray(singlePost.albumItems) && singlePost.albumItems.length > 1) {
         // Already an album (e.g. multi-media post from parser)

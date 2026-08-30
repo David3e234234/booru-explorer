@@ -1104,7 +1104,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     // Automatically trigger full album/set load in background if not already fully fetched
-    if (!currentPost._albumFullyFetched && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:')) || currentPost.pixiv_id)) {
+    if (!currentPost._albumFullyFetched && currentPost.site !== 'pawchive' && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:')) || currentPost.pixiv_id)) {
       loadFullAlbumForPost(currentPost, false);
     }
   }
@@ -1112,7 +1112,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let albumFetchSeq = 0;
 
   async function loadFullAlbumForPost(targetPost, isUserExplicit = false) {
-    if (!targetPost) return;
+    if (!targetPost || targetPost.site === 'pawchive') return;
     const canFetch = Boolean(targetPost.canFetchAlbum || targetPost.hasChildren || targetPost.parentId || (targetPost.seriesKey && !targetPost.seriesKey.startsWith('pawchive:')) || targetPost.pixiv_id);
     if (!canFetch) return;
     if (targetPost._albumFetchInProgress) return;
