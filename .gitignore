@@ -45,6 +45,8 @@ AGENT_CONTEXT.md
 *.agent_context.md
 GEMINI.md
 *.gemini.md
+MEMORY.md
+*.memory.md
 .antigravity/
 
 # Локальные папки ИИ-агентов (не для репозитория)
