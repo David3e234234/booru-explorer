@@ -10,12 +10,11 @@ const KNOWN_SITES = new Set([
 ]);
 
 const ENUMS = {
-  sort: ['new', 'views', 'top'],
+  sort: ['new', 'hot', 'views', 'top'],
   ai: ['all', 'no-ai', 'only-ai'],
   rating: ['all', 'nsfw', 'questionable', 'sfw'],
   type: ['all', 'video', 'image'],
-  age: ['all', 'adult', 'young'],
-  date: ['all', '24h', '2d', '7d', '30d', '90d', '365d']
+  age: ['all', 'adult', 'young']
 };
 
 const MAX_URL_TAGS = 20;
@@ -58,7 +57,6 @@ function buildQuery() {
   if (state.ratingFilter !== 'all') parts.push(`rating=${enc(state.ratingFilter)}`);
   if (state.typeFilter !== 'all') parts.push(`type=${enc(state.typeFilter)}`);
   if (state.ageFilter !== 'all') parts.push(`age=${enc(state.ageFilter)}`);
-  if (state.dateFilter !== 'all') parts.push(`date=${enc(state.dateFilter)}`);
   return parts.join('&');
 }
 
@@ -152,7 +150,6 @@ export function applyUrlToState(p) {
   if (p.rating && p.rating !== state.ratingFilter) { state.ratingFilter = p.rating; changed = true; }
   if (p.type && p.type !== state.typeFilter) { state.typeFilter = p.type; changed = true; }
   if (p.age && p.age !== state.ageFilter) { state.ageFilter = p.age; changed = true; }
-  if (p.date && p.date !== state.dateFilter) { state.dateFilter = p.date; changed = true; }
 
   return changed;
 }

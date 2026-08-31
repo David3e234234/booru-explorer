@@ -13,7 +13,7 @@ import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 export async function fetchDanbooru(params, aiTagsList, settings) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', dateFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all' } = params;
   const userTagList = tags.trim().split(/\s+/).filter(Boolean);
   const queryTags = [];
   
@@ -41,51 +41,27 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     }
   }
 
-  // Priority: sorting and date filter
-  const hasDateFilter = dateFilter && dateFilter !== 'all';
-  const ageMap = {
-    '24h': 'age:..1d',
-    '1d': 'age:..1d',
-    '2d': 'age:..2d',
-    '7d': 'age:..7d',
-    'week': 'age:..7d',
-    '30d': 'age:..30d',
-    'month': 'age:..30d',
-    '90d': 'age:..90d',
-    '3months': 'age:..90d',
-    '365d': 'age:..365d',
-    'year': 'age:..365d'
-  };
-
+  // Priority: sorting
   if (queryTags.length < 2) {
     if (category === 'top') {
-      if (hasDateFilter) {
-        queryTags.push('order:score');
-      } else if (userTagList.length > 0) {
+      if (userTagList.length > 0) {
         queryTags.push('order:score');
       } else {
         queryTags.push('order:score');
         queryTags.push('score:>100');
       }
     } else if (category === 'views') {
-      if (hasDateFilter) {
-        queryTags.push('order:score');
-      } else if (userTagList.length > 0) {
+      if (userTagList.length > 0) {
         queryTags.push('order:favcount');
       } else {
         queryTags.push('order:favcount');
         queryTags.push('favcount:>100');
       }
-    } else if (category === 'popular' || category === 'recommended') {
+    } else if (category === 'hot' || category === 'popular' || category === 'recommended') {
       queryTags.push('order:rank');
     } else if (category === 'random') {
       queryTags.push('order:random');
     }
-  }
-
-  // Priority: date filter (age:..Nd)
-  if (queryTags.length < 2 && hasDateFilter && ageMap[dateFilter]) {
-    queryTags.push(ageMap[dateFilter]);
   }
 
   // Priority: rating
@@ -107,7 +83,6 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     ageFilter: params.ageFilter || 'all',
     aiFilter: params.aiFilter || 'no-ai',
     ratingFilter: params.ratingFilter || 'all',
-    dateFilter: params.dateFilter || 'all',
     hideFurry: params.hideFurry || settings?.hideFurry,
     hidePregnant: params.hidePregnant || settings?.hidePregnant,
     hideLgbt: params.hideLgbt || settings?.hideLgbt,

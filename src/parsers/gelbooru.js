@@ -14,11 +14,11 @@ function getRecentDateFilter(days = 30) {
 }
 
 export async function fetchGelbooru(params, aiTagsList, settings) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   
   let searchTags = adaptTagsForSite('gelbooru', tags, ageFilter, typeFilter);
 
-  if (category === 'top') {
+  if (category === 'top' || category === 'hot') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
@@ -26,12 +26,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:views:desc` : 'sort:views:desc';
     }
-  } else if (category === 'popular') {
-    if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('date:')) {
-      const recentDate = getRecentDateFilter(30);
-      searchTags = searchTags ? `${searchTags} ${recentDate} sort:score:desc` : `${recentDate} sort:score:desc`;
-    }
-  } else if (category === 'recommended') {
+  } else if (category === 'popular' || category === 'recommended') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
@@ -48,27 +43,6 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:questionable` : 'rating:questionable';
   } else if (ratingFilter === 'sfw') {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:general` : 'rating:general';
-  }
-
-  if (dateFilter && dateFilter !== 'all' && !searchTags.includes('date:')) {
-    const daysMap = {
-      '24h': 1,
-      '1d': 1,
-      '2d': 2,
-      '7d': 7,
-      'week': 7,
-      '30d': 30,
-      'month': 30,
-      '90d': 90,
-      '3months': 90,
-      '365d': 365,
-      'year': 365
-    };
-    const days = daysMap[dateFilter];
-    if (days) {
-      const recentDate = getRecentDateFilter(days);
-      searchTags = searchTags ? `${searchTags} ${recentDate}` : recentDate;
-    }
   }
 
   const pid = Math.max(0, page - 1);

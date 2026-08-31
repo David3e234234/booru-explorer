@@ -24,7 +24,7 @@ import {
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
-import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updateDateFilterUI, updatePawchiveServiceUI } from './filtersUI.js';
+import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updatePawchiveServiceUI } from './filtersUI.js';
 import { updateHeaderAuthUI } from './authModal.js';
 import { getLocalCacheCount, clearAllEmbeddingsCache } from './aiVision.js';
 
@@ -213,10 +213,7 @@ export function applySettingsToUIAndState(s) {
     state.ageFilter = s.ageFilter;
     updateAgeFilterUI();
   }
-  if (s.dateFilter) {
-    state.dateFilter = s.dateFilter;
-    updateDateFilterUI();
-  }
+
   if (s.pawchiveService) {
     state.pawchiveService = s.pawchiveService;
     updatePawchiveServiceUI();

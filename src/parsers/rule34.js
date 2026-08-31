@@ -15,19 +15,18 @@ function getRecentDateFilter(days = 30) {
 }
 
 export async function fetchRule34(params, aiTagsList, settings) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   
   let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
 
-  // Category sorting for Rule34:
-  if (category === 'top') {
-    // All-time top
+  if (category === 'top' || category === 'hot') {
+    // All-time top / hot
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
-      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+      searchTags = searchTags ? `${searchTags} order:score` : 'order:score';
     }
   } else if (category === 'views') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
-      searchTags = searchTags ? `${searchTags} sort:views:desc` : 'sort:views:desc';
+      searchTags = searchTags ? `${searchTags} order:score` : 'order:score';
     }
   } else if (category === 'popular') {
     // Trending / recently popular:
@@ -36,7 +35,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
     }
   } else if (category === 'recommended') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
-      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+      searchTags = searchTags ? `${searchTags} order:score` : 'order:score';
     }
   } else if (category === 'random') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
@@ -51,27 +50,6 @@ export async function fetchRule34(params, aiTagsList, settings) {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:questionable` : 'rating:questionable';
   } else if (ratingFilter === 'sfw') {
     if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:safe` : 'rating:safe';
-  }
-
-  if (dateFilter && dateFilter !== 'all' && !searchTags.includes('date:')) {
-    const daysMap = {
-      '24h': 1,
-      '1d': 1,
-      '2d': 2,
-      '7d': 7,
-      'week': 7,
-      '30d': 30,
-      'month': 30,
-      '90d': 90,
-      '3months': 90,
-      '365d': 365,
-      'year': 365
-    };
-    const days = daysMap[dateFilter];
-    if (days) {
-      const recentDate = getRecentDateFilter(days);
-      searchTags = searchTags ? `${searchTags} ${recentDate}` : recentDate;
-    }
   }
 
   const pid = Math.max(0, page - 1);

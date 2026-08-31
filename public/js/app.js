@@ -48,7 +48,6 @@ import {
   updateRatingFilterUI, 
   updateTypeFilterUI, 
   updateAgeFilterUI, 
-  updateDateFilterUI,
   updatePawchiveServiceUI,
   getPawchiveServiceLabel,
   updateCategoryTabsUI,
@@ -383,7 +382,6 @@ async function init() {
   ]);
 
   updateCategoryTabsUI();
-  updateDateFilterUI();
 
   // 4. Restore search/viewer state from the URL before the initial load
   const urlParams = consumeInitialUrl();
@@ -433,7 +431,6 @@ async function openPostById(postId) {
       ratingFilter: 'all',
       typeFilter: 'all',
       ageFilter: 'all',
-      dateFilter: 'all',
       hideFurry: false,
       hidePregnant: false,
       hideLgbt: false
@@ -844,7 +841,6 @@ async function performSearch(reset = false, options = {}) {
             ratingFilter: state.ratingFilter,
             typeFilter: state.typeFilter,
             ageFilter: state.ageFilter,
-            dateFilter: state.dateFilter,
             hideFurry: state.hideFurry,
             hidePregnant: state.hidePregnant,
             hideLgbt: state.hideLgbt,
@@ -940,7 +936,6 @@ async function performSearch(reset = false, options = {}) {
           ratingFilter: state.ratingFilter,
           typeFilter: state.typeFilter,
           ageFilter: state.ageFilter,
-          dateFilter: state.dateFilter,
           hideFurry: state.hideFurry,
           hidePregnant: state.hidePregnant,
           hideLgbt: state.hideLgbt,
@@ -992,7 +987,6 @@ async function performSearch(reset = false, options = {}) {
                   ratingFilter: state.ratingFilter,
                   typeFilter: state.typeFilter,
                   ageFilter: state.ageFilter,
-                  dateFilter: state.dateFilter,
                   hideFurry: state.hideFurry,
                   hidePregnant: state.hidePregnant,
                   hideLgbt: state.hideLgbt,
@@ -1013,7 +1007,6 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
-              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1029,7 +1022,6 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
-              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1058,7 +1050,6 @@ async function performSearch(reset = false, options = {}) {
                 ratingFilter: state.ratingFilter,
                 typeFilter: state.typeFilter,
                 ageFilter: state.ageFilter,
-                dateFilter: state.dateFilter,
                 hideFurry: state.hideFurry,
                 hidePregnant: state.hidePregnant,
                 hideLgbt: state.hideLgbt,
@@ -1080,7 +1071,6 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
-              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1100,7 +1090,6 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
-              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1116,7 +1105,6 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
-              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1132,7 +1120,6 @@ async function performSearch(reset = false, options = {}) {
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
               ageFilter: state.ageFilter,
-              dateFilter: state.dateFilter,
               hideFurry: state.hideFurry,
               hidePregnant: state.hidePregnant,
               hideLgbt: state.hideLgbt,
@@ -1365,7 +1352,6 @@ async function performSearch(reset = false, options = {}) {
       ratingFilter: state.ratingFilter,
       typeFilter: state.typeFilter,
       ageFilter: state.ageFilter,
-      dateFilter: state.dateFilter,
       hideFurry: state.hideFurry,
       hidePregnant: state.hidePregnant,
       hideLgbt: state.hideLgbt,
@@ -1488,49 +1474,7 @@ function setupEventListeners() {
     });
   });
 
-  // Date filter dropdown
-  const dateFilterDropdown = document.getElementById('dateFilterDropdown');
-  const btnDateFilterToggle = document.getElementById('btnDateFilterToggle');
-  if (btnDateFilterToggle && dateFilterDropdown) {
-    btnDateFilterToggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isOpen = dateFilterDropdown.classList.toggle('open');
-      btnDateFilterToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    });
 
-    document.querySelectorAll('#dateFilterMenu .dropdown-item').forEach(item => {
-      item.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const dateVal = item.dataset.date || 'all';
-        if (state.dateFilter === dateVal) {
-          dateFilterDropdown.classList.remove('open');
-          btnDateFilterToggle.setAttribute('aria-expanded', 'false');
-          return;
-        }
-        state.dateFilter = dateVal;
-        updateDateFilterUI();
-        persistSettings({ dateFilter: dateVal });
-        dateFilterDropdown.classList.remove('open');
-        btnDateFilterToggle.setAttribute('aria-expanded', 'false');
-        syncSearchUrl('replace');
-        performSearch(true);
-      });
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!dateFilterDropdown.contains(e.target)) {
-        dateFilterDropdown.classList.remove('open');
-        btnDateFilterToggle.setAttribute('aria-expanded', 'false');
-      }
-    });
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && dateFilterDropdown.classList.contains('open')) {
-        dateFilterDropdown.classList.remove('open');
-        btnDateFilterToggle.setAttribute('aria-expanded', 'false');
-      }
-    });
-  }
 
   // Pawchive platform dropdown (only visible for the Pawchive source)
   const pawchiveServiceDropdown = document.getElementById('pawchiveServiceDropdown');

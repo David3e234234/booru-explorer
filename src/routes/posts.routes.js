@@ -364,7 +364,6 @@ router.get('/posts', async (req, res) => {
     const ratingFilter = req.query.ratingFilter || 'all';
     const typeFilter = req.query.typeFilter || 'all';
     const ageFilter = req.query.ageFilter || 'all';
-    const dateFilter = req.query.dateFilter || 'all';
     const hideFurry = req.query.hideFurry === 'true' || req.query.hideFurry === '1';
     const hidePregnant = req.query.hidePregnant === 'true' || req.query.hidePregnant === '1';
     const hideLgbt = req.query.hideLgbt === 'true' || req.query.hideLgbt === '1';
@@ -382,7 +381,7 @@ router.get('/posts', async (req, res) => {
     };
 
     // groupAlbums changes the response shape (album collapsing), so it belongs in the key
-    const cacheKey = `v3_author_only:${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${dateFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
+    const cacheKey = `v3_author_only:${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
@@ -392,7 +391,7 @@ router.get('/posts', async (req, res) => {
 
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
 
-    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, category=${category}, date=${dateFilter}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}`);
+    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, category=${category}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}`);
 
     // fetchPosts performs the full local filtering itself (isPostMatchingFilters)
     let posts = await fetchPosts(site, {
@@ -403,7 +402,6 @@ router.get('/posts', async (req, res) => {
       ratingFilter, 
       typeFilter, 
       ageFilter, 
-      dateFilter,
       excludeSites,
       customSites,
       pawchiveService,

@@ -178,7 +178,6 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     ageFilter: params.ageFilter || 'all',
     aiFilter: params.aiFilter || 'no-ai',
     ratingFilter: params.ratingFilter || 'all',
-    dateFilter: params.dateFilter || 'all',
     hideFurry: params.hideFurry || settings?.hideFurry,
     hidePregnant: params.hidePregnant || settings?.hidePregnant,
     hideLgbt: params.hideLgbt || settings?.hideLgbt,
@@ -196,7 +195,6 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
                            (params.aiFilter && params.aiFilter !== 'all') ||
                            (params.typeFilter && params.typeFilter !== 'all') ||
                            (params.ratingFilter && params.ratingFilter !== 'all') ||
-                           (params.dateFilter && params.dateFilter !== 'all') ||
                            (settings?.blacklist && settings.blacklist.length > 0) ||
                            settings?.hideFurry ||
                            settings?.hidePregnant ||

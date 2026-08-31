@@ -15,21 +15,6 @@ const criteriaSetsCache = new WeakMap();
 // O(1) lookups instead of array scans per post
 const soundKeywordsSet = new Set(SOUND_KEYWORDS);
 
-// Date-filter windows, hoisted out of the per-post path
-const DATE_FILTER_LIMITS_MS = {
-  '24h': 24 * 60 * 60 * 1000,
-  '1d': 24 * 60 * 60 * 1000,
-  '2d': 2 * 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  'week': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000,
-  'month': 30 * 24 * 60 * 60 * 1000,
-  '90d': 90 * 24 * 60 * 60 * 1000,
-  '3months': 90 * 24 * 60 * 60 * 1000,
-  '365d': 365 * 24 * 60 * 60 * 1000,
-  'year': 365 * 24 * 60 * 60 * 1000
-};
-
 function getCriteriaSets(criteria, activeCurvyTags, activePetiteTags, activeFurryTags, activePregnantTags, activeLgbtTags) {
   let sets = criteriaSetsCache.get(criteria);
   if (sets) return sets;
@@ -57,7 +42,6 @@ export function isPostMatchingFilters(post, criteria = {}) {
     ageFilter = 'all',
     aiFilter = 'no-ai',
     ratingFilter = 'all',
-    dateFilter = 'all',
     hideFurry = false,
     hidePregnant = false,
     hideLgbt = false,
@@ -166,18 +150,6 @@ export function isPostMatchingFilters(post, criteria = {}) {
   if (sets.blacklist.size > 0) {
     for (const t of postTagSet) {
       if (sets.blacklist.has(t)) return false;
-    }
-  }
-
-  // 9. Creation/upload date filter
-  if (dateFilter && dateFilter !== 'all' && post.createdAt) {
-    const postTime = new Date(post.createdAt).getTime();
-    if (!isNaN(postTime) && postTime > 0) {
-      const diffMs = Date.now() - postTime;
-      const allowedMaxMs = DATE_FILTER_LIMITS_MS[dateFilter];
-      if (allowedMaxMs && diffMs > allowedMaxMs) {
-        return false;
-      }
     }
   }
 

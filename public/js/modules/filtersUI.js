@@ -47,6 +47,15 @@ export function updateSiteCapabilitiesUI(siteId) {
     }
   }
 
+  // 1.1 Post sorting block (hide on sites without sorting like Pawchive)
+  const postSortBlock = document.getElementById('postSortBlock');
+  if (postSortBlock) {
+    postSortBlock.style.display = caps.supportsSort ? '' : 'none';
+  }
+  if (!caps.supportsSort && state.postSort !== 'new') {
+    state.postSort = 'new';
+  }
+
   // 2. AI filter block
   const aiFilterBlock = document.getElementById('aiFilterBlock');
   if (aiFilterBlock) {
@@ -64,15 +73,6 @@ export function updateSiteCapabilitiesUI(siteId) {
   }
   if (!hasMultipleRatings) {
     state.ratingFilter = 'all';
-  }
-
-  // 4. Date filter block
-  const dateFilterBlock = document.getElementById('dateFilterBlock');
-  if (dateFilterBlock) {
-    dateFilterBlock.style.display = caps.supportsDateFilter ? '' : 'none';
-  }
-  if (!caps.supportsDateFilter && state.dateFilter !== 'all') {
-    state.dateFilter = 'all';
   }
 
   // 5. Content type filter block & pills
@@ -150,7 +150,6 @@ export function updateSiteCapabilitiesUI(siteId) {
   updateRatingFilterUI();
   updateTypeFilterUI();
   updateAgeFilterUI();
-  updateDateFilterUI();
   updatePawchiveServiceUI();
   updateVideoSortUI();
   updateFilterActiveDot();
@@ -197,35 +196,6 @@ export function updateAgeFilterUI() {
   updateFilterActiveDot();
 }
 
-export function updateDateFilterUI() {
-  const dateMap = {
-    'all': t('date.all', 'За всё время'),
-    '24h': t('date.24h', 'За 24 часа'),
-    '1d': t('date.24h', 'За 24 часа'),
-    '2d': t('date.2d', 'За 2 дня'),
-    '7d': t('date.7d', 'За неделю'),
-    'week': t('date.7d', 'За неделю'),
-    '30d': t('date.30d', 'За месяц'),
-    'month': t('date.30d', 'За месяц'),
-    '90d': t('date.90d', 'За 3 месяца'),
-    '3months': t('date.90d', 'За 3 месяца'),
-    '365d': t('date.365d', 'За год'),
-    'year': t('date.365d', 'За год')
-  };
-
-  const dateFilterLabel = document.getElementById('dateFilterLabel');
-  if (dateFilterLabel) {
-    dateFilterLabel.textContent = dateMap[state.dateFilter] || t('date.all', 'За всё время');
-  }
-
-  document.querySelectorAll('#dateFilterMenu .dropdown-item').forEach(item => {
-    const isCurrent = item.dataset.date === state.dateFilter || (state.dateFilter === 'all' && item.dataset.date === 'all');
-    item.classList.toggle('active', isCurrent);
-  });
-
-  updateFilterActiveDot();
-}
-
 export function updatePawchiveServiceUI() {
   const pawchiveServiceLabel = document.getElementById('pawchiveServiceLabel');
   if (pawchiveServiceLabel) {
@@ -244,12 +214,11 @@ export function updateFilterActiveDot() {
   const filterActiveDot = document.getElementById('filterActiveDot');
   if (!filterActiveDot) return;
   const caps = getSiteCapabilities(state.currentSite);
-  const isCustom = (state.postSort && state.postSort !== 'new') ||
+  const isCustom = (caps.supportsSort && state.postSort && state.postSort !== 'new') ||
                    (caps.supportsAiFilter && state.aiFilter !== 'no-ai' && state.aiFilter !== 'all') ||
                    (caps.rating === 'all' && state.ratingFilter !== 'all') ||
                    (caps.supportsVideo && caps.supportsImages && state.typeFilter !== 'all') ||
                    (caps.supportsShapesFilter && state.ageFilter !== 'all') ||
-                   (caps.supportsDateFilter && state.dateFilter && state.dateFilter !== 'all') ||
                    (caps.supportsContentHiding && (!state.hideFurry || !state.hidePregnant || state.hideLgbt)) ||
                    (state.currentSite === 'pawchive' && state.pawchiveService && state.pawchiveService !== 'all') ||
                    (caps.supportsTags && state.searchTags && state.searchTags.length > 0);

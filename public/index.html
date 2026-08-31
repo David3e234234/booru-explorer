@@ -16,7 +16,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.3">
-  <link rel="stylesheet" href="css/main.css?v=8.8">
+  <link rel="stylesheet" href="css/main.css?v=8.9">
   <link rel="stylesheet" href="css/components.css?v=9.9">
   <link rel="stylesheet" href="css/viewer.css?v=11.4">
   <script src="js/mp4box.all.min.js"></script>
@@ -177,6 +177,7 @@
         </h3>
         <div class="post-sort-toggle" id="postSortGroup">
           <button class="sort-pill active" data-sort="new" title="Свежие публикации (по дате)" data-i18n-title="nav.fresh.title"><span data-i18n="nav.fresh">Свежие</span></button>
+          <button class="sort-pill" data-sort="hot" title="Горячее: популярное и обсуждаемое прямо сейчас" data-i18n-title="nav.hot.title"><span data-i18n="nav.hot">Горячее</span></button>
           <button class="sort-pill" data-sort="views" title="Самые просматриваемые и популярные публикации" data-i18n-title="nav.views.title"><span data-i18n="nav.views">Просмотры</span></button>
           <button class="sort-pill" data-sort="top" title="Высокий рейтинг: лучшее за все время по оценкам" data-i18n-title="nav.top.title"><span data-i18n="nav.top">По рейтингу</span></button>
         </div>
@@ -220,28 +221,6 @@
         </div>
       </div>
 
-      <!-- 2.1.1 Date-added period filter (dropdown) -->
-      <div class="sidebar-block" id="dateFilterBlock">
-        <h3 class="sidebar-title">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-          <span data-i18n="sidebar.dateFilter">Период добавления</span>
-        </h3>
-        <div class="date-filter-dropdown" id="dateFilterDropdown">
-          <button type="button" class="btn-dropdown-toggle" id="btnDateFilterToggle" aria-haspopup="listbox" aria-expanded="false" title="Выбрать период добавления" data-i18n-title="sidebar.dateFilter.title">
-            <span class="dropdown-label" id="dateFilterLabel" data-i18n="sidebar.dateAll">За всё время</span>
-            <svg class="dropdown-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div class="dropdown-menu" id="dateFilterMenu" role="listbox">
-            <button type="button" class="dropdown-item active" data-date="all" role="option" data-i18n="sidebar.dateAll">За всё время</button>
-            <button type="button" class="dropdown-item" data-date="24h" role="option" data-i18n="sidebar.date24h">За 24 часа</button>
-            <button type="button" class="dropdown-item" data-date="2d" role="option" data-i18n="sidebar.date2d">За 2 дня</button>
-            <button type="button" class="dropdown-item" data-date="7d" role="option" data-i18n="sidebar.date7d">За неделю</button>
-            <button type="button" class="dropdown-item" data-date="30d" role="option" data-i18n="sidebar.date30d">За месяц</button>
-            <button type="button" class="dropdown-item" data-date="90d" role="option" data-i18n="sidebar.date90d">За 3 месяца</button>
-            <button type="button" class="dropdown-item" data-date="365d" role="option" data-i18n="sidebar.date365d">За год</button>
-          </div>
-        </div>
-      </div>
 
       <!-- 2.2 Content type toggle (video / images) -->
       <div class="sidebar-block" id="typeFilterBlock">
@@ -2495,6 +2474,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=14.9"></script>
+  <script type="module" src="js/app.js?v=15.0"></script>
 </body>
 </html>

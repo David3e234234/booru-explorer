@@ -25,7 +25,7 @@ function buildAuthQuery(siteId, settings) {
 }
 
 export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList, settings) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all', dateFilter = 'all' } = params;
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
     return [];
   }
@@ -35,7 +35,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
 
   if (category === 'top') {
     finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
-  } else if (category === 'views' || category === 'popular' || category === 'recommended') {
+  } else if (category === 'hot' || category === 'views' || category === 'popular' || category === 'recommended') {
     finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
   } else if (category === 'random') {
     finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
