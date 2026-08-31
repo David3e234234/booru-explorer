@@ -120,7 +120,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   showAiMatchBadge: true,
   aiStatusWidgetMode: 'full',
   aiSimilarSort: 'similarity',
-  postSort: 'new'
+  postSort: 'new',
+  siteSortTags: {}
 };
 
 export function getInitialSettings() {

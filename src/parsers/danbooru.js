@@ -42,8 +42,13 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   }
 
   // Priority: sorting
+  const customDanbooruTag = settings?.siteSortTags?.danbooru?.[category];
   if (queryTags.length < 2) {
-    if (category === 'top') {
+    if (customDanbooruTag) {
+      customDanbooruTag.split(/\s+/).forEach(t => {
+        if (queryTags.length < 2 && t) queryTags.push(t);
+      });
+    } else if (category === 'top') {
       if (userTagList.length > 0) {
         queryTags.push('order:score');
       } else {
@@ -61,6 +66,10 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       queryTags.push('order:rank');
     } else if (category === 'random') {
       queryTags.push('order:random');
+    } else if (category === 'new' && settings?.siteSortTags?.danbooru?.new) {
+      settings.siteSortTags.danbooru.new.split(/\s+/).forEach(t => {
+        if (queryTags.length < 2 && t) queryTags.push(t);
+      });
     }
   }
 

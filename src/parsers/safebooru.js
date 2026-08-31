@@ -41,7 +41,10 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
   }
 
   let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter);
-  if (category === 'hot') {
+  const customSafebooruTag = settings?.siteSortTags?.safebooru?.[category];
+  if (customSafebooruTag) {
+    finalTags = finalTags ? `${finalTags} ${customSafebooruTag}` : customSafebooruTag;
+  } else if (category === 'hot') {
     if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
       const maxId = await getSafebooruMaxId(settings);
       const minId = Math.max(1, maxId - 100000);
@@ -63,6 +66,8 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
     if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
       finalTags = finalTags ? `${finalTags} sort:random` : 'sort:random';
     }
+  } else if (category === 'new' && settings?.siteSortTags?.safebooru?.new) {
+    finalTags = finalTags ? `${finalTags} ${settings.siteSortTags.safebooru.new}` : settings.siteSortTags.safebooru.new;
   }
 
   const pid = Math.max(0, page - 1);

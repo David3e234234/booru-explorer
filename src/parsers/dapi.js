@@ -61,7 +61,10 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('xbooru', tags, ageFilter, typeFilter);
-  if (category === 'hot') {
+  const customXbooruTag = settings?.siteSortTags?.xbooru?.[category];
+  if (customXbooruTag) {
+    searchTags = searchTags ? `${searchTags} ${customXbooruTag}` : customXbooruTag;
+  } else if (category === 'hot') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       const maxId = await getXbooruMaxId(settings);
       const minId = Math.max(1, maxId - 50000);
@@ -83,6 +86,8 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
     }
+  } else if (category === 'new' && settings?.siteSortTags?.xbooru?.new) {
+    searchTags = searchTags ? `${searchTags} ${settings.siteSortTags.xbooru.new}` : settings.siteSortTags.xbooru.new;
   }
 
   // Rating filter
@@ -175,7 +180,10 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('hypnohub', tags, ageFilter, typeFilter);
-  if (category === 'hot') {
+  const customHypnohubTag = settings?.siteSortTags?.hypnohub?.[category];
+  if (customHypnohubTag) {
+    searchTags = searchTags ? `${searchTags} ${customHypnohubTag}` : customHypnohubTag;
+  } else if (category === 'hot') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       const maxId = await getHypnohubMaxId(settings);
       const minId = Math.max(1, maxId - 20000);
@@ -197,6 +205,8 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
     }
+  } else if (category === 'new' && settings?.siteSortTags?.hypnohub?.new) {
+    searchTags = searchTags ? `${searchTags} ${settings.siteSortTags.hypnohub.new}` : settings.siteSortTags.hypnohub.new;
   }
 
   // Rating filter
@@ -299,7 +309,10 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
   // TBIB does not support date:* metatags - strip them or results come back empty
   searchTags = searchTags.replace(/\bdate:\S+/gi, '').trim();
 
-  if (category === 'top' || category === 'hot' || category === 'views' || category === 'recommended') {
+  const customTbibTag = settings?.siteSortTags?.tbib?.[category];
+  if (customTbibTag) {
+    searchTags = searchTags ? `${searchTags} ${customTbibTag}` : customTbibTag;
+  } else if (category === 'top' || category === 'hot' || category === 'views' || category === 'recommended') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
@@ -312,6 +325,8 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
     }
+  } else if (category === 'new' && settings?.siteSortTags?.tbib?.new) {
+    searchTags = searchTags ? `${searchTags} ${settings.siteSortTags.tbib.new}` : settings.siteSortTags.tbib.new;
   }
 
   // Rating filter: TBIB only accepts full words (rating:safe etc.)

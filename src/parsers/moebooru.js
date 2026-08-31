@@ -33,7 +33,10 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
   let url = '';
 
-  if (category === 'hot') {
+  const customMoebooruTag = settings?.siteSortTags?.[siteId]?.[category];
+  if (customMoebooruTag) {
+    finalTags = finalTags ? `${finalTags} ${customMoebooruTag}` : customMoebooruTag;
+  } else if (category === 'hot') {
     if (!tags.trim() && ratingFilter === 'all') {
       url = `${siteUrl}/post/popular_recent.json?period=1w&page=${page}&limit=${limit}`;
     } else {
@@ -48,6 +51,8 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
   } else if (category === 'random') {
     finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
+  } else if (category === 'new' && settings?.siteSortTags?.[siteId]?.new) {
+    finalTags = finalTags ? `${finalTags} ${settings.siteSortTags[siteId].new}` : settings.siteSortTags[siteId].new;
   }
 
   if (ratingFilter === 'nsfw') {

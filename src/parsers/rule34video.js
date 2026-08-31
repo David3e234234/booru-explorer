@@ -189,7 +189,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
   const seenIds = new Set();
 
   let sortByParam = '';
-  if (category === 'top') {
+  const customR34vTag = settings?.siteSortTags?.rule34video?.[category];
+  if (customR34vTag) {
+    sortByParam = customR34vTag.startsWith('&') ? customR34vTag : `&${customR34vTag}`;
+  } else if (category === 'top') {
     sortByParam = '&sort_by=rating';
   } else if (category === 'views') {
     sortByParam = '&sort_by=video_viewed';
@@ -197,6 +200,9 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
     sortByParam = '&sort_by=most_popular';
   } else if (category === 'random') {
     sortByParam = '&sort_by=random';
+  } else if (category === 'new' && settings?.siteSortTags?.rule34video?.new) {
+    const customNew = settings.siteSortTags.rule34video.new;
+    sortByParam = customNew.startsWith('&') ? customNew : `&${customNew}`;
   } else {
     sortByParam = '&sort_by=post_date';
   }

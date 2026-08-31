@@ -19,7 +19,10 @@ export async function fetchRule34(params, aiTagsList, settings) {
   
   let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
 
-  if (category === 'hot' || category === 'popular') {
+  const customRule34Tag = settings?.siteSortTags?.rule34?.[category];
+  if (customRule34Tag) {
+    searchTags = searchTags ? `${searchTags} ${customRule34Tag}` : customRule34Tag;
+  } else if (category === 'hot' || category === 'popular') {
     // Trending / recently popular with positive score:
     if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('score:')) {
       searchTags = searchTags ? `${searchTags} score:>=5` : 'score:>=5';
@@ -33,6 +36,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
     }
+  } else if (category === 'new' && settings?.siteSortTags?.rule34?.new) {
+    searchTags = searchTags ? `${searchTags} ${settings.siteSortTags.rule34.new}` : settings.siteSortTags.rule34.new;
   }
 
   // Rating filter

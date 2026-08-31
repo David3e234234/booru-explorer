@@ -36,7 +36,8 @@ const AUTH_CACHE_FIELDS = [
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
   'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession',
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
-  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy'
+  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy',
+  'siteSortTags'
 ];
 
 function parseClientAuth(req) {
@@ -381,7 +382,7 @@ router.get('/posts', async (req, res) => {
     };
 
     // groupAlbums changes the response shape (album collapsing), so it belongs in the key
-    const cacheKey = `v4_hot_sort:${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
+    const cacheKey = `v5_persite_sort:${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {

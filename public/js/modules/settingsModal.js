@@ -177,6 +177,213 @@ let tempPetiteTags = [];
 let tempFurryTags = [];
 let tempPregnantTags = [];
 let tempLgbtTags = [];
+let tempSiteSortTags = {};
+let currentSortEditingSite = 'gelbooru';
+
+const SITE_SORT_METADATA = {
+  gelbooru: {
+    hotPlaceholder: 'score:>5 (по умолчанию)',
+    viewsPlaceholder: 'sort:views:desc',
+    topPlaceholder: 'sort:score:desc',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'score:>5 (свежие с оценкой)',
+    viewsBadge: 'sort:views:desc',
+    topBadge: 'sort:score:desc',
+    newBadge: 'пусто (хронология)',
+    presets: ['score:>5', 'score:>10', 'sort:favcount', 'sort:score', 'sort:commentcount', 'sort:updated']
+  },
+  danbooru: {
+    hotPlaceholder: 'order:rank (по умолчанию)',
+    viewsPlaceholder: 'order:views',
+    topPlaceholder: 'order:score',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'order:rank (тренды)',
+    viewsBadge: 'order:views',
+    topBadge: 'order:score',
+    newBadge: 'пусто (хронология)',
+    presets: ['order:rank', 'order:favcount', 'order:score', 'order:comment_count']
+  },
+  yandere: {
+    hotPlaceholder: 'popular_recent (по умолчанию 1w)',
+    viewsPlaceholder: 'order:vote',
+    topPlaceholder: 'order:score',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'popular_recent (1 неделя)',
+    viewsBadge: 'order:vote',
+    topBadge: 'order:score',
+    newBadge: 'пусто (хронология)',
+    presets: ['order:vote', 'order:score', 'date:>2026-08-01 order:vote']
+  },
+  konachan: {
+    hotPlaceholder: 'popular_recent (по умолчанию 1w)',
+    viewsPlaceholder: 'order:vote',
+    topPlaceholder: 'order:score',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'popular_recent (1 неделя)',
+    viewsBadge: 'order:vote',
+    topBadge: 'order:score',
+    newBadge: 'пусто (хронология)',
+    presets: ['order:vote', 'order:score', 'date:>2026-08-01 order:vote']
+  },
+  safebooru: {
+    hotPlaceholder: 'id:>=recent sort:score:desc',
+    viewsPlaceholder: 'sort:views:desc',
+    topPlaceholder: 'sort:score:desc',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'свежие ID + sort:score',
+    viewsBadge: 'sort:views:desc',
+    topBadge: 'sort:score:desc',
+    newBadge: 'пусто (хронология)',
+    presets: ['score:>5', 'score:>10', 'sort:score:desc']
+  },
+  rule34: {
+    hotPlaceholder: 'score:>=5 (по умолчанию)',
+    viewsPlaceholder: 'order:score',
+    topPlaceholder: 'order:score',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'score:>=5 (свежие с оценкой)',
+    viewsBadge: 'order:score',
+    topBadge: 'order:score',
+    newBadge: 'пусто (хронология)',
+    presets: ['score:>=5', 'score:>=10', 'order:score']
+  },
+  rule34video: {
+    hotPlaceholder: 'sort_by=video_viewed_week',
+    viewsPlaceholder: 'sort_by=video_viewed',
+    topPlaceholder: 'sort_by=rating',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'sort_by=video_viewed_week',
+    viewsBadge: 'sort_by=video_viewed',
+    topBadge: 'sort_by=rating',
+    newBadge: 'пусто (хронология)',
+    presets: ['sort_by=video_viewed_today', 'sort_by=video_viewed_week', 'sort_by=video_viewed_month', 'sort_by=rating_week', 'sort_by=most_popular']
+  },
+  xbooru: {
+    hotPlaceholder: 'id:>=recent sort:score:desc',
+    viewsPlaceholder: 'sort:views:desc',
+    topPlaceholder: 'sort:score:desc',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'свежие ID + sort:score',
+    viewsBadge: 'sort:views:desc',
+    topBadge: 'sort:score:desc',
+    newBadge: 'пусто (хронология)',
+    presets: ['score:>5', 'sort:score:desc']
+  },
+  hypnohub: {
+    hotPlaceholder: 'id:>=recent sort:score:desc',
+    viewsPlaceholder: 'sort:views:desc',
+    topPlaceholder: 'sort:score:desc',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'свежие ID + sort:score',
+    viewsBadge: 'sort:views:desc',
+    topBadge: 'sort:score:desc',
+    newBadge: 'пусто (хронология)',
+    presets: ['score:>5', 'sort:score:desc']
+  },
+  tbib: {
+    hotPlaceholder: 'По умолчанию пусто',
+    viewsPlaceholder: 'По умолчанию пусто',
+    topPlaceholder: 'По умолчанию пусто',
+    newPlaceholder: 'По умолчанию пусто',
+    hotBadge: 'авто',
+    viewsBadge: 'авто',
+    topBadge: 'авто',
+    newBadge: 'пусто',
+    presets: []
+  }
+};
+
+function saveCurrentSiteSortInputs() {
+  const inputHot = document.getElementById('inputSiteSortHot');
+  const inputViews = document.getElementById('inputSiteSortViews');
+  const inputTop = document.getElementById('inputSiteSortTop');
+  const inputNew = document.getElementById('inputSiteSortNew');
+  if (!currentSortEditingSite) return;
+
+  const hot = inputHot ? inputHot.value.trim() : '';
+  const views = inputViews ? inputViews.value.trim() : '';
+  const top = inputTop ? inputTop.value.trim() : '';
+  const newTag = inputNew ? inputNew.value.trim() : '';
+
+  if (hot || views || top || newTag) {
+    tempSiteSortTags[currentSortEditingSite] = { hot, views, top, new: newTag };
+  } else {
+    delete tempSiteSortTags[currentSortEditingSite];
+  }
+}
+
+export function renderSiteSortTagsUI(siteId) {
+  if (!siteId) siteId = 'gelbooru';
+  currentSortEditingSite = siteId;
+
+  const meta = SITE_SORT_METADATA[siteId] || SITE_SORT_METADATA.gelbooru;
+  const currentTags = tempSiteSortTags[siteId] || {};
+
+  const inputHot = document.getElementById('inputSiteSortHot');
+  const inputViews = document.getElementById('inputSiteSortViews');
+  const inputTop = document.getElementById('inputSiteSortTop');
+  const inputNew = document.getElementById('inputSiteSortNew');
+
+  const badgeHot = document.getElementById('siteSortHotDefaultBadge');
+  const badgeViews = document.getElementById('siteSortViewsDefaultBadge');
+  const badgeTop = document.getElementById('siteSortTopDefaultBadge');
+  const badgeNew = document.getElementById('siteSortNewDefaultBadge');
+  const presetsContainer = document.getElementById('siteSortHotPresets');
+
+  if (inputHot) {
+    inputHot.value = currentTags.hot || '';
+    inputHot.placeholder = meta.hotPlaceholder;
+  }
+  if (inputViews) {
+    inputViews.value = currentTags.views || '';
+    inputViews.placeholder = meta.viewsPlaceholder;
+  }
+  if (inputTop) {
+    inputTop.value = currentTags.top || '';
+    inputTop.placeholder = meta.topPlaceholder;
+  }
+  if (inputNew) {
+    inputNew.value = currentTags.new || '';
+    inputNew.placeholder = meta.newPlaceholder;
+  }
+
+  if (badgeHot) badgeHot.textContent = `(авто: ${meta.hotBadge})`;
+  if (badgeViews) badgeViews.textContent = `(авто: ${meta.viewsBadge})`;
+  if (badgeTop) badgeTop.textContent = `(авто: ${meta.topBadge})`;
+  if (badgeNew) badgeNew.textContent = `(авто: ${meta.newBadge})`;
+
+  if (presetsContainer) {
+    presetsContainer.innerHTML = '';
+    if (meta.presets && meta.presets.length > 0) {
+      const label = document.createElement('span');
+      label.style.fontSize = '10px';
+      label.style.opacity = '0.7';
+      label.style.alignSelf = 'center';
+      label.textContent = t('settings.sortPresets', 'Пресеты:');
+      presetsContainer.appendChild(label);
+
+      meta.presets.forEach(pr => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-text';
+        btn.style.fontSize = '10px';
+        btn.style.padding = '2px 6px';
+        btn.style.background = 'var(--surface-sunken)';
+        btn.style.border = '1px solid var(--border-subtle)';
+        btn.style.borderRadius = 'var(--radius-sm)';
+        btn.style.cursor = 'pointer';
+        btn.textContent = pr;
+        btn.addEventListener('click', () => {
+          if (inputHot) {
+            inputHot.value = pr;
+            saveCurrentSiteSortInputs();
+          }
+        });
+        presetsContainer.appendChild(btn);
+      });
+    }
+  }
+}
 
 export function applySettingsToUIAndState(s) {
   if (!s) return;
@@ -898,10 +1105,14 @@ export function openSettingsModal() {
     }).catch(() => {});
   }
 
-  const currentTheme = document.documentElement.getAttribute('data-theme') || 'kotobox';
-  document.querySelectorAll('.btn-theme').forEach(b => {
-    b.classList.toggle('active', b.dataset.themeVal === currentTheme);
-  });
+  // Update per-site sort tags
+  tempSiteSortTags = JSON.parse(JSON.stringify(state.settings.siteSortTags || {}));
+  const selectSortTagsSite = document.getElementById('selectSortTagsSite');
+  const initialSortSite = (state.currentSite && state.currentSite !== 'custom' && state.currentSite !== 'all') ? state.currentSite : 'gelbooru';
+  if (selectSortTagsSite) {
+    selectSortTagsSite.value = initialSortSite;
+  }
+  renderSiteSortTagsUI(initialSortSite);
 
   // Open the General tab by default
   switchSettingsTab('general');
@@ -949,6 +1160,34 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (btnProfileSettings) btnProfileSettings.addEventListener('click', openSettingsModal);
   if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
   if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
+
+  // Per-site sort tags events
+  const selectSortTagsSite = document.getElementById('selectSortTagsSite');
+  if (selectSortTagsSite) {
+    selectSortTagsSite.addEventListener('change', () => {
+      saveCurrentSiteSortInputs();
+      renderSiteSortTagsUI(selectSortTagsSite.value);
+    });
+  }
+
+  const inputSiteSortHot = document.getElementById('inputSiteSortHot');
+  const inputSiteSortViews = document.getElementById('inputSiteSortViews');
+  const inputSiteSortTop = document.getElementById('inputSiteSortTop');
+  const inputSiteSortNew = document.getElementById('inputSiteSortNew');
+  [inputSiteSortHot, inputSiteSortViews, inputSiteSortTop, inputSiteSortNew].forEach(inp => {
+    if (inp) inp.addEventListener('input', saveCurrentSiteSortInputs);
+  });
+
+  const btnResetCurrentSiteSort = document.getElementById('btnResetCurrentSiteSort');
+  if (btnResetCurrentSiteSort) {
+    btnResetCurrentSiteSort.addEventListener('click', () => {
+      if (currentSortEditingSite && tempSiteSortTags[currentSortEditingSite]) {
+        delete tempSiteSortTags[currentSortEditingSite];
+      }
+      renderSiteSortTagsUI(currentSortEditingSite);
+      showToast(t('settings.siteSortReset', 'Теги для сайта сброшены к стандартным'));
+    });
+  }
 
   // Auto-sync AI & Recommendation mode dropdowns immediately on change
   const selectRecommendationMode = document.getElementById('selectRecommendationMode');
@@ -1799,6 +2038,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         showAiMatchBadge: document.getElementById('checkShowAiMatchBadge') ? document.getElementById('checkShowAiMatchBadge').checked : true,
         aiStatusWidgetMode: document.getElementById('selectAiStatusWidgetMode')?.value || 'full',
         aiSimilarSort: document.getElementById('selectAiSimilarSort')?.value || 'similarity',
+        siteSortTags: tempSiteSortTags
       };
 
       saveLocalSettings(updated);
@@ -1891,7 +2131,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
       if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       if (selectMaxServerCache) selectMaxServerCache.value = '1500';
-      if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
+      tempSiteSortTags = {};
+      renderSiteSortTagsUI(currentSortEditingSite || 'gelbooru');
       renderSettingsChips();
       updateTelegramBackupStatusUI({
         telegramBackupEnabled: false,
@@ -1920,7 +2161,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         telegramChatId: '',
         telegramBackupInterval: 'daily',
         telegramLastBackupAt: null,
-        enableJsDemuxing: true
+        enableJsDemuxing: true,
+        siteSortTags: {}
       });
       showToast(t('set.allReset', 'Значения сброшены к стандартным'));
     });

@@ -18,9 +18,12 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
   
   let searchTags = adaptTagsForSite('gelbooru', tags, ageFilter, typeFilter);
 
-  if (category === 'hot') {
-    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
-      searchTags = searchTags ? `${searchTags} sort:rank` : 'sort:rank';
+  const customTag = settings?.siteSortTags?.gelbooru?.[category];
+  if (customTag) {
+    searchTags = searchTags ? `${searchTags} ${customTag}` : customTag;
+  } else if (category === 'hot') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('score:')) {
+      searchTags = searchTags ? `${searchTags} score:>5` : 'score:>5';
     }
   } else if (category === 'top') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
@@ -31,13 +34,15 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
       searchTags = searchTags ? `${searchTags} sort:views:desc` : 'sort:views:desc';
     }
   } else if (category === 'popular' || category === 'recommended') {
-    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
-      searchTags = searchTags ? `${searchTags} sort:rank` : 'sort:rank';
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('score:')) {
+      searchTags = searchTags ? `${searchTags} score:>5` : 'score:>5';
     }
   } else if (category === 'random') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:random` : 'sort:random';
     }
+  } else if (category === 'new' && settings?.siteSortTags?.gelbooru?.new) {
+    searchTags = searchTags ? `${searchTags} ${settings.siteSortTags.gelbooru.new}` : settings.siteSortTags.gelbooru.new;
   }
 
   // Rating filter

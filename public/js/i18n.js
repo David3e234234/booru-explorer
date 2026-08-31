@@ -333,6 +333,16 @@ Object.assign(en, {
   'settings.lgbtHint': 'Tags cut off when the "Hide LGBT" toggle is on.',
   'settings.lgbt.placeholder': 'Add a tag (e.g. yaoi, gay, futanari)...',
 
+  'settings.sortTagsTitle': 'Per-site sort tags:',
+  'settings.sortTagsHint': 'Customize search tags used for the sort pills (Hot, Views, Top, New) for each site individually. Leave blank to use site defaults.',
+  'settings.selectSortSite': 'Select site to configure:',
+  'settings.sortTagHot': 'Tag for «Hot»:',
+  'settings.sortTagViews': 'Tag for «Views»:',
+  'settings.sortTagTop': 'Tag for «Top»:',
+  'settings.sortTagNew': 'Tag for «New» (optional):',
+  'settings.resetSiteSort': 'Reset for this site',
+  'settings.sortPresets': 'Quick presets:',
+
   'settings.apiKeys': 'Personal API keys (Booru):',
   'settings.apiKeysHint': 'Optional. Free keys lift search limits, raise rate caps and speed up results.',
   'settings.whereGet': 'Where to get one?',
