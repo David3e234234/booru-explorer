@@ -19,21 +19,13 @@ export async function fetchRule34(params, aiTagsList, settings) {
   
   let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
 
-  if (category === 'top' || category === 'hot') {
-    // All-time top / hot
-    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
-      searchTags = searchTags ? `${searchTags} order:score` : 'order:score';
-    }
-  } else if (category === 'views') {
-    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
-      searchTags = searchTags ? `${searchTags} order:score` : 'order:score';
-    }
-  } else if (category === 'popular') {
-    // Trending / recently popular:
+  if (category === 'hot' || category === 'popular') {
+    // Trending / recently popular with positive score:
     if (!searchTags.includes('sort:') && !searchTags.includes('order:') && !searchTags.includes('score:')) {
       searchTags = searchTags ? `${searchTags} score:>=5` : 'score:>=5';
     }
-  } else if (category === 'recommended') {
+  } else if (category === 'top' || category === 'views' || category === 'recommended') {
+    // All-time top score
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} order:score` : 'order:score';
     }

@@ -18,7 +18,11 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
   
   let searchTags = adaptTagsForSite('gelbooru', tags, ageFilter, typeFilter);
 
-  if (category === 'top' || category === 'hot') {
+  if (category === 'hot') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      searchTags = searchTags ? `${searchTags} sort:rank` : 'sort:rank';
+    }
+  } else if (category === 'top') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
@@ -28,7 +32,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     }
   } else if (category === 'popular' || category === 'recommended') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
-      searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
+      searchTags = searchTags ? `${searchTags} sort:rank` : 'sort:rank';
     }
   } else if (category === 'random') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {

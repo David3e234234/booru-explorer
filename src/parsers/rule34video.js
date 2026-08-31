@@ -230,8 +230,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
       url = `https://rule34video.com/top-rated/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&from=${p}`;
     } else if (category === 'views') {
       url = `https://rule34video.com/most-popular/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&sort_by=video_viewed&from=${p}`;
-    } else if (category === 'hot' || category === 'popular' || category === 'recommended') {
-      url = `https://rule34video.com/most-popular/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&from=${p}`;
+    } else if (category === 'hot') {
+      url = `https://rule34video.com/most-popular/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&sort_by=video_viewed_week&from=${p}`;
+    } else if (category === 'popular' || category === 'recommended') {
+      url = `https://rule34video.com/most-popular/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&sort_by=video_viewed_month&from=${p}`;
     } else if (category === 'random') {
       url = `https://rule34video.com/most-popular/?mode=async&function=get_block&block_id=custom_list_videos_common_videos&sort_by=random&from=${p}`;
     } else if (rawTags) {

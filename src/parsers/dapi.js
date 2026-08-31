@@ -13,11 +13,61 @@ function getRecentDateFilter(days = 30) {
   return `date:>=${year}-${month}-${day}`;
 }
 
+let cachedXbooruMaxId = 1270000;
+let lastXbooruMaxIdCheck = 0;
+
+async function getXbooruMaxId(settings) {
+  const now = Date.now();
+  if (now - lastXbooruMaxIdCheck < 3600 * 1000 && cachedXbooruMaxId > 0) {
+    return cachedXbooruMaxId;
+  }
+  try {
+    const res = await fetchSafe('https://xbooru.com/index.php?page=dapi&s=post&q=index&json=1&limit=1', { settings, site: 'xbooru' });
+    if (res.ok) {
+      const data = safeJsonParse(await res.text(), []);
+      const first = Array.isArray(data) ? data[0] : data?.post?.[0];
+      if (first?.id) {
+        cachedXbooruMaxId = parseInt(first.id, 10);
+        lastXbooruMaxIdCheck = now;
+      }
+    }
+  } catch {}
+  return cachedXbooruMaxId;
+}
+
+let cachedHypnohubMaxId = 280000;
+let lastHypnohubMaxIdCheck = 0;
+
+async function getHypnohubMaxId(settings) {
+  const now = Date.now();
+  if (now - lastHypnohubMaxIdCheck < 3600 * 1000 && cachedHypnohubMaxId > 0) {
+    return cachedHypnohubMaxId;
+  }
+  try {
+    const res = await fetchSafe('https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&limit=1', { settings, site: 'hypnohub' });
+    if (res.ok) {
+      const data = safeJsonParse(await res.text(), []);
+      const first = Array.isArray(data) ? data[0] : data?.post?.[0];
+      if (first?.id) {
+        cachedHypnohubMaxId = parseInt(first.id, 10);
+        lastHypnohubMaxIdCheck = now;
+      }
+    }
+  } catch {}
+  return cachedHypnohubMaxId;
+}
+
 export async function fetchXbooru(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('xbooru', tags, ageFilter, typeFilter);
-  if (category === 'top' || category === 'hot') {
+  if (category === 'hot') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      const maxId = await getXbooruMaxId(settings);
+      const minId = Math.max(1, maxId - 50000);
+      searchTags = searchTags ? `${searchTags} id:>=${minId} sort:score:desc` : `id:>=${minId} sort:score:desc`;
+    }
+  } else if (category === 'top') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }
@@ -125,7 +175,13 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
 
   let searchTags = adaptTagsForSite('hypnohub', tags, ageFilter, typeFilter);
-  if (category === 'top' || category === 'hot') {
+  if (category === 'hot') {
+    if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
+      const maxId = await getHypnohubMaxId(settings);
+      const minId = Math.max(1, maxId - 20000);
+      searchTags = searchTags ? `${searchTags} id:>=${minId} sort:score:desc` : `id:>=${minId} sort:score:desc`;
+    }
+  } else if (category === 'top') {
     if (!searchTags.includes('sort:') && !searchTags.includes('order:')) {
       searchTags = searchTags ? `${searchTags} sort:score:desc` : 'sort:score:desc';
     }

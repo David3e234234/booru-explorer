@@ -12,6 +12,28 @@ function getRecentDateFilter(days = 30) {
   return `date:>=${year}-${month}-${day}`;
 }
 
+let cachedSafebooruMaxId = 7100000;
+let lastMaxIdCheck = 0;
+
+async function getSafebooruMaxId(settings) {
+  const now = Date.now();
+  if (now - lastMaxIdCheck < 3600 * 1000 && cachedSafebooruMaxId > 0) {
+    return cachedSafebooruMaxId;
+  }
+  try {
+    const res = await fetchSafe('https://safebooru.org/index.php?page=dapi&s=post&q=index&json=1&limit=1', { settings, site: 'safebooru' });
+    if (res.ok) {
+      const data = safeJsonParse(await res.text(), []);
+      const first = Array.isArray(data) ? data[0] : data?.post?.[0];
+      if (first?.id) {
+        cachedSafebooruMaxId = parseInt(first.id, 10);
+        lastMaxIdCheck = now;
+      }
+    }
+  } catch {}
+  return cachedSafebooruMaxId;
+}
+
 export async function fetchSafebooru(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', typeFilter = 'all', ratingFilter = 'all', ageFilter = 'all' } = params;
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound' || ratingFilter === 'nsfw' || ratingFilter === 'questionable' || ratingFilter === '16+') {
@@ -19,7 +41,13 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
   }
 
   let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter);
-  if (category === 'top' || category === 'hot') {
+  if (category === 'hot') {
+    if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
+      const maxId = await getSafebooruMaxId(settings);
+      const minId = Math.max(1, maxId - 100000);
+      finalTags = finalTags ? `${finalTags} id:>=${minId} sort:score:desc` : `id:>=${minId} sort:score:desc`;
+    }
+  } else if (category === 'top') {
     if (!finalTags.includes('sort:') && !finalTags.includes('order:')) {
       finalTags = finalTags ? `${finalTags} sort:score:desc` : 'sort:score:desc';
     }

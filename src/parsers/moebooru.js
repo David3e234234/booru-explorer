@@ -33,9 +33,18 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
   let url = '';
 
-  if (category === 'top') {
+  if (category === 'hot') {
+    if (!tags.trim() && ratingFilter === 'all') {
+      url = `${siteUrl}/post/popular_recent.json?period=1w&page=${page}&limit=${limit}`;
+    } else {
+      const d = new Date();
+      d.setDate(d.getDate() - 30);
+      const ymd = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      finalTags = finalTags ? `${finalTags} date:>${ymd} order:vote` : `date:>${ymd} order:vote`;
+    }
+  } else if (category === 'top') {
     finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
-  } else if (category === 'hot' || category === 'views' || category === 'popular' || category === 'recommended') {
+  } else if (category === 'views' || category === 'popular' || category === 'recommended') {
     finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
   } else if (category === 'random') {
     finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
@@ -49,7 +58,9 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     finalTags += ' rating:safe';
   }
 
-  url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
+  if (!url) {
+    url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
+  }
   const authQuery = buildAuthQuery(siteId, settings);
   if (authQuery) url += authQuery;
 
