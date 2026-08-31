@@ -3,11 +3,16 @@ import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { THUMBS_DIR, ARCHIVES_DIR } from '../config/constants.js';
-import { getFfmpegHeaders, getProxyForSite, resolveSiteFromUrl } from '../utils/network.js';
+import { getFfmpegHeaders, getProxyForSite, resolveSiteFromUrl, isSafeExternalUrl } from '../utils/network.js';
 import { getSettings } from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 const activeThumbnails = new Map();
+
+// A stalled or hostile source used to leave FFmpeg running forever, which pinned
+// the entry in activeThumbnails and made every later request for that hash hang
+// behind a promise that could never settle
+const FFMPEG_TIMEOUT_MS = 30000;
 
 // Unpacked archive media lives on this server's disk: /api/archive/file?key=<md5>&n=<idx>
 // resolves straight to the extracted file so FFmpeg reads it locally instead of
@@ -30,23 +35,30 @@ function resolveArchiveFilePath(relativeUrl) {
   }
 }
 
-// FFmpeg input for a media URL: same-origin relative URLs are resolved locally
-// (archive files -> disk path, anything else -> absolute URL against this host)
-function resolveFfmpegInput(req, targetUrl) {
-  if (typeof targetUrl === 'string' && targetUrl.startsWith('/')) {
+// FFmpeg input for a media URL. Relative URLs must be unpacked archive files
+// (they map to a path on this server's disk); anything else has to be a safe
+// external http(s) URL. Without that check FFmpeg would happily read file:// URLs
+// or the cloud metadata endpoint handed to it in the url parameter.
+// Returns { input: null } when the target is not acceptable.
+function resolveFfmpegInput(targetUrl) {
+  if (typeof targetUrl !== 'string' || !targetUrl) return { input: null, isLocal: false };
+
+  if (targetUrl.startsWith('/')) {
     const localPath = resolveArchiveFilePath(targetUrl);
-    if (localPath) return { input: localPath, isLocal: true };
-    try {
-      return { input: new URL(targetUrl, `${req.protocol}://${req.get('host')}`).href, isLocal: false };
-    } catch {}
+    return localPath ? { input: localPath, isLocal: true } : { input: null, isLocal: false };
   }
-  return { input: targetUrl, isLocal: false };
+
+  return isSafeExternalUrl(targetUrl) ? { input: targetUrl, isLocal: false } : { input: null, isLocal: false };
 }
 
 export async function handleVideoThumbnailRequest(req, res) {
-  const targetUrl = req.query.url;
+  let targetUrl = req.query.url;
+  if (Array.isArray(targetUrl)) targetUrl = targetUrl[0];
   const quality = req.query.quality || 'medium';
-  if (!targetUrl) return res.status(400).send('Требуется параметр url');
+  if (!targetUrl || typeof targetUrl !== 'string') return res.status(400).send('Требуется параметр url');
+  if (!targetUrl.startsWith('/') && !isSafeExternalUrl(targetUrl)) {
+    return res.status(403).send('URL не разрешён');
+  }
 
   const hash = crypto.createHash('md5').update(`${targetUrl}_${quality}`).digest('hex');
   const thumbPath = path.join(THUMBS_DIR, `${hash}_${quality}.jpg`);
@@ -97,7 +109,11 @@ function sendVideoPlaceholder(res) {
 
 function generateThumbnail(req, targetUrl, quality, thumbPath) {
   const currentSettings = getSettings();
-  const { input: ffmpegInput, isLocal } = resolveFfmpegInput(req, targetUrl);
+  const { input: ffmpegInput, isLocal } = resolveFfmpegInput(targetUrl);
+  if (!ffmpegInput) {
+    logError('Thumbnail', `Недопустимый источник для превью: ${targetUrl}`);
+    return Promise.resolve(false);
+  }
   const headers = isLocal ? null : getFfmpegHeaders(targetUrl, currentSettings);
   const site = isLocal ? null : resolveSiteFromUrl(targetUrl);
   const proxyUrl = site ? getProxyForSite(site, currentSettings) : '';
@@ -130,13 +146,33 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
         thumbPath
       ];
       let proc;
+      let settled = false;
+      let killTimer = null;
+
+      const finish = (result) => {
+        if (settled) return;
+        settled = true;
+        if (killTimer) clearTimeout(killTimer);
+        resolve(result);
+      };
+
       try {
         const env = proxyUrl ? { ...process.env, HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, ALL_PROXY: proxyUrl } : process.env;
         proc = spawn('ffmpeg', args, { env });
       } catch {
-        resolve(false);
+        finish(false);
         return;
       }
+
+      // FFmpeg has no default timeout: a source that accepts the connection and
+      // then dribbles bytes would keep the process - and this promise - alive
+      // indefinitely
+      killTimer = setTimeout(() => {
+        try {
+          if (proc && !proc.killed) proc.kill('SIGKILL');
+        } catch {}
+        finish(false);
+      }, FFMPEG_TIMEOUT_MS);
 
       req.on('close', () => {
         try {
@@ -145,9 +181,9 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
       });
 
       proc.on('close', (code) => {
-        resolve(code === 0 && fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0);
+        finish(code === 0 && fs.existsSync(thumbPath) && fs.statSync(thumbPath).size > 0);
       });
-      proc.on('error', () => resolve(false));
+      proc.on('error', () => finish(false));
     });
   };
 

@@ -329,7 +329,13 @@ export function getUserProfile(userId) {
 }
 
 /**
- * Express authentication middleware
+ * Soft auth: attaches req.user when a valid token is present and passes the
+ * request through either way.
+ *
+ * The app is local-first - a logged-out user keeps their data in the browser and
+ * ships their own API keys in the x-booru-auth header - so these routes must keep
+ * answering anonymous callers. Anything that must not be reachable anonymously
+ * (credentials, backups, destructive actions) has to sit behind requireAuth.
  */
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -340,5 +346,27 @@ export function authMiddleware(req, res, next) {
       req.user = payload;
     }
   }
+  next();
+}
+
+/**
+ * Hard auth: rejects with 401 unless a valid, unexpired token is present.
+ *
+ * Put this on any route that reads or writes credentials, triggers a backup, or
+ * can otherwise be abused from the LAN - the server binds 0.0.0.0 and start_phone.js
+ * hands out a QR code for it, so "local" is not the same as "trusted".
+ */
+export function requireAuth(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = (authHeader && authHeader.startsWith('Bearer '))
+    ? authHeader.substring(7).trim()
+    : '';
+  const payload = verifyToken(token);
+
+  if (!payload || !payload.id) {
+    return res.status(401).json({ success: false, message: 'Не авторизован' });
+  }
+
+  req.user = payload;
   next();
 }

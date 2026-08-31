@@ -138,7 +138,11 @@ export function isPostMatchingFilters(post, criteria = {}) {
     if (r !== 'e' && r !== 'explicit' && r !== '?') return false;
   } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
     const r = (post.rating || '').toLowerCase();
-    if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
+    if (post.site === 'danbooru' || post.site === 'gelbooru') {
+      if (r !== 'q' && r !== 'questionable' && r !== 'sensitive' && r !== 's') return false;
+    } else {
+      if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
+    }
   } else if (ratingFilter === 'sfw') {
     const r = (post.rating || '').toLowerCase();
     // Danbooru and Gelbooru use a 4-level scale: 's' = sensitive (16+), only 'g' is safe there.

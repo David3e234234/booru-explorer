@@ -74,9 +74,14 @@ async function extractArchive(zipUrl, key) {
     logInfo('Archive', `Скачивание архива: ${zipUrl.split('?')[0]}`);
     const response = await fetchSafe(zipUrl, {
       timeout: DOWNLOAD_TIMEOUT_MS,
+      // Archives run to hundreds of megabytes and are streamed straight to disk,
+      // so the header deadline must not be armed against the body read
+      streamBody: true,
       headers: { 'Referer': 'https://pawchive.pw/', 'Accept': '*/*' }
     });
     if (!response.ok || !response.body) {
+      // An unreleased response body keeps the undici socket checked out
+      try { await response.body?.cancel(); } catch {}
       throw new Error(`HTTP ${response.status}`);
     }
 

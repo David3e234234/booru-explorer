@@ -4,7 +4,6 @@ import path from 'path';
 import crypto from 'crypto';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
-import open from 'open';
 import AdmZip from 'adm-zip';
 import {
   SITES,
@@ -17,15 +16,23 @@ import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
 import { getCreatorsDirectory, fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
 import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
-import { fetchSafe, safeJsonParse } from '../utils/network.js';
+import { fetchSafe, safeJsonParse, isSafeExternalUrl } from '../utils/network.js';
+import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 const router = express.Router();
+
+// Hard ceiling for /api/posts?limit=. The frontend asks for 40; anything above this
+// is either a mistake or an attempt to make the server fan out on purpose
+const MAX_POSTS_LIMIT = 200;
 
 // Client settings fields that affect filtering results - they are part of the cache key
 const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
   'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'hideZipPosts', 'groupAlbums', 'customSources',
+  // Switches the Paheal fallback in the rule34 parser on and off - without it in the
+  // key, toggling the setting kept serving a cached page built for the other value
+  'enablePaheal',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
   'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession',
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
@@ -346,7 +353,12 @@ router.get('/posts', async (req, res) => {
     const site = req.query.site || 'danbooru';
     const tags = req.query.tags || '';
     const page = parseInt(req.query.page, 10) || 1;
-    const limit = parseInt(req.query.limit, 10) || 100;
+    // The limit fans out to every selected site, each deep-fetching several pages -
+    // an unclamped value turns one request into tens of thousands of upstream posts
+    const requestedLimit = parseInt(req.query.limit, 10);
+    const limit = (Number.isFinite(requestedLimit) && requestedLimit > 0)
+      ? Math.min(requestedLimit, MAX_POSTS_LIMIT)
+      : 100;
     const category = req.query.category || 'new';
     const aiFilter = req.query.aiFilter || 'no-ai';
     const ratingFilter = req.query.ratingFilter || 'all';
@@ -629,22 +641,57 @@ router.get('/posts/album', async (req, res) => {
   }
 });
 
-// POST /api/download
-router.post('/download', async (req, res) => {
-  try {
-    const { url, isZip, site, id, ext } = req.body;
-    if (!url) return res.json({ success: false, error: 'URL не указан' });
+// Extensions we are willing to write into <root>/downloads
+const DOWNLOAD_EXT_ALLOWLIST = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'mp4', 'webm', 'mov', 'zip']);
 
-    const downloadsDir = path.join(ROOT_DIR, 'downloads');
+// The name is rebuilt from validated pieces instead of trusting the body: joining
+// raw site/id/ext let a caller walk out of downloads/ and overwrite any file the
+// server process can write - including a .bat in the user's Startup folder.
+function buildDownloadName(site, id, ext, isZip) {
+  const rawSite = String(site ?? '');
+  const rawId = String(id ?? '');
+  const safeSite = /^[a-z0-9_-]{1,32}$/i.test(rawSite) ? rawSite : 'file';
+  const safeId = /^[a-z0-9_-]{1,64}$/i.test(rawId) ? rawId : crypto.randomBytes(6).toString('hex');
+  const rawExt = String(ext ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const safeExt = DOWNLOAD_EXT_ALLOWLIST.has(rawExt) ? rawExt : (isZip ? 'zip' : 'jpg');
+  return `${safeSite}_${safeId}.${safeExt}`;
+}
+
+// POST /api/download - save a remote file to the server's downloads folder.
+// Nothing in the web UI calls this (browser downloads stream straight to the
+// device), so it stays behind a token.
+router.post('/download', requireAuth, async (req, res) => {
+  try {
+    const { url, isZip, site, id, ext } = req.body || {};
+    if (!url || typeof url !== 'string') return res.json({ success: false, error: 'URL не указан' });
+    if (!isSafeExternalUrl(url)) return res.json({ success: false, error: 'Недопустимый URL' });
+
+    const downloadsDir = path.resolve(ROOT_DIR, 'downloads');
     if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
 
-    const filename = `${site}_${id}.${ext || (isZip ? 'zip' : 'jpg')}`;
-    const filePath = path.join(downloadsDir, filename);
+    const filename = buildDownloadName(site, id, ext, isZip);
+    const filePath = path.resolve(downloadsDir, filename);
+    // Belt and braces: the name carries no separators any more, but confirm the
+    // resolved path really landed inside downloads/
+    if (path.dirname(filePath) !== downloadsDir) {
+      return res.json({ success: false, error: 'Некорректное имя файла' });
+    }
 
     logInfo('Download', `Скачивание: ${url}`);
     const currentSettings = getSettings();
-    const response = await fetchSafe(url, { timeout: 60000, settings: currentSettings, site });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // Streamed straight to disk: a large archive takes as long as it takes, so
+    // only the headers get a deadline
+    const response = await fetchSafe(url, {
+      timeout: 60000,
+      settings: currentSettings,
+      site,
+      streamBody: true
+    });
+    if (!response.ok) {
+      // An unreleased response body keeps the undici socket checked out
+      try { await response.body?.cancel(); } catch {}
+      throw new Error(`HTTP ${response.status}`);
+    }
     if (!response.body) throw new Error('Пустой ответ от источника');
 
     // Stream straight to disk - buffering the whole file in RAM and writing it
@@ -654,14 +701,11 @@ router.post('/download', async (req, res) => {
     if (isZip) {
       logInfo('Download', `Распаковка ZIP: ${filePath}`);
       const zip = new AdmZip(filePath);
-      const extractPath = path.join(downloadsDir, `${site}_${id}_unzipped`);
+      const extractPath = path.join(downloadsDir, filename.replace(/\.[^.]+$/, '') + '_unzipped');
       zip.extractAllTo(extractPath, true);
-      open(extractPath);
-    } else {
-      open(downloadsDir);
     }
 
-    res.json({ success: true });
+    res.json({ success: true, path: filePath });
   } catch (err) {
     logError('Download', 'Ошибка скачивания', err);
     res.json({ success: false, error: err.message });
@@ -743,14 +787,21 @@ router.get('/tags/autocomplete', async (req, res) => {
       if (tagsResult.length === 0) {
         tagsResult = await fetchDanbooruTags(query);
       }
-    } else if (site === 'gelbooru') {
+    } else if (site === 'gelbooru' || site === 'xbooru' || site === 'tbib' || site === 'hypnohub') {
+      const siteHostMap = {
+        gelbooru: 'https://gelbooru.com',
+        xbooru: 'https://xbooru.com',
+        tbib: 'https://tbib.org',
+        hypnohub: 'https://hypnohub.net'
+      };
+      const host = siteHostMap[site] || 'https://gelbooru.com';
       try {
-        const url = `https://gelbooru.com/index.php?page=autocomplete2&term=${encodeURIComponent(query.toLowerCase())}&type=tag_query&limit=15`;
+        const url = `${host}/index.php?page=autocomplete2&term=${encodeURIComponent(query.toLowerCase())}&type=tag_query&limit=15`;
         const resp = await fetchSafe(url, {
-          headers: { 'Referer': 'https://gelbooru.com/' },
+          headers: { 'Referer': `${host}/` },
           timeout: 3000,
           settings,
-          site: 'gelbooru'
+          site
         });
         if (resp.ok) {
           const data = await resp.json();

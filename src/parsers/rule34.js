@@ -1,4 +1,4 @@
-import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { BROWSER_USER_AGENT } from '../config/constants.js';
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
@@ -161,6 +161,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
             return mappedPosts;
           }
         }
+      } else {
+        await discardResponse(res);
       }
     } catch (err) {
       logError('Rule34.xxx DAPI', 'Ошибка DAPI запроса, переключение на HTML парсинг', err);
@@ -436,6 +438,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
         }
         return posts.slice(0, limit);
       }
+    } else {
+      await discardResponse(res);
     }
   } catch (err) {
     logError('Rule34.xxx HTML', 'Ошибка веб-парсинга Rule34.xxx', err);
@@ -484,7 +488,10 @@ export async function fetchRule34(params, aiTagsList, settings) {
       settings,
       site: 'rule34'
     });
-    if (!pahealRes.ok) return [];
+    if (!pahealRes.ok) {
+      await discardResponse(pahealRes);
+      return [];
+    }
     const text = await pahealRes.text();
 
     const rawAttrsList = [];

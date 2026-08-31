@@ -23,6 +23,7 @@ import authRoutes from './src/routes/auth.routes.js';
 import archiveRoutes from './src/routes/archive.routes.js';
 import aiRoutes from './src/routes/ai.routes.js';
 import { initBackupScheduler } from './src/services/backupService.js';
+import { flushPendingWrites } from './src/services/storageService.js';
 
 // Force IPv4 first for reliable network requests to overseas Booru sites
 if (dns.setDefaultResultOrder) {
@@ -42,6 +43,24 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason) => {
   console.error('[Process UnhandledRejection]', reason);
 });
+
+// Debounced JSON writes (favourites, likes, settings) sit in a 150 ms timer. Without
+// this the last change before Ctrl+C or a service restart is silently lost
+let shuttingDown = false;
+function handleShutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  try {
+    flushPendingWrites();
+  } catch (err) {
+    console.error('[Shutdown] Не удалось сбросить отложенные записи:', err);
+  }
+  if (signal) process.exit(0);
+}
+
+process.on('SIGINT', () => handleShutdown('SIGINT'));
+process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+process.on('exit', () => handleShutdown(null));
 
 // Initialize storage and cache directories
 [DATA_DIR, CACHE_DIR, THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR].forEach(dir => {

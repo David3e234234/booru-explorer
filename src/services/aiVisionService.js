@@ -28,11 +28,6 @@ const MODEL_CONFIGS = {
     name: 'Xenova/clip-vit-base-patch32',
     type: 'clip',
     dim: 512
-  },
-  mobilenet: {
-    name: 'Xenova/dinov2-small',
-    type: 'pipeline',
-    dim: 384
   }
 };
 

@@ -10,40 +10,107 @@ import {
   DISLIKES_FILE,
   AUTHOR_FEED_STATE_FILE,
   BROWSER_USER_AGENT,
-  DATA_DIR 
+  DATA_DIR,
+  SECRET_SETTING_FIELDS
 } from '../config/constants.js';
 import { logInfo, logError } from '../utils/logger.js';
-import { fetchSafe } from '../utils/network.js';
+import { fetchSafe, discardResponse } from '../utils/network.js';
 import { getUserDataDir } from './userService.js';
 
 const pendingWrites = new Map();
 const pendingData = new Map();
 
+function cloneData(value) {
+  if (value === null || typeof value !== 'object') return value;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    return value;
+  }
+}
+
+// A half-written or hand-edited file used to fall through to defaultData silently,
+// and the next save then overwrote it - favourites and settings were gone for good.
+// Move the damaged file aside instead so the data stays recoverable
+function quarantineCorruptFile(filePath, err) {
+  try {
+    if (!fs.existsSync(filePath)) return;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupPath = `${filePath}.corrupt-${stamp}`;
+    fs.renameSync(filePath, backupPath);
+    logError('Storage', `Файл ${filePath} повреждён и не читается как JSON. Копия сохранена как ${backupPath}`, err);
+  } catch (renameErr) {
+    logError('Storage', `Не удалось сохранить копию повреждённого файла ${filePath}`, renameErr);
+  }
+}
+
+// Write through a temp file + rename: the target is never open in a truncated
+// state, so a crash or a kill mid-write cannot leave a half-written JSON behind
+function tmpPathFor(filePath) {
+  return `${filePath}.${process.pid}.tmp`;
+}
+
+function writeFileAtomicSync(filePath, content) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = tmpPathFor(filePath);
+  try {
+    fs.writeFileSync(tmpPath, content, 'utf-8');
+    fs.renameSync(tmpPath, filePath);
+  } catch (err) {
+    try { fs.unlinkSync(tmpPath); } catch {}
+    throw err;
+  }
+}
+
+async function writeFileAtomic(filePath, content) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) await fs.promises.mkdir(dir, { recursive: true });
+  const tmpPath = tmpPathFor(filePath);
+  try {
+    await fs.promises.writeFile(tmpPath, content, 'utf-8');
+    await fs.promises.rename(tmpPath, filePath);
+  } catch (err) {
+    await fs.promises.unlink(tmpPath).catch(() => {});
+    throw err;
+  }
+}
+
+function cancelPendingWrite(filePath) {
+  const timer = pendingWrites.get(filePath);
+  if (timer) {
+    clearTimeout(timer);
+    pendingWrites.delete(filePath);
+  }
+}
+
 export function readJsonFile(filePath, defaultData) {
   if (pendingData.has(filePath)) {
-    try {
-      return JSON.parse(JSON.stringify(pendingData.get(filePath)));
-    } catch {
-      return pendingData.get(filePath);
-    }
+    return cloneData(pendingData.get(filePath));
   }
   try {
     if (fs.existsSync(filePath)) {
       const content = fs.readFileSync(filePath, 'utf-8');
-      return JSON.parse(content);
+      try {
+        return JSON.parse(content);
+      } catch (parseErr) {
+        quarantineCorruptFile(filePath, parseErr);
+        return cloneData(defaultData);
+      }
     }
   } catch (err) {
     logError('Storage', `Ошибка чтения ${filePath}`, err);
   }
-  return defaultData;
+  return cloneData(defaultData);
 }
 
 export function writeJsonFile(filePath, data) {
   pendingData.set(filePath, data);
+  // A debounced write already queued for this file carries older data and would
+  // land on top of this one
+  cancelPendingWrite(filePath);
   try {
-    const dir = path.dirname(filePath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    writeFileAtomicSync(filePath, JSON.stringify(data, null, 2));
     if (!pendingWrites.has(filePath)) {
       pendingData.delete(filePath);
     }
@@ -56,15 +123,12 @@ export function writeJsonFile(filePath, data) {
 
 export function writeJsonFileAsync(filePath, data, debounceMs = 150) {
   pendingData.set(filePath, data);
-  if (pendingWrites.has(filePath)) {
-    clearTimeout(pendingWrites.get(filePath));
-  }
+  cancelPendingWrite(filePath);
   const timer = setTimeout(async () => {
     pendingWrites.delete(filePath);
     try {
-      const dir = path.dirname(filePath);
-      if (!fs.existsSync(dir)) await fs.promises.mkdir(dir, { recursive: true });
-      await fs.promises.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+      await writeFileAtomic(filePath, JSON.stringify(data, null, 2));
+      // A newer write may have been queued while we were awaiting - its data wins
       if (!pendingWrites.has(filePath)) {
         pendingData.delete(filePath);
       }
@@ -73,6 +137,23 @@ export function writeJsonFileAsync(filePath, data, debounceMs = 150) {
     }
   }, debounceMs);
   pendingWrites.set(filePath, timer);
+}
+
+// Debounced writes are lost when the process goes down before the timer fires.
+// Called from the shutdown handlers in server.js
+export function flushPendingWrites() {
+  const entries = [...pendingWrites.entries()];
+  pendingWrites.clear();
+  for (const [filePath] of entries) {
+    const data = pendingData.get(filePath);
+    if (data === undefined) continue;
+    try {
+      writeFileAtomicSync(filePath, JSON.stringify(data, null, 2));
+    } catch (err) {
+      logError('Storage', `Не удалось сбросить отложенную запись ${filePath}`, err);
+    }
+  }
+  pendingData.clear();
 }
 
 function getUserFilePath(userId, defaultFile, filename) {
@@ -95,27 +176,41 @@ const ENV_OVERRIDES = (() => {
 })();
 
 let inMemorySettings = null;
-export function getSettings(userId = null) {
-  const filePath = getUserFilePath(userId, SETTINGS_FILE, 'settings.json');
-  let settings;
-  if (!userId && inMemorySettings) {
-    settings = inMemorySettings;
-  } else {
-    const raw = readJsonFile(filePath, {});
-    settings = { ...DEFAULT_SETTINGS, ...raw };
-    if (!userId) inMemorySettings = settings;
-  }
 
-  return { ...settings, ...ENV_OVERRIDES };
+// On-disk settings, without the environment overlay
+function readSettingsRaw(userId) {
+  const filePath = getUserFilePath(userId, SETTINGS_FILE, 'settings.json');
+  if (!userId && inMemorySettings) return inMemorySettings;
+  const raw = readJsonFile(filePath, {});
+  const settings = { ...DEFAULT_SETTINGS, ...raw };
+  if (!userId) inMemorySettings = settings;
+  return settings;
+}
+
+export function getSettings(userId = null) {
+  return { ...readSettingsRaw(userId), ...ENV_OVERRIDES };
 }
 
 export function updateSettings(partial, userId = null) {
-  const current = getSettings(userId);
-  const updated = { ...current, ...(partial || {}) };
+  // Merge over the persisted values only. Overlaying ENV_OVERRIDES here used to
+  // write env-provided secrets straight into settings.json on the first save,
+  // from where they leaked into Telegram backups and account exports.
+  const updated = { ...readSettingsRaw(userId), ...(partial || {}) };
   const filePath = getUserFilePath(userId, SETTINGS_FILE, 'settings.json');
   if (!userId) inMemorySettings = updated;
   writeJsonFileAsync(filePath, updated);
-  return updated;
+  return { ...updated, ...ENV_OVERRIDES };
+}
+
+// Returns a copy of settings with every credential removed. Used for anonymous
+// API responses and for backups, both of which can end up somewhere we do not
+// control. A logged-out browser does not need this half: it keeps its own copy
+// and sends the keys per request in the x-booru-auth header.
+export function stripSecretSettings(settings) {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return settings;
+  const safe = { ...settings };
+  for (const field of SECRET_SETTING_FIELDS) delete safe[field];
+  return safe;
 }
 
 export function getFavorites(userId = null) {
@@ -221,6 +316,11 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
           site: 'danbooru'
         }).catch(err => ({ ok: false, status: 'network_error', error: err.message }));
 
+        // Nothing here needs the response body, but leaving it unread keeps the
+        // undici socket checked out - likes fire in bursts from the gallery
+        await discardResponse(favRes);
+        await discardResponse(voteRes);
+
         const isFavOk = favRes?.ok || favRes?.status === 200 || favRes?.status === 201 || favRes?.status === 422;
         const isVoteOk = voteRes?.ok || voteRes?.status === 200 || voteRes?.status === 201 || voteRes?.status === 422;
 
@@ -244,6 +344,7 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
           settings,
           site: 'danbooru'
         }).catch(err => ({ ok: false, error: err.message }));
+        await discardResponse(delRes);
         return { success: delRes?.ok || delRes?.status === 200 || delRes?.status === 204, site: 'danbooru', id: cleanId };
       }
     } 
@@ -272,6 +373,7 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
       }).catch(err => ({ ok: false, error: err.message }));
 
       logInfo('Sync', `${effectiveSite} vote [${cleanId}]: status=${voteRes?.status || (voteRes?.ok ? 200 : 'err')}`);
+      await discardResponse(voteRes);
       const isOk = voteRes?.ok || voteRes?.status === 200;
       return { success: isOk, site: effectiveSite, id: cleanId, status: voteRes?.status };
     }
@@ -305,6 +407,7 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
           site: 'pawchive'
         }).catch(err => ({ ok: false, error: err.message }));
         logInfo('Sync', `Pawchive like [${realPostId}]: status=${pawRes?.status || (pawRes?.ok ? 200 : 'err')}`);
+        await discardResponse(pawRes);
         const isOk = pawRes?.ok || pawRes?.status === 200 || pawRes?.status === 201;
         return { success: isOk, site: 'pawchive', id: realPostId, status: pawRes?.status };
       }
@@ -358,6 +461,8 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
         }).catch(err => ({ ok: false, error: err.message }));
         logInfo('Sync', `Pawchive follow [${service}:${creatorId}]: status=${res?.status || (res?.ok ? 200 : 'err')}`);
         const isOk = res?.ok || res?.status === 200 || res?.status === 201;
+        // Follow requests are fire-and-forget, but undici holds the socket until the body is released
+        await discardResponse(res);
         return { success: isOk, site: 'pawchive', service, creatorId, status: res?.status };
       }
       return { success: false, site: 'pawchive', message: 'Не указан сервис и автор Pawchive' };

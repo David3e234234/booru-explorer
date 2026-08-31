@@ -5,9 +5,14 @@ import {
   rankCandidatesBySimilarity, 
   clearEmbeddingsCache 
 } from '../services/aiVisionService.js';
+import { isSafeExternalUrl } from '../utils/network.js';
 import { logError } from '../utils/logger.js';
 
 const router = express.Router();
+
+// Ceiling on a single batch: each item downloads a remote image and runs it
+// through the model, so an unbounded array is a cheap way to pin the server
+const MAX_BATCH_ITEMS = 64;
 
 // GET /api/ai/status
 router.get('/status', (req, res) => {
@@ -23,8 +28,13 @@ router.get('/status', (req, res) => {
 router.post('/embedding', async (req, res) => {
   try {
     const { url, postId, model } = req.body;
-    if (!url) {
+    if (!url || typeof url !== 'string') {
       return res.status(400).json({ success: false, error: 'Параметр url обязателен' });
+    }
+    // The server fetches this URL on the caller's behalf, so it must not point at
+    // the local network or a cloud metadata endpoint
+    if (!isSafeExternalUrl(url)) {
+      return res.status(403).json({ success: false, error: 'Недопустимый URL' });
     }
     const result = await getEmbedding(url, postId, model || 'mobilenet');
     if (!result.success) {
@@ -44,6 +54,9 @@ router.post('/batch-embeddings', async (req, res) => {
     if (!Array.isArray(items)) {
       return res.status(400).json({ success: false, error: 'Параметр items должен быть массивом' });
     }
+    if (items.length > MAX_BATCH_ITEMS) {
+      return res.status(400).json({ success: false, error: `Не более ${MAX_BATCH_ITEMS} изображений за раз` });
+    }
 
     const modelType = model || 'mobilenet';
     const results = [];
@@ -53,6 +66,9 @@ router.post('/batch-embeddings', async (req, res) => {
     for (let i = 0; i < items.length; i += CONCURRENCY) {
       const chunk = items.slice(i, i + CONCURRENCY);
       const chunkResults = await Promise.all(chunk.map(async (item) => {
+        if (!isSafeExternalUrl(item && item.url)) {
+          return { id: item?.id, success: false, embedding: null, error: 'Недопустимый URL' };
+        }
         try {
           const res = await getEmbedding(item.url, item.id, modelType);
           return { id: item.id, success: res.success, embedding: res.embedding || null, error: res.error || null };

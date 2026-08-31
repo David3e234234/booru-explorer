@@ -1699,7 +1699,7 @@ function setupEventListeners() {
       if (state.settings) state.settings.recommendationFocus = focus;
       saveLocalSettings({ recommendationFocus: focus });
       recFocusButtons.forEach(b => b.classList.toggle('active', b === btn));
-      performSearch(1, { bustCache: false, showLoading: true });
+      performSearch(true, { bustCache: false, showLoading: true });
     });
   });
 

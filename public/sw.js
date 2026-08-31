@@ -1,5 +1,5 @@
-const CACHE_NAME = 'booru-explorer-v8.9';
-const MEDIA_CACHE = 'booru-media-v8.9';
+const CACHE_NAME = 'booru-explorer-v8.10';
+const MEDIA_CACHE = 'booru-media-v8.10';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
 
@@ -43,6 +43,7 @@ const STATIC_ASSETS = [
   '/js/viewer.js',
   '/js/viewer/index.js',
   '/js/autocomplete.js',
+  '/js/mp4box.all.min.js',
   '/js/modules/uiUtils.js',
   '/js/modules/filtersUI.js',
   '/js/modules/navigationUI.js',
@@ -52,6 +53,9 @@ const STATIC_ASSETS = [
   '/js/modules/authModal.js',
   '/js/modules/profileUI.js',
   '/js/modules/favoriteAuthorsUI.js',
+  '/js/modules/downloadManager.js',
+  '/js/modules/wikiModal.js',
+  '/js/modules/aiVision.js',
   '/js/viewer/imageZoom.js',
   '/js/viewer/videoPlayer.js',
   '/js/viewer/viewerSidebar.js',

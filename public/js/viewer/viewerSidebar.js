@@ -19,34 +19,45 @@ export function formatRating(r) {
 
 export const CATEGORY_ORDER = ['artist', 'copyright', 'character', 'general', 'meta'];
 
+export function getCategoryLabel(catKey) {
+  const map = {
+    artist: t('vsb.groupArtist', 'Художник'),
+    copyright: t('vsb.groupSeries', 'Серия / Франшиза'),
+    character: t('vsb.groupCharacter', 'Персонаж'),
+    general: t('vsb.groupGeneral', 'Общие теги'),
+    meta: t('vsb.groupMeta', 'Мета-теги')
+  };
+  return map[catKey] || catKey;
+}
+
 export const CATEGORY_CONFIG = {
   artist: {
     key: 'artist',
-    label: t('vsb.groupArtist', 'Художник'),
+    get label() { return getCategoryLabel('artist'); },
     colorClass: 'category-artist',
     tagClass: 'tag-artist'
   },
   copyright: {
     key: 'copyright',
-    label: t('vsb.groupSeries', 'Серия / Франшиза'),
+    get label() { return getCategoryLabel('copyright'); },
     colorClass: 'category-copyright',
     tagClass: 'tag-copyright'
   },
   character: {
     key: 'character',
-    label: t('vsb.groupCharacter', 'Персонаж'),
+    get label() { return getCategoryLabel('character'); },
     colorClass: 'category-character',
     tagClass: 'tag-character'
   },
   general: {
     key: 'general',
-    label: t('vsb.groupGeneral', 'Общие теги'),
+    get label() { return getCategoryLabel('general'); },
     colorClass: 'category-general',
     tagClass: 'tag-general'
   },
   meta: {
     key: 'meta',
-    label: t('vsb.groupMeta', 'Мета-теги'),
+    get label() { return getCategoryLabel('meta'); },
     colorClass: 'category-meta',
     tagClass: 'tag-meta'
   }

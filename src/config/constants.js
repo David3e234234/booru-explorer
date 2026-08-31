@@ -288,6 +288,18 @@ export const DEFAULT_SETTINGS = {
   aiSimilarSort: 'similarity'
 };
 
+// Credentials and session tokens. These are never returned to an unauthenticated
+// client, never accepted from one, and stripped out of Telegram backups.
+export const SECRET_SETTING_FIELDS = [
+  'rule34ApiKey', 'rule34UserId',
+  'gelbooruApiKey', 'gelbooruUserId',
+  'danbooruApiKey', 'danbooruLogin',
+  'konachanLogin', 'konachanPassword',
+  'yandereLogin', 'yanderePassword',
+  'pawchiveSession',
+  'telegramBotToken', 'telegramChatId'
+];
+
 export const SITES = {
   danbooru: {
     id: 'danbooru',

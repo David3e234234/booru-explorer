@@ -1,7 +1,6 @@
-import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, normalizeDate } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
-import { isVideoMediaUrl } from '../../public/js/modules/uiUtils.js';
 import { logError } from '../utils/logger.js';
 
 let creatorsCache = null;
@@ -15,6 +14,13 @@ const PAWCHIVE_ARCHIVE_EXTS = new Set([
   'psd', 'clip', 'blend', 'sai', 'sai2', 'pdf', 'txt', 'doc', 'docx',
   'mp3', 'wav', 'flac', 'ogg', 'm4a', 'aac'
 ]);
+
+function isVideoFile(nameOrPath) {
+  if (!nameOrPath) return false;
+  const clean = String(nameOrPath).toLowerCase().split('?')[0].split('#')[0];
+  const ext = clean.includes('.') ? clean.split('.').pop() : '';
+  return PAWCHIVE_VIDEO_EXTS.has(ext);
+}
 
 // The global feed (/api/v1/posts) has no server-side service filter, so a
 // platform filter is applied by scanning a window of raw pages client-side.
@@ -73,6 +79,8 @@ export async function getPawchiveCreatorProfile(service, userId, settings = {}) 
     if (res.ok) {
       const data = await res.json();
       if (data && data.name) return data;
+    } else {
+      await discardResponse(res);
     }
   } catch {}
   return null;
@@ -116,6 +124,7 @@ export async function getCreatorsDirectory(settings = {}) {
           return creatorsCache;
         }
       }
+      await discardResponse(res);
       break; // got a response (non-ok / bad shape): retrying won't help
     } catch (err) {
       if (attempt === 0) continue; // transient connect failure: retry once
@@ -362,7 +371,7 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
   // Build complete albumItems array for all visual slides
   const albumItems = mediaFiles.map((m, idx) => {
     const rawFileName = m.name || `file_${idx + 1}`;
-    const isVid = isVideoMediaUrl(rawFileName) || /\.(mp4|webm|mov|m4v)$/i.test(rawFileName || m.path);
+    const isVid = isVideoFile(rawFileName) || isVideoFile(m.path) || /\.(mp4|webm|mov|m4v|mkv|avi)$/i.test(rawFileName || m.path);
     const isGif = (rawFileName || m.path || '').toLowerCase().endsWith('.gif');
     const isPrevOnly = Boolean(m.preview_only || item.has_full === false);
     let fileExt = (rawFileName || m.path || '').split('?')[0].split('.').pop()?.toLowerCase() || '';
@@ -502,6 +511,8 @@ export async function fetchPawchivePostById(postId, service, user, aiTagsList = 
               targetUser = p.user;
               break;
             }
+          } else {
+            await discardResponse(resSearch);
           }
         } catch (err) {
           if (attempt === 0) continue;
@@ -521,6 +532,7 @@ export async function fetchPawchivePostById(postId, service, user, aiTagsList = 
           site: 'pawchive'
         });
         if (!res.ok) {
+          await discardResponse(res);
           if (attempt === 0) continue;
           return null;
         }
@@ -629,7 +641,10 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const res = await fetchSafe(apiUrl, { timeout: 20000, headers: authHeaders, settings, site: 'pawchive' });
-        if (!res.ok) return null;
+        if (!res.ok) {
+          await discardResponse(res);
+          return null;
+        }
         const data = safeJsonParse(await res.text(), []);
         return Array.isArray(data) ? data : [];
       } catch (err) {

@@ -520,9 +520,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     abortRef.current = controller;
     isPreCaching = true;
     currentSource = 'remux';
-    if (btnTranscode) {
-      btnTranscode.classList.add('active');
-      btnTranscode.textContent = t('vp.jsRemuxing', 'JS Ремукс...');
+    if (switchBtn) {
+      switchBtn.textContent = t('vp.jsRemuxing', 'JS Ремукс...');
     }
     setProgress(0, t('vp.jsDemuxing', 'Клиентский JS-демуксинг (MSE)...'), true);
 

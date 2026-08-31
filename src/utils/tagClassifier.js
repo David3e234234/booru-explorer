@@ -1,4 +1,4 @@
-import { fetchSafe } from './network.js';
+import { fetchSafe, discardResponse } from './network.js';
 import { extractAuthor as extractAuthorFromSource, decodeHtmlEntities } from './tagHelpers.js';
 
 // Cache of the global tag map (1 = artist, 3 = copyright, 4 = character, 0 = general, 6 = meta)
@@ -293,6 +293,7 @@ export async function loadGlobalTagSummary(settings = {}) {
       // Fast non-blocking load with 3-second timeout and site proxy support
       let res = await fetchSafe('https://konachan.com/tag/summary.json', { timeout: 3000, settings, site: 'konachan' }).catch(() => null);
       if (!res || !res.ok) {
+        await discardResponse(res);
         res = await fetchSafe('https://yande.re/tag/summary.json', { timeout: 3000, settings, site: 'yandere' }).catch(() => null);
       }
 
@@ -322,6 +323,8 @@ export async function loadGlobalTagSummary(settings = {}) {
           lastFetchedTime = Date.now();
           return map;
         }
+      } else {
+        await discardResponse(res);
       }
     } catch (err) {
       // Non-fatal, fallback to local dictionary

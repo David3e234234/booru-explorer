@@ -1247,8 +1247,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (downloadTarget.startsWith('/api/archive/file')) {
         const dlUrl = downloadTarget.includes('?') ? `${downloadTarget}&download=1` : `${downloadTarget}?download=1`;
         const a = document.createElement('a');
+        const baseId = currentPost.id || currentPost.originalId || 'album';
         a.href = dlUrl;
-        a.download = item.title || `album_${currentPost.site || 'post'}_${currentPost.id}_p${i + 1}.${item.fileExt || (item.isVideo ? 'mp4' : 'jpg')}`;
+        a.download = item.title || `album_${currentPost.site || 'post'}_${baseId}_p${i + 1}.${item.fileExt || (item.isVideo ? 'mp4' : 'jpg')}`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -1262,7 +1263,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (res.ok) {
           const blob = await res.blob();
           const ext = item.fileExt || (item.isVideo ? 'mp4' : 'jpg');
-          const filename = `album_${currentPost.site || 'post'}_${currentPost.id}_p${i + 1}.${ext}`;
+          const baseId = currentPost.id || currentPost.originalId || 'album';
+          const filename = `album_${currentPost.site || 'post'}_${baseId}_p${i + 1}.${ext}`;
           const blobUrl = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = blobUrl;

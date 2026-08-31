@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
@@ -64,7 +64,12 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     res = await fetchSafe(url, { settings, site: siteId });
     if (!res.ok && siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
       const altRes = await fetchSafe(toAltKonachanUrl(url), { settings, site: siteId });
-      if (altRes.ok) res = altRes;
+      if (altRes.ok) {
+        await discardResponse(res);
+        res = altRes;
+      } else {
+        await discardResponse(altRes);
+      }
     }
   } catch (e) {
     if (siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
@@ -75,6 +80,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   }
   if (!res || !res.ok) {
     logError(siteName, `API статус: ${res?.status || 'network error'}`);
+    await discardResponse(res);
     return [];
   }
   const text = await res.text();

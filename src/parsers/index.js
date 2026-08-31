@@ -7,6 +7,7 @@ import { fetchRule34Video } from './rule34video.js';
 import { fetchXbooru, fetchHypnohub, fetchTbib } from './dapi.js';
 import { fetchPawchive } from './pawchive.js';
 import { isPostMatchingFilters } from '../utils/tagHelpers.js';
+import { runWithDeadlineSignal } from '../utils/network.js';
 import { 
   CURVY_INCLUDE_TAGS, 
   PETITE_INCLUDE_TAGS,
@@ -57,13 +58,34 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
 
 const SITE_FETCH_DEADLINE_MS = 15000;
 
-function withDeadline(promise, ms = SITE_FETCH_DEADLINE_MS) {
+// Races a site fetch against a deadline. Resolving early used to be all it did:
+// the losing site kept fetching in the background, still holding its sockets, so
+// a slow source could stall the next search long after the response was sent.
+// The deadline now also aborts the in-flight requests, which means `work` must be
+// a factory - the async context has to exist before any request is started.
+// Nested deadlines compose (see runWithDeadlineSignal), so a per-page deadline
+// inside the all-sites one cannot outlive the outer one.
+function withDeadline(work, ms = SITE_FETCH_DEADLINE_MS) {
+  const controller = new AbortController();
   let timer = null;
+
   const timeout = new Promise(resolve => {
-    timer = setTimeout(() => resolve([]), ms);
+    timer = setTimeout(() => {
+      try { controller.abort(); } catch {}
+      resolve([]);
+    }, ms);
     if (timer && typeof timer.unref === 'function') timer.unref();
   });
-  return Promise.race([promise.catch(() => []), timeout]).finally(() => {
+
+  // A plain promise cannot be cancelled, but accepting one beats silently
+  // resolving to [] because the caller forgot to wrap it in a function
+  const factory = typeof work === 'function' ? work : () => work;
+
+  const task = Promise.resolve()
+    .then(() => runWithDeadlineSignal(controller.signal, factory))
+    .catch(() => []);
+
+  return Promise.race([task, timeout]).finally(() => {
     if (timer) clearTimeout(timer);
   });
 }
@@ -119,7 +141,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
 
     const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / Math.max(1, mainSites.length)));
     const results = await Promise.allSettled(
-      mainSites.map(s => withDeadline(fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, settings)))
+      mainSites.map(s => withDeadline(() => fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, settings)))
     );
     const lists = [];
     results.forEach(res => {
@@ -196,7 +218,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
 
   // Pipeline: fetch the next page while the current one is still being processed
   const launchPage = (remotePage) =>
-    withDeadline(fetchSingleSiteBatch(site, { ...params, page: remotePage, limit: batchLimit }, aiTagsList, settings))
+    withDeadline(() => fetchSingleSiteBatch(site, { ...params, page: remotePage, limit: batchLimit }, aiTagsList, settings))
       .catch(() => []);
 
   let inflight = launchPage(startRemotePage);

@@ -1,4 +1,4 @@
-import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
@@ -63,7 +63,10 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
 
   try {
     const res = await fetchSafe(url, { settings, site: 'xbooru' });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      await discardResponse(res);
+      return [];
+    }
     const text = await res.text();
     const data = safeJsonParse(text, []);
     const posts = data?.post || (Array.isArray(data) ? data : []);
@@ -182,7 +185,10 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
 
   try {
     const res = await fetchSafe(url, { settings, site: 'hypnohub' });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      await discardResponse(res);
+      return [];
+    }
     const text = await res.text();
     const data = safeJsonParse(text, []);
     const posts = data?.post || (Array.isArray(data) ? data : []);
@@ -294,7 +300,10 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
 
   try {
     const res = await fetchSafe(url, { settings, site: 'tbib' });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      await discardResponse(res);
+      return [];
+    }
     const text = await res.text();
     const data = safeJsonParse(text, []);
     const posts = Array.isArray(data) ? data : [];

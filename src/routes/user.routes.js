@@ -1,8 +1,7 @@
 import express from 'express';
 import fs from 'fs';
-import path from 'path';
-import { spawn, exec } from 'child_process';
-import { THUMBS_DIR, VIDEOS_DIR, PORT, ROOT_DIR } from '../config/constants.js';
+import { spawn } from 'child_process';
+import { THUMBS_DIR, VIDEOS_DIR, PORT } from '../config/constants.js';
 import { 
   getSettings, 
   updateSettings, 
@@ -17,7 +16,8 @@ import {
   clearDislikes, 
   sendBooruLike,
   sendBooruFavorite,
-  sendBooruAuthorFollow
+  sendBooruAuthorFollow,
+  stripSecretSettings
 } from '../services/storageService.js';
 import { 
   apiPostsCache, 
@@ -27,12 +27,14 @@ import {
 } from '../services/cacheService.js';
 import { getLocalIpAddress } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
-import { authMiddleware } from '../services/userService.js';
+import { authMiddleware, requireAuth } from '../services/userService.js';
 import { testTelegramBot, performTelegramBackup } from '../services/backupService.js';
 
 const router = express.Router();
 
-// Authentication middleware for all user routes
+// Soft auth for all user routes: attaches req.user when a token is present, but
+// lets anonymous callers through - a logged-out client keeps its data in the
+// browser. Routes that must not be reachable anonymously add requireAuth below.
 router.use(authMiddleware);
 
 // Store the minimum: album items are full post copies (huge JSON bloat),
@@ -48,40 +50,30 @@ function sanitizeStoredPost(post) {
   return clean;
 }
 
-// GET & POST /api/git-pull (deploy hook for Alwaysdata / servers)
-router.all('/git-pull', (req, res) => {
-  exec('git reset --hard origin/main && git pull origin main', { cwd: ROOT_DIR }, (err, stdout, stderr) => {
-    if (err) {
-      return res.status(500).json({ success: false, error: err.message, stderr });
-    }
-    try {
-      const restartFile = path.join(ROOT_DIR, 'tmp', 'restart.txt');
-      if (!fs.existsSync(path.dirname(restartFile))) fs.mkdirSync(path.dirname(restartFile), { recursive: true });
-      fs.writeFileSync(restartFile, 'reloaded at ' + new Date().toISOString());
-    } catch {}
-    res.json({ success: true, stdout, stderr, time: new Date().toISOString() });
-
-    // Restart the process to load the new code into memory immediately
-    setTimeout(() => {
-      process.exit(0);
-    }, 500);
-  });
-});
-
 // GET /api/settings
 router.get('/settings', (req, res) => {
   const userId = req.user?.id || null;
-  res.json({ success: true, settings: getSettings(userId) });
+  const settings = getSettings(userId);
+  // An anonymous caller gets the non-secret half only. A logged-out browser does
+  // not need the keys - it keeps its own copy and sends them per request in the
+  // x-booru-auth header - but anyone on the LAN used to be able to read every
+  // API key and the Telegram bot token straight out of here.
+  res.json({ success: true, settings: userId ? settings : stripSecretSettings(settings) });
 });
 
 // POST /api/settings
 router.post('/settings', (req, res) => {
   const userId = req.user?.id || null;
-  const updated = updateSettings(req.body || {}, userId);
+  // Credentials are only persisted for a signed-in account. Accepting them from
+  // an anonymous caller let anyone on the network repoint telegramBotToken /
+  // telegramChatId at their own bot and have the next scheduled backup deliver
+  // the whole database to them.
+  const incoming = userId ? (req.body || {}) : stripSecretSettings(req.body || {});
+  const updated = updateSettings(incoming, userId);
   if (req.body && req.body.maxServerCacheMb !== undefined) {
     cleanDiskCacheIfNeeded();
   }
-  res.json({ success: true, settings: updated });
+  res.json({ success: true, settings: userId ? updated : stripSecretSettings(updated) });
 });
 
 // GET /api/favorites
@@ -412,8 +404,8 @@ router.get('/cache-info', async (req, res) => {
   });
 });
 
-// POST /api/cache-clear
-router.post('/cache-clear', async (req, res) => {
+// POST /api/cache-clear - wipes the RAM cache and every cached file on disk
+router.post('/cache-clear', requireAuth, async (req, res) => {
   try {
     apiPostsCache.clear();
     tagAutocompleteCache.clear();
@@ -439,7 +431,9 @@ router.post('/cache-clear', async (req, res) => {
 let tunnelProcess = null;
 let tunnelUrl = '';
 
-router.get('/tunnel', (req, res) => {
+// Publishing the server to the public internet is not something an anonymous
+// LAN peer gets to trigger
+router.get('/tunnel', requireAuth, (req, res) => {
   const port = Number(PORT);
   const localIp = getLocalIpAddress();
   const localUrl = `http://${localIp}:${port}`;
@@ -487,7 +481,7 @@ router.get('/tunnel', (req, res) => {
 });
 
 // POST /api/backup/telegram/test - check bot connectivity
-router.post('/backup/telegram/test', async (req, res) => {
+router.post('/backup/telegram/test', requireAuth, async (req, res) => {
   try {
     const { token, chatId } = req.body || {};
     const userId = req.user?.id || null;
@@ -511,7 +505,7 @@ router.post('/backup/telegram/test', async (req, res) => {
 });
 
 // POST /api/backup/telegram/send - send a backup to Telegram
-router.post('/backup/telegram/send', async (req, res) => {
+router.post('/backup/telegram/send', requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id || null;
     const result = await performTelegramBackup(userId, true);
@@ -553,7 +547,7 @@ function parseClientAuth(req) {
 }
 
 // POST /api/sync-external - Batch sync existing likes, favorites, and favorite authors to remote services
-router.post('/sync-external', async (req, res) => {
+router.post('/sync-external', requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id || null;
     const clientAuth = parseClientAuth(req);

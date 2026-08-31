@@ -4,7 +4,7 @@ import fs from 'fs';
 import { Readable } from 'stream';
 import { THUMBS_DIR, BROWSER_USER_AGENT, BOORU_USER_AGENT } from '../config/constants.js';
 import { getSettings } from './storageService.js';
-import { resolveSiteReferer, fetchSafe } from '../utils/network.js';
+import { resolveSiteReferer, fetchSafe, isSafeExternalUrl, discardResponse } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
 
 // Max image size that gets buffered into memory and written to the disk cache
@@ -24,6 +24,50 @@ function detectImageExt(cleanPath) {
     if (cleanPath.endsWith(suffix)) return ext;
   }
   return 'jpg';
+}
+
+// Cache file name is derived from the requested URL only - never from the URL a 404
+// fallback resolved to. Keying the write off the effective URL made the reader and
+// the writer disagree whenever the fallback changed the extension, so the entry was
+// written once and never hit again
+function imageCachePath(url) {
+  const hash = crypto.createHash('md5').update(url).digest('hex');
+  return path.join(THUMBS_DIR, `${hash}.${detectImageExt(url.split('?')[0].toLowerCase())}`);
+}
+
+// A cache entry is only usable if its first bytes are a real image signature.
+// Otherwise we would happily serve a cached HTML error page forever
+async function hasValidCacheFile(cacheFilePath) {
+  let head = null;
+  try {
+    const stats = await fs.promises.stat(cacheFilePath);
+    if (stats.size <= 0) return false;
+    const handle = await fs.promises.open(cacheFilePath, 'r');
+    try {
+      head = await handle.read(Buffer.alloc(32), 0, 32, 0);
+    } finally {
+      await handle.close().catch(() => {});
+    }
+    head = head.buffer.subarray(0, head.bytesRead);
+  } catch {
+    return false;
+  }
+  if (isValidImageBuffer(head)) return true;
+  // Garbage on disk (truncated write, error page) - drop it so the next request refetches
+  fs.promises.unlink(cacheFilePath).catch(() => {});
+  return false;
+}
+
+// Write via a temp file + rename: a crash or a concurrent reader must never see a half-written image
+async function writeCacheFileAtomic(cacheFilePath, buf) {
+  const tmpPath = `${cacheFilePath}.${process.pid}.tmp`;
+  try {
+    await fs.promises.writeFile(tmpPath, buf);
+    await fs.promises.rename(tmpPath, cacheFilePath);
+  } catch (err) {
+    fs.promises.unlink(tmpPath).catch(() => {});
+    throw err;
+  }
 }
 
 // Deduplicate concurrent requests for the same image (thundering herd)
@@ -145,7 +189,17 @@ function fixContentType(res, targetUrl) {
 }
 
 async function tryFetch(url, headers, signal, settings) {
-  return fetchSafe(url, { headers, redirect: 'follow', signal, settings, timeout: PROXY_ABORT_MS });
+  // The body is piped straight to the client - a full-length video is far slower
+  // than any sane timeout - so the caller's AbortController owns the deadline
+  // here and no body timer is armed
+  return fetchSafe(url, {
+    headers,
+    redirect: 'follow',
+    signal,
+    settings,
+    timeout: PROXY_ABORT_MS,
+    streamBody: true
+  });
 }
 
 // Sources like rule34video answer 429 to a burst of Range requests for one video.
@@ -159,6 +213,30 @@ function pruneUpstreamCooldown() {
   for (const [url, until] of upstreamCooldown) {
     if (until < now) upstreamCooldown.delete(url);
   }
+}
+
+// Shared by every proxy path: fetch, and on 404 walk the alternative CDN hosts /
+// extensions. Any response that is not adopted must have its body released -
+// undici keeps the socket checked out until the body is consumed or cancelled,
+// so a leaking fallback loop exhausts the pool during gallery scroll
+async function fetchWith404Fallback(url, headers, signal, settings, options = {}) {
+  const { headersFor = null, shouldFallback = (r) => r.status === 404 } = options;
+
+  let response = await fetchUpstreamWithRetry(url, headers, signal, settings);
+  if (!shouldFallback(response)) return { response, effectiveUrl: url };
+
+  for (const altUrl of build404FallbackCandidates(url)) {
+    let altResp = null;
+    try {
+      altResp = await tryFetch(altUrl, headersFor ? headersFor(altUrl) : headers, signal, settings);
+      if (altResp.ok || altResp.status === 206) {
+        await discardResponse(response);
+        return { response: altResp, effectiveUrl: altUrl };
+      }
+    } catch {}
+    await discardResponse(altResp);
+  }
+  return { response, effectiveUrl: url };
 }
 
 async function fetchUpstreamWithRetry(targetUrl, headers, signal, settings, maxRetries = 2) {
@@ -197,26 +275,14 @@ async function downloadAndCacheImage(req, res, originalUrl, headers, settings) {
     try { controller.abort(); } catch {}
   });
 
-  let response;
-  let effectiveUrl = originalUrl;
+  let fetched;
   try {
-    response = await fetchUpstreamWithRetry(originalUrl, headers, controller.signal, settings);
-
-    if (response.status === 404) {
-      for (const altUrl of build404FallbackCandidates(originalUrl)) {
-        try {
-          const altResp = await tryFetch(altUrl, headers, controller.signal, settings);
-          if (altResp.ok || altResp.status === 206) {
-            response = altResp;
-            effectiveUrl = altUrl;
-            break;
-          }
-        } catch {}
-      }
-    }
+    fetched = await fetchWith404Fallback(originalUrl, headers, controller.signal, settings);
   } finally {
     clearTimeout(abortTimeout);
   }
+  const response = fetched.response;
+  const effectiveUrl = fetched.effectiveUrl;
 
   res.status(response.status);
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -261,10 +327,9 @@ async function downloadAndCacheImage(req, res, originalUrl, headers, settings) {
     return res.send(buf);
   }
 
-  const hash = crypto.createHash('md5').update(originalUrl).digest('hex');
-  const ext = detectImageExt(effectiveUrl.split('?')[0].toLowerCase());
-  const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${ext}`);
-  fs.promises.writeFile(cacheFilePath, buf).catch(() => {});
+  // Keyed off the requested URL, not the fallback one, so the reader finds it again
+  const cacheFilePath = imageCachePath(originalUrl);
+  writeCacheFileAtomic(cacheFilePath, buf).catch(() => {});
   res.send(buf);
 }
 
@@ -288,7 +353,15 @@ function pipeUpstream(req, res, webStream) {
 export async function handleProxyRequest(req, res) {
   // Reassigned when a 404 fallback candidate succeeds, so it must stay mutable
   let targetUrl = req.query.url;
-  if (!targetUrl) return res.status(400).send('Требуется параметр url');
+  // ?url=a&url=b arrives as an array, which would blow up on .split() below
+  if (Array.isArray(targetUrl)) targetUrl = targetUrl[0];
+  if (!targetUrl || typeof targetUrl !== 'string') return res.status(400).send('Требуется параметр url');
+
+  // Without this the endpoint is an open proxy: anything on the LAN could read
+  // internal services and cloud metadata (169.254.169.254) through it.
+  if (!isSafeExternalUrl(targetUrl)) {
+    return res.status(403).send('URL не разрешён');
+  }
 
   try {
     const cleanPath = targetUrl.split('?')[0].toLowerCase();
@@ -298,28 +371,21 @@ export async function handleProxyRequest(req, res) {
 
     // Disk cache for images (non-blocking)
     if (isImage && !isRangeReq) {
-      const hash = crypto.createHash('md5').update(targetUrl).digest('hex');
-      const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${detectImageExt(cleanPath)}`);
+      const cacheFilePath = imageCachePath(targetUrl);
 
-      try {
-        const stats = await fs.promises.stat(cacheFilePath);
-        if (stats.size > 0) {
-          res.setHeader('Cache-Control', 'public, max-age=604800');
-          return res.sendFile(cacheFilePath);
-        }
-      } catch {}
+      if (await hasValidCacheFile(cacheFilePath)) {
+        res.setHeader('Cache-Control', 'public, max-age=604800');
+        return res.sendFile(cacheFilePath);
+      }
 
       // The same file is already downloading - wait for it, then re-check the cache
       const inflightJob = inflightImages.get(targetUrl);
       if (inflightJob) {
         await inflightJob.catch(() => {});
-        try {
-          const stats = await fs.promises.stat(cacheFilePath);
-          if (stats.size > 0) {
-            res.setHeader('Cache-Control', 'public, max-age=604800');
-            return res.sendFile(cacheFilePath);
-          }
-        } catch {}
+        if (await hasValidCacheFile(cacheFilePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=604800');
+          return res.sendFile(cacheFilePath);
+        }
       }
 
       // Register our own download as active
@@ -345,20 +411,7 @@ export async function handleProxyRequest(req, res) {
       try { controller.abort(); } catch {}
     });
 
-    let response = await fetchUpstreamWithRetry(targetUrl, headers, controller.signal, currentSettings);
-
-    if (response.status === 404) {
-      for (const altUrl of build404FallbackCandidates(targetUrl)) {
-        try {
-          const altResp = await tryFetch(altUrl, headers, controller.signal, currentSettings);
-          if (altResp.ok || altResp.status === 206) {
-            response = altResp;
-            targetUrl = altUrl;
-            break;
-          }
-        } catch {}
-      }
-    }
+    const { response, effectiveUrl } = await fetchWith404Fallback(targetUrl, headers, controller.signal, currentSettings);
     clearTimeout(abortTimeout);
 
     res.status(response.status);
@@ -372,7 +425,7 @@ export async function handleProxyRequest(req, res) {
         res.setHeader(h, h === 'content-type' && val.includes(',') ? val.split(',')[0].trim() : val);
       }
     });
-    fixContentType(res, targetUrl);
+    fixContentType(res, effectiveUrl);
     if (!res.getHeader('cache-control')) {
       res.setHeader('Cache-Control', 'public, max-age=604800');
     }
@@ -420,20 +473,17 @@ export function isValidImageBuffer(buf) {
 export async function getOrFetchImageBuffer(imageUrl, currentSettings = null) {
   if (!imageUrl || typeof imageUrl !== 'string') return null;
   const settings = currentSettings || getSettings();
-  const cleanPath = imageUrl.split('?')[0].toLowerCase();
-  const hash = crypto.createHash('md5').update(imageUrl).digest('hex');
-  const ext = detectImageExt(cleanPath);
-  const cacheFilePath = path.join(THUMBS_DIR, `${hash}.${ext}`);
+  // Same key as every other path - see imageCachePath
+  const cacheFilePath = imageCachePath(imageUrl);
 
   // 1. Check disk cache
   try {
-    const stats = await fs.promises.stat(cacheFilePath);
-    if (stats.size > 0) {
-      const cachedBuf = await fs.promises.readFile(cacheFilePath);
-      if (isValidImageBuffer(cachedBuf)) {
-        return { buffer: cachedBuf, fromDisk: true };
-      }
+    const cachedBuf = await fs.promises.readFile(cacheFilePath);
+    if (isValidImageBuffer(cachedBuf)) {
+      return { buffer: cachedBuf, fromDisk: true };
     }
+    // Not an image - a stale or truncated entry, drop it
+    fs.promises.unlink(cacheFilePath).catch(() => {});
   } catch {}
 
   // 2. Fetch from upstream with full browser headers and fallback
@@ -442,29 +492,19 @@ export async function getOrFetchImageBuffer(imageUrl, currentSettings = null) {
   const timeout = setTimeout(() => controller.abort(), PROXY_ABORT_MS);
 
   try {
-    let response = await fetchUpstreamWithRetry(imageUrl, headers, controller.signal, settings);
-    let effectiveUrl = imageUrl;
-
-    if (response.status === 404 || !response.ok) {
-      for (const altUrl of build404FallbackCandidates(imageUrl)) {
-        try {
-          const altHeaders = buildUpstreamHeaders(altUrl, true, settings);
-          const altResp = await tryFetch(altUrl, altHeaders, controller.signal, settings);
-          if (altResp.ok || altResp.status === 206) {
-            response = altResp;
-            effectiveUrl = altUrl;
-            break;
-          }
-        } catch {}
-      }
-    }
+    const { response } = await fetchWith404Fallback(imageUrl, headers, controller.signal, settings, {
+      headersFor: (altUrl) => buildUpstreamHeaders(altUrl, true, settings),
+      shouldFallback: (r) => r.status === 404 || !r.ok
+    });
 
     if (!response || !response.ok) {
+      await discardResponse(response);
       return null;
     }
 
     const cType = (response.headers.get('content-type') || '').toLowerCase();
     if (cType.includes('text/html') || cType.includes('text/plain')) {
+      await discardResponse(response);
       return null;
     }
 
@@ -477,9 +517,7 @@ export async function getOrFetchImageBuffer(imageUrl, currentSettings = null) {
 
     // Save to disk cache
     if (buf.length <= MAX_CACHED_IMAGE_BYTES) {
-      const saveExt = detectImageExt(effectiveUrl.split('?')[0].toLowerCase());
-      const finalCachePath = path.join(THUMBS_DIR, `${hash}.${saveExt}`);
-      fs.promises.writeFile(finalCachePath, buf).catch(() => {});
+      writeCacheFileAtomic(cacheFilePath, buf).catch(() => {});
     }
 
     return { buffer: buf, fromDisk: false };

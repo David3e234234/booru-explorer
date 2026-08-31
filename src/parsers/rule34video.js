@@ -1,4 +1,4 @@
-import { fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, classifyTags } from '../utils/tagHelpers.js';
 import { logError } from '../utils/logger.js';
 
@@ -269,7 +269,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         settings,
         site: 'rule34video'
       });
-      if (!res.ok) return [];
+      if (!res.ok) {
+        await discardResponse(res);
+        return [];
+      }
       const html = await res.text();
 
       const blocks = html.split('<div class="item').slice(1);
@@ -411,7 +414,9 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
 
         let duration = 0;
         let durationText = '';
-        const durMatch = block.match(/class="[^"]*duration[^"]*">([^<]+)<\/span>/i) || block.match(/data-duration="([^"]+)"/i) || block.match(/(\d+:\d+(?::\d+)?)/);
+        const durMatch = block.match(/class="[^"]*duration[^"]*"[^>]*>([^<]+)<\/span>/i) ||
+                         block.match(/data-duration="([^"]+)"/i) ||
+                         block.match(/class="[^"]*(?:time|length)[^"]*"[^>]*>([^<]+)<\/span>/i);
         if (durMatch) {
           const rawDur = durMatch[1].trim();
           durationText = rawDur;
@@ -576,7 +581,10 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
       settings,
       site: 'rule34video'
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      await discardResponse(res);
+      return null;
+    }
     const html = await res.text();
 
     const candidateUrls = [];

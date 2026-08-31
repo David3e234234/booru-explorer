@@ -819,7 +819,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         } else if (post.isVideo && !this.src.includes('/api/video-thumbnail')) {
           this.src = `/api/video-thumbnail?url=${encodeURIComponent(post.sampleUrl || post.fileUrl)}&quality=low`;
         } else {
-          this.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' fill='%231a202e'><rect width='200' height='200'/><text x='50%' y='50%' fill='%2364748b' text-anchor='middle' font-size='12'>${t('gal.badgeVideo', 'Видео')}</text></svg>`;
+          const placeholderText = post.isVideo ? t('gal.badgeVideo', 'Видео') : t('gal.failedImage', 'Медиа');
+          this.src = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200' fill='%231a202e'><rect width='200' height='200'/><text x='50%' y='50%' fill='%2364748b' text-anchor='middle' font-size='12'>${placeholderText}</text></svg>`;
         }
       });
     }

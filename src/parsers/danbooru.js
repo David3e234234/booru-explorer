@@ -7,7 +7,7 @@ import {
   PREGNANT_TAGS,
   LGBT_TAGS
 } from '../config/constants.js';
-import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, isPostMatchingFilters } from '../utils/tagHelpers.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logInfo, logError } from '../utils/logger.js';
@@ -165,7 +165,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       if (r !== 'e' && r !== 'explicit' && r !== '?') return false;
     } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
       const r = (item.rating || '').toLowerCase();
-      if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
+      if (r !== 'q' && r !== 'questionable' && r !== 'sensitive' && r !== 's') return false;
     } else if (ratingFilter === 'sfw') {
       const r = (item.rating || '').toLowerCase();
       if (r !== 'g' && r !== 'general') return false;
@@ -210,6 +210,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
           if (i > 0 || retry > 0) await new Promise(r => setTimeout(r, 150));
           const res = await fetchSafe(url, { settings, site: 'danbooru' });
           if (!res.ok) {
+            await discardResponse(res);
             if (res.status === 429) {
               await new Promise(r => setTimeout(r, 600));
               continue;
@@ -272,6 +273,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         if (Array.isArray(data)) allData = data;
       } else {
         logError('Danbooru', `API статус: ${res.status}`);
+        await discardResponse(res);
       }
     } catch (err) {
       logError('Danbooru', 'Ошибка стандартного fetch', err);
@@ -295,6 +297,8 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
           skipUserTagCheck = true;
           allData = data;
         }
+      } else {
+        await discardResponse(res);
       }
     } catch (e) {}
   }
@@ -313,6 +317,8 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         if (Array.isArray(data) && data.length > 0) {
           allData = data;
         }
+      } else {
+        await discardResponse(res);
       }
     } catch (e) {}
   }

@@ -4,12 +4,23 @@ import {
   getFavorites, 
   getLikes, 
   getDislikes, 
-  getFavoriteAuthors 
+  getFavoriteAuthors,
+  stripSecretSettings
 } from './storageService.js';
 import { getUsersList, exportAccountRecord } from './userService.js';
 import { logInfo, logError, logWarn } from '../utils/logger.js';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
+
+// An account export carries passwordHash + salt so the login can be recreated on
+// another machine. A backup goes to a third-party chat instead, so the password
+// material is dropped: restoring a backup still brings back all data, just not
+// the login itself (the user signs in or re-registers as usual).
+function stripAccountSecrets(account) {
+  if (!account || typeof account !== 'object') return account;
+  const { passwordHash, salt, ...safe } = account;
+  return safe;
+}
 
 /**
  * Check connectivity to the Telegram bot and send a test message
@@ -134,7 +145,7 @@ export function buildBackupPayload(userId = null) {
   const likes = getLikes(userId);
   const dislikes = getDislikes(userId);
   const favoriteAuthors = getFavoriteAuthors(userId);
-  const account = userId ? exportAccountRecord(userId) : null;
+  const account = userId ? stripAccountSecrets(exportAccountRecord(userId)) : null;
 
   const now = new Date();
 
@@ -151,7 +162,7 @@ export function buildBackupPayload(userId = null) {
       favoriteAuthorsCount: favoriteAuthors.length
     },
     data: {
-      settings,
+      settings: stripSecretSettings(settings),
       favorites,
       likes,
       dislikes,

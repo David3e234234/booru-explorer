@@ -1,4 +1,4 @@
-import { safeJsonParse, fetchSafe, resolvePreviewUrl } from '../utils/network.js';
+import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
@@ -130,6 +130,8 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
             };
           }));
         }
+      } else {
+        await discardResponse(res);
       }
     } catch (err) {
       logError('Gelbooru DAPI', 'Ошибка DAPI запроса, переключение на HTML парсинг', err);
@@ -140,7 +142,10 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
   const htmlUrl = `https://gelbooru.com/index.php?page=post&s=list&tags=${encodeURIComponent(searchTags)}&pid=${pid * 42}`;
   try {
     const res = await fetchSafe(htmlUrl, { settings, site: 'gelbooru' });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      await discardResponse(res);
+      return [];
+    }
     const html = await res.text();
 
     const rawParsed = [];
