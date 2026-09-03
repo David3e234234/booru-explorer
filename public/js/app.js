@@ -834,6 +834,7 @@ async function performSearch(reset = false, options = {}) {
       }
 
       const searchQueryStr = state.searchTags.length > 0 ? state.searchTags.join(' ').trim() : '';
+      const effectiveSort = (state.postSort && state.postSort !== 'new') ? state.postSort : 'new';
       const fetchTasks = [];
 
       for (const aQuery of authorQueries) {
@@ -844,7 +845,8 @@ async function performSearch(reset = false, options = {}) {
             tags: combinedTags,
             page: state.page,
             limit: Math.min(40, currentLimit),
-            category: 'new',
+            category: effectiveSort,
+            customSites: state.currentSite === 'custom' ? state.settings?.customSources : '',
             pawchiveService: state.currentSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
             aiFilter: state.aiFilter,
             ratingFilter: state.ratingFilter,
@@ -862,30 +864,75 @@ async function performSearch(reset = false, options = {}) {
       if (seq !== searchSeq) return;
 
       let allFetchedPosts = [];
+      const authorLists = [];
       for (const res of results) {
-        if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts)) {
+        if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts) && res.value.posts.length > 0) {
+          authorLists.push(res.value.posts);
           allFetchedPosts.push(...res.value.posts);
+        }
+      }
+
+      // If sorting by "hot", interleave across author lists so each creator gets equal representation
+      let orderedPosts = allFetchedPosts;
+      if (effectiveSort === 'hot' && authorLists.length > 1) {
+        orderedPosts = [];
+        const maxLength = Math.max(0, ...authorLists.map(l => l.length));
+        for (let i = 0; i < maxLength; i++) {
+          for (let j = 0; j < authorLists.length; j++) {
+            if (i < authorLists[j].length) {
+              orderedPosts.push(authorLists[j][i]);
+            }
+          }
         }
       }
 
       // Deduplicate posts
       const seenIds = new Set();
       const uniquePosts = [];
-      for (const post of allFetchedPosts) {
+      for (const post of orderedPosts) {
         if (!post || !post.id || seenIds.has(post.id)) continue;
         seenIds.add(post.id);
         uniquePosts.push(post);
       }
 
-      // Sort by newest first (created_at date or numeric originalId)
-      uniquePosts.sort((a, b) => {
-        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        if (timeA && timeB && timeA !== timeB) return timeB - timeA;
-        const numIdA = Number(String(a.originalId || a.id).replace(/\D/g, '')) || 0;
-        const numIdB = Number(String(b.originalId || b.id).replace(/\D/g, '')) || 0;
-        return numIdB - numIdA;
-      });
+      // Sort unique posts according to selected sort mode
+      if (effectiveSort === 'top') {
+        uniquePosts.sort((a, b) => {
+          const scoreA = Number(a.score) || 0;
+          const scoreB = Number(b.score) || 0;
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+          const numIdA = Number(String(a.originalId || a.id).replace(/\D/g, '')) || 0;
+          const numIdB = Number(String(b.originalId || b.id).replace(/\D/g, '')) || 0;
+          return numIdB - numIdA;
+        });
+      } else if (effectiveSort === 'views') {
+        uniquePosts.sort((a, b) => {
+          const viewsA = Number(a.views != null ? a.views : (a.favCount || a.score || 0));
+          const viewsB = Number(b.views != null ? b.views : (b.favCount || b.score || 0));
+          if (viewsB !== viewsA) return viewsB - viewsA;
+          const scoreA = Number(a.score) || 0;
+          const scoreB = Number(b.score) || 0;
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+          const numIdA = Number(String(a.originalId || a.id).replace(/\D/g, '')) || 0;
+          const numIdB = Number(String(b.originalId || b.id).replace(/\D/g, '')) || 0;
+          return numIdB - numIdA;
+        });
+      } else if (effectiveSort === 'new') {
+        uniquePosts.sort((a, b) => {
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+          const numIdA = Number(String(a.originalId || a.id).replace(/\D/g, '')) || 0;
+          const numIdB = Number(String(b.originalId || b.id).replace(/\D/g, '')) || 0;
+          return numIdB - numIdA;
+        });
+      }
 
       // Strictly verify that the post belongs to followed favorite authors
       const isPostByFollowedAuthor = (post) => {
