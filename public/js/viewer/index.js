@@ -132,21 +132,23 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             if (cardEl) {
               if (cardEl._post) cardEl._post.author = data.author;
               let authorBadge = cardEl.querySelector('.badge-format.author');
-              const cleanA = data.author.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').trim();
+              const parts = data.author.split(',').map(s => s.trim()).filter(Boolean);
+              const mainAuthor = parts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || parts[0] || '';
+              const cleanA = mainAuthor.replace(/^@/, '').replace(/^pixiv:/, '').replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').trim();
               if (cleanA && cleanA.length >= 2) {
                 if (authorBadge) {
                   authorBadge.textContent = cleanA;
                   authorBadge.setAttribute('data-author', cleanA);
                   authorBadge.setAttribute('title', `Автор: ${cleanA} (нажмите для поиска)`);
                 } else {
-                  const badgesContainer = cardEl.querySelector('.card-badges');
-                  if (badgesContainer) {
+                  const bottomGroup = cardEl.querySelector('.badge-group-bottom');
+                  if (bottomGroup) {
                     const span = document.createElement('span');
                     span.className = 'badge-format author';
                     span.setAttribute('data-author', cleanA);
                     span.setAttribute('title', `Автор: ${cleanA} (нажмите для поиска)`);
                     span.textContent = cleanA;
-                    badgesContainer.appendChild(span);
+                    bottomGroup.appendChild(span);
                   }
                 }
               }
@@ -957,16 +959,26 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (resBadge) resBadge.textContent = (currentPost.width && currentPost.height) ? `${currentPost.width} × ${currentPost.height}` : t('vw.original', 'Оригинал');
     if (extBadge) extBadge.textContent = (currentPost.fileExt || 'JPG').toUpperCase();
 
-    // Author display
-    const primaryArtistTag = (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0) ? currentPost.tagDetails.artist[0] : '';
-    const rawAuthor = primaryArtistTag || currentPost.author || '';
-    const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
+    // Author display: prioritize visual creator over secondary audio/sound credits
+    let primaryVisualArtist = '';
+    if (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0) {
+      const visualTag = currentPost.tagDetails.artist.find(a => !/_?\((audio|sfx|sound|voice|va|music)\)$/i.test(a));
+      primaryVisualArtist = visualTag || currentPost.tagDetails.artist[0];
+    }
+
+    let rawAuthor = currentPost.author || primaryVisualArtist || '';
+    let authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
+
+    // Split authors to identify the primary animator / creator
+    const authorParts = authorName.split(',').map(s => s.trim()).filter(Boolean);
+    const mainAuthorName = authorParts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || authorParts[0] || authorName;
+
     if (authorName && authorName.trim()) {
-      const cleanAuthorTag = (primaryArtistTag || authorName.split(',')[0]).trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      const cleanAuthorTag = (primaryVisualArtist || mainAuthorName).trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
       const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
 
       if (viewerAuthorBadge && viewerAuthorText) {
-        viewerAuthorText.textContent = authorName;
+        viewerAuthorText.textContent = mainAuthorName;
         viewerAuthorBadge.style.display = 'inline-flex';
         viewerAuthorBadge.onclick = (e) => {
           e.stopPropagation();

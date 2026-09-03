@@ -568,6 +568,47 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     'resident_evil', 'final_fantasy', 'cyberpunk', 'league_of_legends', 'touhou'
   ]);
 
+  const resolvingCardAuthors = new Set();
+
+  function lazyResolveRule34VideoAuthor(card, post) {
+    if (!post || post.site !== 'rule34video' || post.author) return;
+    const postId = post.originalId || post.id;
+    if (!postId || resolvingCardAuthors.has(postId)) return;
+    resolvingCardAuthors.add(postId);
+
+    fetch(`/api/resolve-video?id=${encodeURIComponent(post.originalId)}&url=${encodeURIComponent(post.source || '')}&site=rule34video`)
+      .then(r => r.json())
+      .then(data => {
+        resolvingCardAuthors.delete(postId);
+        if (!data || !data.author) return;
+        post.author = data.author;
+        if (card._post) card._post.author = data.author;
+
+        const bottomGroup = card.querySelector('.badge-group-bottom');
+        if (!bottomGroup) return;
+
+        const parts = data.author.split(',').map(s => s.trim()).filter(Boolean);
+        const mainAuthor = parts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || parts[0] || '';
+        let cleanA = mainAuthor.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
+        cleanA = cleanA.replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').replace(/\([^)]*\)$/, '').trim();
+
+        if (cleanA && cleanA.length >= 2 && !INVALID_AUTHOR_NAMES.has(cleanA.toLowerCase())) {
+          let badge = bottomGroup.querySelector('.badge-format.author');
+          if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'badge-format author';
+            bottomGroup.appendChild(badge);
+          }
+          badge.setAttribute('data-author', cleanA);
+          badge.setAttribute('title', t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanA));
+          badge.textContent = cleanA;
+        }
+      })
+      .catch(() => {
+        resolvingCardAuthors.delete(postId);
+      });
+  }
+
   function createMediaCard(post, index) {
     const card = document.createElement('div');
     card.className = 'media-card';
@@ -689,9 +730,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       ratingBadge = `<span class="badge-format" style="background-color: rgba(244,63,94,0.85);">18+</span>`;
     }
 
-    // Strip junk suffixes from the author but display the full author name
-    const rawAuthor = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
-    let cleanAuthor = rawAuthor.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
+    // Strip junk suffixes from the author and prioritize primary visual animator
+    const authorParts = (post.author || '').split(',').map(s => s.trim()).filter(Boolean);
+    const mainAuthorCandidate = authorParts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || authorParts[0] || '';
+    const rawAuthor = mainAuthorCandidate || (post.tagDetails?.artist && post.tagDetails.artist.find(a => !/_?\((audio|sfx|sound|voice|va|music)\)$/i.test(a))) || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
+    let cleanAuthor = String(rawAuthor).split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
     cleanAuthor = cleanAuthor.replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').replace(/\([^)]*\)$/, '').trim();
     if (cleanAuthor && (INVALID_AUTHOR_NAMES.has(cleanAuthor.toLowerCase()) || cleanAuthor.length < 2)) {
       cleanAuthor = '';
@@ -896,6 +939,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       if (videoMetadataObserver && !post.duration) {
         videoMetadataObserver.observe(card);
       }
+    }
+
+    if (post.site === 'rule34video' && !cleanAuthor) {
+      setTimeout(() => lazyResolveRule34VideoAuthor(card, post), 60);
     }
 
     return card;

@@ -583,7 +583,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     author.split(',').forEach(a => {
       const cleanA = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
       if (cleanA && !artist.includes(cleanA) && !artist.includes(a.trim())) {
-        artist.unshift(cleanA);
+        artist.push(cleanA);
       }
     });
   } else if (artist.length > 0) {
@@ -599,9 +599,18 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       author = authorFromSource;
       const cleanA = author.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
       if (cleanA && !artist.includes(cleanA)) {
-        artist.unshift(cleanA);
+        artist.push(cleanA);
       }
     }
+  }
+
+  // Sort artist array so that visual creators always come first and audio/VA contributors come last
+  if (artist.length > 1) {
+    artist.sort((a, b) => {
+      const aAudio = /_?\((audio|sfx|sound|voice|va|music)\)$/i.test(a) ? 1 : 0;
+      const bAudio = /_?\((audio|sfx|sound|voice|va|music)\)$/i.test(b) ? 1 : 0;
+      return aAudio - bAudio;
+    });
   }
 
   return {
