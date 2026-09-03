@@ -127,6 +127,31 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           if (changed) {
             renderViewerPost(true);
           }
+          if (data.author) {
+            const cardEl = document.querySelector(`.media-card[data-post-id="${targetPostId}"]`);
+            if (cardEl) {
+              if (cardEl._post) cardEl._post.author = data.author;
+              let authorBadge = cardEl.querySelector('.badge-format.author');
+              const cleanA = data.author.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').trim();
+              if (cleanA && cleanA.length >= 2) {
+                if (authorBadge) {
+                  authorBadge.textContent = cleanA;
+                  authorBadge.setAttribute('data-author', cleanA);
+                  authorBadge.setAttribute('title', `Автор: ${cleanA} (нажмите для поиска)`);
+                } else {
+                  const badgesContainer = cardEl.querySelector('.card-badges');
+                  if (badgesContainer) {
+                    const span = document.createElement('span');
+                    span.className = 'badge-format author';
+                    span.setAttribute('data-author', cleanA);
+                    span.setAttribute('title', `Автор: ${cleanA} (нажмите для поиска)`);
+                    span.textContent = cleanA;
+                    badgesContainer.appendChild(span);
+                  }
+                }
+              }
+            }
+          }
           return data;
         })
         .catch(() => null);

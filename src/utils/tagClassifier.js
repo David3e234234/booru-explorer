@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { fetchSafe, discardResponse } from './network.js';
 import { extractAuthor as extractAuthorFromSource, decodeHtmlEntities } from './tagHelpers.js';
 
@@ -7,6 +9,8 @@ let isLoadingMap = null;
 let lastFetchedTime = 0;
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_DIR = path.resolve('data/cache');
+const TAGS_SUMMARY_CACHE_FILE = path.join(CACHE_DIR, 'tags_summary.json');
 
 export const KNOWN_EXTRA_TAGS = {
   // Popular artists, animators and studios
@@ -225,6 +229,14 @@ export const KNOWN_EXTRA_TAGS = {
   hololive_id: 3
 };
 
+export const LOCATION_BY_NOUNS = new Set([
+  'window', 'bed', 'door', 'river', 'sea', 'ocean', 'water', 'pool', 'tree', 'trees',
+  'wall', 'mirror', 'table', 'chair', 'couch', 'sofa', 'fireplace', 'fence', 'stairs',
+  'beach', 'lake', 'road', 'car', 'counter', 'railing', 'pole', 'curtain', 'pillar',
+  'bridge', 'balcony', 'desk', 'bookshelf', 'shelf', 'sink', 'bathtub', 'shower',
+  'cliff', 'rock', 'forest', 'field', 'grass', 'bench', 'steps', 'gate', 'street'
+]);
+
 export const GENERIC_NON_ARTIST_TAGS = new Set([
   '2d', '3d', 'art', 'artwork', 'animation', 'video', 'sound', 'audio', 'highres', 'lowres', 
   'comic', 'parody', 'original', 'cosplay', 'edit', 'cg', 'illustration', 'sketch', 
@@ -233,7 +245,11 @@ export const GENERIC_NON_ARTIST_TAGS = new Set([
   'ai_generated', 'ai', 'unknown', 'anonymous', 'various', 'bad_id', 'bad_link', 'translated', 'translation', 'sample', 'thumbnail',
   'throat', 'oral', 'solo', 'female', 'male', 'breasts', 'nipples', 'pussy', 'penis', 'anal', 'hentai', 'r18', 'nsfw', 'sfw',
   'selfie', 'wip', 'alt', 'version', 'ver', 'set', 'bundle', 'part', 'vol', 'volume',
-  'artist_request', 'artist request', 'source_request', 'source request', 'character_request', 'character request', 'copyright_request', 'meta_request'
+  'preview', 'trailer', 'teaser', 'short', 'commission', 'leak', 'remastered', 'fan_animation', 'gameplay', 'no_ai', 'voiced',
+  'overwatch', 'pokemon', 'genshin_impact', 'honkai_star_rail', 'zenless_zone_zero', 'wuthering_waves', 'resident_evil', 
+  'final_fantasy', 'cyberpunk', 'nier', 'nier_automata', 'league_of_legends', 'touhou', 'fate', 'naruto', 'one_piece', 'bleach',
+  'artist_request', 'artist request', 'source_request', 'source request', 'character_request', 'character request', 'copyright_request', 'meta_request',
+  ...LOCATION_BY_NOUNS
 ]);
 
 export const META_KEYWORDS = new Set([
@@ -279,71 +295,111 @@ const RESERVED_PAREN_WORDS = new Set([
   'fruit', 'food', 'animal', 'vehicle', 'object', 'clothing', 'instrument', 'weapon', 'anatomy', 'pose', 'hair', 'eyes', 'color', 'background', 'furniture', 'disambiguation'
 ]);
 
+async function fetchAndCacheSummary(settings = {}) {
+  try {
+    // Try konachan.net first (reliable/unblocked), then yande.re, then konachan.com
+    let res = await fetchSafe('https://konachan.net/tag/summary.json', { timeout: 3500, settings, site: 'konachan' }).catch(() => null);
+    if (!res || !res.ok) {
+      if (res) await discardResponse(res);
+      res = await fetchSafe('https://yande.re/tag/summary.json', { timeout: 3500, settings, site: 'yandere' }).catch(() => null);
+    }
+    if (!res || !res.ok) {
+      if (res) await discardResponse(res);
+      res = await fetchSafe('https://konachan.com/tag/summary.json', { timeout: 3500, settings, site: 'konachan' }).catch(() => null);
+    }
+
+    if (res && res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json && typeof json.data === 'string') {
+        const entries = json.data.split(' ');
+        const map = new Map();
+
+        for (const entryStr of entries) {
+          if (!entryStr) continue;
+          const parts = entryStr.split('`');
+          const type = parseInt(parts[0], 10);
+          for (let i = 1; i < parts.length; i++) {
+            const tName = parts[i];
+            if (tName) {
+              map.set(tName.toLowerCase(), type);
+            }
+          }
+        }
+
+        for (const [tag, type] of Object.entries(KNOWN_EXTRA_TAGS)) {
+          map.set(tag.toLowerCase(), type);
+        }
+
+        globalTagMap = map;
+        lastFetchedTime = Date.now();
+
+        // Persist to local disk so future boots/restarts load instantly (10ms)
+        try {
+          if (!fs.existsSync(CACHE_DIR)) {
+            fs.mkdirSync(CACHE_DIR, { recursive: true });
+          }
+          const serialized = JSON.stringify(Array.from(map.entries()));
+          await fs.promises.writeFile(TAGS_SUMMARY_CACHE_FILE, serialized, 'utf8');
+        } catch (writeErr) {
+          console.warn('[TagClassifier] Не удалось сохранить tags_summary.json на диск:', writeErr.message);
+        }
+      }
+    } else if (res) {
+      await discardResponse(res);
+    }
+  } catch (err) {
+    // Non-fatal, fallback to local dictionary
+  } finally {
+    isLoadingMap = null;
+  }
+  return globalTagMap;
+}
+
 export async function loadGlobalTagSummary(settings = {}) {
-  if (globalTagMap && Date.now() - lastFetchedTime < CACHE_TTL_MS) {
+  // If memory map is fresh, return it immediately
+  if (globalTagMap && globalTagMap.size > 1000 && Date.now() - lastFetchedTime < CACHE_TTL_MS) {
     return globalTagMap;
   }
 
-  // Immediate local dictionary so post rendering is never delayed by 6s network timeouts
+  // 1. First run: attempt to load from local disk cache (near-instant ~15ms, provides all 83,000+ tags on boot)
+  if (!globalTagMap) {
+    try {
+      if (fs.existsSync(TAGS_SUMMARY_CACHE_FILE)) {
+        const raw = fs.readFileSync(TAGS_SUMMARY_CACHE_FILE, 'utf8');
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const map = new Map(parsed);
+          for (const [tag, type] of Object.entries(KNOWN_EXTRA_TAGS)) {
+            map.set(tag.toLowerCase(), type);
+          }
+          globalTagMap = map;
+          lastFetchedTime = Date.now();
+        }
+      }
+    } catch (e) {
+      console.warn('[TagClassifier] Не удалось прочитать tags_summary.json с диска:', e.message);
+    }
+  }
+
+  // If memory or disk map is populated, return it immediately and refresh in background if stale
+  if (globalTagMap && globalTagMap.size > 1000) {
+    if (Date.now() - lastFetchedTime >= CACHE_TTL_MS && !isLoadingMap) {
+      isLoadingMap = fetchAndCacheSummary(settings);
+    }
+    return globalTagMap;
+  }
+
+  // Otherwise, initialize fallback dictionary and await network fetch
   if (!globalTagMap) {
     globalTagMap = new Map(Object.entries(KNOWN_EXTRA_TAGS));
   }
 
   if (isLoadingMap) {
-    return globalTagMap;
+    return await isLoadingMap;
   }
 
-  isLoadingMap = (async () => {
-    try {
-      // Fast non-blocking load with konachan.net first (unblocked), then yande.re, then konachan.com
-      let res = await fetchSafe('https://konachan.net/tag/summary.json', { timeout: 3000, settings, site: 'konachan' }).catch(() => null);
-      if (!res || !res.ok) {
-        if (res) await discardResponse(res);
-        res = await fetchSafe('https://yande.re/tag/summary.json', { timeout: 3000, settings, site: 'yandere' }).catch(() => null);
-      }
-      if (!res || !res.ok) {
-        if (res) await discardResponse(res);
-        res = await fetchSafe('https://konachan.com/tag/summary.json', { timeout: 3000, settings, site: 'konachan' }).catch(() => null);
-      }
-
-      if (res && res.ok) {
-        const json = await res.json().catch(() => null);
-        if (json && typeof json.data === 'string') {
-          const entries = json.data.split(' ');
-          const map = new Map(globalTagMap);
-
-          for (const entryStr of entries) {
-            if (!entryStr) continue;
-            const parts = entryStr.split('`');
-            const type = parseInt(parts[0], 10);
-            for (let i = 1; i < parts.length; i++) {
-              const tName = parts[i];
-              if (tName) {
-                map.set(tName.toLowerCase(), type);
-              }
-            }
-          }
-
-          for (const [tag, type] of Object.entries(KNOWN_EXTRA_TAGS)) {
-            map.set(tag.toLowerCase(), type);
-          }
-
-          globalTagMap = map;
-        }
-      } else if (res) {
-        await discardResponse(res);
-      }
-    } catch (err) {
-      // Non-fatal, fallback to local dictionary
-    } finally {
-      lastFetchedTime = Date.now();
-      isLoadingMap = null;
-    }
-
-    return globalTagMap;
-  })();
-
-  return globalTagMap;
+  isLoadingMap = fetchAndCacheSummary(settings);
+  return await isLoadingMap;
 }
 
 /**
@@ -385,10 +441,27 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     const lower = originalTag.toLowerCase();
 
     // 1. Explicit prefixes
-    if (lower.startsWith('artist:') || lower.startsWith('creator:') || lower.startsWith('author:') || lower.startsWith('draw:') || lower.startsWith('by_') || lower.startsWith('channel:') || lower.startsWith('uploader:')) {
-      const clean = originalTag.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/^by_/i, '').trim();
-      addUnique(artist, clean || originalTag);
+    if (lower.startsWith('artist:') || lower.startsWith('creator:') || lower.startsWith('author:') || lower.startsWith('draw:') || lower.startsWith('channel:') || lower.startsWith('uploader:')) {
+      const clean = originalTag.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').trim();
+      if (clean && !GENERIC_NON_ARTIST_TAGS.has(clean.toLowerCase())) {
+        addUnique(artist, clean);
+      }
       continue;
+    }
+
+    // by_* is only an artist if not an English preposition location tag (e.g. by_window, by_bed, by_pool)
+    if (lower.startsWith('by_')) {
+      const candidate = lower.slice(3).trim();
+      if (!LOCATION_BY_NOUNS.has(candidate) && !GENERIC_NON_ARTIST_TAGS.has(candidate) && candidate.length > 2) {
+        const clean = originalTag.slice(3).trim();
+        if (tagMap && tagMap.get(candidate) === 1) {
+          addUnique(artist, clean);
+          continue;
+        } else if (!tagMap || tagMap.get(candidate) !== 0) {
+          addUnique(artist, clean);
+          continue;
+        }
+      }
     }
 
     if (lower.startsWith('copyright:') || lower.startsWith('series:')) {
@@ -514,7 +587,12 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       }
     });
   } else if (artist.length > 0) {
-    author = artist.map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/i, '')).join(', ');
+    const validArtists = artist
+      .map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/i, '').trim())
+      .filter(a => a && !GENERIC_NON_ARTIST_TAGS.has(a.toLowerCase()) && !LOCATION_BY_NOUNS.has(a.toLowerCase()));
+    if (validArtists.length > 0) {
+      author = validArtists.join(', ');
+    }
   } else if (sourceUrl) {
     const authorFromSource = extractAuthorFromSource(tags, sourceUrl, '');
     if (authorFromSource) {

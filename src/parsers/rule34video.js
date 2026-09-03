@@ -1,6 +1,37 @@
+import fs from 'fs';
+import path from 'path';
 import { fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, classifyTags } from '../utils/tagHelpers.js';
+import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
+
+// Persistent disk cache for Rule34Video authors and videos
+const R34V_CACHE_FILE = path.join(path.resolve('data/cache'), 'r34v_authors.json');
+let r34vAuthorsCache = null;
+
+function loadR34vAuthorsCache() {
+  if (r34vAuthorsCache) return r34vAuthorsCache;
+  try {
+    if (fs.existsSync(R34V_CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(R34V_CACHE_FILE, 'utf8'));
+      if (typeof data === 'object' && data !== null && data.authors && data.videos) {
+        r34vAuthorsCache = data;
+        return r34vAuthorsCache;
+      }
+    }
+  } catch (e) {}
+  r34vAuthorsCache = { authors: {}, videos: {} };
+  return r34vAuthorsCache;
+}
+
+function saveR34vAuthorsCache() {
+  if (!r34vAuthorsCache) return;
+  try {
+    const dir = path.dirname(R34V_CACHE_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(R34V_CACHE_FILE, JSON.stringify(r34vAuthorsCache, null, 2), 'utf8');
+  } catch (e) {}
+}
 
 // Insertion-ordered eviction: these caches previously grew without bound
 // (one entry per resolved author/video for the whole uptime)
@@ -13,6 +44,30 @@ function cacheResolved(map, key, value) {
   }
   map.set(key, value);
 }
+
+export const NON_AUTHOR_TAGS = new Set([
+  'pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd', 'animated', 'loop', 
+  'audio', 'voiced', 'preview', 'commission', 'no ai', 'rus sub', 'eng sub', 
+  'full video', 'wuthering waves', 'genshin impact', 'zenless zone zero', 
+  'honkai star rail', 'christmas', 'sex', 'r18', 'uncensored', 'decensored', 'mmd', 'compilation',
+  'sfm', 'animation', 'sound', 'leak', 'patreon', 'remastered', 'fan animation', 'ai', 'vr',
+  'trailer', 'gameplay', 'hentai', 'full', 'oc', 'blender', '720p', '1080p', '480p', '2160p',
+  'part 1', 'part 2', 'part 3', 'part 4', 'part 5', 'short', 'redub', 'with sound',
+  // Expanded franchises, games and animation styles
+  'overwatch', 'overwatch 2', 'pokemon', 'pokémon', 'resident evil', 'final fantasy', 'cyberpunk',
+  'nier', 'nier automata', 'league of legends', 'lol', 'apex', 'apex legends', 'minecraft',
+  'touhou', 'fate', 'fate grand order', 'naruto', 'one piece', 'bleach', 'dragon ball',
+  'spy x family', 'chainsaw man', 'jujutsu kaisen', 'my hero academia', 'boku no hero academia',
+  'blue archive', 'arknights', 'azur lane', 'nikke', 'star wars', 'marvel', 'dc',
+  'street fighter', 'tekken', 'dead or alive', 'mortal kombat', 'persona', 'zelda',
+  'super mario', 'sonic', 'metroid', 'evangelion', 'hololive', 'nijisanji', 'vshojo',
+  'fortnite', 'valorant', 'dota', 'dota 2', 'honkai impact',
+  // Expanded release types and labels
+  '4k uhd', '1080p 60fps', '720p 60fps', '60 fps', 'dl', 'download', 'patreon release',
+  'fanbox release', 'subscribestar', 'gumroad', 'teaser', 'wip', 'full version', 'free',
+  'sound effects', 'with audio', 'no sound', 'audio version', 'test animation', 'short clip',
+  'fan made', 'fan animation', 'clip', 'webm', 'mp4', 'h264', 'h265', 'hevc'
+]);
 
 /**
  * Resolves an author/artist/model name to Rule34Video IDs (model_ids, channels, members)
@@ -208,15 +263,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
     sortByParam = '&sort_by=post_date';
   }
 
-  const nonAuthorTags = new Set([
-    'pmv', 'hmv', 'sfx', '3d', '2d', 'zzz', '4k', '60fps', 'hd', 'animated', 'loop', 
-    'audio', 'voiced', 'preview', 'commission', 'no ai', 'rus sub', 'eng sub', 
-    'full video', 'wuthering waves', 'genshin impact', 'zenless zone zero', 
-    'honkai star rail', 'christmas', 'sex', 'r18', 'uncensored', 'decensored', 'mmd', 'compilation',
-    'sfm', 'animation', 'sound', 'leak', 'patreon', 'remastered', 'fan animation', 'ai', 'vr',
-    'trailer', 'gameplay', 'hentai', 'full', 'oc', 'blender', '720p', '1080p', '480p', '2160p',
-    'part 1', 'part 2', 'part 3', 'part 4', 'part 5', 'short', 'redub', 'with sound'
-  ]);
+
 
   const fetchPromises = pageNumbers.map(async (p) => {
     let url = '';
@@ -283,27 +330,43 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         const thumb = thumbMatch ? thumbMatch[1] : '';
         const previewMp4 = previewMatch ? previewMatch[1] : '';
 
-        // 1. Extract the author from the account/channel/uploader link in the block HTML
-        let author = '';
-        const channelMatch = block.match(/href="[^"]*\/channels\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
-        const memberMatch = block.match(/href="[^"]*\/members\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
-        const uploaderMatch = block.match(/class="[^"]*(?:uploader|author|user|channel-name|item-user)[^"]*"[^>]*>([^<]+)<\/[^>]+>/i);
+        // 1. Check if this video ID is already known in our persistent disk cache
+        const r34vCache = loadR34vAuthorsCache();
+        let author = r34vCache.videos[id] || '';
 
-        if (channelMatch && channelMatch[2]) {
-          author = channelMatch[2].trim();
-        } else if (memberMatch && memberMatch[2]) {
-          author = memberMatch[2].trim();
-        } else if (uploaderMatch && uploaderMatch[1]) {
-          author = uploaderMatch[1].trim();
+        // 2. Extract the author from the account/channel/uploader link in the block HTML
+        if (!author) {
+          const channelMatch = block.match(/href="[^"]*\/channels\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
+          const memberMatch = block.match(/href="[^"]*\/members\/([^"/?#]+)\/?"[^>]*>([^<]+)<\/a>/i);
+          const uploaderMatch = block.match(/class="[^"]*(?:uploader|author|user|channel-name|item-user)[^"]*"[^>]*>([^<]+)<\/[^>]+>/i);
+
+          if (channelMatch && channelMatch[2]) {
+            author = channelMatch[2].trim();
+          } else if (memberMatch && memberMatch[2]) {
+            author = memberMatch[2].trim();
+          } else if (uploaderMatch && uploaderMatch[1]) {
+            author = uploaderMatch[1].trim();
+          }
         }
 
-        // 2. No account link in the block - deep-search the title for the author
+        // 3. Match against known authors in persistent cache
+        if (!author && r34vCache.authors) {
+          const lowerTitle = title.toLowerCase();
+          for (const [key, origName] of Object.entries(r34vCache.authors)) {
+            if (key.length >= 3 && (lowerTitle.includes(`[${key}]`) || lowerTitle.includes(`by ${key}`) || lowerTitle.includes(`${key} -`) || lowerTitle.includes(`- ${key}`) || lowerTitle.includes(`| ${key}`))) {
+              author = origName;
+              break;
+            }
+          }
+        }
+
+        // 4. No account link in block - deep-search title for author using refined heuristics
         if (!author) {
           // a) 'by Author' pattern
           const authorByMatch = title.match(/\bby\s+@?([a-zA-Z0-9_\- ]+?)(?:\s*\[|\s*\(|\s*\||\s*-\s*|$)/i);
           if (authorByMatch) {
             const candidate = authorByMatch[1].trim();
-            if (!nonAuthorTags.has(candidate.toLowerCase()) && !/^\d+p$/i.test(candidate) && candidate.length >= 2 && candidate.length <= 40) {
+            if (!NON_AUTHOR_TAGS.has(candidate.toLowerCase()) && !/^\d+p$/i.test(candidate) && candidate.length >= 2 && candidate.length <= 40) {
               author = candidate;
             }
           }
@@ -313,9 +376,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
             const startBracketMatch = title.match(/^\[([^\]]+)\]/);
             if (startBracketMatch) {
               const candidate = startBracketMatch[1].trim();
-              const parts = candidate.split(/[,/]+/).map(p => p.trim()).filter(Boolean);
+              const parts = candidate.split(/[,/|]+/).map(p => p.trim()).filter(Boolean);
               for (const part of parts) {
-                if (!nonAuthorTags.has(part.toLowerCase()) && !/^\d+p$/i.test(part) && part.length >= 2 && part.length <= 40) {
+                if (part.toLowerCase().includes(' x ')) continue;
+                if (!NON_AUTHOR_TAGS.has(part.toLowerCase()) && !/^\d+p$/i.test(part) && part.length >= 2 && part.length <= 40) {
                   author = part;
                   break;
                 }
@@ -328,7 +392,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
             const authorPipeMatch = title.match(/\|\s*([a-zA-Z0-9_\- ]+)$/);
             if (authorPipeMatch) {
               const candidate = authorPipeMatch[1].trim();
-              if (!nonAuthorTags.has(candidate.toLowerCase()) && !/^\d+p$/i.test(candidate) && candidate.length >= 2 && candidate.length <= 40) {
+              if (!NON_AUTHOR_TAGS.has(candidate.toLowerCase()) && !/^\d+p$/i.test(candidate) && candidate.length >= 2 && candidate.length <= 40) {
                 author = candidate;
               }
             }
@@ -339,9 +403,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
             const brackets = [...title.matchAll(/\[([^\]]+)\]/g)];
             for (const b of brackets) {
               const candidate = b[1].trim();
-              const parts = candidate.split(/[,/]+/).map(p => p.trim()).filter(Boolean);
+              const parts = candidate.split(/[,/|]+/).map(p => p.trim()).filter(Boolean);
               for (const part of parts) {
-                if (!nonAuthorTags.has(part.toLowerCase()) && !/^\d+p$/i.test(part) && part.length >= 2 && part.length <= 40) {
+                if (part.toLowerCase().includes(' x ')) continue;
+                if (!NON_AUTHOR_TAGS.has(part.toLowerCase()) && !/^\d+p$/i.test(part) && part.length >= 2 && part.length <= 40) {
                   author = part;
                   break;
                 }
@@ -351,7 +416,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
           }
         }
 
-        // 3. Fall back to the author/channel found in the query
+        // 5. Fall back to the author/channel found in the query
         if (authorTarget) {
           author = authorTarget.name || author;
         } else if (!author && extractedAuthor) {
@@ -401,7 +466,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
 
         const rawTags = Array.from(rawTagsSet);
         const isAi = checkIsAi(rawTags, aiTagsList);
-        const tagDetails = classifyTags(rawTags, author);
+        const { tagDetails, author: classifiedAuthor } = await classifyPostTags(rawTags, pageUrl, author, settings);
+        if (!author && classifiedAuthor) {
+          author = classifiedAuthor;
+        }
 
         let duration = 0;
         let durationText = '';
@@ -644,6 +712,18 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
 
     const finalAuthor = artist || channelName || uploaderName || sourceAuthor || '';
 
+    if (finalAuthor) {
+      const cache = loadR34vAuthorsCache();
+      cache.videos[id] = finalAuthor;
+      finalAuthor.split(',').forEach(a => {
+        const cleanA = a.trim().toLowerCase();
+        if (cleanA && cleanA.length >= 2 && !NON_AUTHOR_TAGS.has(cleanA)) {
+          cache.authors[cleanA] = a.trim();
+        }
+      });
+      saveR34vAuthorsCache();
+    }
+
     // 7. Tags and categories from the video page
     const flashTagsMatch = html.match(/video_tags\s*:\s*'([^']*)'/i);
     const flashCatMatch = html.match(/video_categories\s*:\s*'([^']*)'/i);
@@ -655,6 +735,8 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
     if (flashTagsMatch && flashTagsMatch[1]) {
       flashTagsMatch[1].split(',').map(s => s.trim()).filter(Boolean).forEach(t => rawTagsList.push(t));
     }
+
+    const { tagDetails } = await classifyPostTags(rawTagsList, `https://rule34video.com/video/${id}/`, finalAuthor, settings);
 
     if (fullVideoUrl) {
       if (fullVideoUrl.startsWith('//')) {
@@ -673,7 +755,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
         uploaderName,
         channelName,
         tags: rawTagsList,
-        tagDetails: classifyTags(rawTagsList, finalAuthor)
+        tagDetails
       };
       cacheResolved(resolvedVideoCache, cacheKey, result);
       return result;
@@ -688,7 +770,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
         uploaderName,
         channelName,
         tags: rawTagsList,
-        tagDetails: classifyTags(rawTagsList, finalAuthor)
+        tagDetails
       };
       cacheResolved(resolvedVideoCache, cacheKey, result);
       return result;

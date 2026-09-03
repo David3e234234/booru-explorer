@@ -555,6 +555,19 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }, 350);
   }
 
+  const INVALID_AUTHOR_NAMES = new Set([
+    'window', 'bed', 'door', 'river', 'sea', 'ocean', 'water', 'pool', 'tree', 'trees',
+    'wall', 'mirror', 'table', 'chair', 'couch', 'sofa', 'fireplace', 'fence', 'stairs',
+    'beach', 'lake', 'road', 'car', 'counter', 'railing', 'pole', 'curtain', 'pillar',
+    'bridge', 'balcony', 'desk', 'bookshelf', 'shelf', 'sink', 'bathtub', 'shower',
+    'cliff', 'rock', 'forest', 'field', 'grass', 'bench', 'steps', 'gate', 'street',
+    'video', 'animated', 'loop', 'original', 'commission', 'preview', 'trailer', 'teaser',
+    'full', 'sound', 'audio', 'no_sound', 'voiced', 'wip', 'leak', 'remastered', '4k',
+    '1080p', '720p', '60fps', 'hd', '3d', '2d', 'pmv', 'hmv', 'mmd', 'sfm', 'blender',
+    'overwatch', 'pokemon', 'genshin_impact', 'honkai_star_rail', 'zenless_zone_zero',
+    'resident_evil', 'final_fantasy', 'cyberpunk', 'league_of_legends', 'touhou'
+  ]);
+
   function createMediaCard(post, index) {
     const card = document.createElement('div');
     card.className = 'media-card';
@@ -680,7 +693,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const rawAuthor = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
     let cleanAuthor = rawAuthor.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '');
     cleanAuthor = cleanAuthor.replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').replace(/\([^)]*\)$/, '').trim();
-    const authorBadge = cleanAuthor ? `<span class="badge-format author" title="${t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor)}">${cleanAuthor}</span>` : '';
+    if (cleanAuthor && (INVALID_AUTHOR_NAMES.has(cleanAuthor.toLowerCase()) || cleanAuthor.length < 2)) {
+      cleanAuthor = '';
+    }
+    const authorBadge = cleanAuthor ? `<span class="badge-format author" data-author="${cleanAuthor}" title="${t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor)}">${cleanAuthor}</span>` : '';
 
     let durationBadge = '';
     if (post.isVideo && (post.durationText || post.duration > 0)) {

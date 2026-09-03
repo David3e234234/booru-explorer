@@ -257,6 +257,14 @@ export function normalizeDate(rawDate) {
   return '';
 }
 
+const LOCATION_NOUNS = new Set([
+  'window', 'bed', 'door', 'river', 'sea', 'ocean', 'water', 'pool', 'tree', 'trees',
+  'wall', 'mirror', 'table', 'chair', 'couch', 'sofa', 'fireplace', 'fence', 'stairs',
+  'beach', 'lake', 'road', 'car', 'counter', 'railing', 'pole', 'curtain', 'pillar',
+  'bridge', 'balcony', 'desk', 'bookshelf', 'shelf', 'sink', 'bathtub', 'shower',
+  'cliff', 'rock', 'forest', 'field', 'grass', 'bench', 'steps', 'gate', 'street'
+]);
+
 export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
   const tags = Array.isArray(rawTags) ? rawTags : [];
   
@@ -269,14 +277,20 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
   }
 
   // 2. Look for tags with special markers: name_(artist), name_(creator), by_name, etc.
-  const markerArtistTags = tags.filter(t => 
-    t.endsWith('_(artist)') || t.endsWith('_(creator)') || t.endsWith('_(circle)') || t.endsWith('_(studio)') || t.startsWith('by_')
-  ).map(t => t.replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, ''));
+  const markerArtistTags = tags.filter(t => {
+    const low = t.toLowerCase();
+    if (low.endsWith('_(artist)') || low.endsWith('_(creator)') || low.endsWith('_(circle)') || low.endsWith('_(studio)')) return true;
+    if (low.startsWith('by_')) {
+      const cand = low.slice(3).trim();
+      return !LOCATION_NOUNS.has(cand) && cand.length > 2;
+    }
+    return false;
+  }).map(t => t.replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, ''));
   if (markerArtistTags.length > 0) {
     return markerArtistTags.join(', ');
   }
 
-  // 3. Extract the author from the source URL
+  // 3. Extract the author from the source URL or source text
   if (source && typeof source === 'string') {
     const s = source.trim();
     const twitterMatch = s.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)(?:\/status|\/|$)/i);
@@ -291,13 +305,29 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     if (pixivUserMatch) {
       return `pixiv:${pixivUserMatch[1]}`;
     }
+    const pixivLegacyMatch = s.match(/pixiv\.net\/member\.php\?id=(\d+)/i);
+    if (pixivLegacyMatch) {
+      return `pixiv:${pixivLegacyMatch[1]}`;
+    }
+    const fediverseMatch = s.match(/(?:pawoo\.net|misskey\.io|baraag\.net)\/@([a-zA-Z0-9_.-]+)/i);
+    if (fediverseMatch) {
+      return `@${fediverseMatch[1]}`;
+    }
     const artstationMatch = s.match(/artstation\.com\/([a-zA-Z0-9_-]+)/i);
     if (artstationMatch && !['artwork', 'projects', 'artist'].includes(artstationMatch[1].toLowerCase())) {
       return artstationMatch[1];
     }
-    const deviantArtMatch = s.match(/deviantart\.com\/([a-zA-Z0-9_-]+)/i);
-    if (deviantArtMatch && !['art', 'tag', 'topic', 'view'].includes(deviantArtMatch[1].toLowerCase())) {
+    const deviantArtMatch = s.match(/deviantart\.com\/([a-zA-Z0-9_-]+)/i) || s.match(/([a-zA-Z0-9_-]+)\.deviantart\.com/i);
+    if (deviantArtMatch && !['art', 'tag', 'topic', 'view', 'www'].includes(deviantArtMatch[1].toLowerCase())) {
       return deviantArtMatch[1];
+    }
+    const furAffinityMatch = s.match(/furaffinity\.net\/user\/([a-zA-Z0-9_-]+)/i);
+    if (furAffinityMatch) {
+      return furAffinityMatch[1];
+    }
+    const inkbunnyMatch = s.match(/inkbunny\.net\/([a-zA-Z0-9_-]+)/i);
+    if (inkbunnyMatch && !['submissions', 'gallery', 'pool', 'search'].includes(inkbunnyMatch[1].toLowerCase())) {
+      return inkbunnyMatch[1];
     }
     const fanboxMatch = s.match(/([a-zA-Z0-9_-]+)\.fanbox\.cc/i);
     if (fanboxMatch) {
@@ -310,6 +340,10 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     const patreonMatch = s.match(/patreon\.com\/([a-zA-Z0-9_-]+)/i);
     if (patreonMatch && !['posts', 'join'].includes(patreonMatch[1].toLowerCase())) {
       return `patreon:${patreonMatch[1]}`;
+    }
+    const subStarMatch = s.match(/subscribestar\.(?:adult|com)\/([a-zA-Z0-9_-]+)/i);
+    if (subStarMatch) {
+      return subStarMatch[1];
     }
     const boostyMatch = s.match(/boosty\.to\/([a-zA-Z0-9_-]+)/i);
     if (boostyMatch) {
@@ -334,6 +368,31 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     const nijieMatch = s.match(/nijie\.info\/members\.php\?id=(\d+)/i);
     if (nijieMatch) {
       return `nijie:${nijieMatch[1]}`;
+    }
+    const redditUserMatch = s.match(/reddit\.com\/user\/([a-zA-Z0-9_-]+)/i);
+    if (redditUserMatch) {
+      return `reddit:${redditUserMatch[1]}`;
+    }
+    const civitaiMatch = s.match(/civitai\.com\/user\/([a-zA-Z0-9_-]+)/i);
+    if (civitaiMatch) {
+      return civitaiMatch[1];
+    }
+    const weiboMatch = s.match(/weibo\.(?:com|cn)\/(?:u\/)?([a-zA-Z0-9_]+)/i);
+    if (weiboMatch && !['p', 'status', 'u', 'home'].includes(weiboMatch[1].toLowerCase())) {
+      return weiboMatch[1];
+    }
+
+    // Text source with circle / artist in brackets: e.g. (C82) [T2 ART WORKS (Tony)] Title
+    const bracketMatch = s.match(/\[([^\]]+)\]/);
+    if (bracketMatch) {
+      const candidate = bracketMatch[1].trim();
+      const parenArtist = candidate.match(/\(([^)]+)\)$/);
+      if (parenArtist && parenArtist[1].length >= 2) {
+        return parenArtist[1].trim();
+      }
+      if (candidate.length >= 2 && candidate.length <= 35) {
+        return candidate;
+      }
     }
   }
 
@@ -383,7 +442,7 @@ export function classifyTags(rawTags = [], author = '') {
   if (author) {
     author.split(',').forEach(a => {
       const clean = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
-      if (clean) addUnique(artist, clean);
+      if (clean && !LOCATION_NOUNS.has(clean.toLowerCase())) addUnique(artist, clean);
     });
   }
 
@@ -392,10 +451,18 @@ export function classifyTags(rawTags = [], author = '') {
     const originalTag = String(tag).trim();
     const lower = originalTag.toLowerCase();
 
-    if (lower.startsWith('artist:') || lower.startsWith('creator:') || lower.startsWith('author:') || lower.startsWith('draw:') || lower.startsWith('by_') || lower.startsWith('channel:') || lower.startsWith('uploader:')) {
-      const clean = originalTag.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/^by_/i, '').trim();
+    if (lower.startsWith('artist:') || lower.startsWith('creator:') || lower.startsWith('author:') || lower.startsWith('draw:') || lower.startsWith('channel:') || lower.startsWith('uploader:')) {
+      const clean = originalTag.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').trim();
       addUnique(artist, clean || originalTag);
       continue;
+    }
+
+    if (lower.startsWith('by_')) {
+      const candidate = lower.slice(3).trim();
+      if (!LOCATION_NOUNS.has(candidate) && candidate.length > 2) {
+        addUnique(artist, originalTag.slice(3).trim());
+        continue;
+      }
     }
 
     if (lower.startsWith('copyright:') || lower.startsWith('series:')) {
