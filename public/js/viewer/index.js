@@ -100,20 +100,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     currentAlbumIndex = 0;
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) viewerContent.classList.remove('ui-hidden');
-    renderViewerPost();
-    if (modal) modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-
-    if (currentPost && currentPost.originalId != null) {
-      if (opts.move) {
-        notifyViewerMoved(currentPost.originalId);
-      } else {
-        notifyViewerOpened(currentPost.originalId);
-      }
-    }
 
     // For Rule34Video videos, refresh full metadata (author, tags, HD stream).
-    // One request total: the video player receives the same promise.
+    // Initialized BEFORE renderViewerPost() so createVideoPlayer receives the promise!
     if (currentPost?.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
       const targetPostId = currentPost.id;
       activeResolvePromise = fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
@@ -130,8 +119,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             currentPost.tagDetails = data.tagDetails || currentPost.tagDetails;
             changed = true;
           }
-          if (data.fullVideoUrl && !currentPost.fileUrl.includes('1080p') && data.fullVideoUrl !== currentPost.fileUrl) {
+          if (data.fullVideoUrl) {
             currentPost.fileUrl = data.fullVideoUrl;
+            currentPost.hasSound = true;
+            if (data.quality) currentPost.quality = data.quality;
           }
           if (changed) {
             renderViewerPost(true);
@@ -204,6 +195,18 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         .catch(() => null);
     } else {
       activeResolvePromise = null;
+    }
+
+    renderViewerPost();
+    if (modal) modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+
+    if (currentPost && currentPost.originalId != null) {
+      if (opts.move) {
+        notifyViewerMoved(currentPost.originalId);
+      } else {
+        notifyViewerOpened(currentPost.originalId);
+      }
     }
   }
 

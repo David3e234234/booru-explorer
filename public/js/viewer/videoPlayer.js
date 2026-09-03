@@ -808,13 +808,20 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   });
 
   // Automatically resolve full HD video with sound for Rule34Video.
-  // The request itself is owned by the viewer (openViewer); we only consume its
-  // result here, so opening a video doesn't hit /api/resolve-video twice.
-  if (currentPost.site === 'rule34video' && typeof resolvedVideoPromise?.then === 'function') {
-    resolvedVideoPromise.then(data => {
+  // The request itself is owned by the viewer (openViewer); we consume its result
+  // or fall back to an autonomous fetch if opened without the promise.
+  const r34VideoPromise = (currentPost.site === 'rule34video' && typeof resolvedVideoPromise?.then === 'function')
+    ? resolvedVideoPromise
+    : (currentPost.site === 'rule34video' && (currentPost.source || currentPost.originalId)
+      ? fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`).then(r => r.json()).catch(() => null)
+      : null);
+
+  if (r34VideoPromise) {
+    r34VideoPromise.then(data => {
       if (!data || !data.fullVideoUrl) return;
       currentPost.fileUrl = data.fullVideoUrl;
       currentPost.hasSound = true;
+      if (data.quality) currentPost.quality = data.quality;
       rebuildMediaUrls();
       const fullDirect = data.fullVideoUrl;
       const fullProxy = getProxiedUrl(fullDirect);
