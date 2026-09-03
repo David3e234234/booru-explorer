@@ -236,8 +236,10 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         break;
       }
 
-      if (matchedCount >= minDesiredPosts && i >= deepFetchPagesSetting - 1) {
-        break;
+      if (matchedCount >= minDesiredPosts) {
+        if (!isCustomOrder || i >= 1) {
+          break;
+        }
       }
 
       if (data.length < fetchLimit) {

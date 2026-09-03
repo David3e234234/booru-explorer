@@ -284,24 +284,33 @@ export async function loadGlobalTagSummary(settings = {}) {
     return globalTagMap;
   }
 
+  // Immediate local dictionary so post rendering is never delayed by 6s network timeouts
+  if (!globalTagMap) {
+    globalTagMap = new Map(Object.entries(KNOWN_EXTRA_TAGS));
+  }
+
   if (isLoadingMap) {
-    return await isLoadingMap;
+    return globalTagMap;
   }
 
   isLoadingMap = (async () => {
     try {
-      // Fast non-blocking load with 3-second timeout and site proxy support
-      let res = await fetchSafe('https://konachan.com/tag/summary.json', { timeout: 3000, settings, site: 'konachan' }).catch(() => null);
+      // Fast non-blocking load with konachan.net first (unblocked), then yande.re, then konachan.com
+      let res = await fetchSafe('https://konachan.net/tag/summary.json', { timeout: 3000, settings, site: 'konachan' }).catch(() => null);
       if (!res || !res.ok) {
-        await discardResponse(res);
+        if (res) await discardResponse(res);
         res = await fetchSafe('https://yande.re/tag/summary.json', { timeout: 3000, settings, site: 'yandere' }).catch(() => null);
+      }
+      if (!res || !res.ok) {
+        if (res) await discardResponse(res);
+        res = await fetchSafe('https://konachan.com/tag/summary.json', { timeout: 3000, settings, site: 'konachan' }).catch(() => null);
       }
 
       if (res && res.ok) {
         const json = await res.json().catch(() => null);
         if (json && typeof json.data === 'string') {
           const entries = json.data.split(' ');
-          const map = new Map();
+          const map = new Map(globalTagMap);
 
           for (const entryStr of entries) {
             if (!entryStr) continue;
@@ -320,25 +329,21 @@ export async function loadGlobalTagSummary(settings = {}) {
           }
 
           globalTagMap = map;
-          lastFetchedTime = Date.now();
-          return map;
         }
-      } else {
+      } else if (res) {
         await discardResponse(res);
       }
     } catch (err) {
       // Non-fatal, fallback to local dictionary
     } finally {
+      lastFetchedTime = Date.now();
       isLoadingMap = null;
     }
 
-    if (!globalTagMap) {
-      globalTagMap = new Map(Object.entries(KNOWN_EXTRA_TAGS));
-    }
     return globalTagMap;
   })();
 
-  return await isLoadingMap;
+  return globalTagMap;
 }
 
 /**

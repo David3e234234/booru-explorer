@@ -24,10 +24,20 @@ function buildAuthQuery(siteId, settings) {
   return `&login=${encodeURIComponent(login)}&password_hash=${hash}`;
 }
 
+// Sticky failover: if konachan.com is unreachable/blocked, switch to konachan.net for 30 minutes
+let preferredKonachanHost = 'konachan.com';
+let lastKonachanFailureTime = 0;
+const KONACHAN_FAILOVER_TTL_MS = 30 * 60 * 1000;
+
 export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   if (typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') {
     return [];
+  }
+
+  let effectiveSiteUrl = siteUrl;
+  if (siteId === 'konachan' && preferredKonachanHost === 'konachan.net' && (Date.now() - lastKonachanFailureTime < KONACHAN_FAILOVER_TTL_MS)) {
+    effectiveSiteUrl = 'https://konachan.net';
   }
 
   let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
@@ -38,7 +48,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     finalTags = finalTags ? `${finalTags} ${customMoebooruTag}` : customMoebooruTag;
   } else if (category === 'hot') {
     if (!tags.trim() && ratingFilter === 'all') {
-      url = `${siteUrl}/post/popular_recent.json?period=1w&page=${page}&limit=${limit}`;
+      url = `${effectiveSiteUrl}/post/popular_recent.json?period=1w&page=${page}&limit=${limit}`;
     } else {
       const d = new Date();
       d.setDate(d.getDate() - 30);
@@ -48,7 +58,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   } else if (category === 'top') {
     finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
   } else if (category === 'views' || category === 'popular' || category === 'recommended') {
-    finalTags = finalTags ? `${finalTags} order:vote` : 'order:vote';
+    finalTags = finalTags ? `${finalTags} order:score` : 'order:score';
   } else if (category === 'random') {
     finalTags = finalTags ? `${finalTags} order:random` : 'order:random';
   } else if (category === 'new' && settings?.siteSortTags?.[siteId]?.new) {
@@ -64,10 +74,10 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   }
 
   if (!url) {
-    url = `${siteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
+    url = `${effectiveSiteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
   }
   const authQuery = buildAuthQuery(siteId, settings);
-  if (authQuery) url += authQuery;
+  if (authQuery && !url.includes('konachan.net')) url += authQuery;
 
   // konachan.net is a separate site with its own accounts, so the fallback goes anonymous
   const toAltKonachanUrl = (u) => {
@@ -76,9 +86,14 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   };
 
   let res = null;
+  const isKonachanPrimaryCom = siteId === 'konachan' && url.includes('konachan.com');
+  const requestTimeout = isKonachanPrimaryCom ? 3500 : 8000;
+
   try {
-    res = await fetchSafe(url, { settings, site: siteId });
+    res = await fetchSafe(url, { timeout: requestTimeout, settings, site: siteId });
     if (!res.ok && siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
+      preferredKonachanHost = 'konachan.net';
+      lastKonachanFailureTime = Date.now();
       const altRes = await fetchSafe(toAltKonachanUrl(url), { settings, site: siteId });
       if (altRes.ok) {
         await discardResponse(res);
@@ -89,6 +104,8 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     }
   } catch (e) {
     if (siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
+      preferredKonachanHost = 'konachan.net';
+      lastKonachanFailureTime = Date.now();
       try {
         res = await fetchSafe(toAltKonachanUrl(url), { settings, site: siteId });
       } catch (err) {}

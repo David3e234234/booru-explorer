@@ -1416,6 +1416,11 @@ async function performSearch(reset = false, options = {}) {
 
     galleryInstance.renderGallery(!reset);
     renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+
+    // Speculatively prefetch next page into server cache during idle for seamless infinite scroll
+    if (state.hasMore && state.currentCategory !== 'random' && state.currentCategory !== 'favorites' && state.currentCategory !== 'following') {
+      scheduleNextPagePrefetch();
+    }
   } catch (err) {
     console.error('Ошибка поиска:', err);
     if (seq !== searchSeq) return;
@@ -1435,6 +1440,32 @@ async function performSearch(reset = false, options = {}) {
       if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
     }
   }
+}
+
+let prefetchTimer = null;
+function scheduleNextPagePrefetch() {
+  if (prefetchTimer) clearTimeout(prefetchTimer);
+  prefetchTimer = setTimeout(() => {
+    if (state.isLoading || !state.hasMore) return;
+    const currentLimit = state.settings?.itemsPerPage || state.limit || 100;
+    fetchPosts({
+      site: state.currentSite,
+      tags: state.searchTags.join(' '),
+      page: state.page + 1,
+      limit: currentLimit,
+      category: (state.currentCategory === 'feed' || state.currentCategory === 'new' || !state.currentCategory) ? (state.postSort || 'new') : state.currentCategory,
+      aiFilter: state.aiFilter,
+      ratingFilter: state.ratingFilter,
+      typeFilter: state.typeFilter,
+      ageFilter: state.ageFilter,
+      hideFurry: state.hideFurry,
+      hidePregnant: state.hidePregnant,
+      hideLgbt: state.hideLgbt,
+      customSites: state.currentSite === 'custom' ? state.settings?.customSources : '',
+      pawchiveService: state.currentSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
+      bustCache: false
+    }).catch(() => {});
+  }, 1200);
 }
 
 function setupEventListeners() {

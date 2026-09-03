@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, normalizeDate } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
@@ -6,6 +8,7 @@ import { logError } from '../utils/logger.js';
 let creatorsCache = null;
 let creatorsCacheTime = 0;
 const CREATORS_CACHE_TTL = 3600 * 1000; // 1 hour
+const DISK_CREATORS_PATH = path.join(process.cwd(), 'data', 'cache', 'pawchive_creators.json');
 
 const PAWCHIVE_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp']);
 const PAWCHIVE_VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts']);
@@ -26,8 +29,6 @@ function isVideoFile(nameOrPath) {
 // platform filter is applied by scanning a window of raw pages client-side.
 const PAWCHIVE_RAW_PAGE_SIZE = 50;
 const PAWCHIVE_SERVICE_SCAN_PAGES = 3;
-// The API starts returning 429 after ~4-5 rapid requests, so pace the scan
-const PAWCHIVE_SERVICE_SCAN_DELAY_MS = 400;
 const PAWCHIVE_FALLBACK_SERVICES = ['patreon', 'fanbox'];
 
 function isPawchiveVisualMedia(nameOrPath) {
@@ -98,15 +99,36 @@ function buildArchiveFields(archiveAttachments) {
 
 /**
  * Fetches and caches creator directory from Pawchive.
- * The payload is ~12 MB, so on flaky links the first connect attempt often
- * times out - retry once with a generous timeout instead of silently
- * degrading author resolution to an empty directory.
+ * Uses persistent disk cache in data/cache/pawchive_creators.json to avoid repeating 12MB downloads.
  */
 export async function getCreatorsDirectory(settings = {}) {
   const now = Date.now();
   if (creatorsCache && (now - creatorsCacheTime) < CREATORS_CACHE_TTL) {
     return creatorsCache;
   }
+
+  // 1. Check local disk cache first (fast, ~50ms instead of 10s network transfer)
+  if (!creatorsCache && fs.existsSync(DISK_CREATORS_PATH)) {
+    try {
+      const stat = fs.statSync(DISK_CREATORS_PATH);
+      if (now - stat.mtimeMs < 24 * 3600 * 1000) {
+        const text = fs.readFileSync(DISK_CREATORS_PATH, 'utf8');
+        const data = safeJsonParse(text, null);
+        if (Array.isArray(data) && data.length > 0) {
+          const creatorMap = new Map();
+          for (const c of data) {
+            if (c && c.service && c.id) {
+              creatorMap.set(`${c.service}:${c.id}`, c);
+            }
+          }
+          creatorsCache = { list: data, map: creatorMap };
+          creatorsCacheTime = stat.mtimeMs;
+          return creatorsCache;
+        }
+      }
+    } catch {}
+  }
+
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetchSafe('https://pawchive.pw/api/v1/creators', { timeout: 30000, settings, site: 'pawchive' });
@@ -121,13 +143,21 @@ export async function getCreatorsDirectory(settings = {}) {
           }
           creatorsCache = { list: data, map: creatorMap };
           creatorsCacheTime = Date.now();
+
+          // Persist to disk in background
+          try {
+            const dir = path.dirname(DISK_CREATORS_PATH);
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            fs.promises.writeFile(DISK_CREATORS_PATH, JSON.stringify(data)).catch(() => {});
+          } catch {}
+
           return creatorsCache;
         }
       }
       await discardResponse(res);
-      break; // got a response (non-ok / bad shape): retrying won't help
+      break;
     } catch (err) {
-      if (attempt === 0) continue; // transient connect failure: retry once
+      if (attempt === 0) continue;
       logError('Pawchive', 'Failed to load creators list', err);
     }
   }
@@ -685,15 +715,15 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
       // service filter, so scan a fixed window of raw pages per app page and
       // keep only matching posts. Page N maps to raw pages [N*K, N*K+K).
       const windowStart = Math.max(0, (page - 1) * PAWCHIVE_RAW_PAGE_SIZE * PAWCHIVE_SERVICE_SCAN_PAGES);
-      for (let i = 0; i < PAWCHIVE_SERVICE_SCAN_PAGES; i++) {
-        const pageItems = await fetchJsonPage(`https://pawchive.pw/api/v1/posts?${qPart}o=${windowStart + i * PAWCHIVE_RAW_PAGE_SIZE}`);
-        if (pageItems === null) break; // 429 or repeated failure: return what we have
-        for (const it of pageItems) {
-          if (it && (it.service || '').toLowerCase() === serviceFilter) items.push(it);
-        }
-        if (pageItems.length < PAWCHIVE_RAW_PAGE_SIZE) break; // feed exhausted
-        if (i < PAWCHIVE_SERVICE_SCAN_PAGES - 1) {
-          await new Promise(r => setTimeout(r, PAWCHIVE_SERVICE_SCAN_DELAY_MS));
+      const scanPromises = Array.from({ length: PAWCHIVE_SERVICE_SCAN_PAGES }, (_, i) =>
+        fetchJsonPage(`https://pawchive.pw/api/v1/posts?${qPart}o=${windowStart + i * PAWCHIVE_RAW_PAGE_SIZE}`)
+      );
+      const scanSettled = await Promise.allSettled(scanPromises);
+      for (const res of scanSettled) {
+        if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+          for (const it of res.value) {
+            if (it && (it.service || '').toLowerCase() === serviceFilter) items.push(it);
+          }
         }
       }
     } else if (authorQuery && !qPart) {

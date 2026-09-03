@@ -216,7 +216,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   const handleScrollCheck = () => {
     if (!state.isLoading && state.hasMore && state.posts.length > 0 && state.currentCategory !== 'favorites') {
       const info = getScrollContainerInfo();
-      if (info.scrollTop > 50 && info.isNearBottom(350)) {
+      if (info.scrollTop > 50 && info.isNearBottom(800)) {
         onLoadMore();
       }
     }

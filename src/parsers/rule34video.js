@@ -181,7 +181,8 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
     cleanQuery = extractedAuthor;
   }
   
-  const pagesPerBatch = 4;
+  const targetLimit = parseInt(params.limit, 10) || 40;
+  const pagesPerBatch = Math.min(4, Math.max(1, Math.ceil(targetLimit / 30)));
   const startFrom = (page - 1) * pagesPerBatch + 1;
   const pageNumbers = Array.from({ length: pagesPerBatch }, (_, i) => startFrom + i);
 
@@ -520,32 +521,6 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
       }
     }
   }
-
-  // Pre-resolve full original HD videos with sound and exact metadata for the first batch of posts in parallel (8 at a time)
-  const resolveQueue = allPosts.slice(0, 30);
-  const concurrency = 8;
-  for (let i = 0; i < resolveQueue.length; i += concurrency) {
-    const chunk = resolveQueue.slice(i, i + concurrency);
-    await Promise.allSettled(chunk.map(async (post) => {
-      try {
-        const resolved = await resolveRule34VideoFullMedia(post.source, post.originalId, settings);
-        if (resolved) {
-          if (resolved.fullVideoUrl) {
-            post.fileUrl = resolved.fullVideoUrl;
-            post.hasSound = true;
-          }
-          if (resolved.author) {
-            post.author = resolved.author;
-          }
-          if (resolved.tags && resolved.tags.length > 0) {
-            post.tags = resolved.tags;
-            post.tagDetails = resolved.tagDetails || classifyTags(resolved.tags, post.author);
-          }
-        }
-      } catch {}
-    }));
-  }
-
   return allPosts;
 }
 

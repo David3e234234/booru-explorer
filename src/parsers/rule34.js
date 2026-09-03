@@ -68,7 +68,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           'User-Agent': BROWSER_USER_AGENT,
           'Referer': 'https://rule34.xxx/'
         },
-        timeout: 6000,
+        timeout: 3500,
         settings,
         site: 'rule34'
       });

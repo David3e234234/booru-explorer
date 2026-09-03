@@ -140,8 +140,12 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     }
 
     const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / Math.max(1, mainSites.length)));
+    // In all-sites mode, 1 remote page per site (25-100 items) is more than enough.
+    // Disabling multi-page deepFetch here avoids fan-out and dramatically cuts latency.
+    const allModeSettings = { ...settings, deepFetchPages: 1 };
+    const allSitesDeadline = 4000;
     const results = await Promise.allSettled(
-      mainSites.map(s => withDeadline(() => fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, settings)))
+      mainSites.map(s => withDeadline(() => fetchPosts(s, { ...params, limit: perSiteLimit }, aiTagsList, allModeSettings), allSitesDeadline))
     );
     const lists = [];
     results.forEach(res => {
@@ -205,8 +209,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   const pageMultiplier = Math.max(1, deepFetchPagesSetting);
   const startRemotePage = (page - 1) * pageMultiplier + 1;
   const maxIterations = shouldDeepFetch ? Math.max(deepFetchPagesSetting * 2, 6) : 1;
-  // Previously the limit was always inflated to >=100, even in all-sites mode with perSiteLimit=25.
-  // Now we respect the requested limit (within reason) and make up depth with extra pages.
+  // Respect the requested limit and make up depth with pipelined pages
   const batchLimit = Math.min(200, Math.max(targetLimit, 25));
 
   logInfo(site, `Глубокий поиск: tags="${params.tags || ''}", page=${page} (remote: ${startRemotePage}), limit=${targetLimit}, deepFetch=${shouldDeepFetch ? maxIterations + ' макс. стр.' : 'выкл'}`);
@@ -234,8 +237,13 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
       }
     }
 
-    if (accumulatedPosts.length >= targetLimit && i >= deepFetchPagesSetting - 1) {
-      break;
+    // Early exit: as soon as we have enough filtered posts to fulfill the user's limit,
+    // break immediately instead of waiting for extra remote pages
+    if (accumulatedPosts.length >= targetLimit) {
+      const isGlobalSortNeeded = (params.category === 'top' || params.category === 'views') && site !== 'all';
+      if (!isGlobalSortNeeded || i >= 1) {
+        break;
+      }
     }
 
     // If a site returned fewer than 15 posts in a raw batch, its results are most likely exhausted
