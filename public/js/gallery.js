@@ -168,6 +168,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           const videoEl = card.querySelector('.hover-video-preview');
           const post = card._post || state.posts.find(p => p.id === card.dataset.postId) || (state.displayedPosts || state.posts)[parseInt(card.dataset.index, 10)];
           if (videoEl && post && post.isVideo && !post.duration) {
+            // Rule34Video post.fileUrl is a 20-second teaser clip; probing it yields a false 20s duration
+            if (post.site === 'rule34video') {
+              obs.unobserve(card);
+              return;
+            }
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget && !videoEl.src) {
               const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
@@ -603,6 +608,29 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           badge.setAttribute('title', t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanA));
           badge.textContent = cleanA;
         }
+
+        if (data.duration && (!post.duration || post.duration === 20)) {
+          post.duration = data.duration;
+          post.durationText = data.durationText;
+          if (card._post) {
+            card._post.duration = data.duration;
+            card._post.durationText = data.durationText;
+          }
+          let durBadge = card.querySelector('.badge-duration');
+          if (!durBadge) {
+            const topGroup = card.querySelector('.badge-group-top > div');
+            if (topGroup) {
+              durBadge = document.createElement('span');
+              durBadge.className = 'badge-format badge-duration';
+              durBadge.style.cssText = 'background-color: rgba(12, 9, 6, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
+              topGroup.appendChild(durBadge);
+            }
+          }
+          if (durBadge) {
+            durBadge.textContent = post.durationText;
+            durBadge.setAttribute('title', t('gal.durationBadge.title', 'Длительность: {d}').replace('{d}', post.durationText));
+          }
+        }
       })
       .catch(() => {
         resolvingCardAuthors.delete(postId);
@@ -891,6 +919,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
       if (videoEl) {
         videoEl.addEventListener('loadedmetadata', () => {
+          if (post.site === 'rule34video') return;
           if (videoEl.duration && !post.duration) {
             post.duration = videoEl.duration;
             const mins = Math.floor(videoEl.duration / 60);
@@ -936,12 +965,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         mobileVideoObserver.observe(card);
       }
 
-      if (videoMetadataObserver && !post.duration) {
+      if (videoMetadataObserver && !post.duration && post.site !== 'rule34video') {
         videoMetadataObserver.observe(card);
       }
     }
 
-    if (post.site === 'rule34video' && !cleanAuthor) {
+    if (post.site === 'rule34video' && (!cleanAuthor || !post.duration)) {
       setTimeout(() => lazyResolveRule34VideoAuthor(card, post), 60);
     }
 

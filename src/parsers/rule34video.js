@@ -69,6 +69,27 @@ export const NON_AUTHOR_TAGS = new Set([
   'fan made', 'fan animation', 'clip', 'webm', 'mp4', 'h264', 'h265', 'hevc'
 ]);
 
+function parseIsoDuration(iso) {
+  if (!iso) return 0;
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i);
+  if (!match) return 0;
+  const h = parseInt(match[1] || 0, 10);
+  const m = parseInt(match[2] || 0, 10);
+  const s = parseInt(match[3] || 0, 10);
+  return h * 3600 + m * 60 + s;
+}
+
+function formatDurationSeconds(totalSeconds) {
+  if (!totalSeconds || totalSeconds <= 0) return '';
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+}
+
 /**
  * Resolves an author/artist/model name to Rule34Video IDs (model_ids, channels, members)
  */
@@ -473,9 +494,8 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
 
         let duration = 0;
         let durationText = '';
-        const durMatch = block.match(/class="[^"]*duration[^"]*"[^>]*>([^<]+)<\/span>/i) ||
-                         block.match(/data-duration="([^"]+)"/i) ||
-                         block.match(/class="[^"]*(?:time|length)[^"]*"[^>]*>([^<]+)<\/span>/i);
+        const durMatch = block.match(/class="[^"]*(?:time|duration|length)[^"]*"[^>]*>([^<]+)<\/(?:div|span)>/i) ||
+                         block.match(/data-duration="([^"]+)"/i);
         if (durMatch) {
           const rawDur = durMatch[1].trim();
           durationText = rawDur;
@@ -738,6 +758,27 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
 
     const { tagDetails } = await classifyPostTags(rawTagsList, `https://rule34video.com/video/${id}/`, finalAuthor, settings);
 
+    let duration = 0;
+    let durationText = '';
+    const isoMatch = html.match(/"duration"\s*:\s*"(PT[^"]+)"/i);
+    if (isoMatch) {
+      duration = parseIsoDuration(isoMatch[1]);
+      durationText = formatDurationSeconds(duration);
+    }
+    if (!duration) {
+      const pageDurMatch = html.match(/class="[^"]*(?:time|duration|length)[^"]*"[^>]*>([^<]+)<\/(?:div|span)>/i);
+      if (pageDurMatch) {
+        const rawDur = pageDurMatch[1].trim();
+        durationText = rawDur;
+        const parts = rawDur.split(':').map(Number);
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          duration = parts[0] * 60 + parts[1];
+        } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+          duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        }
+      }
+    }
+
     if (fullVideoUrl) {
       if (fullVideoUrl.startsWith('//')) {
         fullVideoUrl = 'https:' + fullVideoUrl;
@@ -750,6 +791,8 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
         fullVideoUrl,
         quality,
         hasSound: true,
+        duration,
+        durationText,
         author: finalAuthor,
         artist,
         uploaderName,
@@ -765,6 +808,8 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
     if (finalAuthor) {
       const result = {
         success: false,
+        duration,
+        durationText,
         author: finalAuthor,
         artist,
         uploaderName,

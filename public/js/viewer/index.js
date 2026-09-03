@@ -124,12 +124,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             currentPost.hasSound = true;
             if (data.quality) currentPost.quality = data.quality;
           }
+          if (data.duration && (!currentPost.duration || currentPost.duration === 20)) {
+            currentPost.duration = data.duration;
+            currentPost.durationText = data.durationText || currentPost.durationText;
+            changed = true;
+          }
           if (changed) {
             renderViewerPost(true);
           }
-          if (data.author) {
-            const cardEl = document.querySelector(`.media-card[data-post-id="${targetPostId}"]`);
-            if (cardEl) {
+          const cardEl = document.querySelector(`.media-card[data-post-id="${targetPostId}"]`);
+          if (cardEl) {
+            if (data.author) {
               if (cardEl._post) cardEl._post.author = data.author;
               let authorBadge = cardEl.querySelector('.badge-format.author');
               const parts = data.author.split(',').map(s => s.trim()).filter(Boolean);
@@ -151,6 +156,26 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
                     bottomGroup.appendChild(span);
                   }
                 }
+              }
+            }
+            if (data.duration) {
+              if (cardEl._post) {
+                cardEl._post.duration = data.duration;
+                cardEl._post.durationText = data.durationText;
+              }
+              let durBadge = cardEl.querySelector('.badge-duration');
+              if (!durBadge) {
+                const topGroup = cardEl.querySelector('.badge-group-top > div');
+                if (topGroup) {
+                  durBadge = document.createElement('span');
+                  durBadge.className = 'badge-format badge-duration';
+                  durBadge.style.cssText = 'background-color: rgba(12, 9, 6, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
+                  topGroup.appendChild(durBadge);
+                }
+              }
+              if (durBadge) {
+                durBadge.textContent = data.durationText;
+                durBadge.setAttribute('title', `Длительность: ${data.durationText}`);
               }
             }
           }
