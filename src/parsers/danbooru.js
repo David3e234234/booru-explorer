@@ -264,7 +264,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     }
   }
 
-  if (allData.length === 0 && userTagList.length === 1 && !userTagList[0].includes(':')) {
+  if (allData.length === 0 && userTagList.length === 1 && !userTagList[0].includes(':') && userTagList[0].startsWith('@')) {
     const rawTag = userTagList[0].replace(/^@/, '');
     const sourceQuery = `source:*${rawTag}*`;
     logInfo('Danbooru', `Прямой тег не вернул результатов, пробуем поиск по автору в источнике: tags="${sourceQuery}"`);
@@ -278,8 +278,16 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         const text = await res.text();
         const data = safeJsonParse(text, null);
         if (Array.isArray(data) && data.length > 0) {
-          skipUserTagCheck = true;
-          allData = data;
+          const lowerRaw = rawTag.toLowerCase();
+          const filteredBySource = data.filter(item => {
+            const src = String(item?.source || '').toLowerCase();
+            if (!src) return false;
+            return src.includes(`/${lowerRaw}`) || src.includes(`@${lowerRaw}`) || src.includes(`=${lowerRaw}`);
+          });
+          if (filteredBySource.length > 0) {
+            skipUserTagCheck = true;
+            allData = filteredBySource;
+          }
         }
       } else {
         await discardResponse(res);

@@ -549,16 +549,34 @@ export function toggleLikeLocally(post) {
 
 export function setFavoriteAuthors(authorsList) {
   state.favoriteAuthors = authorsList || [];
-  state.favoriteAuthorNames = new Set(
-    state.favoriteAuthors.map(a => (a.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_'))
-  );
+  const names = new Set();
+  for (const a of state.favoriteAuthors) {
+    if (!a) continue;
+    if (a.name) {
+      const clean = String(a.name).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+      if (clean) {
+        names.add(clean);
+        names.add(clean.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
+      }
+    }
+    if (a.displayName) {
+      const cleanDisplay = String(a.displayName).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+      if (cleanDisplay) {
+        names.add(cleanDisplay);
+        names.add(cleanDisplay.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
+      }
+    }
+  }
+  state.favoriteAuthorNames = names;
   saveLocalFavoriteAuthors(state.favoriteAuthors);
 }
 
 export function isAuthorFavorite(name) {
   if (!name) return false;
   const clean = String(name).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
-  return state.favoriteAuthorNames.has(clean);
+  if (state.favoriteAuthorNames.has(clean)) return true;
+  const base = clean.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, '');
+  return state.favoriteAuthorNames.has(base);
 }
 
 // 🛡️ Broad composition/generic tags that should NOT be wiped out by single dislikes

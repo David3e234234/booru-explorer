@@ -18,7 +18,8 @@ import {
   getUserInterestTags,
   getUserInterestSeedPairs,
   getRecommendationSeeds,
-  calculatePostMatchPercent
+  calculatePostMatchPercent,
+  isAuthorFavorite
 } from './state.js';
 import { 
   fetchPosts, 
@@ -781,7 +782,15 @@ async function performSearch(reset = false, options = {}) {
       const btnRefreshSearch = document.getElementById('btnRefreshSearch');
       if (btnRefreshSearch) btnRefreshSearch.classList.add('refreshing');
 
-      const followedAuthors = Array.isArray(state.favoriteAuthors) ? state.favoriteAuthors : [];
+      const isAllSites = state.currentSite === 'all';
+      const allFollowed = Array.isArray(state.favoriteAuthors) ? state.favoriteAuthors : [];
+      const followedAuthors = allFollowed.filter(author => {
+        if (!author) return false;
+        if (isAllSites) return true;
+        if (author.site && author.site !== state.currentSite) return false;
+        if (author.service && author.user && state.currentSite !== 'pawchive') return false;
+        return true;
+      });
       const currentLimit = state.settings.itemsPerPage || state.limit || 100;
 
       if (followedAuthors.length === 0) {
@@ -805,10 +814,10 @@ async function performSearch(reset = false, options = {}) {
           if (author.service && author.user) {
             queryTag = `service:${author.service} user:${author.user}`;
           } else {
-            queryTag = `artist:${cleanName || rawName}`;
+            queryTag = `artist:${(cleanName || rawName).replace(/\s+/g, '_')}`;
           }
         } else {
-          queryTag = cleanName || rawName;
+          queryTag = (cleanName || rawName).replace(/\s+/g, '_');
         }
 
         if (queryTag && !authorQueries.includes(queryTag)) {
@@ -878,7 +887,34 @@ async function performSearch(reset = false, options = {}) {
         return numIdB - numIdA;
       });
 
-      const filteredPosts = uniquePosts.filter(p => p && p.id && !state.dislikedIds.has(p.id));
+      // Strictly verify that the post belongs to followed favorite authors
+      const isPostByFollowedAuthor = (post) => {
+        if (!post) return false;
+
+        if (post.site === 'pawchive' || (post.service && post.user)) {
+          const matchPawchive = followedAuthors.some(a => 
+            a.service && a.user && 
+            String(a.service).toLowerCase() === String(post.service || '').toLowerCase() && 
+            String(a.user) === String(post.user)
+          );
+          if (matchPawchive) return true;
+        }
+
+        const artists = Array.isArray(post.tagDetails?.artist) && post.tagDetails.artist.length > 0
+          ? post.tagDetails.artist
+          : (post.author ? post.author.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+        if (artists.length > 0) {
+          if (artists.some(art => isAuthorFavorite(art))) return true;
+        }
+
+        if (post.author && isAuthorFavorite(post.author)) return true;
+
+        return false;
+      };
+
+      const authorFilteredPosts = uniquePosts.filter(p => isPostByFollowedAuthor(p));
+      const filteredPosts = authorFilteredPosts.filter(p => p && p.id && !state.dislikedIds.has(p.id));
       const pageSlice = filteredPosts.slice(0, currentLimit);
 
       if (reset) {
