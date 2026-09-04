@@ -3,7 +3,7 @@ import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } f
 import { showToast, showActionToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
 import { t } from './i18n.js';
 
-export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh, onFindSimilar }) {
+export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh, onFindSimilar, onAddAuthor, onSelectSite }) {
   const galleryGrid = document.getElementById('galleryGrid');
   const loadingSpinner = document.getElementById('loadingSpinner');
   const emptyState = document.getElementById('emptyState');
@@ -481,8 +481,41 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         if (emptyTitle) emptyTitle.textContent = t('gal.emptyFavoritesTitle', 'В избранном пока пусто');
         if (emptyDesc) emptyDesc.textContent = t('gal.emptyFavoritesDesc', 'Нажмите на значок закладки на любой карточке, чтобы сохранить пост.');
       } else if (state.currentCategory === 'following') {
-        if (emptyTitle) emptyTitle.textContent = t('gal.emptyFollowingTitle', 'В подписках пока пусто');
-        if (emptyDesc) emptyDesc.textContent = t('gal.emptyFollowingDesc', 'Добавляйте авторов в избранное на карточках постов или в разделе «Авторы», чтобы видеть их новые публикации.');
+        const totalFollowed = Array.isArray(state.favoriteAuthors) ? state.favoriteAuthors.length : 0;
+        if (totalFollowed === 0) {
+          if (emptyTitle) emptyTitle.textContent = t('gal.emptyFollowingTitle', 'В подписках пока пусто');
+          if (emptyDesc) {
+            emptyDesc.innerHTML = `
+              <span>${t('gal.emptyFollowingDesc', 'Добавляйте авторов в избранное на карточках постов или в профиле во вкладке «Подписки», чтобы видеть их новые публикации.')}</span>
+              ${onAddAuthor ? `
+                <div style="margin-top: 14px;">
+                  <button type="button" class="btn-action-primary btn-add-author" id="btnEmptyAddAuthorFollowing" style="padding: 9px 18px; font-size: 13px;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>${t('gal.addAuthorManually', 'Добавить автора вручную')}</span>
+                  </button>
+                </div>
+              ` : ''}
+            `;
+            const btn = document.getElementById('btnEmptyAddAuthorFollowing');
+            if (btn && onAddAuthor) btn.addEventListener('click', onAddAuthor);
+          }
+        } else {
+          if (emptyTitle) emptyTitle.textContent = t('gal.emptyFollowingFilteredTitle', 'Нет публикаций по выбранным условиям');
+          if (emptyDesc) {
+            emptyDesc.innerHTML = `
+              <span>${t('gal.emptyFollowingFilteredDesc', 'У ваших отслеживаемых авторов нет постов в выбранном источнике или под текущие фильтры.')}</span>
+              ${(onSelectSite && state.currentSite !== 'all') ? `
+                <div style="margin-top: 14px;">
+                  <button type="button" class="btn-action-primary" id="btnEmptySwitchToAllSources" style="padding: 9px 18px; font-size: 13px;">
+                    <span>${t('gal.allSources', 'Все источники')}</span>
+                  </button>
+                </div>
+              ` : ''}
+            `;
+            const btn = document.getElementById('btnEmptySwitchToAllSources');
+            if (btn && onSelectSite) btn.addEventListener('click', () => onSelectSite('all'));
+          }
+        }
       } else {
         if (emptyTitle) emptyTitle.textContent = t('gal.noResultsTitle', 'Ничего не найдено');
         if (emptyDesc) emptyDesc.textContent = t('gal.noResultsDesc', 'Попробуйте изменить теги поиска или переключить Booru-источник.');

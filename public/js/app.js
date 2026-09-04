@@ -65,7 +65,8 @@ import {
   switchFavoritesSubTab, 
   renderFavoriteAuthorsList, 
   initAddAuthorModal,
-  initCoverPickerModal
+  initCoverPickerModal,
+  openAddAuthorModal
 } from './modules/favoriteAuthorsUI.js';
 import { 
   initSettingsModal, 
@@ -271,7 +272,9 @@ async function init() {
     onRefresh: () => {
       performSearch(true);
     },
-    onFindSimilar: handleFindVisuallySimilar
+    onFindSimilar: handleFindVisuallySimilar,
+    onAddAuthor: openAddAuthorModal,
+    onSelectSite: (siteId) => selectSite(siteId)
   });
 
   viewerInstance = initViewer({
@@ -783,10 +786,20 @@ async function performSearch(reset = false, options = {}) {
       if (btnRefreshSearch) btnRefreshSearch.classList.add('refreshing');
 
       const isAllSites = state.currentSite === 'all';
+      const isCustomSites = state.currentSite === 'custom';
+      const customSitesList = (isCustomSites && Array.isArray(state.settings?.customSources) && state.settings.customSources.length > 0)
+        ? state.settings.customSources
+        : ['danbooru', 'gelbooru', 'rule34', 'yandere'];
+
       const allFollowed = Array.isArray(state.favoriteAuthors) ? state.favoriteAuthors : [];
       const followedAuthors = allFollowed.filter(author => {
         if (!author) return false;
         if (isAllSites) return true;
+        if (isCustomSites) {
+          if (author.site) return customSitesList.includes(author.site);
+          if (author.service && author.user) return customSitesList.includes('pawchive');
+          return true;
+        }
         if (author.site && author.site !== state.currentSite) return false;
         if (author.service && author.user && state.currentSite !== 'pawchive') return false;
         return true;
@@ -804,24 +817,33 @@ async function performSearch(reset = false, options = {}) {
       // Collect author queries for search
       const authorQueries = [];
       for (const author of followedAuthors) {
-        const rawName = String(author.displayName || author.name || '').trim();
         const fallbackName = String(author.name || '').trim();
-        const cleanName = (fallbackName || rawName).replace(/^@/, '').replace(/^pixiv:/i, '').trim();
-        if (!cleanName && !rawName) continue;
+        const rawName = String(author.displayName || '').trim();
+        const baseName = (fallbackName || rawName.split(',')[0]).replace(/^@/, '').replace(/^pixiv:/i, '').trim();
+        if (!baseName) continue;
 
+        const isPawchiveAuthor = author.site === 'pawchive' || Boolean(author.service && author.user);
+        let targetSite = state.currentSite;
         let queryTag = '';
-        if (state.currentSite === 'pawchive') {
-          if (author.service && author.user) {
-            queryTag = `service:${author.service} user:${author.user}`;
+
+        if (isPawchiveAuthor) {
+          if (state.currentSite === 'all' || (isCustomSites && customSitesList.includes('pawchive')) || state.currentSite === 'pawchive') {
+            targetSite = 'pawchive';
+            if (author.service && author.user) {
+              queryTag = `service:${author.service} user:${author.user}`;
+            } else {
+              queryTag = `artist:${baseName.replace(/\s+/g, '_')}`;
+            }
           } else {
-            queryTag = `artist:${(cleanName || rawName).replace(/\s+/g, '_')}`;
+            continue;
           }
         } else {
-          queryTag = (cleanName || rawName).replace(/\s+/g, '_');
+          queryTag = baseName.replace(/\s+/g, '_');
         }
 
-        if (queryTag && !authorQueries.includes(queryTag)) {
-          authorQueries.push(queryTag);
+        const queryKey = `${targetSite}:${queryTag}`;
+        if (queryTag && !authorQueries.some(q => q.key === queryKey)) {
+          authorQueries.push({ site: targetSite, tag: queryTag, key: queryKey });
         }
       }
 
@@ -838,16 +860,16 @@ async function performSearch(reset = false, options = {}) {
       const fetchTasks = [];
 
       for (const aQuery of authorQueries) {
-        const combinedTags = searchQueryStr ? `${aQuery} ${searchQueryStr}` : aQuery;
+        const combinedTags = searchQueryStr ? `${aQuery.tag} ${searchQueryStr}` : aQuery.tag;
         fetchTasks.push(
           fetchPosts({
-            site: state.currentSite,
+            site: aQuery.site,
             tags: combinedTags,
             page: state.page,
             limit: Math.min(40, currentLimit),
             category: effectiveSort,
-            customSites: state.currentSite === 'custom' ? state.settings?.customSources : '',
-            pawchiveService: state.currentSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
+            customSites: aQuery.site === 'custom' ? (state.settings?.customSources || customSitesList) : '',
+            pawchiveService: aQuery.site === 'pawchive' ? (state.pawchiveService || 'all') : '',
             aiFilter: state.aiFilter,
             ratingFilter: state.ratingFilter,
             typeFilter: state.typeFilter,
@@ -956,6 +978,8 @@ async function performSearch(reset = false, options = {}) {
         }
 
         if (post.author && isAuthorFavorite(post.author)) return true;
+
+        if (Array.isArray(post.tags) && post.tags.some(t => isAuthorFavorite(t))) return true;
 
         return false;
       };

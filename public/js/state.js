@@ -560,10 +560,13 @@ export function setFavoriteAuthors(authorsList) {
       }
     }
     if (a.displayName) {
-      const cleanDisplay = String(a.displayName).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
-      if (cleanDisplay) {
-        names.add(cleanDisplay);
-        names.add(cleanDisplay.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
+      const parts = String(a.displayName).split(',');
+      for (const part of parts) {
+        const cleanDisplay = part.toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+        if (cleanDisplay) {
+          names.add(cleanDisplay);
+          names.add(cleanDisplay.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
+        }
       }
     }
   }
