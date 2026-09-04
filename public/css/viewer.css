@@ -1906,6 +1906,7 @@
 }
 
 .btn-archive-inspect {
+  position: relative;
   min-height: 36px;
   display: inline-flex;
   align-items: center;
@@ -1919,6 +1920,8 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  overflow: hidden;
+  user-select: none;
   transition: all var(--transition-fast);
 }
 
@@ -1929,7 +1932,26 @@
   transform: translateY(-1px);
 }
 
+.btn-archive-inspect.is-inspecting {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface-elevated);
+  color: var(--text-primary);
+}
+
+.btn-archive-inspect.is-completed {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.btn-archive-inspect.is-completed .btn-archive-progress-fill {
+  width: 100% !important;
+  background: rgba(16, 185, 129, 0.18);
+  border-right: none;
+}
+
 .btn-archive-inspect-icon {
+  position: relative;
   width: 40px;
   height: 40px;
   flex-shrink: 0;
@@ -1941,6 +1963,7 @@
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   cursor: pointer;
+  overflow: hidden;
   transition: all var(--transition-fast);
 }
 
@@ -1950,7 +1973,20 @@
   color: var(--accent-primary);
 }
 
+.btn-archive-inspect-icon.is-loading {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface);
+  color: var(--accent-primary);
+}
+
+.btn-archive-inspect-icon.is-completed {
+  border-color: #10b981;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+}
+
 .btn-archive-view {
+  position: relative;
   min-height: 36px;
   display: inline-flex;
   align-items: center;
@@ -1964,6 +2000,8 @@
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  overflow: hidden;
+  user-select: none;
   transition: all var(--transition-fast);
 }
 
@@ -1974,7 +2012,42 @@
   transform: translateY(-1px);
 }
 
+.btn-archive-view.is-downloading,
+.btn-archive-view.is-extracting {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface-elevated);
+  color: var(--accent-primary);
+}
+
+.btn-archive-view.is-downloading .btn-archive-progress-fill {
+  background: rgba(168, 85, 247, 0.22);
+}
+
+.btn-archive-view.is-extracting .btn-archive-progress-fill {
+  background: rgba(168, 85, 247, 0.32);
+  border-right: none;
+}
+
+.btn-archive-view.is-completed {
+  border-color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.btn-archive-view.is-completed .btn-archive-progress-fill {
+  width: 100% !important;
+  background: rgba(16, 185, 129, 0.18);
+  border-right: none;
+}
+
+.btn-archive-view.is-error {
+  border-color: var(--accent-danger);
+  background: rgba(244, 63, 94, 0.12);
+  color: var(--accent-danger);
+}
+
 .btn-archive-view-icon {
+  position: relative;
   width: 40px;
   height: 40px;
   flex-shrink: 0;
@@ -1986,6 +2059,7 @@
   border-radius: var(--radius-md);
   color: var(--accent-primary);
   cursor: pointer;
+  overflow: hidden;
   transition: all var(--transition-fast);
 }
 
@@ -1994,6 +2068,28 @@
   border-color: var(--accent-primary);
   color: #fff;
   background: var(--accent-primary);
+}
+
+.btn-archive-view-icon.is-loading {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface);
+  color: var(--accent-primary);
+}
+
+.btn-archive-view-icon.is-completed {
+  border-color: #10b981;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.btn-archive-spinner {
+  animation: btnArchiveSpin 0.85s linear infinite;
+  transform-origin: center;
+}
+
+@keyframes btnArchiveSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* ==========================================================================
