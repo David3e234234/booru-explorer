@@ -22,6 +22,8 @@ export const KNOWN_EXTRA_TAGS = {
   diives: 1,
   vic_bw: 1,
   vicineko: 1,
+  the_atko: 1,
+  atko: 1,
   misfitbite: 1,
   saucifer3d: 1,
   saucifer: 1,

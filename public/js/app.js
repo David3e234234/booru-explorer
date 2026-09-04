@@ -794,14 +794,14 @@ async function performSearch(reset = false, options = {}) {
       const allFollowed = Array.isArray(state.favoriteAuthors) ? state.favoriteAuthors : [];
       const followedAuthors = allFollowed.filter(author => {
         if (!author) return false;
-        if (isAllSites) return true;
-        if (isCustomSites) {
-          if (author.site) return customSitesList.includes(author.site);
-          if (author.service && author.user) return customSitesList.includes('pawchive');
-          return true;
+        const isPawchiveAuthor = author.site === 'pawchive' || Boolean(author.service && author.user);
+        if (isPawchiveAuthor) {
+          if (isAllSites || (isCustomSites && customSitesList.includes('pawchive')) || state.currentSite === 'pawchive') {
+            return true;
+          }
+          return false;
         }
-        if (author.site && author.site !== state.currentSite) return false;
-        if (author.service && author.user && state.currentSite !== 'pawchive') return false;
+        // General booru authors (e.g. the_atko, vicineko, doridoriko) exist across multiple boorus
         return true;
       });
       const currentLimit = state.settings.itemsPerPage || state.limit || 100;
@@ -857,12 +857,15 @@ async function performSearch(reset = false, options = {}) {
 
       const searchQueryStr = state.searchTags.length > 0 ? state.searchTags.join(' ').trim() : '';
       const effectiveSort = (state.postSort && state.postSort !== 'new') ? state.postSort : 'new';
-      const fetchTasks = [];
-
-      for (const aQuery of authorQueries) {
-        const combinedTags = searchQueryStr ? `${aQuery.tag} ${searchQueryStr}` : aQuery.tag;
-        fetchTasks.push(
-          fetchPosts({
+      
+      // Fetch author posts in controlled concurrent batches to prevent API rate-limiting (e.g. Rule34 HTTP 429)
+      const batchSize = 4;
+      const results = [];
+      for (let i = 0; i < authorQueries.length; i += batchSize) {
+        const batch = authorQueries.slice(i, i + batchSize);
+        const batchTasks = batch.map(aQuery => {
+          const combinedTags = searchQueryStr ? `${aQuery.tag} ${searchQueryStr}` : aQuery.tag;
+          return fetchPosts({
             site: aQuery.site,
             tags: combinedTags,
             page: state.page,
@@ -878,11 +881,12 @@ async function performSearch(reset = false, options = {}) {
             hidePregnant: state.hidePregnant,
             hideLgbt: state.hideLgbt,
             bustCache: options.bustCache || false
-          }).catch(() => null)
-        );
+          }).catch(() => null);
+        });
+        const batchResults = await Promise.allSettled(batchTasks);
+        if (seq !== searchSeq) return;
+        results.push(...batchResults);
       }
-
-      const results = await Promise.allSettled(fetchTasks);
       if (seq !== searchSeq) return;
 
       let allFetchedPosts = [];
