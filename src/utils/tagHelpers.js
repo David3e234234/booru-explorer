@@ -536,6 +536,11 @@ export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilt
     tags = tags.replace(/\bpetite\b/gi, 'small_breasts');
   }
 
+  // 2.5 Strip category prefixes for DAPI engines that do not support them (e.g. artist:tag -> tag)
+  if (site === 'xbooru' || site === 'hypnohub' || site === 'tbib' || site === 'safebooru') {
+    tags = tags.replace(/(?:^|\s)(?:artist|character|copyright|meta):\s*/gi, m => m.startsWith(' ') ? ' ' : '');
+  }
+
   // 3. Adapt sort directives (order:* <-> sort:*) between engines
   if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
     tags = tags

@@ -410,3 +410,138 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
     return [];
   }
 }
+
+/**
+ * Resolves full post details for Xbooru including categorized tags and verified artist
+ */
+export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}) {
+  const cleanId = String(postId || '').replace(/^xbooru_/, '').split('_')[0].trim();
+  if (!cleanId || !/^\d+$/.test(cleanId)) return null;
+
+  try {
+    const dapiUrl = `https://xbooru.com/index.php?page=dapi&s=post&q=index&json=1&id=${cleanId}`;
+    const dapiRes = await fetchSafe(dapiUrl, { settings, site: 'xbooru' });
+    let postItem = null;
+    if (dapiRes.ok) {
+      const text = await dapiRes.text();
+      const data = safeJsonParse(text, null);
+      postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : null;
+    } else {
+      await discardResponse(dapiRes);
+    }
+
+    const pageUrl = `https://xbooru.com/index.php?page=post&s=view&id=${cleanId}`;
+    const pageRes = await fetchSafe(pageUrl, {
+      headers: { 'Referer': 'https://xbooru.com/' },
+      timeout: 5000,
+      settings,
+      site: 'xbooru'
+    });
+
+    const tagDetails = { artist: [], copyright: [], character: [], general: [], meta: [] };
+    const allTags = [];
+    let pageSource = '';
+
+    if (pageRes.ok) {
+      const html = await pageRes.text();
+      const srcMatch = html.match(/Source:?\s*<a[^>]*href="([^"]+)"/i) || html.match(/Source:?\s*([^\s<"'>]+)/i);
+      if (srcMatch && srcMatch[1] && !srcMatch[1].startsWith('"')) {
+        pageSource = srcMatch[1].trim();
+      }
+
+      const tagMatches = [...html.matchAll(/class="tag-type-([^"]+)"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[\s\S]*?<\/li>/gi)];
+      for (const m of tagMatches) {
+        const rawType = m[1].replace(/\s+tag/, '').trim().toLowerCase();
+        const tagName = decodeURIComponent(m[2]).trim();
+        if (!tagName) continue;
+        if (!allTags.includes(tagName)) allTags.push(tagName);
+
+        if (rawType === 'artist') {
+          if (!tagDetails.artist.includes(tagName)) tagDetails.artist.push(tagName);
+        } else if (rawType === 'copyright') {
+          if (!tagDetails.copyright.includes(tagName)) tagDetails.copyright.push(tagName);
+        } else if (rawType === 'character') {
+          if (!tagDetails.character.includes(tagName)) tagDetails.character.push(tagName);
+        } else if (rawType === 'metadata' || rawType === 'meta') {
+          if (!tagDetails.meta.includes(tagName)) tagDetails.meta.push(tagName);
+        } else {
+          if (!tagDetails.general.includes(tagName)) tagDetails.general.push(tagName);
+        }
+      }
+    } else {
+      await discardResponse(pageRes);
+    }
+
+    if (!postItem && allTags.length === 0) return null;
+
+    const rawTags = allTags.length > 0 ? allTags : (decodeHtmlEntities(postItem?.tags || '').split(' ').filter(Boolean));
+    const finalSource = pageSource || postItem?.source || '';
+    let author = tagDetails.artist[0] || '';
+    if (!author && rawTags.length > 0) {
+      const classified = await classifyPostTags(rawTags, finalSource, '', settings, false);
+      if (classified.author) author = classified.author;
+      if (tagDetails.artist.length === 0 && classified.tagDetails?.artist?.length > 0) {
+        tagDetails.artist = classified.tagDetails.artist;
+      }
+    }
+
+    let fileUrl = postItem?.file_url || '';
+    if (!fileUrl && postItem?.directory && postItem?.image) {
+      fileUrl = `https://img.xbooru.com/images/${postItem.directory}/${postItem.image}`;
+    } else if (fileUrl.startsWith('//')) {
+      fileUrl = 'https:' + fileUrl;
+    }
+
+    let sampleUrl = postItem?.sample_url || fileUrl;
+    if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+
+    let previewUrlRaw = postItem?.preview_url || (postItem?.directory && postItem?.image ? `https://img.xbooru.com/thumbnails/${postItem.directory}/thumbnail_${postItem.image}` : fileUrl);
+    if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
+
+    const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+    const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+    const createdAt = normalizeDate(postItem?.created_at || postItem?.change);
+
+    const parentId = postItem?.parent_id && String(postItem.parent_id) !== '0' ? String(postItem.parent_id) : null;
+    const hasChildren = Boolean(postItem?.has_children);
+    const seriesKey = extractSeriesKey({
+      source: finalSource,
+      parentId,
+      hasChildren,
+      originalId: cleanId,
+      tags: rawTags
+    }, 'xbooru');
+
+    return {
+      id: `xbooru_${cleanId}`,
+      originalId: cleanId,
+      site: 'xbooru',
+      siteName: 'Xbooru',
+      previewUrl,
+      sampleUrl,
+      fileUrl,
+      fileExt,
+      isVideo,
+      isGif,
+      hasSound: isVideo && hasSound,
+      author,
+      tags: rawTags,
+      tagDetails,
+      score: parseInt(postItem?.score, 10) || 0,
+      rating: postItem?.rating || 'e',
+      width: parseInt(postItem?.width, 10) || 0,
+      height: parseInt(postItem?.height, 10) || 0,
+      source: finalSource,
+      postUrl: `https://xbooru.com/index.php?page=post&s=view&id=${cleanId}`,
+      parentId,
+      hasChildren,
+      seriesKey,
+      createdAt,
+      isAi: checkIsAi(rawTags, aiTagsList)
+    };
+  } catch (err) {
+    logError('Xbooru Resolve', `Ошибка разрешения поста xbooru id:${cleanId}`, err);
+    return null;
+  }
+}
+

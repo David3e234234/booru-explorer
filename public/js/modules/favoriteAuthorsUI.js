@@ -90,9 +90,16 @@ async function loadAuthorPostsForCover(author, site) {
   if (grid) grid.innerHTML = '';
 
   try {
+    const targetSite = site || author.site || 'danbooru';
+    let authorTag = author.name;
+    if (targetSite === 'pawchive') {
+      authorTag = (author.service && author.user)
+        ? `service:${author.service} user:${author.user}`
+        : `artist:${author.name}`;
+    }
     const res = await fetchPosts({
-      site: site || author.site || 'danbooru',
-      tags: author.name,
+      site: targetSite,
+      tags: authorTag,
       page: 1,
       limit: 40,
       category: 'new'

@@ -166,6 +166,7 @@ router.post('/favorite-authors', (req, res) => {
   const previewUrl = body.previewUrl || '';
   const site = body.site || 'danbooru';
   const service = body.service || '';
+  const user = body.user ? String(body.user) : '';
 
   const userId = req.user?.id || null;
   const authors = getFavoriteAuthors(userId);
@@ -187,6 +188,7 @@ router.post('/favorite-authors', (req, res) => {
       previewUrl: previewUrl,
       site: site,
       service: service,
+      user: user,
       createdAt: new Date().toISOString()
     };
     authors.unshift(newAuthor);
@@ -256,6 +258,8 @@ router.post('/favorite-authors/preview', (req, res) => {
     if (thumb360 !== undefined) target.thumb360 = thumb360;
     if (thumb720 !== undefined) target.thumb720 = thumb720;
     if (site) target.site = site;
+    if (req.body?.service) target.service = req.body.service;
+    if (req.body?.user) target.user = String(req.body.user);
   } else {
     target = {
       id: cleanName,
@@ -268,6 +272,8 @@ router.post('/favorite-authors/preview', (req, res) => {
       thumb360: thumb360 || '',
       thumb720: thumb720 || '',
       site: site || 'danbooru',
+      service: req.body?.service || '',
+      user: req.body?.user ? String(req.body.user) : '',
       createdAt: new Date().toISOString()
     };
     authors.unshift(target);

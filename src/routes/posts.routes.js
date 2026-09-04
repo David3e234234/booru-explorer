@@ -16,6 +16,7 @@ import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
 import { getCreatorsDirectory, fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
 import { fetchRule34PostById } from '../parsers/rule34.js';
+import { fetchXbooruPostById } from '../parsers/dapi.js';
 import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse, isSafeExternalUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
@@ -257,6 +258,20 @@ router.get('/resolve-post', async (req, res) => {
         : [];
       const aiTagsList = settings.aiTags || [];
       const resolvedPost = await fetchRule34PostById(targetPostId, aiTagsList, settings, rawTags);
+      if (resolvedPost) {
+        return res.json({ success: true, post: resolvedPost });
+      }
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'xbooru') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) {
+        targetPostId = String(targetPostId).replace(/^xbooru_/, '').split('_')[0];
+      }
+      if (!targetPostId) {
+        return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      }
+      const aiTagsList = settings.aiTags || [];
+      const resolvedPost = await fetchXbooruPostById(targetPostId, aiTagsList, settings);
       if (resolvedPost) {
         return res.json({ success: true, post: resolvedPost });
       }
@@ -804,21 +819,14 @@ router.get('/tags/autocomplete', async (req, res) => {
       if (tagsResult.length === 0) {
         tagsResult = await fetchDanbooruTags(query);
       }
-    } else if (site === 'gelbooru' || site === 'xbooru' || site === 'tbib' || site === 'hypnohub') {
-      const siteHostMap = {
-        gelbooru: 'https://gelbooru.com',
-        xbooru: 'https://xbooru.com',
-        tbib: 'https://tbib.org',
-        hypnohub: 'https://hypnohub.net'
-      };
-      const host = siteHostMap[site] || 'https://gelbooru.com';
+    } else if (site === 'gelbooru') {
       try {
-        const url = `${host}/index.php?page=autocomplete2&term=${encodeURIComponent(query.toLowerCase())}&type=tag_query&limit=15`;
+        const url = `https://gelbooru.com/index.php?page=autocomplete2&term=${encodeURIComponent(query.toLowerCase())}&type=tag_query&limit=15`;
         const resp = await fetchSafe(url, {
-          headers: { 'Referer': `${host}/` },
+          headers: { 'Referer': 'https://gelbooru.com/' },
           timeout: 3000,
           settings,
-          site
+          site: 'gelbooru'
         });
         if (resp.ok) {
           const data = await resp.json();
@@ -841,10 +849,66 @@ router.get('/tags/autocomplete', async (req, res) => {
           }
         }
       } catch {}
+    } else if (site === 'xbooru') {
+      try {
+        const url = `https://xbooru.com/public/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
+        const resp = await fetchSafe(url, {
+          headers: { 'Referer': 'https://xbooru.com/' },
+          timeout: 3000,
+          settings,
+          site: 'xbooru'
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data) && data.length > 0) {
+            tagsResult = data.map(item => {
+              const matchCount = String(item.label || '').match(/\((\d+)\)$/);
+              const count = matchCount ? parseInt(matchCount[1], 10) : (parseInt(item.total || item.count, 10) || 0);
+              const val = item.value || (item.label ? item.label.replace(/\s*\(\d+\)$/, '').trim() : '');
+              let cat = 'general';
+              const tLow = String(item.type || '').toLowerCase();
+              if (tLow === 'artist' || tLow === '1') cat = 'artist';
+              else if (tLow === 'copyright' || tLow === '3') cat = 'copyright';
+              else if (tLow === 'character' || tLow === '4') cat = 'character';
+              else if (tLow === 'metadata' || tLow === 'meta' || tLow === '6') cat = 'meta';
 
-      if (tagsResult.length === 0) {
-        tagsResult = await fetchDanbooruTags(query);
-      }
+              return {
+                value: val,
+                label: val.replace(/_/g, ' '),
+                count,
+                category: cat
+              };
+            });
+          }
+        }
+      } catch {}
+    } else if (site === 'tbib' || site === 'hypnohub') {
+      const host = site === 'tbib' ? 'https://tbib.org' : 'https://hypnohub.net';
+      try {
+        const url = `${host}/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
+        const resp = await fetchSafe(url, {
+          headers: { 'Referer': `${host}/` },
+          timeout: 3000,
+          settings,
+          site
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (Array.isArray(data) && data.length > 0) {
+            tagsResult = data.map(item => {
+              const matchCount = String(item.label || '').match(/\((\d+)\)$/);
+              const count = matchCount ? parseInt(matchCount[1], 10) : (parseInt(item.total || item.count, 10) || 0);
+              const val = item.value || (item.label ? item.label.replace(/\s*\(\d+\)$/, '').trim() : '');
+              return {
+                value: val,
+                label: val.replace(/_/g, ' '),
+                count,
+                category: 'general'
+              };
+            });
+          }
+        }
+      } catch {}
     } else if (site === 'yandere' || site === 'konachan') {
       const base = site === 'yandere' ? 'https://yande.re' : 'https://konachan.com';
       try {

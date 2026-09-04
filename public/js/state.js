@@ -553,19 +553,23 @@ export function setFavoriteAuthors(authorsList) {
   for (const a of state.favoriteAuthors) {
     if (!a) continue;
     if (a.name) {
-      const clean = String(a.name).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+      const clean = String(a.name).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
       if (clean) {
         names.add(clean);
         names.add(clean.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
+        const noDelim = clean.replace(/[\s_.-]+/g, '');
+        if (noDelim) names.add(noDelim);
       }
     }
     if (a.displayName) {
       const parts = String(a.displayName).split(',');
       for (const part of parts) {
-        const cleanDisplay = part.toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+        const cleanDisplay = part.toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
         if (cleanDisplay) {
           names.add(cleanDisplay);
           names.add(cleanDisplay.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
+          const noDelim = cleanDisplay.replace(/[\s_.-]+/g, '');
+          if (noDelim) names.add(noDelim);
         }
       }
     }
@@ -576,11 +580,14 @@ export function setFavoriteAuthors(authorsList) {
 
 export function isAuthorFavorite(name) {
   if (!name) return false;
-  const clean = String(name).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
+  const clean = String(name).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
   if (state.favoriteAuthorNames.has(clean)) return true;
   const base = clean.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, '');
-  return state.favoriteAuthorNames.has(base);
+  if (state.favoriteAuthorNames.has(base)) return true;
+  const noDelim = clean.replace(/[\s_.-]+/g, '');
+  return state.favoriteAuthorNames.has(noDelim);
 }
+
 
 // 🛡️ Broad composition/generic tags that should NOT be wiped out by single dislikes
 const GENERIC_DISLIKE_PROTECTED_TAGS = new Set([

@@ -484,9 +484,14 @@ function handleExploreAuthor(author) {
     renderMobileSourcesSheet({ onSelectSite: selectSite });
   }
   state.searchTags = [];
-  const tagToAdd = (state.currentSite === 'rule34video' && !author.name.includes(':'))
-    ? `artist:${author.name}`
-    : author.name;
+  let tagToAdd = author.name;
+  if (state.currentSite === 'rule34video' && !author.name.includes(':')) {
+    tagToAdd = `artist:${author.name}`;
+  } else if (state.currentSite === 'pawchive') {
+    tagToAdd = (author.service && author.user)
+      ? `service:${author.service} user:${author.user}`
+      : `artist:${author.name}`;
+  }
   addSearchTag(tagToAdd);
   if (autocompleteInstance) {
     autocompleteInstance.renderTagsChips();
@@ -838,7 +843,9 @@ async function performSearch(reset = false, options = {}) {
             continue;
           }
         } else {
-          queryTag = baseName.replace(/\s+/g, '_');
+          queryTag = (targetSite === 'pawchive')
+            ? `artist:${baseName.replace(/\s+/g, '_')}`
+            : baseName.replace(/\s+/g, '_');
         }
 
         const queryKey = `${targetSite}:${queryTag}`;
@@ -985,13 +992,14 @@ async function performSearch(reset = false, options = {}) {
 
         if (Array.isArray(post.tags)) {
           for (const t of post.tags) {
-            if (isAuthorFavorite(t)) {
+            const cleanT = String(t).replace(/^(artist|creator|author):/i, '').trim();
+            if (isAuthorFavorite(cleanT)) {
               if (!post.author) {
-                post.author = t;
+                post.author = cleanT;
               }
               if (!post.tagDetails) post.tagDetails = {};
               if (!Array.isArray(post.tagDetails.artist)) post.tagDetails.artist = [];
-              if (!post.tagDetails.artist.includes(t)) post.tagDetails.artist.unshift(t);
+              if (!post.tagDetails.artist.includes(cleanT)) post.tagDetails.artist.unshift(cleanT);
               return true;
             }
           }

@@ -4,7 +4,7 @@ import { fetchSafebooru } from './safebooru.js';
 import { fetchRule34 } from './rule34.js';
 import { fetchGelbooru } from './gelbooru.js';
 import { fetchRule34Video } from './rule34video.js';
-import { fetchXbooru, fetchHypnohub, fetchTbib } from './dapi.js';
+import { fetchXbooru, fetchHypnohub, fetchTbib, fetchXbooruPostById } from './dapi.js';
 import { fetchPawchive } from './pawchive.js';
 import { isPostMatchingFilters } from '../utils/tagHelpers.js';
 import { runWithDeadlineSignal } from '../utils/network.js';
@@ -25,6 +25,7 @@ export {
   fetchGelbooru,
   fetchRule34Video,
   fetchXbooru,
+  fetchXbooruPostById,
   fetchHypnohub,
   fetchPawchive
 };
