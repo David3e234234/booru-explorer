@@ -51,6 +51,20 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
   const pid = Math.max(0, page - 1);
 
+  // Extract author name from query tags if searching by author (e.g. artist:name or author tag in following feed)
+  let searchAuthor = '';
+  const searchTokens = (tags || '').split(' ').map(s => s.trim()).filter(Boolean);
+  for (const tok of searchTokens) {
+    if (tok.startsWith('artist:')) {
+      searchAuthor = tok.slice(7).trim();
+      break;
+    }
+    if (!tok.includes(':') && tok.length >= 3 && !/^\d+/.test(tok) && !['order', 'sort', 'score', 'rating', 'date', 'id', 'status', 'parent', 'user'].some(k => tok.toLowerCase().startsWith(k))) {
+      searchAuthor = tok.toLowerCase();
+      break;
+    }
+  }
+
   // 1. Try the official DAPI when an API key is available
   if (settings?.rule34ApiKey && settings?.rule34UserId) {
     let dapiTags = searchTags
@@ -90,7 +104,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 sampleUrl = fileUrl;
               }
               previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
-              const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
+              const { tagDetails, author } = await classifyPostTags(rawTags, item.source, searchAuthor, settings);
               const createdAt = normalizeDate(item.created_at || item.change);
               const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
               const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -265,7 +279,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
       if (rawParsedItems.length > 0) {
         posts = await Promise.all(rawParsedItems.map(async p => {
-          const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source, '', settings);
+          const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings);
           const seriesKey = extractSeriesKey({
             source: p.source,
             parentId: null,
@@ -378,7 +392,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
         if (altItems.length > 0) {
           posts = await Promise.all(altItems.map(async p => {
-            const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source, '', settings);
+            const { tagDetails, author } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings);
             return {
               id: `rule34_${p.id}`,
               originalId: p.id,
@@ -668,6 +682,9 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
         tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
       }
 
+      const dateMatch = html.match(/Posted on\s+([0-9-]+\s+[0-9:]+)/i) || html.match(/Posted:\s*([0-9-]+\s+[0-9:]+)/i) || html.match(/Posted:\s*([0-9-]+)/i);
+      const createdAt = dateMatch ? normalizeDate(dateMatch[1]) : '';
+
       return {
         id: `rule34_${cleanId}`,
         originalId: cleanId,
@@ -677,7 +694,8 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
         postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
         author: author || artistMatches.join(', '),
         tags: allTags,
-        tagDetails
+        tagDetails,
+        createdAt
       };
     } else {
       await discardResponse(res);

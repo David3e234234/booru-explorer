@@ -240,6 +240,7 @@ Object.assign(en, {
   'viewer.makeCover': 'Make cover',
   'viewer.makeCover.title': 'Use this art as the author cover',
   'viewer.labelDuration': 'Duration:',
+  'viewer.labelDate': 'Date:',
   'viewer.labelRating': 'Rating:',
   'viewer.labelScore': 'Score:',
   'viewer.labelAi': 'AI:',

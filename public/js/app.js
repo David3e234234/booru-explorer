@@ -979,7 +979,19 @@ async function performSearch(reset = false, options = {}) {
 
         if (post.author && isAuthorFavorite(post.author)) return true;
 
-        if (Array.isArray(post.tags) && post.tags.some(t => isAuthorFavorite(t))) return true;
+        if (Array.isArray(post.tags)) {
+          for (const t of post.tags) {
+            if (isAuthorFavorite(t)) {
+              if (!post.author) {
+                post.author = t;
+              }
+              if (!post.tagDetails) post.tagDetails = {};
+              if (!Array.isArray(post.tagDetails.artist)) post.tagDetails.artist = [];
+              if (!post.tagDetails.artist.includes(t)) post.tagDetails.artist.unshift(t);
+              return true;
+            }
+          }
+        }
 
         return false;
       };

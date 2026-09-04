@@ -49,6 +49,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const btnSetAuthorCoverSidebar = document.getElementById('btnSetAuthorCoverSidebar');
 
   const infoSite = document.getElementById('infoSite');
+  const infoDateRow = document.getElementById('infoDateRow');
+  const infoDate = document.getElementById('infoDate');
   const infoAlbumRow = document.getElementById('infoAlbumRow');
   const btnFetchFullAlbum = document.getElementById('btnFetchFullAlbum');
   const btnFetchFullAlbumText = document.getElementById('btnFetchFullAlbumText');
@@ -1198,6 +1200,30 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (infoDurationRow) infoDurationRow.style.display = 'flex';
     } else {
       if (infoDurationRow) infoDurationRow.style.display = 'none';
+    }
+
+    if (infoDateRow && infoDate) {
+      if (currentPost.createdAt) {
+        try {
+          const d = new Date(currentPost.createdAt);
+          if (!isNaN(d.getTime())) {
+            infoDate.textContent = d.toLocaleString(document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            });
+            infoDateRow.style.display = 'flex';
+          } else {
+            infoDateRow.style.display = 'none';
+          }
+        } catch {
+          infoDateRow.style.display = 'none';
+        }
+      } else {
+        infoDateRow.style.display = 'none';
+      }
     }
 
     if (infoSite) {

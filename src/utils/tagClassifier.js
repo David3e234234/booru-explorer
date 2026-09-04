@@ -21,6 +21,7 @@ export const KNOWN_EXTRA_TAGS = {
   zone_sama: 1,
   diives: 1,
   vic_bw: 1,
+  vicineko: 1,
   nyantastic: 1,
   redmoa: 1,
   afrobull: 1,
@@ -376,6 +377,86 @@ function debouncedSaveSummary() {
   }, 2000);
 }
 
+// In-flight deduplication and concurrency control for Rule34 tag lookups
+const inflightTagLookups = new Map();
+let activeTagLookups = 0;
+const tagLookupQueue = [];
+
+function acquireTagLookupSlot() {
+  if (activeTagLookups < 3) {
+    activeTagLookups++;
+    return Promise.resolve();
+  }
+  return new Promise(resolve => tagLookupQueue.push(resolve));
+}
+
+function releaseTagLookupSlot() {
+  activeTagLookups--;
+  if (tagLookupQueue.length > 0) {
+    activeTagLookups++;
+    const next = tagLookupQueue.shift();
+    next();
+  }
+}
+
+async function fetchSingleTagType(tName, apiKey, userId, effectiveSettings) {
+  if (inflightTagLookups.has(tName)) {
+    return await inflightTagLookups.get(tName);
+  }
+
+  const lookupPromise = (async () => {
+    await acquireTagLookupSlot();
+    try {
+      const url = `https://api.rule34.xxx/index.php?page=dapi&s=tag&q=index&name=${encodeURIComponent(tName)}&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`;
+      let res = await fetchSafe(url, {
+        timeout: 3500,
+        settings: effectiveSettings,
+        site: 'rule34'
+      }).catch(() => null);
+
+      // Handle 429 Rate Limit with a brief pause and single retry
+      if (res && res.status === 429) {
+        await discardResponse(res);
+        await new Promise(r => setTimeout(r, 400));
+        res = await fetchSafe(url, {
+          timeout: 3500,
+          settings: effectiveSettings,
+          site: 'rule34'
+        }).catch(() => null);
+      }
+
+      if (res && res.ok) {
+        const text = await res.text();
+        const tagElMatch = text.match(/<tag\s+([^>]+)\/?>/i);
+        if (tagElMatch) {
+          const attrs = tagElMatch[1];
+          const typeM = attrs.match(/type="(\d+)"/i);
+          const nameM = attrs.match(/name="([^"]+)"/i);
+          if (typeM && nameM) {
+            const typeNum = parseInt(typeM[1], 10);
+            const matchedName = nameM[1].toLowerCase();
+            if (globalTagMap) {
+              globalTagMap.set(matchedName, typeNum);
+            }
+            return { name: matchedName, type: typeNum };
+          }
+        }
+      } else if (res) {
+        await discardResponse(res);
+      }
+      return null;
+    } catch {
+      return null;
+    } finally {
+      releaseTagLookupSlot();
+      inflightTagLookups.delete(tName);
+    }
+  })();
+
+  inflightTagLookups.set(tName, lookupPromise);
+  return await lookupPromise;
+}
+
 /**
  * Dynamically resolves unknown tags via Rule34 tag DAPI API
  * @param {string[]} candidateTags - List of potential unknown artist/character/copyright tags
@@ -413,38 +494,16 @@ export async function resolveUnknownRule34Tags(candidateTags = [], settings = {}
   const tagsBatch = tagsToFetch.slice(0, 8);
   let hasNewTypes = false;
 
-  await Promise.all(tagsBatch.map(async (tName) => {
-    try {
-      const url = `https://api.rule34.xxx/index.php?page=dapi&s=tag&q=index&name=${encodeURIComponent(tName)}&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`;
-      const res = await fetchSafe(url, {
-        timeout: 3000,
-        settings: effectiveSettings,
-        site: 'rule34'
-      });
-      if (res && res.ok) {
-        const text = await res.text();
-        const tagElMatch = text.match(/<tag\s+([^>]+)\/?>/i);
-        if (tagElMatch) {
-          const attrs = tagElMatch[1];
-          const typeM = attrs.match(/type="(\d+)"/i);
-          const nameM = attrs.match(/name="([^"]+)"/i);
-          if (typeM && nameM) {
-            const typeNum = parseInt(typeM[1], 10);
-            const matchedName = nameM[1].toLowerCase();
-            resolved.set(matchedName, typeNum);
-            if (globalTagMap) {
-              globalTagMap.set(matchedName, typeNum);
-              hasNewTypes = true;
-            }
-          }
-        }
-      } else if (res) {
-        await discardResponse(res);
-      }
-    } catch {
-      // Non-fatal per-tag failure
+  const results = await Promise.all(
+    tagsBatch.map(tName => fetchSingleTagType(tName, apiKey, userId, effectiveSettings))
+  );
+
+  for (const item of results) {
+    if (item && item.name) {
+      resolved.set(item.name, item.type);
+      hasNewTypes = true;
     }
-  }));
+  }
 
   if (hasNewTypes) {
     debouncedSaveSummary();
