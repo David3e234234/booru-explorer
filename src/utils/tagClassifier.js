@@ -22,6 +22,11 @@ export const KNOWN_EXTRA_TAGS = {
   diives: 1,
   vic_bw: 1,
   vicineko: 1,
+  misfitbite: 1,
+  saucifer3d: 1,
+  saucifer: 1,
+  dorahdew: 1,
+  eatwaffles: 1,
   nyantastic: 1,
   redmoa: 1,
   afrobull: 1,
@@ -444,8 +449,14 @@ async function fetchSingleTagType(tName, apiKey, userId, effectiveSettings) {
       } else if (res) {
         await discardResponse(res);
       }
+      if (globalTagMap) {
+        globalTagMap.set(tName.toLowerCase(), 0);
+      }
       return null;
     } catch {
+      if (globalTagMap) {
+        globalTagMap.set(tName.toLowerCase(), 0);
+      }
       return null;
     } finally {
       releaseTagLookupSlot();
@@ -546,6 +557,7 @@ async function fetchAndCacheSummary(settings = {}) {
         for (const [tag, type] of Object.entries(KNOWN_EXTRA_TAGS)) {
           map.set(tag.toLowerCase(), type);
         }
+        seedFavoriteAuthors(map);
 
         globalTagMap = map;
         lastFetchedTime = Date.now();
@@ -572,6 +584,32 @@ async function fetchAndCacheSummary(settings = {}) {
   return globalTagMap;
 }
 
+function seedFavoriteAuthors(map) {
+  if (!map) return;
+  try {
+    const candidateFiles = [path.resolve('data/favorite_authors.json')];
+    const usersDir = path.resolve('data/users');
+    if (fs.existsSync(usersDir)) {
+      const uDirs = fs.readdirSync(usersDir);
+      for (const ud of uDirs) {
+        candidateFiles.push(path.join(usersDir, ud, 'favorite_authors.json'));
+      }
+    }
+    for (const file of candidateFiles) {
+      if (fs.existsSync(file)) {
+        const raw = fs.readFileSync(file, 'utf8');
+        const list = JSON.parse(raw);
+        if (Array.isArray(list)) {
+          for (const a of list) {
+            if (a.name) map.set(String(a.name).toLowerCase().trim(), 1);
+            if (a.id) map.set(String(a.id).toLowerCase().trim(), 1);
+          }
+        }
+      }
+    }
+  } catch {}
+}
+
 export async function loadGlobalTagSummary(settings = {}) {
   // If memory map is fresh, return it immediately
   if (globalTagMap && globalTagMap.size > 1000 && Date.now() - lastFetchedTime < CACHE_TTL_MS) {
@@ -589,6 +627,7 @@ export async function loadGlobalTagSummary(settings = {}) {
           for (const [tag, type] of Object.entries(KNOWN_EXTRA_TAGS)) {
             map.set(tag.toLowerCase(), type);
           }
+          seedFavoriteAuthors(map);
           globalTagMap = map;
           lastFetchedTime = Date.now();
         }
@@ -625,9 +664,10 @@ export async function loadGlobalTagSummary(settings = {}) {
  * @param {string} sourceUrl - Source link (Pixiv, Twitter, etc.)
  * @param {string} initialAuthor - Author known in advance
  * @param {object} settings - Application settings (for proxy resolution)
+ * @param {boolean} allowDynamicLookup - Whether to query external tag API for unknown tags (only for single post resolve)
  * @returns {Promise<{ tagDetails: { artist: string[], copyright: string[], character: string[], general: string[], meta: string[] }, author: string }>}
  */
-export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuthor = '', settings = {}) {
+export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuthor = '', settings = {}, allowDynamicLookup = false) {
   const tags = (Array.isArray(rawTags) ? rawTags : []).map(t => decodeHtmlEntities(String(t || '').trim())).filter(Boolean);
   const tagMap = await loadGlobalTagSummary(settings);
 
@@ -793,39 +833,41 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     }
   }
 
-  // 6.5 Dynamic tag resolution for boorus without tag types (e.g. Rule34)
-  const hasMainArtist = artist.some(a => !/_?\((audio|sfx|sound|voice|va|music|voice_actor)\)$/i.test(a));
-  if (!hasMainArtist && general.length > 0) {
-    const candidateTags = general.filter(t => {
-      const low = t.toLowerCase();
-      if (tagMap && tagMap.has(low)) return false;
-      if (isDescriptiveTag(low)) return false;
-      if (GENERIC_NON_ARTIST_TAGS.has(low) || META_KEYWORDS.has(low)) return false;
-      return true;
-    });
+  // 6.5 Dynamic tag resolution for boorus without tag types (e.g. Rule34) - only on single-post resolve
+  if (allowDynamicLookup) {
+    const hasMainArtist = artist.some(a => !/_?\((audio|sfx|sound|voice|va|music|voice_actor)\)$/i.test(a));
+    if (!hasMainArtist && general.length > 0) {
+      const candidateTags = general.filter(t => {
+        const low = t.toLowerCase();
+        if (tagMap && tagMap.has(low)) return false;
+        if (isDescriptiveTag(low)) return false;
+        if (GENERIC_NON_ARTIST_TAGS.has(low) || META_KEYWORDS.has(low)) return false;
+        return true;
+      });
 
-    if (candidateTags.length > 0) {
-      candidateTags.sort((a, b) => (a.includes('_') ? 1 : 0) - (b.includes('_') ? 1 : 0));
-      const topCandidates = candidateTags.slice(0, 8);
-      const resolved = await resolveUnknownRule34Tags(topCandidates, settings);
-      if (resolved && resolved.size > 0) {
-        for (let i = general.length - 1; i >= 0; i--) {
-          const gLow = general[i].toLowerCase();
-          const rType = resolved.get(gLow);
-          if (rType !== undefined) {
-            const originalTag = general[i];
-            if (rType === 1 && !GENERIC_NON_ARTIST_TAGS.has(gLow)) {
-              addUnique(artist, originalTag);
-              general.splice(i, 1);
-            } else if (rType === 3) {
-              addUnique(copyright, originalTag);
-              general.splice(i, 1);
-            } else if (rType === 4) {
-              addUnique(character, originalTag);
-              general.splice(i, 1);
-            } else if (rType === 6 || rType === 5 || META_KEYWORDS.has(gLow)) {
-              addUnique(meta, originalTag);
-              general.splice(i, 1);
+      if (candidateTags.length > 0) {
+        candidateTags.sort((a, b) => (a.includes('_') ? 1 : 0) - (b.includes('_') ? 1 : 0));
+        const topCandidates = candidateTags.slice(0, 4);
+        const resolved = await resolveUnknownRule34Tags(topCandidates, settings);
+        if (resolved && resolved.size > 0) {
+          for (let i = general.length - 1; i >= 0; i--) {
+            const gLow = general[i].toLowerCase();
+            const rType = resolved.get(gLow);
+            if (rType !== undefined) {
+              const originalTag = general[i];
+              if (rType === 1 && !GENERIC_NON_ARTIST_TAGS.has(gLow)) {
+                addUnique(artist, originalTag);
+                general.splice(i, 1);
+              } else if (rType === 3) {
+                addUnique(copyright, originalTag);
+                general.splice(i, 1);
+              } else if (rType === 4) {
+                addUnique(character, originalTag);
+                general.splice(i, 1);
+              } else if (rType === 6 || rType === 5 || META_KEYWORDS.has(gLow)) {
+                addUnique(meta, originalTag);
+                general.splice(i, 1);
+              }
             }
           }
         }
