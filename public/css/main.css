@@ -484,6 +484,17 @@ input.search-input:focus,
   gap: 2px;
 }
 
+.type-filter-toggle {
+  flex-wrap: wrap;
+  overflow: hidden;
+}
+
+.type-filter-toggle .type-pill {
+  flex: 1 1 auto;
+  min-width: fit-content;
+  padding: 5px 6px;
+}
+
 .ai-pill, .rating-pill, .type-pill, .age-pill, .video-sort-pill, .sort-pill {
   flex: 1;
   border: none;

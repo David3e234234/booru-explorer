@@ -25,11 +25,12 @@ const DOWNLOAD_TIMEOUT_MS = 120000;
 // Natural sort so img2 < img10 inside the album
 const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-// Deduplicate concurrent extractions of the same archive
+// Deduplicate concurrent extractions and inspections of the same archive
 const inflightJobs = new Map();
+const inflightInspects = new Map();
 
 // Download/extract progress, polled by the client loading indicator
-const jobStatus = new Map(); // zipUrl -> { phase: 'download'|'extract', received, total }
+const jobStatus = new Map(); // zipUrl -> { phase: 'download'|'extract'|'inspect', received, total }
 
 export function getArchiveJobStatus(zipUrl) {
   return jobStatus.get(zipUrl) || null;
@@ -148,6 +149,11 @@ export function isCloudStorageUrl(url) {
   );
 }
 
+const IGNORED_DOMAINS = [
+  'w3.org', 'adobe.com', 'purl.org', 'schema.org', 'xml.org',
+  'openxmlformats.org', 'microsoft.com', 'apple.com', 'google.com/recaptcha'
+];
+
 export function scanBufferForLinksAndPasswords(buf, filename = '') {
   const links = new Set();
   const passwords = new Set();
@@ -155,13 +161,15 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
 
   const addUrl = (u) => {
     let clean = String(u || '').trim();
-    clean = clean.replace(/[\)\]\>,\.;]+$/, '');
+    clean = clean.replace(/\\r|\\n/g, '').replace(/[\r\n]+/g, '').replace(/\\+$/, '').replace(/[\)\]\>,\.;]+$/, '');
     if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
       clean = 'https://' + clean;
     }
     try {
       const parsed = new URL(clean);
       if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        const host = parsed.hostname.toLowerCase();
+        if (IGNORED_DOMAINS.some(d => host === d || host.endsWith('.' + d))) return;
         links.add(clean);
       }
     } catch {}
@@ -169,29 +177,27 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
 
   const addPass = (p) => {
     let clean = String(p || '').trim();
-    clean = clean.replace(/^[:=–—\s]+/, '').replace(/[\r\n,;"'<>()\[\]]+$/, '').trim();
-    if (clean && clean.length >= 2 && clean.length <= 80 && !clean.startsWith('http') && !clean.startsWith('www.')) {
+    clean = clean.replace(/^[:=–—\s]+/, '').replace(/[\r\n,;"'<>()\[\]\\]+$/, '').trim();
+    if (clean && clean.length >= 2 && clean.length <= 80 && !clean.startsWith('http') && !clean.startsWith('www.') && !/^(\)Tj|Tj|TJ|ET|BT|rg|RG)$/i.test(clean)) {
       passwords.add(clean);
     }
   };
 
+  const passRegex = /\b(?:password|pass|пароль|pwd|passcode|secret\s*key|access\s*code|ключ)\b\s*[:=–—\-]\s*([^\s\r\n,;"'<>()\[\]]{2,60})/gi;
+  const urlRegex = /(https?:\/\/[^\s<>"')]+|(?:mega\.(?:nz|io|co\.nz)|drive\.google\.com|disk\.yandex\.(?:ru|com)|yadi\.sk|dropbox\.com|mediafire\.com|1drv\.ms)\/[^\s<>"')]+)/gi;
+
   const scanText = (str) => {
     if (!str || typeof str !== 'string') return;
-    const urlRegex = /(https?:\/\/[^\s<>"')]+|(?:mega\.(?:nz|io|co\.nz)|drive\.google\.com|disk\.yandex\.(?:ru|com)|yadi\.sk|dropbox\.com|mediafire\.com|1drv\.ms)\/[^\s<>"')]+)/gi;
     let m;
     while ((m = urlRegex.exec(str)) !== null) {
       addUrl(m[1]);
     }
-    const passRegex = /(?:password|pass|пароль|pwd|passcode|secret\s*key|access\s*code|ключ)\s*[:=–—\s]\s*([^\r\n,;"'<>]{2,60})/gi;
     while ((m = passRegex.exec(str)) !== null) {
       addPass(m[1]);
     }
   };
 
-  const rawUtf8 = buf.toString('utf8');
-  scanText(rawUtf8);
   const rawLatin1 = buf.toString('latin1');
-  if (rawLatin1 !== rawUtf8) scanText(rawLatin1);
 
   if (ext === 'pdf' || rawLatin1.includes('%PDF')) {
     const uriRegex = /\/URI\s*\(([^)]+)\)/g;
@@ -210,18 +216,34 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
     const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
     while ((m = streamRegex.exec(rawLatin1)) !== null) {
       const streamBytes = Buffer.from(m[1], 'latin1');
+      let inflatedStr = '';
       try {
-        const inflated = zlib.inflateSync(streamBytes);
-        scanText(inflated.toString('utf8'));
-        scanText(inflated.toString('latin1'));
+        inflatedStr = zlib.inflateSync(streamBytes).toString('utf8');
       } catch {
         try {
-          const rawInflated = zlib.inflateRawSync(streamBytes);
-          scanText(rawInflated.toString('utf8'));
-          scanText(rawInflated.toString('latin1'));
+          inflatedStr = zlib.inflateRawSync(streamBytes).toString('utf8');
         } catch {}
       }
+
+      if (inflatedStr) {
+        scanText(inflatedStr);
+
+        // Also extract text inside PDF text operators: (text) Tj
+        const tjRegex = /\(([^)]*)\)\s*Tj/g;
+        let tjMatch;
+        const pdfTextFragments = [];
+        while ((tjMatch = tjRegex.exec(inflatedStr)) !== null) {
+          pdfTextFragments.push(tjMatch[1]);
+        }
+        if (pdfTextFragments.length > 0) {
+          scanText(pdfTextFragments.join(' '));
+        }
+      }
     }
+  } else {
+    const rawUtf8 = buf.toString('utf8');
+    scanText(rawUtf8);
+    if (rawLatin1 !== rawUtf8) scanText(rawLatin1);
   }
 
   return {
@@ -231,43 +253,48 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
 }
 
 async function extractArchive(zipUrl, key) {
+  const cachedZip = path.join(ARCHIVES_DIR, `${key}.zip`);
   const tmpPath = path.join(ARCHIVES_DIR, `${key}.downloading`);
+
   try {
     await fs.promises.mkdir(ARCHIVES_DIR, { recursive: true });
-    logInfo('Archive', `Скачивание архива: ${zipUrl.split('?')[0]}`);
-    const response = await fetchSafe(zipUrl, {
-      timeout: DOWNLOAD_TIMEOUT_MS,
-      // Archives run to hundreds of megabytes and are streamed straight to disk,
-      // so the header deadline must not be armed against the body read
-      streamBody: true,
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://pawchive.pw/',
-        'Accept': '*/*'
+    if (!fs.existsSync(cachedZip)) {
+      logInfo('Archive', `Скачивание архива: ${zipUrl.split('?')[0]}`);
+      const response = await fetchSafe(zipUrl, {
+        timeout: DOWNLOAD_TIMEOUT_MS,
+        // Archives run to hundreds of megabytes and are streamed straight to disk,
+        // so the header deadline must not be armed against the body read
+        streamBody: true,
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Referer': 'https://pawchive.pw/',
+          'Accept': '*/*'
+        }
+      });
+      if (!response.ok || !response.body) {
+        // An unreleased response body keeps the undici socket checked out
+        try { await response.body?.cancel(); } catch {}
+        throw new Error(`HTTP ${response.status}`);
       }
-    });
-    if (!response.ok || !response.body) {
-      // An unreleased response body keeps the undici socket checked out
-      try { await response.body?.cancel(); } catch {}
-      throw new Error(`HTTP ${response.status}`);
+
+      const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
+      jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader });
+      const progressCounter = new Transform({
+        transform(chunk, enc, cb) {
+          const st = jobStatus.get(zipUrl);
+          if (st) st.received += chunk.length;
+          cb(null, chunk);
+        }
+      });
+
+      await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(tmpPath));
+      await fs.promises.rename(tmpPath, cachedZip).catch(() => {});
     }
-
-    const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
-    jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader });
-    const progressCounter = new Transform({
-      transform(chunk, enc, cb) {
-        const st = jobStatus.get(zipUrl);
-        if (st) st.received += chunk.length;
-        cb(null, chunk);
-      }
-    });
-
-    await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(tmpPath));
 
     const downloadStatus = jobStatus.get(zipUrl);
     if (downloadStatus) downloadStatus.phase = 'extract';
 
-    const zip = new StreamZip.async({ file: tmpPath });
+    const zip = new StreamZip.async({ file: cachedZip });
     try {
       const entries = Object.values(await zip.entries()).filter(entry => {
         if (entry.isDirectory) return false;
@@ -400,15 +427,22 @@ export async function inspectArchive(zipUrl) {
     const raw = await fs.promises.readFile(inspectPath, 'utf8');
     const cached = JSON.parse(raw);
     if (cached && Array.isArray(cached.fileTree)) {
+      if (typeof cached.hasMedia !== 'boolean') {
+        cached.hasMedia = cached.fileTree.some(f => /\.(jpe?g|png|gif|webp|mp4|webm|mov|mkv)$/i.test(f.name || ''));
+      }
       return cached;
     }
   } catch {}
 
-  await fs.promises.mkdir(ARCHIVES_DIR, { recursive: true });
-  const zipPath = path.join(ARCHIVES_DIR, `${key}.zip`);
-  const downloadingPath = path.join(ARCHIVES_DIR, `${key}.downloading`);
+  const inflight = inflightInspects.get(zipUrl);
+  if (inflight) return inflight;
 
-  // 2. Download zip if not already on disk
+  const job = (async () => {
+    await fs.promises.mkdir(ARCHIVES_DIR, { recursive: true });
+    const zipPath = path.join(ARCHIVES_DIR, `${key}.zip`);
+    const downloadingPath = path.join(ARCHIVES_DIR, `${key}.downloading`);
+
+    // 2. Download zip if not already on disk
   if (!fs.existsSync(zipPath)) {
     // If downloading is in progress or extractArchive has a file, check
     logInfo('Archive', `Скачивание архива для инспекции: ${zipUrl.split('?')[0]}`);
@@ -472,8 +506,8 @@ export async function inspectArchive(zipUrl) {
       let foundEntryLinks = [];
       let foundEntryPass = [];
 
-      // Scan documents under 15MB for links and passwords
-      if (isDoc && size > 0 && size < 15 * 1024 * 1024 && !entry.isEncrypted) {
+      // Scan documents under 100MB for links and passwords
+      if (isDoc && size > 0 && size < 100 * 1024 * 1024 && !entry.isEncrypted) {
         try {
           const buf = await zip.entryData(entry.name);
           const scanned = scanBufferForLinksAndPasswords(buf, base);
@@ -483,13 +517,18 @@ export async function inspectArchive(zipUrl) {
           for (const l of foundEntryLinks) {
             const svc = classifyCloudService(l);
             if (!scannedLinks.some(sl => sl.url === l)) {
+              let assignedPass = foundEntryPass[0] || null;
+              if (foundEntryPass.length > 1) {
+                const passForSvc = foundEntryPass.find(p => p.toLowerCase().includes(svc.id) || p.toLowerCase().includes(svc.name.toLowerCase()));
+                if (passForSvc) assignedPass = passForSvc;
+              }
               scannedLinks.push({
                 url: l,
                 service: svc.name,
                 serviceId: svc.id,
                 icon: svc.icon,
                 sourceFile: base,
-                password: foundEntryPass[0] || null
+                password: assignedPass
               });
             }
           }
@@ -518,6 +557,7 @@ export async function inspectArchive(zipUrl) {
       archiveSize = st.size;
     } catch {}
 
+    const hasMedia = fileTree.some(f => /\.(jpe?g|png|gif|webp|mp4|webm|mov|mkv)$/i.test(f.name || ''));
     const result = {
       success: true,
       key,
@@ -527,6 +567,7 @@ export async function inspectArchive(zipUrl) {
       totalFiles: fileTree.length,
       totalBytes,
       isEncrypted,
+      hasMedia,
       scannedLinks,
       passwords: Array.from(passwords),
       fileTree
@@ -538,4 +579,10 @@ export async function inspectArchive(zipUrl) {
     try { await zip.close(); } catch {}
     jobStatus.delete(zipUrl);
   }
+  })().finally(() => {
+    inflightInspects.delete(zipUrl);
+  });
+
+  inflightInspects.set(zipUrl, job);
+  return job;
 }

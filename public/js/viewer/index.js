@@ -933,6 +933,19 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           group.className = 'archive-item-group';
 
           const btn = createAnimatedArchiveButton({ url, name, size, isSidebar: false });
+          const viewBtn = document.createElement('button');
+          viewBtn.className = 'btn-archive-view';
+          viewBtn.type = 'button';
+          viewBtn.title = t('viewer.viewArchiveTitle', 'Распаковать и просмотреть в галерее');
+          viewBtn.innerHTML = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>${t('viewer.viewArchive', 'Просмотреть')}</span>
+          `;
+          viewBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            unpackAndViewArchive(url, name);
+          });
+
           const inspectBtn = document.createElement('button');
           inspectBtn.className = 'btn-archive-inspect';
           inspectBtn.type = 'button';
@@ -947,6 +960,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           });
 
           group.appendChild(btn);
+          group.appendChild(viewBtn);
           group.appendChild(inspectBtn);
           buttonsContainer.appendChild(group);
         });
@@ -979,6 +993,16 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         row.className = 'sidebar-archive-row';
 
         const btn = createAnimatedArchiveButton({ url, name, size, isSidebar: true });
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'btn-archive-view-icon';
+        viewBtn.type = 'button';
+        viewBtn.title = t('viewer.viewArchiveTitle', 'Распаковать и просмотреть в галерее');
+        viewBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+        viewBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          unpackAndViewArchive(url, name);
+        });
+
         const inspectBtn = document.createElement('button');
         inspectBtn.className = 'btn-archive-inspect-icon';
         inspectBtn.type = 'button';
@@ -990,6 +1014,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         });
 
         row.appendChild(btn);
+        row.appendChild(viewBtn);
         row.appendChild(inspectBtn);
         listEl.appendChild(row);
       });
@@ -1306,6 +1331,55 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     section.style.display = 'block';
   }
 
+  async function unpackAndViewArchive(url, name) {
+    if (!currentPost) return;
+    const cleanName = name || (url.split('?')[0].split('/').pop()) || 'archive.zip';
+    haptic(10);
+
+    const modal = document.getElementById('archiveInspectModal');
+    if (modal) modal.style.display = 'none';
+
+    showToast(t('vw.unpackingArchive', 'Распаковка архива на сервере...'), 2500);
+
+    let pollInterval = setInterval(async () => {
+      try {
+        const st = await fetchArchiveStatus(url);
+        if (st && st.active) {
+          if (st.phase === 'download') {
+            const pct = st.percent || (st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0);
+            const mb = (st.received / (1024 * 1024)).toFixed(1);
+            showToast(`${t('vw.archiveDownloading', 'Загрузка архива на сервер...')}: ${pct}% (${mb} MB)`, 900);
+          } else if (st.phase === 'extract') {
+            showToast(t('vw.archiveExtracting', 'Извлечение файлов на сервере...'), 900);
+          }
+        }
+      } catch {}
+    }, 500);
+
+    try {
+      const res = await fetchArchiveList(url);
+      clearInterval(pollInterval);
+      if (res && res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
+        currentPost.albumItems = res.albumItems;
+        currentPost.albumCount = res.albumItems.length;
+        currentPost.isAlbum = true;
+        currentAlbumIndex = 0;
+        currentPost.fileUrl = res.albumItems[0].fileUrl;
+        currentPost.sampleUrl = res.albumItems[0].sampleUrl;
+        currentPost.previewUrl = res.albumItems[0].previewUrl;
+        currentPost.isVideo = Boolean(res.albumItems[0].isVideo);
+        renderViewerPost(false);
+        renderSidebar(currentPost);
+        showToast(t('vw.archiveOpenedInViewer', 'Архив распакован: открыто {n} файлов').replace('{n}', String(res.albumItems.length)));
+      } else {
+        showToast(res?.error || t('vw.archiveNoMedia', 'В архиве не найдено поддерживаемых медиафайлов'), 3500);
+      }
+    } catch (err) {
+      clearInterval(pollInterval);
+      showToast(err.message || t('vw.archiveUnpackFailed', 'Ошибка при распаковке архива'), 3500);
+    }
+  }
+
   /* ── Archive Inspection Modal ── */
   function isArchiveInspectModalOpen() {
     const modal = document.getElementById('archiveInspectModal');
@@ -1329,13 +1403,54 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     bodyEl.innerHTML = `
       <div class="archive-inspect-loading">
         <div class="loading-spinner"></div>
-        <div class="archive-inspect-loading-text">${t('vw.inspectScanning', 'Сканирование файлов архива и поиск ссылок...')}</div>
+        <div class="archive-inspect-loading-text" id="archiveInspectStatusText">${t('vw.inspectScanning', 'Подготовка архива...')}</div>
+        <div class="archive-inspect-progress-wrap" id="archiveInspectProgressWrap" style="display: none;">
+          <div class="archive-inspect-progress-bar-track">
+            <div class="archive-inspect-progress-bar-fill" id="archiveInspectProgressBar"></div>
+          </div>
+          <div class="archive-inspect-progress-details">
+            <span id="archiveInspectProgressPct">0%</span>
+            <span id="archiveInspectProgressBytes"></span>
+          </div>
+        </div>
         <div class="archive-inspect-loading-sub">${cleanName}</div>
       </div>
     `;
 
+    let pollInterval = setInterval(async () => {
+      try {
+        const status = await fetchArchiveStatus(url);
+        if (status && status.active) {
+          const wrap = document.getElementById('archiveInspectProgressWrap');
+          const bar = document.getElementById('archiveInspectProgressBar');
+          const statusText = document.getElementById('archiveInspectStatusText');
+          const pctEl = document.getElementById('archiveInspectProgressPct');
+          const bytesEl = document.getElementById('archiveInspectProgressBytes');
+          if (wrap) wrap.style.display = 'block';
+
+          if (status.phase === 'download') {
+            if (statusText) statusText.textContent = t('vw.archiveDownloading', 'Загрузка архива на сервер...');
+            const pct = status.percent || (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0);
+            if (bar) bar.style.width = `${pct}%`;
+            if (pctEl) pctEl.textContent = `${pct}%`;
+            if (bytesEl && status.received) {
+              const recMb = (status.received / (1024 * 1024)).toFixed(1);
+              const totMb = status.total > 0 ? (status.total / (1024 * 1024)).toFixed(1) + ' MB' : '';
+              bytesEl.textContent = totMb ? `${recMb} / ${totMb}` : `${recMb} MB`;
+            }
+          } else if (status.phase === 'inspect' || status.phase === 'extract') {
+            if (statusText) statusText.textContent = t('vw.archiveAnalyzing', 'Анализ файлов, поиск ссылок и PDF...');
+            if (bar) bar.style.width = '100%';
+            if (pctEl) pctEl.textContent = '100%';
+            if (bytesEl) bytesEl.textContent = t('vw.inspectingPhase', 'Сканирование');
+          }
+        }
+      } catch {}
+    }, 400);
+
     try {
       const result = await fetchArchiveInspect(url);
+      clearInterval(pollInterval);
       if (!result || !result.success) {
         const errMsg = result?.error || t('vw.inspectFailed', 'Не удалось проанализировать архив');
         bodyEl.innerHTML = `
@@ -1351,7 +1466,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         return;
       }
 
-      renderInspectResults(result, cleanName, bodyEl);
+      renderInspectResults(result, cleanName, bodyEl, url);
 
       // If cloud links were found in the archive, update post & sidebar
       if (Array.isArray(result.scannedLinks) && result.scannedLinks.length > 0 && currentPost) {
@@ -1365,6 +1480,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         renderSidebarContent(currentPost, (updatedCloud || []).map(l => l.url));
       }
     } catch (err) {
+      clearInterval(pollInterval);
       bodyEl.innerHTML = `
         <div class="archive-inspect-error">
           <div class="archive-inspect-error-msg">${err.message || t('vw.inspectFailed', 'Не удалось проанализировать архив')}</div>
@@ -1375,14 +1491,18 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (retryBtn) {
         retryBtn.addEventListener('click', () => openArchiveInspectModal(url, name));
       }
+    } finally {
+      clearInterval(pollInterval);
     }
   }
 
-  function renderInspectResults(data, archiveName, container) {
+  function renderInspectResults(data, archiveName, container, archiveUrl) {
     const totalFiles = data.totalFiles || (data.fileTree ? data.fileTree.length : 0);
     const totalSize = data.archiveSize || data.totalBytes || 0;
     const links = data.scannedLinks || [];
     const fileTree = data.fileTree || [];
+    const hasMedia = Boolean(data.hasMedia || fileTree.some(f => /\.(jpe?g|png|gif|webp|mp4|webm|mov|mkv)$/i.test(f.name || '')));
+    const effectiveUrl = archiveUrl || data.zipUrl || '';
 
     container.innerHTML = `
       <div class="archive-inspect-meta">
@@ -1400,6 +1520,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         </div>
       </div>
 
+      ${hasMedia ? `
+        <div class="archive-inspect-actions">
+          <button type="button" class="btn-primary btn-archive-inspect-open-player" id="btnInspectOpenInPlayer">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span>${t('viewer.openArchiveInViewer', 'Открыть файлы в плеере / галерее')}</span>
+          </button>
+        </div>
+      ` : ''}
+
       <div class="archive-inspect-links-section">
         <div class="archive-inspect-section-title">${t('viewer.archiveInspectLinksFound', 'Найденные ссылки и пароли')} (${links.length})</div>
         ${links.length > 0 ? `
@@ -1415,6 +1544,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         <div class="archive-inspect-file-list" id="archiveInspectFileList"></div>
       </div>
     `;
+
+    const openInPlayerBtn = container.querySelector('#btnInspectOpenInPlayer');
+    if (openInPlayerBtn && effectiveUrl) {
+      openInPlayerBtn.addEventListener('click', () => {
+        unpackAndViewArchive(effectiveUrl, archiveName);
+      });
+    }
 
     const linksContainer = container.querySelector('#inspectLinksList');
     if (linksContainer && links.length > 0) {

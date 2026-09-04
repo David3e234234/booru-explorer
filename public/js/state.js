@@ -35,6 +35,7 @@ export function getSiteCapabilities(siteId) {
     return {
       supportsVideo: siteObj.supportsVideo ?? true,
       supportsImages: siteObj.supportsImages ?? true,
+      supportsArchives: Boolean(siteObj.supportsArchives),
       supportsTags: siteObj.supportsTags ?? true,
       supportsAiFilter: siteObj.supportsAiFilter ?? (siteObj.supportsTags ?? true),
       supportsShapesFilter: siteObj.supportsShapesFilter ?? (siteObj.supportsTags ?? true),
@@ -47,6 +48,7 @@ export function getSiteCapabilities(siteId) {
   return {
     supportsVideo: true,
     supportsImages: true,
+    supportsArchives: false,
     supportsTags: true,
     supportsAiFilter: true,
     supportsShapesFilter: true,
