@@ -9,7 +9,18 @@ import { ARCHIVES_DIR } from '../config/constants.js';
 import { fetchSafe } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
 
-const ALLOWED_HOSTS = ['file.pawchive.pw', 'file.pawchive.st'];
+function isAllowedArchiveHost(hostname) {
+  if (!hostname) return false;
+  const h = hostname.toLowerCase();
+  return (
+    h === 'pawchive.pw' || h.endsWith('.pawchive.pw') ||
+    h === 'pawchive.st' || h.endsWith('.pawchive.st') ||
+    h === 'kemono.su' || h.endsWith('.kemono.su') ||
+    h === 'kemono.party' || h.endsWith('.kemono.party') ||
+    h === 'coomer.su' || h.endsWith('.coomer.su') ||
+    h === 'coomer.party' || h.endsWith('.coomer.party')
+  );
+}
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp', 'svg']);
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts']);
@@ -44,10 +55,10 @@ function getExt(nameOrPath) {
 export function isAllowedArchiveUrl(url) {
   try {
     const parsed = new URL(url);
-    if (!ALLOWED_HOSTS.includes(parsed.hostname)) return false;
+    if (!isAllowedArchiveHost(parsed.hostname)) return false;
     const cleanPath = parsed.pathname.toLowerCase();
     const queryF = (parsed.searchParams.get('f') || '').toLowerCase();
-    return cleanPath.endsWith('.zip') || queryF.endsWith('.zip');
+    return cleanPath.endsWith('.zip') || queryF.endsWith('.zip') || cleanPath.includes('.zip');
   } catch {
     return false;
   }
@@ -57,7 +68,7 @@ export function getArchiveKey(zipUrl) {
   return crypto.createHash('md5').update(zipUrl).digest('hex');
 }
 
-function readManifest(key) {
+export function readManifest(key) {
   const manifestPath = path.join(ARCHIVES_DIR, `${key}.manifest.json`);
   try {
     const raw = fs.readFileSync(manifestPath, 'utf8');
@@ -278,11 +289,14 @@ async function extractArchive(zipUrl, key) {
       }
 
       const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
-      jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader });
+      jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0 });
       const progressCounter = new Transform({
         transform(chunk, enc, cb) {
           const st = jobStatus.get(zipUrl);
-          if (st) st.received += chunk.length;
+          if (st) {
+            st.received += chunk.length;
+            st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
+          }
           cb(null, chunk);
         }
       });
@@ -291,8 +305,13 @@ async function extractArchive(zipUrl, key) {
       await fs.promises.rename(tmpPath, cachedZip).catch(() => {});
     }
 
-    const downloadStatus = jobStatus.get(zipUrl);
-    if (downloadStatus) downloadStatus.phase = 'extract';
+    jobStatus.set(zipUrl, {
+      phase: 'extract',
+      percent: 0,
+      extractedFiles: 0,
+      totalFiles: 0,
+      currentFile: ''
+    });
 
     const zip = new StreamZip.async({ file: cachedZip });
     try {
@@ -307,9 +326,19 @@ async function extractArchive(zipUrl, key) {
 
       entries.sort((a, b) => nameCollator.compare(a.name, b.name));
 
+      const totalEntries = entries.length;
+      jobStatus.set(zipUrl, {
+        phase: 'extract',
+        percent: 0,
+        extractedFiles: 0,
+        totalFiles: totalEntries,
+        currentFile: ''
+      });
+
       let totalBytes = 0;
       const items = [];
-      for (const entry of entries) {
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
         if (items.length >= MAX_FILES) break;
         const size = entry.size || 0;
         if (size > MAX_ENTRY_BYTES) continue;
@@ -319,6 +348,15 @@ async function extractArchive(zipUrl, key) {
         const ext = getExt(base);
         const n = items.length + 1;
         const destPath = path.join(ARCHIVES_DIR, `${key}_${n}.${ext}`);
+
+        jobStatus.set(zipUrl, {
+          phase: 'extract',
+          percent: totalEntries > 0 ? Math.min(100, Math.round(((i + 1) / totalEntries) * 100)) : 0,
+          extractedFiles: items.length,
+          totalFiles: totalEntries,
+          currentFile: base
+        });
+
         try {
           await zip.extract(entry.name, destPath);
         } catch (extractErr) {
@@ -334,6 +372,14 @@ async function extractArchive(zipUrl, key) {
           isVideo: VIDEO_EXTS.has(ext),
           size
         });
+
+        jobStatus.set(zipUrl, {
+          phase: 'extract',
+          percent: totalEntries > 0 ? Math.min(100, Math.round(((i + 1) / totalEntries) * 100)) : 100,
+          extractedFiles: items.length,
+          totalFiles: totalEntries,
+          currentFile: base
+        });
       }
 
       if (items.length === 0) {
@@ -346,12 +392,21 @@ async function extractArchive(zipUrl, key) {
         JSON.stringify(manifest)
       );
       logInfo('Archive', `Архив ${key} распакован: ${items.length} файлов (${(totalBytes / 1024 / 1024).toFixed(1)} МБ)`);
+
+      jobStatus.set(zipUrl, {
+        phase: 'completed',
+        percent: 100,
+        extractedFiles: items.length,
+        totalFiles: totalEntries,
+        currentFile: ''
+      });
+      setTimeout(() => jobStatus.delete(zipUrl), 10000);
+
       return manifest;
     } finally {
       zip.close().catch(() => {});
     }
   } finally {
-    jobStatus.delete(zipUrl);
     fs.promises.unlink(tmpPath).catch(() => {});
   }
 }
@@ -461,11 +516,14 @@ export async function inspectArchive(zipUrl) {
     }
 
     const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
-    jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader });
+    jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0 });
     const progressCounter = new Transform({
       transform(chunk, enc, cb) {
         const st = jobStatus.get(zipUrl);
-        if (st) st.received += chunk.length;
+        if (st) {
+          st.received += chunk.length;
+          st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
+        }
         cb(null, chunk);
       }
     });
@@ -474,24 +532,48 @@ export async function inspectArchive(zipUrl) {
     await fs.promises.rename(downloadingPath, zipPath);
   }
 
-  const downloadStatus = jobStatus.get(zipUrl);
-  if (downloadStatus) downloadStatus.phase = 'inspect';
+  jobStatus.set(zipUrl, {
+    phase: 'inspect',
+    percent: 0,
+    scannedFiles: 0,
+    totalFiles: 0,
+    currentFile: ''
+  });
 
   // 3. Inspect zip contents with StreamZip
   const zip = new StreamZip.async({ file: zipPath });
   try {
     const rawEntries = Object.values(await zip.entries());
+    const totalRawEntries = rawEntries.length;
+    jobStatus.set(zipUrl, {
+      phase: 'inspect',
+      percent: 0,
+      scannedFiles: 0,
+      totalFiles: totalRawEntries,
+      currentFile: ''
+    });
+
     const fileTree = [];
     const scannedLinks = [];
     const passwords = new Set();
     let totalBytes = 0;
     let isEncrypted = false;
 
-    for (const entry of rawEntries) {
+    for (let idx = 0; idx < rawEntries.length; idx++) {
+      const entry = rawEntries[idx];
       if (entry.isDirectory) continue;
       const rawName = entry.name.replace(/\\/g, '/');
       const base = rawName.split('/').pop();
       if (!base || base.startsWith('.') || rawName.includes('__MACOSX')) continue;
+
+      jobStatus.set(zipUrl, {
+        phase: 'inspect',
+        percent: totalRawEntries > 0 ? Math.min(100, Math.round(((idx + 1) / totalRawEntries) * 100)) : 0,
+        scannedFiles: idx + 1,
+        totalFiles: totalRawEntries,
+        currentFile: base
+      });
+
       const ext = getExt(base);
       const size = entry.size || 0;
       totalBytes += size;
@@ -574,10 +656,19 @@ export async function inspectArchive(zipUrl) {
     };
 
     await fs.promises.writeFile(inspectPath, JSON.stringify(result, null, 2), 'utf8');
+
+    jobStatus.set(zipUrl, {
+      phase: 'completed',
+      percent: 100,
+      scannedFiles: fileTree.length,
+      totalFiles: totalRawEntries,
+      currentFile: ''
+    });
+    setTimeout(() => jobStatus.delete(zipUrl), 10000);
+
     return result;
   } finally {
     try { await zip.close(); } catch {}
-    jobStatus.delete(zipUrl);
   }
   })().finally(() => {
     inflightInspects.delete(zipUrl);

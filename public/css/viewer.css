@@ -1886,23 +1886,261 @@
 /* ==========================================================================
    Archive Inspection Button & Groups
    ========================================================================== */
-.archive-item-group {
+/* ==========================================================================
+   Archive Card & Action Buttons (Sidebar & Card)
+   ========================================================================== */
+.sidebar-archive-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: 100%;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+  overflow: hidden;
 }
 
-.sidebar-archive-row {
+.sidebar-archive-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-surface-elevated);
+}
+
+.sidebar-archive-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sidebar-archive-file-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary-subtle);
+  border-radius: var(--radius-md);
+  color: var(--accent-primary);
+}
+
+.sidebar-archive-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.sidebar-archive-filename {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-archive-filesize {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.sidebar-archive-actions {
   display: flex;
   align-items: center;
   gap: 6px;
   width: 100%;
 }
 
-.sidebar-archive-row .btn-archive-download {
+.btn-archive-pill {
+  position: relative;
   flex: 1;
   min-width: 0;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+  transition: all var(--transition-fast);
+}
+
+.btn-archive-pill:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--bg-surface-elevated);
+}
+
+.btn-archive-pill:active {
+  transform: scale(0.97);
+}
+
+.btn-archive-pill-content {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.btn-archive-pill .btn-archive-icon {
+  flex-shrink: 0;
+}
+
+.btn-archive-pill .btn-archive-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Button Active States */
+.btn-archive-pill.is-downloading {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.btn-archive-pill.is-downloading .btn-archive-progress-fill {
+  background: rgba(99, 102, 241, 0.25);
+}
+
+.btn-archive-pill.is-extracting {
+  border-color: #8b5cf6;
+  color: #8b5cf6;
+}
+
+.btn-archive-pill.is-extracting .btn-archive-progress-fill {
+  background: rgba(139, 92, 246, 0.25);
+}
+
+.btn-archive-pill.is-inspecting {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.btn-archive-pill.is-inspecting .btn-archive-progress-fill {
+  background: rgba(99, 102, 241, 0.25);
+}
+
+.btn-archive-pill.is-completed {
+  border-color: #10b981;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.btn-archive-pill.is-completed .btn-archive-progress-fill {
+  width: 100% !important;
+  background: rgba(16, 185, 129, 0.18);
+  border-right: none;
+}
+
+.btn-archive-pill.is-error {
+  border-color: var(--accent-danger);
+  color: var(--accent-danger);
+  background: rgba(244, 63, 94, 0.1);
+}
+
+/* Dedicated Live Progress Bar & Info Strip */
+.sidebar-archive-live-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-top: 2px;
+  animation: archiveFadeIn 0.2s ease-out;
+}
+
+@keyframes archiveFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sidebar-archive-live-bar-track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: var(--bg-surface-elevated);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.sidebar-archive-live-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent-primary) 0%, #8b5cf6 100%);
+  border-radius: 3px;
+  transition: width 0.15s ease-out;
+}
+
+.sidebar-archive-live-status.is-completed .sidebar-archive-live-bar-fill {
+  background: #10b981 !important;
+  width: 100% !important;
+}
+
+.sidebar-archive-live-status.is-error .sidebar-archive-live-bar-fill {
+  background: var(--accent-danger) !important;
+}
+
+.sidebar-archive-live-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.sidebar-archive-live-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.sidebar-archive-live-pct {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.sidebar-archive-live-status.is-completed .sidebar-archive-live-pct,
+.sidebar-archive-live-status.is-completed .sidebar-archive-live-phase {
+  color: #10b981;
+}
+
+.sidebar-archive-live-status.is-error .sidebar-archive-live-pct,
+.sidebar-archive-live-status.is-error .sidebar-archive-live-phase {
+  color: var(--accent-danger);
+}
+
+/* Legacy class compatibility */
+.sidebar-archive-row {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
 .btn-archive-inspect {
@@ -1929,7 +2167,6 @@
   background: var(--bg-surface-elevated);
   border-color: var(--accent-primary);
   color: var(--text-primary);
-  transform: translateY(-1px);
 }
 
 .btn-archive-inspect.is-inspecting {
@@ -1942,47 +2179,6 @@
   border-color: #10b981;
   background: rgba(16, 185, 129, 0.12);
   color: #10b981;
-}
-
-.btn-archive-inspect.is-completed .btn-archive-progress-fill {
-  width: 100% !important;
-  background: rgba(16, 185, 129, 0.18);
-  border-right: none;
-}
-
-.btn-archive-inspect-icon {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  cursor: pointer;
-  overflow: hidden;
-  transition: all var(--transition-fast);
-}
-
-.btn-archive-inspect-icon:hover {
-  background: var(--bg-surface);
-  border-color: var(--accent-primary);
-  color: var(--accent-primary);
-}
-
-.btn-archive-inspect-icon.is-loading {
-  border-color: var(--accent-primary);
-  background: var(--bg-surface);
-  color: var(--accent-primary);
-}
-
-.btn-archive-inspect-icon.is-completed {
-  border-color: #10b981;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.12);
 }
 
 .btn-archive-view {
@@ -2009,7 +2205,6 @@
   background: var(--bg-surface-elevated);
   border-color: var(--accent-primary);
   color: var(--accent-primary);
-  transform: translateY(-1px);
 }
 
 .btn-archive-view.is-downloading,
@@ -2019,67 +2214,10 @@
   color: var(--accent-primary);
 }
 
-.btn-archive-view.is-downloading .btn-archive-progress-fill {
-  background: rgba(168, 85, 247, 0.22);
-}
-
-.btn-archive-view.is-extracting .btn-archive-progress-fill {
-  background: rgba(168, 85, 247, 0.32);
-  border-right: none;
-}
-
 .btn-archive-view.is-completed {
   border-color: #10b981;
   background: rgba(16, 185, 129, 0.12);
   color: #10b981;
-}
-
-.btn-archive-view.is-completed .btn-archive-progress-fill {
-  width: 100% !important;
-  background: rgba(16, 185, 129, 0.18);
-  border-right: none;
-}
-
-.btn-archive-view.is-error {
-  border-color: var(--accent-danger);
-  background: rgba(244, 63, 94, 0.12);
-  color: var(--accent-danger);
-}
-
-.btn-archive-view-icon {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-md);
-  color: var(--accent-primary);
-  cursor: pointer;
-  overflow: hidden;
-  transition: all var(--transition-fast);
-}
-
-.btn-archive-view-icon:hover {
-  background: var(--bg-surface);
-  border-color: var(--accent-primary);
-  color: #fff;
-  background: var(--accent-primary);
-}
-
-.btn-archive-view-icon.is-loading {
-  border-color: var(--accent-primary);
-  background: var(--bg-surface);
-  color: var(--accent-primary);
-}
-
-.btn-archive-view-icon.is-completed {
-  border-color: #10b981;
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.12);
 }
 
 .btn-archive-spinner {

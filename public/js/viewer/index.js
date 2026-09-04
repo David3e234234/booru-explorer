@@ -740,21 +740,39 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const poll = async () => {
         try {
           const status = await fetchArchiveStatus(url);
-          if (status && status.active) {
-            const pct = status.percent || (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0);
-            notifyArchiveJob(url, {
-              active: true,
-              phase: status.phase,
-              received: status.received || 0,
-              total: status.total || 0,
-              percent: pct
-            });
+          if (status) {
+            if (status.active) {
+              const pct = status.percent !== undefined
+                ? status.percent
+                : (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0);
+              notifyArchiveJob(url, {
+                active: true,
+                phase: status.phase,
+                received: status.received || 0,
+                total: status.total || 0,
+                percent: pct,
+                extractedFiles: status.extractedFiles || 0,
+                scannedFiles: status.scannedFiles || 0,
+                totalFiles: status.totalFiles || 0,
+                currentFile: status.currentFile || ''
+              });
+            } else if (status.completed) {
+              notifyArchiveJob(url, {
+                active: false,
+                completed: true,
+                phase: status.phase || 'completed',
+                percent: 100,
+                extractedFiles: status.extractedFiles || 0,
+                totalFiles: status.totalFiles || 0
+              });
+              stopArchivePolling(url);
+            }
           }
         } catch {}
       };
 
       poll();
-      const id = setInterval(poll, 400);
+      const id = setInterval(poll, 300);
       activeArchivePollers.set(url, id);
     }
 
@@ -774,127 +792,307 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
     }
 
-    function createAnimatedArchiveButton({ url, name, size = 0, isSidebar = false }) {
-      const btn = document.createElement('button');
-      btn.className = 'btn-archive-download';
-      btn.type = 'button';
+    /**
+     * Creates a reactive archive card component with live progress bars,
+     * download speeds, unpacking counter, and inspection states.
+     */
+    function createArchiveCardComponent({ url, name, size = 0, isSidebar = false }) {
+      const card = document.createElement('div');
+      card.className = 'sidebar-archive-card';
+      card.dataset.url = url;
 
-      const cleanName = name || 'archive.zip';
+      const cleanName = name || (url.split('?')[0].split('/').pop()) || 'archive.zip';
       const displaySize = size > 0 ? formatBytes(size) : '';
 
-      btn.innerHTML = `
-        <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-        <div class="btn-archive-inner">
-          <svg class="btn-archive-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          <span class="btn-archive-label">${cleanName}</span>
-          ${displaySize ? `<span class="btn-archive-sub">(${displaySize})</span>` : ''}
+      card.innerHTML = `
+        <div class="sidebar-archive-card-header">
+          <div class="sidebar-archive-file-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 8v13H3V8"/>
+              <path d="M1 3h22v5H1z"/>
+              <path d="M10 12h4"/>
+            </svg>
+          </div>
+          <div class="sidebar-archive-file-info">
+            <div class="sidebar-archive-filename" title="${cleanName}">${cleanName}</div>
+            <div class="sidebar-archive-filesize">${displaySize || t('vw.archiveZip', 'ZIP-архив')}</div>
+          </div>
+        </div>
+
+        <div class="sidebar-archive-actions">
+          <button type="button" class="btn-archive-pill btn-archive-pill-download" title="${t('viewer.downloadArchiveTitle', 'Скачать архив на устройство')}">
+            <div class="btn-archive-progress-fill" style="width: 0%;"></div>
+            <span class="btn-archive-pill-content">
+              <svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span class="btn-archive-pill-text">${t('viewer.downloadArchive', 'Скачать')}</span>
+            </span>
+          </button>
+          <button type="button" class="btn-archive-pill btn-archive-pill-view" title="${t('viewer.viewArchiveTitle', 'Распаковать и просмотреть в галерее')}">
+            <div class="btn-archive-progress-fill" style="width: 0%;"></div>
+            <span class="btn-archive-pill-content">
+              <svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span class="btn-archive-pill-text">${t('viewer.viewArchive', 'Просмотреть')}</span>
+            </span>
+          </button>
+          <button type="button" class="btn-archive-pill btn-archive-pill-inspect" title="${t('viewer.inspectArchiveTitle', 'Проверить архив на ссылки и файлы')}">
+            <div class="btn-archive-progress-fill" style="width: 0%;"></div>
+            <span class="btn-archive-pill-content">
+              <svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span class="btn-archive-pill-text">${t('viewer.inspectArchive', 'Проверить')}</span>
+            </span>
+          </button>
+        </div>
+
+        <div class="sidebar-archive-live-status" style="display: none;">
+          <div class="sidebar-archive-live-bar-track">
+            <div class="sidebar-archive-live-bar-fill" style="width: 0%;"></div>
+          </div>
+          <div class="sidebar-archive-live-info">
+            <span class="sidebar-archive-live-phase"></span>
+            <span class="sidebar-archive-live-pct">0%</span>
+          </div>
         </div>
       `;
 
-      const fillEl = btn.querySelector('.btn-archive-progress-fill');
-      const labelEl = btn.querySelector('.btn-archive-label');
-      const iconEl = btn.querySelector('.btn-archive-icon');
-      const subEl = btn.querySelector('.btn-archive-sub');
+      const btnDownload = card.querySelector('.btn-archive-pill-download');
+      const btnView = card.querySelector('.btn-archive-pill-view');
+      const btnInspect = card.querySelector('.btn-archive-pill-inspect');
+
+      const liveStatus = card.querySelector('.sidebar-archive-live-status');
+      const liveBarFill = card.querySelector('.sidebar-archive-live-bar-fill');
+      const livePhase = card.querySelector('.sidebar-archive-live-phase');
+      const livePct = card.querySelector('.sidebar-archive-live-pct');
+
+      const dlFill = btnDownload.querySelector('.btn-archive-progress-fill');
+      const dlText = btnDownload.querySelector('.btn-archive-pill-text');
+      const dlIcon = btnDownload.querySelector('.btn-archive-icon');
+
+      const viewFill = btnView.querySelector('.btn-archive-progress-fill');
+      const viewText = btnView.querySelector('.btn-archive-pill-text');
+      const viewIcon = btnView.querySelector('.btn-archive-icon');
+
+      const inspFill = btnInspect.querySelector('.btn-archive-progress-fill');
+      const inspText = btnInspect.querySelector('.btn-archive-pill-text');
+      const inspIcon = btnInspect.querySelector('.btn-archive-icon');
 
       let serverUnpackAbortController = null;
       let isServerUnpacking = false;
+      let resetTimer = null;
 
       const resetToDefault = () => {
-        btn.classList.remove('is-downloading', 'is-completed', 'is-error');
-        if (fillEl) fillEl.style.width = '0%';
-        if (labelEl) labelEl.textContent = cleanName;
-        if (subEl) subEl.textContent = displaySize ? `(${displaySize})` : '';
-        if (iconEl) {
-          iconEl.innerHTML = `
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          `;
+        btnDownload.className = 'btn-archive-pill btn-archive-pill-download';
+        btnView.className = 'btn-archive-pill btn-archive-pill-view';
+        btnInspect.className = 'btn-archive-pill btn-archive-pill-inspect';
+
+        if (dlFill) dlFill.style.width = '0%';
+        if (viewFill) viewFill.style.width = '0%';
+        if (inspFill) inspFill.style.width = '0%';
+
+        if (dlText) dlText.textContent = t('viewer.downloadArchive', 'Скачать');
+        if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотреть');
+        if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить');
+
+        if (dlIcon) dlIcon.outerHTML = `<svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+        if (viewIcon) viewIcon.outerHTML = `<svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+        if (inspIcon) inspIcon.outerHTML = `<svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+
+        if (liveStatus) {
+          liveStatus.style.display = 'none';
+          liveStatus.className = 'sidebar-archive-live-status';
         }
+        if (liveBarFill) liveBarFill.style.width = '0%';
+
         isServerUnpacking = false;
         serverUnpackAbortController = null;
       };
 
-      // Subscribe to global in-page download manager
+      // 1. Subscribe to downloadManager for direct browser streaming downloads
       downloadManager.subscribeToUrl(url, (task) => {
-        if (!task) return;
-        if (isServerUnpacking) return;
+        if (!task || isServerUnpacking) return;
+        clearTimeout(resetTimer);
 
         if (task.status === 'downloading' || task.status === 'saving') {
-          btn.classList.remove('is-completed', 'is-error');
-          btn.classList.add('is-downloading');
-          if (subEl) subEl.textContent = '';
+          btnDownload.classList.remove('is-completed', 'is-error');
+          btnDownload.classList.add('is-downloading');
+
+          const curIcon = btnDownload.querySelector('.btn-archive-icon');
+          if (curIcon && !curIcon.classList.contains('btn-archive-spinner')) {
+            curIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
+          }
+
           const pct = Math.round(task.percent || 0);
-          if (fillEl) fillEl.style.width = `${pct}%`;
+          if (dlFill) dlFill.style.width = `${pct}%`;
+
+          if (liveStatus) {
+            liveStatus.style.display = 'flex';
+            liveStatus.className = 'sidebar-archive-live-status';
+          }
+          if (liveBarFill) liveBarFill.style.width = `${pct}%`;
+          if (livePct) livePct.textContent = `${pct}%`;
+
+          const loadedMb = (task.loaded / (1024 * 1024)).toFixed(1);
+          const totalMb = task.total > 0 ? (task.total / (1024 * 1024)).toFixed(1) + ' MB' : '';
 
           if (task.status === 'saving') {
-            if (labelEl) labelEl.textContent = t('dl.saving', 'Сохранение...');
+            if (dlText) dlText.textContent = t('dl.saving', 'Сохранение...');
+            if (livePhase) livePhase.textContent = t('dl.saving', 'Сохранение файла на устройство...');
           } else {
-            const loadedMb = (task.loaded / (1024 * 1024)).toFixed(1);
-            if (task.total > 0) {
-              const totalMb = (task.total / (1024 * 1024)).toFixed(1);
-              if (labelEl) labelEl.textContent = `${pct}% · ${loadedMb} / ${totalMb} MB`;
-            } else {
-              if (labelEl) labelEl.textContent = `${loadedMb} MB...`;
+            const speedText = task.speed > 0 ? ` · ${formatBytes(task.speed)}/s` : '';
+            if (dlText) dlText.textContent = `${pct}%`;
+            if (livePhase) {
+              livePhase.textContent = totalMb
+                ? `${t('vw.downloading', 'Загрузка')}: ${loadedMb} / ${totalMb}${speedText}`
+                : `${t('vw.downloading', 'Загрузка')}: ${loadedMb} MB${speedText}`;
             }
           }
         } else if (task.status === 'completed') {
-          btn.classList.remove('is-downloading', 'is-error');
-          btn.classList.add('is-completed');
-          if (fillEl) fillEl.style.width = '100%';
-          const finalMb = (task.loaded / (1024 * 1024)).toFixed(1);
-          if (labelEl) labelEl.textContent = t('vw.downloadArchiveDone', 'Скачано ({size} МБ) ✓').replace('{size}', finalMb);
-          if (iconEl) {
-            iconEl.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
+          btnDownload.classList.remove('is-downloading', 'is-error');
+          btnDownload.classList.add('is-completed');
+          if (dlFill) dlFill.style.width = '100%';
+          if (dlText) dlText.textContent = t('vw.archiveDownloadedShort', 'Скачано ✓');
+          const curIcon = btnDownload.querySelector('.btn-archive-icon');
+          if (curIcon) curIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
+
+          if (liveStatus) {
+            liveStatus.style.display = 'flex';
+            liveStatus.className = 'sidebar-archive-live-status is-completed';
           }
-          setTimeout(() => resetToDefault(), 4000);
+          if (liveBarFill) liveBarFill.style.width = '100%';
+          if (livePct) livePct.textContent = '100%';
+          if (livePhase) livePhase.textContent = t('dl.toastSaved', 'Архив сохранён на устройство ✓');
+
+          resetTimer = setTimeout(resetToDefault, 4000);
+        } else if (task.status === 'error') {
+          btnDownload.classList.remove('is-downloading');
+          btnDownload.classList.add('is-error');
+          if (dlFill) dlFill.style.width = '0%';
+          if (dlText) dlText.textContent = t('vw.error', 'Ошибка');
+
+          if (liveStatus) {
+            liveStatus.style.display = 'flex';
+            liveStatus.className = 'sidebar-archive-live-status is-error';
+          }
+          if (livePhase) livePhase.textContent = task.errorMessage || t('dl.error', 'Ошибка скачивания');
+          resetTimer = setTimeout(resetToDefault, 4000);
         } else if (task.status === 'cancelled') {
           resetToDefault();
-        } else if (task.status === 'error') {
-          btn.classList.remove('is-downloading');
-          btn.classList.add('is-error');
-          if (fillEl) fillEl.style.width = '0%';
-          if (labelEl) labelEl.textContent = t('vw.downloadArchiveError', 'Ошибка. Повторить?');
         }
       });
 
-      // Also subscribe to archive job manager (for server unpacking/viewing)
+      // 2. Subscribe to centralized archive job tracker (server unpacking / inspection)
       subscribeArchiveJob(url, (state) => {
-        if (state.active && (state.phase === 'download' || state.phase === 'extract')) {
-          btn.classList.remove('is-completed', 'is-error');
-          btn.classList.add('is-downloading');
-          if (subEl) subEl.textContent = '';
-          if (state.phase === 'extract') {
-            if (fillEl) fillEl.style.width = '100%';
-            if (labelEl) labelEl.textContent = t('vw.archiveExtracting', 'Распаковка на сервере...');
-          } else {
-            const pct = state.percent || 0;
-            if (fillEl) fillEl.style.width = `${pct}%`;
-            const loadedMb = (state.received / (1024 * 1024)).toFixed(1);
-            if (state.total > 0) {
-              const totalMb = (state.total / (1024 * 1024)).toFixed(1);
-              if (labelEl) labelEl.textContent = `${pct}% · ${loadedMb} / ${totalMb} MB`;
-            } else {
-              if (labelEl) labelEl.textContent = `${loadedMb} MB...`;
+        if (!state) return;
+        clearTimeout(resetTimer);
+
+        if (state.active) {
+          if (liveStatus) {
+            liveStatus.style.display = 'flex';
+            liveStatus.className = 'sidebar-archive-live-status';
+          }
+
+          const pct = Math.max(5, state.percent || 0);
+          if (liveBarFill) liveBarFill.style.width = `${pct}%`;
+          if (livePct) livePct.textContent = `${pct}%`;
+
+          if (state.phase === 'download') {
+            btnView.classList.remove('is-completed', 'is-error', 'is-extracting');
+            btnView.classList.add('is-downloading');
+            const vIcon = btnView.querySelector('.btn-archive-icon');
+            if (vIcon && !vIcon.classList.contains('btn-archive-spinner')) {
+              vIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
+            }
+            if (viewFill) viewFill.style.width = `${pct}%`;
+            if (viewText) viewText.textContent = `${pct}%`;
+
+            const recMb = (state.received / (1024 * 1024)).toFixed(1);
+            const totMb = state.total > 0 ? (state.total / (1024 * 1024)).toFixed(1) + ' MB' : '';
+            if (livePhase) {
+              livePhase.textContent = totMb
+                ? `${t('vw.archiveDownloading', 'Загрузка на сервер')}: ${recMb} / ${totMb} (${pct}%)`
+                : `${t('vw.archiveDownloading', 'Загрузка на сервер')}: ${recMb} MB`;
+            }
+          } else if (state.phase === 'extract') {
+            btnView.classList.remove('is-completed', 'is-error', 'is-downloading');
+            btnView.classList.add('is-extracting');
+            const vIcon = btnView.querySelector('.btn-archive-icon');
+            if (vIcon && !vIcon.classList.contains('btn-archive-spinner')) {
+              vIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
+            }
+            if (viewFill) viewFill.style.width = `${pct}%`;
+            if (viewText) viewText.textContent = `${pct}%`;
+
+            if (livePhase) {
+              if (state.totalFiles > 0) {
+                const fileHint = state.currentFile ? ` · ${state.currentFile}` : '';
+                livePhase.textContent = `${t('vw.archiveExtracting', 'Распаковка')}: ${state.extractedFiles || 0} / ${state.totalFiles} файлов (${pct}%)${fileHint}`;
+              } else {
+                livePhase.textContent = t('vw.archiveExtracting', 'Распаковка архива на сервере...');
+              }
+            }
+          } else if (state.phase === 'inspect') {
+            btnInspect.classList.remove('is-completed', 'is-error');
+            btnInspect.classList.add('is-inspecting');
+            const iIcon = btnInspect.querySelector('.btn-archive-icon');
+            if (iIcon && !iIcon.classList.contains('btn-archive-spinner')) {
+              iIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
+            }
+            if (inspFill) inspFill.style.width = `${pct}%`;
+            if (inspText) inspText.textContent = `${pct}%`;
+
+            if (livePhase) {
+              if (state.totalFiles > 0) {
+                livePhase.textContent = `${t('vw.inspectScanning', 'Анализ')}: ${state.scannedFiles || 0} / ${state.totalFiles} файлов (${pct}%)`;
+              } else {
+                livePhase.textContent = t('vw.archiveAnalyzing', 'Анализ архива: поиск ссылок и файлов...');
+              }
             }
           }
-        } else if (state.completed && state.phase === 'unpack') {
-          btn.classList.remove('is-downloading', 'is-error');
-          btn.classList.add('is-completed');
-          if (fillEl) fillEl.style.width = '100%';
-          if (labelEl) labelEl.textContent = t('vw.openedInViewer', 'Открыто в плеере ✓');
-          if (iconEl) {
-            iconEl.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
+        } else if (state.completed) {
+          if (state.phase === 'unpack' || state.phase === 'extract' || state.phase === 'completed') {
+            btnView.classList.remove('is-downloading', 'is-extracting');
+            btnView.classList.add('is-completed');
+            if (viewFill) viewFill.style.width = '100%';
+            if (viewText) viewText.textContent = t('vw.openedInViewer', 'Открыто ✓');
+            const vIcon = btnView.querySelector('.btn-archive-icon');
+            if (vIcon) vIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
+
+            if (liveStatus) {
+              liveStatus.style.display = 'flex';
+              liveStatus.className = 'sidebar-archive-live-status is-completed';
+            }
+            if (liveBarFill) liveBarFill.style.width = '100%';
+            if (livePct) livePct.textContent = '100%';
+            if (livePhase) livePhase.textContent = t('vw.archiveOpenedInViewer', 'Архив распакован и открыт в галерее ✓');
+            resetTimer = setTimeout(resetToDefault, 4000);
+          } else if (state.phase === 'inspected') {
+            btnInspect.classList.remove('is-inspecting');
+            btnInspect.classList.add('is-completed');
+            if (inspFill) inspFill.style.width = '100%';
+            if (inspText) inspText.textContent = t('vw.inspectedDone', 'Проверено ✓');
+            const iIcon = btnInspect.querySelector('.btn-archive-icon');
+            if (iIcon) iIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
+
+            if (liveStatus) {
+              liveStatus.style.display = 'flex';
+              liveStatus.className = 'sidebar-archive-live-status is-completed';
+            }
+            if (liveBarFill) liveBarFill.style.width = '100%';
+            if (livePct) livePct.textContent = '100%';
+            if (livePhase) livePhase.textContent = t('vw.inspectedDone', 'Проверено ✓');
+            resetTimer = setTimeout(resetToDefault, 3500);
           }
-          setTimeout(() => resetToDefault(), 4000);
+        } else if (state.error) {
+          if (liveStatus) {
+            liveStatus.style.display = 'flex';
+            liveStatus.className = 'sidebar-archive-live-status is-error';
+          }
+          if (livePhase) livePhase.textContent = state.error || t('vw.archiveFailed', 'Ошибка при обработке архива');
+          resetTimer = setTimeout(resetToDefault, 4000);
         }
       });
 
-      btn.addEventListener('click', async (e) => {
+      // Button event listeners
+      btnDownload.addEventListener('click', async (e) => {
         e.stopPropagation();
         e.preventDefault();
 
@@ -918,35 +1116,16 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         const isExtractable = /\.(zip|rar|7z)$/i.test(cleanName) || url.toLowerCase().includes('.zip');
 
         if (isUnpackEnabled && isExtractable) {
-          // Unpack on server and download extracted files
           isServerUnpacking = true;
-          btn.classList.remove('is-completed', 'is-error');
-          btn.classList.add('is-downloading');
-          if (subEl) subEl.textContent = '';
-          if (labelEl) labelEl.textContent = t('vw.unpackingOnServer', 'Распаковка на сервере...');
-
           serverUnpackAbortController = new AbortController();
           activeArchiveDownloads.set(url, serverUnpackAbortController);
 
-          let pollInterval = setInterval(async () => {
-            const status = await fetchArchiveStatus(url);
-            if (status && status.active) {
-              if (status.phase === 'extract') {
-                if (fillEl) fillEl.style.width = '100%';
-                if (labelEl) labelEl.textContent = t('vw.archiveExtracting', 'Извлечение файлов...');
-              } else if (status.phase === 'download' && status.total > 0) {
-                const pct = status.percent || Math.round((status.received / status.total) * 100);
-                if (fillEl) fillEl.style.width = `${pct}%`;
-                const loadedMb = (status.received / (1024 * 1024)).toFixed(1);
-                const totalMb = (status.total / (1024 * 1024)).toFixed(1);
-                if (labelEl) labelEl.textContent = `${pct}% · ${loadedMb} / ${totalMb} MB`;
-              }
-            }
-          }, 600);
+          notifyArchiveJob(url, { active: true, phase: 'download', percent: 5, received: 0, total: 0 });
+          startArchivePolling(url);
 
           try {
             const res = await fetchArchiveList(url);
-            clearInterval(pollInterval);
+            stopArchivePolling(url);
 
             if (serverUnpackAbortController.signal.aborted) {
               resetToDefault();
@@ -954,8 +1133,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             }
 
             if (res && res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
-              if (fillEl) fillEl.style.width = '100%';
-              if (labelEl) labelEl.textContent = t('vw.savingFiles', 'Сохранение файлов ({n})...').replace('{n}', String(res.albumItems.length));
+              notifyArchiveJob(url, { active: false, completed: true, phase: 'unpack', percent: 100 });
+              if (livePhase) livePhase.textContent = t('vw.savingFiles', 'Сохранение файлов ({n})...').replace('{n}', String(res.albumItems.length));
 
               for (let i = 0; i < res.albumItems.length; i++) {
                 if (serverUnpackAbortController.signal.aborted) break;
@@ -972,30 +1151,21 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
                 }
               }
 
-              btn.classList.remove('is-downloading');
-              btn.classList.add('is-completed');
-              if (labelEl) labelEl.textContent = t('vw.downloadedFilesCount', 'Скачано ({n} файлов) ✓').replace('{n}', String(res.albumItems.length));
-              if (iconEl) {
-                iconEl.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
-              }
               showToast(t('vw.archiveExtractedAndSaved', 'Архив распакован, файлы ({n} шт.) сохранены на устройство').replace('{n}', String(res.albumItems.length)));
-              setTimeout(() => resetToDefault(), 4000);
               return;
             }
           } catch (err) {
-            clearInterval(pollInterval);
+            stopArchivePolling(url);
             if (err.name === 'AbortError') {
               resetToDefault();
               return;
             }
-            console.warn('[Server unpack error, fallback to direct download]', err);
           } finally {
-            clearInterval(pollInterval);
             activeArchiveDownloads.delete(url);
           }
         }
 
-        // MEGA-style in-site background stream download
+        // Direct in-page streaming download
         downloadManager.startDownload({
           url,
           filename: cleanName,
@@ -1004,263 +1174,18 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         });
       });
 
-      return btn;
-    }
-
-    function createAnimatedViewButton({ url, name, isSidebar = false }) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-
-      if (isSidebar) {
-        btn.className = 'btn-archive-view-icon';
-        btn.title = t('viewer.viewArchiveTitle', 'Распаковать и просмотреть в галерее');
-        btn.innerHTML = `
-          <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-          ${ARCHIVE_PLAY_ICON_SVG}
-        `;
-
-        let resetTimer = null;
-        const resetToDefault = () => {
-          btn.classList.remove('is-downloading', 'is-extracting', 'is-loading', 'is-completed', 'is-error');
-          btn.innerHTML = `
-            <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-            ${ARCHIVE_PLAY_ICON_SVG}
-          `;
-          btn.title = t('viewer.viewArchiveTitle', 'Распаковать и просмотреть в галерее');
-        };
-
-        subscribeArchiveJob(url, (state) => {
-          clearTimeout(resetTimer);
-          if (state.active) {
-            btn.classList.remove('is-completed', 'is-error');
-            btn.classList.add('is-loading');
-            const pct = Math.max(8, state.percent || 0);
-            btn.innerHTML = `
-              <div class="btn-archive-progress-fill" style="width: ${pct}%;"></div>
-              ${ARCHIVE_SPINNER_ICON_SVG}
-            `;
-            if (state.phase === 'extract') {
-              btn.title = t('vw.archiveExtracting', 'Распаковка архива...');
-            } else {
-              btn.title = `${t('vw.downloading', 'Загрузка')}: ${state.percent || 0}%`;
-            }
-          } else if (state.completed && state.phase === 'unpack') {
-            btn.classList.remove('is-loading', 'is-error');
-            btn.classList.add('is-completed');
-            btn.innerHTML = `
-              <div class="btn-archive-progress-fill" style="width: 100%;"></div>
-              ${ARCHIVE_CHECK_ICON_SVG}
-            `;
-            btn.title = t('vw.openedInViewer', 'Открыто в плеере ✓');
-            resetTimer = setTimeout(resetToDefault, 3500);
-          } else if (state.error && state.phase === 'unpack') {
-            btn.classList.remove('is-loading', 'is-completed');
-            btn.classList.add('is-error');
-            btn.title = state.error || t('vw.archiveUnpackFailed', 'Ошибка при распаковке архива');
-            resetTimer = setTimeout(resetToDefault, 3500);
-          }
-        });
-
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          unpackAndViewArchive(url, name);
-        });
-
-        return btn;
-      }
-
-      // Card button
-      btn.className = 'btn-archive-view';
-      btn.title = t('viewer.viewArchiveTitle', 'Распаковать и просмотреть в галерее');
-      btn.innerHTML = `
-        <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-        <div class="btn-archive-inner">
-          ${ARCHIVE_PLAY_ICON_SVG}
-          <span class="btn-archive-label">${t('viewer.viewArchive', 'Просмотреть')}</span>
-          <span class="btn-archive-sub"></span>
-        </div>
-      `;
-
-      const fillEl = btn.querySelector('.btn-archive-progress-fill');
-      const labelEl = btn.querySelector('.btn-archive-label');
-      const subEl = btn.querySelector('.btn-archive-sub');
-      let resetTimer = null;
-
-      const resetToDefault = () => {
-        btn.classList.remove('is-downloading', 'is-extracting', 'is-loading', 'is-completed', 'is-error');
-        if (fillEl) fillEl.style.width = '0%';
-        if (labelEl) labelEl.textContent = t('viewer.viewArchive', 'Просмотреть');
-        if (subEl) subEl.textContent = '';
-        const curIcon = btn.querySelector('.btn-archive-icon');
-        if (curIcon) curIcon.outerHTML = ARCHIVE_PLAY_ICON_SVG;
-      };
-
-      subscribeArchiveJob(url, (state) => {
-        clearTimeout(resetTimer);
-        if (state.active) {
-          btn.classList.remove('is-completed', 'is-error');
-          const curIcon = btn.querySelector('.btn-archive-icon');
-          if (curIcon && !curIcon.classList.contains('btn-archive-spinner')) {
-            curIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
-          }
-
-          if (state.phase === 'extract') {
-            btn.classList.remove('is-downloading');
-            btn.classList.add('is-extracting');
-            if (fillEl) fillEl.style.width = '100%';
-            if (labelEl) labelEl.textContent = t('vw.archiveExtracting', 'Распаковка архива...');
-            if (subEl) subEl.textContent = '';
-          } else {
-            btn.classList.remove('is-extracting');
-            btn.classList.add('is-downloading');
-            const pct = Math.max(5, state.percent || 0);
-            if (fillEl) fillEl.style.width = `${pct}%`;
-            if (labelEl) labelEl.textContent = `${t('vw.downloading', 'Загрузка')} ${state.percent || 0}%`;
-            if (subEl) {
-              const recMb = (state.received / (1024 * 1024)).toFixed(1);
-              const totMb = state.total > 0 ? (state.total / (1024 * 1024)).toFixed(1) + ' MB' : '';
-              subEl.textContent = totMb ? `(${recMb} / ${totMb})` : `(${recMb} MB)`;
-            }
-          }
-        } else if (state.completed && state.phase === 'unpack') {
-          btn.classList.remove('is-downloading', 'is-extracting', 'is-loading');
-          btn.classList.add('is-completed');
-          if (fillEl) fillEl.style.width = '100%';
-          const curIcon = btn.querySelector('.btn-archive-icon');
-          if (curIcon) curIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
-          if (labelEl) labelEl.textContent = t('vw.openedInViewer', 'Открыто в плеере ✓');
-          if (subEl) subEl.textContent = '';
-          resetTimer = setTimeout(resetToDefault, 3500);
-        } else if (state.error && state.phase === 'unpack') {
-          btn.classList.remove('is-downloading', 'is-extracting', 'is-loading');
-          btn.classList.add('is-error');
-          if (fillEl) fillEl.style.width = '0%';
-          if (labelEl) labelEl.textContent = t('vw.unpackError', 'Ошибка распаковки');
-          if (subEl) subEl.textContent = '';
-          resetTimer = setTimeout(resetToDefault, 3500);
-        }
-      });
-
-      btn.addEventListener('click', (e) => {
+      btnView.addEventListener('click', (e) => {
         e.stopPropagation();
-        unpackAndViewArchive(url, name);
+        unpackAndViewArchive(url, cleanName);
       });
 
-      return btn;
-    }
-
-    function createAnimatedInspectButton({ url, name, isSidebar = false }) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-
-      if (isSidebar) {
-        btn.className = 'btn-archive-inspect-icon';
-        btn.title = t('viewer.inspectArchiveTitle', 'Проверить архив на ссылки и файлы');
-        btn.innerHTML = `
-          <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-          ${ARCHIVE_SEARCH_ICON_SVG}
-        `;
-
-        let resetTimer = null;
-        const resetToDefault = () => {
-          btn.classList.remove('is-inspecting', 'is-loading', 'is-completed', 'is-error');
-          btn.innerHTML = `
-            <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-            ${ARCHIVE_SEARCH_ICON_SVG}
-          `;
-          btn.title = t('viewer.inspectArchiveTitle', 'Проверить архив на ссылки и файлы');
-        };
-
-        subscribeArchiveJob(url, (state) => {
-          clearTimeout(resetTimer);
-          if (state.active && state.phase === 'inspect') {
-            btn.classList.add('is-loading');
-            const pct = Math.max(8, state.percent || 0);
-            btn.innerHTML = `
-              <div class="btn-archive-progress-fill" style="width: ${pct}%;"></div>
-              ${ARCHIVE_SPINNER_ICON_SVG}
-            `;
-            btn.title = `${t('viewer.inspectArchive', 'Проверить архив')}: ${state.percent || 0}%`;
-          } else if (state.completed && state.phase === 'inspected') {
-            btn.classList.remove('is-loading');
-            btn.classList.add('is-completed');
-            btn.innerHTML = `
-              <div class="btn-archive-progress-fill" style="width: 100%;"></div>
-              ${ARCHIVE_CHECK_ICON_SVG}
-            `;
-            btn.title = t('vw.inspectedDone', 'Проверено ✓');
-            resetTimer = setTimeout(resetToDefault, 3000);
-          }
-        });
-
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          openArchiveInspectModal(url, name);
-        });
-
-        return btn;
-      }
-
-      // Card button
-      btn.className = 'btn-archive-inspect';
-      btn.title = t('viewer.inspectArchiveTitle', 'Проверить архив на ссылки и файлы');
-      btn.innerHTML = `
-        <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-        <div class="btn-archive-inner">
-          ${ARCHIVE_SEARCH_ICON_SVG}
-          <span class="btn-archive-label">${t('viewer.inspectArchive', 'Проверить архив')}</span>
-          <span class="btn-archive-sub"></span>
-        </div>
-      `;
-
-      const fillEl = btn.querySelector('.btn-archive-progress-fill');
-      const labelEl = btn.querySelector('.btn-archive-label');
-      const subEl = btn.querySelector('.btn-archive-sub');
-      let resetTimer = null;
-
-      const resetToDefault = () => {
-        btn.classList.remove('is-inspecting', 'is-completed', 'is-error', 'is-loading');
-        if (fillEl) fillEl.style.width = '0%';
-        if (labelEl) labelEl.textContent = t('viewer.inspectArchive', 'Проверить архив');
-        if (subEl) subEl.textContent = '';
-        const curIcon = btn.querySelector('.btn-archive-icon');
-        if (curIcon) curIcon.outerHTML = ARCHIVE_SEARCH_ICON_SVG;
-      };
-
-      subscribeArchiveJob(url, (state) => {
-        clearTimeout(resetTimer);
-        if (state.active && state.phase === 'inspect') {
-          btn.classList.add('is-inspecting');
-          const curIcon = btn.querySelector('.btn-archive-icon');
-          if (curIcon && !curIcon.classList.contains('btn-archive-spinner')) {
-            curIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
-          }
-          const pct = Math.max(5, state.percent || 0);
-          if (fillEl) fillEl.style.width = `${pct}%`;
-          if (labelEl) {
-            labelEl.textContent = state.percent > 0 && state.percent < 100
-              ? `${t('vw.inspectScanning', 'Проверка')} ${state.percent}%`
-              : t('vw.archiveAnalyzing', 'Анализ архива...');
-          }
-        } else if (state.completed && state.phase === 'inspected') {
-          btn.classList.remove('is-inspecting');
-          btn.classList.add('is-completed');
-          if (fillEl) fillEl.style.width = '100%';
-          const curIcon = btn.querySelector('.btn-archive-icon');
-          if (curIcon) curIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
-          if (labelEl) labelEl.textContent = t('vw.inspectedDone', 'Проверено ✓');
-          resetTimer = setTimeout(resetToDefault, 3000);
-        }
-      });
-
-      btn.addEventListener('click', (e) => {
+      btnInspect.addEventListener('click', (e) => {
         e.stopPropagation();
-        openArchiveInspectModal(url, name);
+        openArchiveInspectModal(url, cleanName);
       });
 
-      return btn;
+      return card;
     }
-
 
     function renderArchivePostCard(targetPost) {
       if (!mediaWrapper) return;
@@ -1293,18 +1218,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         targetPost.archiveUrls.forEach((url, idx) => {
           const name = (Array.isArray(targetPost.archiveNames) && targetPost.archiveNames[idx]) || `archive_${idx + 1}.zip`;
           const size = (Array.isArray(targetPost.archiveSizes) && targetPost.archiveSizes[idx]) || 0;
-
-          const group = document.createElement('div');
-          group.className = 'archive-item-group';
-
-          const btn = createAnimatedArchiveButton({ url, name, size, isSidebar: false });
-          const viewBtn = createAnimatedViewButton({ url, name, isSidebar: false });
-          const inspectBtn = createAnimatedInspectButton({ url, name, isSidebar: false });
-
-          group.appendChild(btn);
-          group.appendChild(viewBtn);
-          group.appendChild(inspectBtn);
-          buttonsContainer.appendChild(group);
+          const archiveBlock = createArchiveCardComponent({ url, name, size, isSidebar: false });
+          buttonsContainer.appendChild(archiveBlock);
         });
       }
 
@@ -1330,18 +1245,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       targetPost.archiveUrls.forEach((url, idx) => {
         const name = (Array.isArray(targetPost.archiveNames) && targetPost.archiveNames[idx]) || `archive_${idx + 1}.zip`;
         const size = (Array.isArray(targetPost.archiveSizes) && targetPost.archiveSizes[idx]) || 0;
-
-        const row = document.createElement('div');
-        row.className = 'sidebar-archive-row';
-
-        const btn = createAnimatedArchiveButton({ url, name, size, isSidebar: true });
-        const viewBtn = createAnimatedViewButton({ url, name, isSidebar: true });
-        const inspectBtn = createAnimatedInspectButton({ url, name, isSidebar: true });
-
-        row.appendChild(btn);
-        row.appendChild(viewBtn);
-        row.appendChild(inspectBtn);
-        listEl.appendChild(row);
+        const archiveBlock = createArchiveCardComponent({ url, name, size, isSidebar: true });
+        listEl.appendChild(archiveBlock);
       });
     }
 
@@ -1718,34 +1623,35 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       <div class="archive-inspect-loading">
         <div class="loading-spinner"></div>
         <div class="archive-inspect-loading-text" id="archiveInspectStatusText">${t('vw.inspectScanning', 'Подготовка архива...')}</div>
-        <div class="archive-inspect-progress-wrap" id="archiveInspectProgressWrap" style="display: none;">
+        <div class="archive-inspect-progress-wrap" id="archiveInspectProgressWrap">
           <div class="archive-inspect-progress-bar-track">
-            <div class="archive-inspect-progress-bar-fill" id="archiveInspectProgressBar"></div>
+            <div class="archive-inspect-progress-bar-fill" id="archiveInspectProgressBar" style="width: 5%;"></div>
           </div>
           <div class="archive-inspect-progress-details">
             <span id="archiveInspectProgressPct">0%</span>
-            <span id="archiveInspectProgressBytes"></span>
+            <span id="archiveInspectProgressBytes">${t('vw.inspectingPhase', 'Инициализация...')}</span>
           </div>
         </div>
         <div class="archive-inspect-loading-sub">${cleanName}</div>
       </div>
     `;
 
-    notifyArchiveJob(url, { active: true, phase: 'inspect', percent: 0 });
+    notifyArchiveJob(url, { active: true, phase: 'inspect', percent: 5 });
     startArchivePolling(url);
 
     const unsubscribe = subscribeArchiveJob(url, (status) => {
-      if (status && status.active) {
-        const wrap = document.getElementById('archiveInspectProgressWrap');
-        const bar = document.getElementById('archiveInspectProgressBar');
-        const statusText = document.getElementById('archiveInspectStatusText');
-        const pctEl = document.getElementById('archiveInspectProgressPct');
-        const bytesEl = document.getElementById('archiveInspectProgressBytes');
-        if (wrap) wrap.style.display = 'block';
+      if (!status) return;
+      const wrap = document.getElementById('archiveInspectProgressWrap');
+      const bar = document.getElementById('archiveInspectProgressBar');
+      const statusText = document.getElementById('archiveInspectStatusText');
+      const pctEl = document.getElementById('archiveInspectProgressPct');
+      const bytesEl = document.getElementById('archiveInspectProgressBytes');
+      if (wrap) wrap.style.display = 'block';
 
+      if (status.active) {
         if (status.phase === 'download') {
           if (statusText) statusText.textContent = t('vw.archiveDownloading', 'Загрузка архива на сервер...');
-          const pct = status.percent || (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0);
+          const pct = Math.max(5, status.percent || (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 5));
           if (bar) bar.style.width = `${pct}%`;
           if (pctEl) pctEl.textContent = `${pct}%`;
           if (bytesEl && status.received) {
@@ -1754,11 +1660,22 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             bytesEl.textContent = totMb ? `${recMb} / ${totMb}` : `${recMb} MB`;
           }
         } else if (status.phase === 'inspect' || status.phase === 'extract') {
-          if (statusText) statusText.textContent = t('vw.archiveAnalyzing', 'Анализ файлов, поиск ссылок и PDF...');
-          if (bar) bar.style.width = '100%';
-          if (pctEl) pctEl.textContent = '100%';
-          if (bytesEl) bytesEl.textContent = t('vw.inspectingPhase', 'Сканирование');
+          const pct = Math.max(10, status.percent || 15);
+          if (bar) bar.style.width = `${pct}%`;
+          if (pctEl) pctEl.textContent = `${pct}%`;
+          if (status.totalFiles > 0) {
+            if (statusText) statusText.textContent = `${t('vw.inspectScanning', 'Анализ файлов')}: ${status.scannedFiles || 0} / ${status.totalFiles} (${pct}%)`;
+            if (bytesEl) bytesEl.textContent = status.currentFile ? status.currentFile.split('/').pop() : t('vw.inspectingPhase', 'Сканирование...');
+          } else {
+            if (statusText) statusText.textContent = t('vw.archiveAnalyzing', 'Анализ файлов, поиск ссылок и PDF...');
+            if (bytesEl) bytesEl.textContent = t('vw.inspectingPhase', 'Сканирование...');
+          }
         }
+      } else if (status.completed) {
+        if (bar) bar.style.width = '100%';
+        if (pctEl) pctEl.textContent = '100%';
+        if (bytesEl) bytesEl.textContent = t('vw.inspectedDone', 'Завершено ✓');
+        if (statusText) statusText.textContent = t('vw.archiveAnalyzingDone', 'Анализ завершен');
       }
     });
 

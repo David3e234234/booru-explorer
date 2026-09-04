@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { ARCHIVES_DIR } from '../config/constants.js';
-import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive } from '../services/archiveService.js';
+import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive, getArchiveKey, readManifest } from '../services/archiveService.js';
 import { logError } from '../utils/logger.js';
 
 const router = express.Router();
@@ -49,9 +49,32 @@ router.get('/status', (req, res) => {
     return res.json({ active: false });
   }
   const status = getArchiveJobStatus(zipUrl);
-  if (!status) return res.json({ active: false });
-  const percent = status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0;
-  res.json({ active: true, phase: status.phase, received: status.received, total: status.total, percent });
+  if (!status) {
+    const key = getArchiveKey(zipUrl);
+    const hasManifest = Boolean(readManifest(key));
+    const hasInspect = fs.existsSync(path.join(ARCHIVES_DIR, `${key}.inspect.json`));
+    if (hasManifest || hasInspect) {
+      return res.json({ active: false, completed: true, cached: true, percent: 100 });
+    }
+    return res.json({ active: false });
+  }
+
+  const percent = status.percent !== undefined
+    ? status.percent
+    : (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0);
+
+  res.json({
+    active: status.phase !== 'completed',
+    completed: status.phase === 'completed',
+    phase: status.phase,
+    received: status.received || 0,
+    total: status.total || 0,
+    percent,
+    extractedFiles: status.extractedFiles || 0,
+    scannedFiles: status.scannedFiles || 0,
+    totalFiles: status.totalFiles || 0,
+    currentFile: status.currentFile || ''
+  });
 });
 
 // GET /api/archive/file?key=<md5>&n=<idx> - serve one extracted file from cache
