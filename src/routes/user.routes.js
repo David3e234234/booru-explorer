@@ -1,7 +1,7 @@
 import express from 'express';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { THUMBS_DIR, VIDEOS_DIR, PORT } from '../config/constants.js';
+import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR, PORT } from '../config/constants.js';
 import { 
   getSettings, 
   updateSettings, 
@@ -387,11 +387,12 @@ router.post('/dislikes/sync', (req, res) => {
 router.get('/cache-info', async (req, res) => {
   const userId = req.user?.id || null;
   const settings = getSettings(userId);
-  const [thumbs, videos] = await Promise.all([
+  const [thumbs, videos, archives] = await Promise.all([
     getDirectoryStats(THUMBS_DIR),
-    getDirectoryStats(VIDEOS_DIR)
+    getDirectoryStats(VIDEOS_DIR),
+    getDirectoryStats(ARCHIVES_DIR)
   ]);
-  const totalDiskBytes = thumbs.totalBytes + videos.totalBytes;
+  const totalDiskBytes = thumbs.totalBytes + videos.totalBytes + archives.totalBytes;
 
   res.json({
     success: true,
@@ -400,27 +401,28 @@ router.get('/cache-info', async (req, res) => {
     maxServerCacheMb: settings?.maxServerCacheMb !== undefined ? Number(settings.maxServerCacheMb) : 1500,
     thumbsCount: thumbs.fileList.length,
     videosCount: videos.fileList.length,
+    archivesCount: archives.fileList.length,
     ramCacheEntries: apiPostsCache.size() + tagAutocompleteCache.size()
   });
 });
 
 // POST /api/cache-clear - wipes the RAM cache and every cached file on disk
-router.post('/cache-clear', requireAuth, async (req, res) => {
+router.post('/cache-clear', async (req, res) => {
   try {
     apiPostsCache.clear();
     tagAutocompleteCache.clear();
 
-    const [thumbs, videos] = await Promise.all([
+    const [thumbs, videos, archives] = await Promise.all([
       getDirectoryStats(THUMBS_DIR),
-      getDirectoryStats(VIDEOS_DIR)
+      getDirectoryStats(VIDEOS_DIR),
+      getDirectoryStats(ARCHIVES_DIR)
     ]);
 
-    for (const f of [...thumbs.fileList, ...videos.fileList]) {
-      try { await fs.promises.unlink(f.path); } catch {}
-    }
+    const allFiles = [...thumbs.fileList, ...videos.fileList, ...archives.fileList];
+    await Promise.allSettled(allFiles.map(f => fs.promises.unlink(f.path).catch(() => {})));
 
-    logInfo('Cache', 'Кэш полностью очищен по запросу пользователя');
-    res.json({ success: true, message: 'Кэш успешно очищен' });
+    logInfo('Cache', `Кэш полностью очищен по запросу пользователя (${allFiles.length} файлов)`);
+    res.json({ success: true, message: 'Кэш успешно очищен', deletedCount: allFiles.length });
   } catch (err) {
     logError('Cache', 'Ошибка очистки кэша', err);
     res.status(500).json({ success: false, error: err.message });

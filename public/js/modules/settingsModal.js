@@ -811,10 +811,12 @@ export async function updateStorageUsageInfo() {
   } catch {}
 
   let pwaCacheBytes = 0;
+  let pwaMediaCacheBytes = 0;
   if ('caches' in window) {
     try {
       const keys = await caches.keys();
       for (const k of keys) {
+        const isMediaCache = k.includes('media');
         const cache = await caches.open(k);
         const reqs = await cache.keys();
         for (const req of reqs) {
@@ -822,6 +824,9 @@ export async function updateStorageUsageInfo() {
           if (res) {
             const blob = await res.blob();
             pwaCacheBytes += blob.size;
+            if (isMediaCache) {
+              pwaMediaCacheBytes += blob.size;
+            }
           }
         }
       }
@@ -864,7 +869,7 @@ export async function updateStorageUsageInfo() {
     storageProgressBar.style.width = `${pct}%`;
   }
 
-  if (storageMediaCacheText) storageMediaCacheText.textContent = formatBytes(pwaCacheBytes || localBytes);
+  if (storageMediaCacheText) storageMediaCacheText.textContent = formatBytes(pwaMediaCacheBytes);
   if (storageServerCacheText) {
     const formattedLimit = maxServerCacheMb > 0 
       ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ' + t('unit.gb', 'ГБ') : maxServerCacheMb + ' ' + t('unit.mb', 'МБ'))
@@ -899,16 +904,31 @@ export async function handleClearStorageCache() {
 
     if ('caches' in window) {
       const cacheNames = await caches.keys();
-      await Promise.all(
-        cacheNames
-          .filter(n => n.startsWith('booru-cache-') || n.includes('media'))
-          .map(n => caches.delete(n))
-      );
+      for (const name of cacheNames) {
+        if (name.includes('media') || name.startsWith('booru-cache-')) {
+          await caches.delete(name);
+        } else if (name.startsWith('booru-explorer-')) {
+          try {
+            const appCache = await caches.open(name);
+            const requests = await appCache.keys();
+            await Promise.all(
+              requests
+                .filter(req => {
+                  try {
+                    const pathname = new URL(req.url).pathname;
+                    return pathname.startsWith('/api/');
+                  } catch {
+                    return false;
+                  }
+                })
+                .map(req => appCache.delete(req))
+            );
+          } catch {}
+        }
+      }
     }
 
-    try {
-      await clearCache();
-    } catch (err) {}
+    await clearCache();
 
     await updateStorageUsageInfo();
     if (statusEl) {
@@ -917,7 +937,11 @@ export async function handleClearStorageCache() {
     }
     showToast(t('set.mediaCacheCleared', 'Кэш медиа успешно очищен'));
   } catch (err) {
-    if (statusEl) statusEl.textContent = t('set.clearFailed', 'Ошибка очистки');
+    console.error('[Settings] Cache clear failed:', err);
+    if (statusEl) {
+      statusEl.textContent = t('set.clearFailed', 'Ошибка очистки');
+      setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+    }
     showToast(t('set.cacheClearIncomplete', 'Не удалось полностью очистить кэш'));
   } finally {
     if (btn) btn.disabled = false;

@@ -387,14 +387,23 @@ export function getProxiedUrl(targetUrl) {
 }
 
 export async function fetchCacheInfo() {
-  const res = await fetch('/api/cache-info');
-  if (!res.ok) return { diskCacheMB: '0.0', thumbsCount: 0, videosCount: 0, ramCacheEntries: 0 };
+  const res = await fetch('/api/cache-info', {
+    headers: getAuthHeaders()
+  });
+  if (!res.ok) return { diskCacheMB: '0.0', thumbsCount: 0, videosCount: 0, archivesCount: 0, ramCacheEntries: 0 };
   return await res.json();
 }
 
 export async function clearCache() {
-  const res = await fetch('/api/cache-clear', { method: 'POST' });
-  return await res.json();
+  const res = await fetch('/api/cache-clear', {
+    method: 'POST',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.success === false) {
+    throw new Error(data.message || data.error || `HTTP ${res.status}`);
+  }
+  return data;
 }
 
 export async function testTelegramConnection(token, chatId) {
