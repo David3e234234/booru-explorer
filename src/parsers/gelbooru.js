@@ -60,7 +60,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
   if (settings?.gelbooruApiKey && settings?.gelbooruUserId) {
     const url = `https://gelbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.gelbooruApiKey)}&user_id=${encodeURIComponent(settings.gelbooruUserId)}`;
     try {
-      const res = await fetchSafe(url, { timeout: 3500, settings, site: 'gelbooru' });
+      const res = await fetchSafe(url, { timeout: 8000, settings, site: 'gelbooru' });
       if (res.ok) {
         const text = await res.text();
         const data = safeJsonParse(text, []);

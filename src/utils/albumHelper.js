@@ -351,6 +351,21 @@ export function groupPostsIntoAlbums(posts, options = {}) {
                          Array.from(allKeysSet).find(k => k.startsWith('pawchive:')) ||
                          Array.from(allKeysSet)[0] || '';
 
+      // Use the most recent upload/update date among album items so feed sorting by new remains consistent
+      const validDates = cleanItems
+        .map(i => i.createdAt)
+        .filter(d => typeof d === 'string' && d.trim().length > 0);
+      let latestCreatedAt = rootPost.createdAt || '';
+      if (validDates.length > 0) {
+        latestCreatedAt = validDates.reduce((latest, curr) => {
+          const t1 = new Date(latest).getTime();
+          const t2 = new Date(curr).getTime();
+          if (isNaN(t1)) return curr;
+          if (isNaN(t2)) return latest;
+          return t2 > t1 ? curr : latest;
+        });
+      }
+
       const albumPost = {
         ...rootPost,
         isAlbum: true,
@@ -362,7 +377,8 @@ export function groupPostsIntoAlbums(posts, options = {}) {
         tags: Array.from(allTagsSet),
         score: maxScore,
         favCount: maxFavs,
-        views: maxViews
+        views: maxViews,
+        createdAt: latestCreatedAt
       };
 
       resultMap.set(rootIndex, albumPost);

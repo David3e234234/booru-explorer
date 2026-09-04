@@ -207,8 +207,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
                            negativeTokens.length > 0;
 
   const shouldDeepFetch = hasStrictFilters || deepFetchPagesSetting > 1 || targetLimit > 40;
-  const pageMultiplier = Math.max(1, deepFetchPagesSetting);
-  const startRemotePage = (page - 1) * pageMultiplier + 1;
+  const startRemotePage = page;
   const maxIterations = shouldDeepFetch ? Math.max(deepFetchPagesSetting * 2, 6) : 1;
   // Respect the requested limit and make up depth with pipelined pages
   const batchLimit = Math.min(200, Math.max(targetLimit, 25));

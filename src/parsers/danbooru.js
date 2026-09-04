@@ -107,7 +107,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
 
   const isTagsDropped = userTagList.length + (typeFilter !== 'all' ? 1 : 0) + (ratingFilter !== 'all' ? 1 : 0) > 2;
   const shouldDeepFetch = isTagsDropped || deepFetchPagesSetting > 1;
-  const fetchLimit = shouldDeepFetch ? Math.max(limit, 200) : limit;
+  const fetchLimit = isTagsDropped ? 200 : Math.min(limit || 100, 200);
 
   const finalTags = queryTags.join(' ');
   let allData = [];
@@ -169,15 +169,12 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
 
   if (shouldDeepFetch) {
     const minDesiredPosts = Math.min(limit || 100, 200);
-    const maxIterations = Math.max(deepFetchPagesSetting * 2, 12);
+    const maxIterations = shouldDeepFetch ? Math.max(deepFetchPagesSetting * 2, 8) : 1;
     let currentCursor = '';
     let matchedCount = 0;
     
     if (page > 1) {
-      const startPageNum = (page - 1) * deepFetchPagesSetting + 1;
-      if (startPageNum <= 5) {
-        currentCursor = `page=${startPageNum}`;
-      }
+      currentCursor = `page=${page}`;
     }
 
     const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)
@@ -185,7 +182,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       : '';
 
     for (let i = 0; i < maxIterations; i++) {
-      let pageParam = currentCursor || `page=${(page - 1) * deepFetchPagesSetting + 1 + i}`;
+      let pageParam = currentCursor || `page=${page + i}`;
       const url = `https://danbooru.donmai.us/posts.json?tags=${encodeURIComponent(finalTags)}&limit=${fetchLimit}${pageParam ? '&' + pageParam : ''}${authParam}`;
       
       let data = null;
@@ -230,7 +227,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         const minId = Math.min(...ids);
         currentCursor = `page=b${minId}`;
       } else if (isCustomOrder) {
-        const nextPg = (page - 1) * deepFetchPagesSetting + 1 + (i + 1);
+        const nextPg = page + (i + 1);
         currentCursor = `page=${nextPg}`;
       } else {
         break;
