@@ -694,6 +694,18 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     }
   }
 
+  const isInvalidArtist = (cand) => {
+    if (!cand || typeof cand !== 'string') return true;
+    const lower = cand.trim().toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_.-]+/g, '_');
+    if (!lower || lower.length < 2) return true;
+    if (GENERIC_NON_ARTIST_TAGS.has(lower) || LOCATION_BY_NOUNS.has(lower) || META_KEYWORDS.has(lower)) return true;
+    if (tagMap) {
+      const type = tagMap.get(lower);
+      if (type !== undefined && type !== 1) return true;
+    }
+    return false;
+  };
+
   for (const tag of tags) {
     if (!tag) continue;
     const originalTag = String(tag).trim();
@@ -779,13 +791,15 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       continue;
     }
 
-    // 3.5. Check if tag matches known initial author
+    // 3.5. Check if tag matches known initial author (only if not a known non-artist)
     if (initialAuthor && typeof initialAuthor === 'string') {
       const cleanInitial = initialAuthor.replace(/^[@pixiv:]+/, '').trim().toLowerCase().replace(/[\s_.-]+/g, '_');
-      const cleanTagLower = lower.replace(/[\s_.-]+/g, '_');
-      if (cleanInitial && (cleanTagLower === cleanInitial || cleanTagLower === `artist:${cleanInitial}`)) {
-        addUnique(artist, originalTag);
-        continue;
+      if (cleanInitial && !isInvalidArtist(cleanInitial)) {
+        const cleanTagLower = lower.replace(/[\s_.-]+/g, '_');
+        if (cleanTagLower === cleanInitial || cleanTagLower === `artist:${cleanInitial}`) {
+          addUnique(artist, originalTag);
+          continue;
+        }
       }
     }
 
@@ -888,24 +902,28 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
 
   // 7. Author extraction and synchronization
   let author = '';
-  if (initialAuthor && typeof initialAuthor === 'string' && initialAuthor.trim()) {
-    author = initialAuthor.trim();
-    author.split(',').forEach(a => {
-      const cleanA = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
-      if (cleanA && !artist.includes(cleanA) && !artist.includes(a.trim())) {
+  const validInitialAuthors = (initialAuthor && typeof initialAuthor === 'string')
+    ? initialAuthor.split(',').map(a => a.trim()).filter(a => a && !isInvalidArtist(a))
+    : [];
+
+  if (validInitialAuthors.length > 0) {
+    author = validInitialAuthors.join(', ');
+    validInitialAuthors.forEach(a => {
+      const cleanA = a.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
+      if (cleanA && !artist.includes(cleanA) && !artist.includes(a)) {
         artist.push(cleanA);
       }
     });
   } else if (artist.length > 0) {
     const validArtists = artist
       .map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/_?\((artist|creator|circle|studio|animator|voice_actor|voice|va)\)$/i, '').replace(/^by_/i, '').trim())
-      .filter(a => a && !GENERIC_NON_ARTIST_TAGS.has(a.toLowerCase()) && !LOCATION_BY_NOUNS.has(a.toLowerCase()));
+      .filter(a => a && !GENERIC_NON_ARTIST_TAGS.has(a.toLowerCase()) && !LOCATION_BY_NOUNS.has(a.toLowerCase()) && !isInvalidArtist(a));
     if (validArtists.length > 0) {
       author = validArtists.join(', ');
     }
   } else if (sourceUrl) {
     const authorFromSource = extractAuthorFromSource(tags, sourceUrl, '');
-    if (authorFromSource) {
+    if (authorFromSource && !isInvalidArtist(authorFromSource)) {
       author = authorFromSource;
       const cleanA = author.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
       if (cleanA && !artist.includes(cleanA)) {

@@ -1,7 +1,7 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { BROWSER_USER_AGENT } from '../config/constants.js';
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
-import { classifyPostTags } from '../utils/tagClassifier.js';
+import { classifyPostTags, loadGlobalTagSummary } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
@@ -51,16 +51,26 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
   const pid = Math.max(0, page - 1);
 
-  // Extract author name from query tags if searching by author (e.g. artist:name or author tag in following feed)
+  // Extract author name from query tags if explicitly searching by author (e.g. artist:name, author:name)
+  // or if the bare tag is confirmed as an artist in the global tag dictionary
   let searchAuthor = '';
   const searchTokens = (tags || '').split(' ').map(s => s.trim()).filter(Boolean);
+  const tagMap = await loadGlobalTagSummary(settings);
   for (const tok of searchTokens) {
-    if (tok.startsWith('artist:')) {
-      searchAuthor = tok.slice(7).trim();
+    const lower = tok.toLowerCase();
+    if (lower.startsWith('artist:') || lower.startsWith('author:') || lower.startsWith('creator:')) {
+      searchAuthor = tok.replace(/^(artist|author|creator):/i, '').trim();
       break;
     }
-    if (!tok.includes(':') && tok.length >= 3 && !/^\d+/.test(tok) && !['order', 'sort', 'score', 'rating', 'date', 'id', 'status', 'parent', 'user'].some(k => tok.toLowerCase().startsWith(k))) {
-      searchAuthor = tok.toLowerCase();
+    if (lower.startsWith('by_')) {
+      const candidate = lower.slice(3);
+      if (tagMap && tagMap.get(candidate) === 1) {
+        searchAuthor = tok.slice(3).trim();
+        break;
+      }
+    }
+    if (!tok.includes(':') && tagMap && tagMap.get(lower) === 1) {
+      searchAuthor = tok;
       break;
     }
   }
