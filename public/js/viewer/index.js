@@ -245,6 +245,87 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           return data;
         })
         .catch(() => null);
+    } else if (currentPost?.site === 'rule34' && (currentPost.originalId || currentPost.id)) {
+      const targetPostId = currentPost.id;
+      const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^rule34_/, '').split('_')[0];
+      const needsRule34Resolve = !currentPost.author ||
+        !(currentPost.tagDetails?.artist?.length) ||
+        !currentPost.source ||
+        currentPost.source.includes('rule34.xxx/index.php');
+
+      if (needsRule34Resolve && cleanOrigId) {
+        const tagsParam = Array.isArray(currentPost.tags) ? currentPost.tags.join(',') : '';
+        const reqUrl = `/api/resolve-post?site=rule34&id=${encodeURIComponent(cleanOrigId)}${tagsParam ? `&tags=${encodeURIComponent(tagsParam)}` : ''}`;
+
+        activeResolvePromise = fetch(reqUrl)
+          .then(r => r.json())
+          .then(data => {
+            if (!data || !data.success || !data.post || currentPost?.id !== targetPostId) return null;
+            const resolved = data.post;
+            let changed = false;
+
+            if (resolved.author && resolved.author !== currentPost.author) {
+              currentPost.author = resolved.author;
+              changed = true;
+            }
+
+            if (resolved.source && resolved.source !== currentPost.source && !resolved.source.includes('rule34.xxx/index.php')) {
+              currentPost.source = resolved.source;
+              changed = true;
+            }
+
+            if (resolved.tagDetails && Object.keys(resolved.tagDetails).length > 0) {
+              if (resolved.tagDetails.artist?.length || resolved.tagDetails.copyright?.length || resolved.tagDetails.character?.length) {
+                currentPost.tagDetails = resolved.tagDetails;
+                changed = true;
+              }
+            }
+
+            if (Array.isArray(resolved.tags) && resolved.tags.length > (currentPost.tags?.length || 0)) {
+              currentPost.tags = resolved.tags;
+              changed = true;
+            }
+
+            if (resolved.createdAt && !currentPost.createdAt) {
+              currentPost.createdAt = resolved.createdAt;
+              changed = true;
+            }
+
+            if (resolved.width && !currentPost.width) {
+              currentPost.width = resolved.width;
+              currentPost.height = resolved.height;
+              changed = true;
+            }
+
+            if (changed) {
+              renderViewerPost(true);
+
+              const card = document.querySelector(`.media-card[data-post-id="${currentPost.id}"]`);
+              if (card) {
+                card._post = currentPost;
+                const bottomGroup = card.querySelector('.badge-group-bottom');
+                if (bottomGroup && currentPost.author) {
+                  let authorBadge = bottomGroup.querySelector('.badge-format.author');
+                  const cleanA = currentPost.author.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').trim();
+                  if (cleanA && cleanA.length >= 2) {
+                    if (!authorBadge) {
+                      authorBadge = document.createElement('span');
+                      authorBadge.className = 'badge-format author';
+                      bottomGroup.appendChild(authorBadge);
+                    }
+                    authorBadge.setAttribute('data-author', cleanA);
+                    authorBadge.setAttribute('title', t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanA));
+                    authorBadge.textContent = cleanA;
+                  }
+                }
+              }
+            }
+            return data;
+          })
+          .catch(() => null);
+      } else {
+        activeResolvePromise = null;
+      }
     } else {
       activeResolvePromise = null;
     }

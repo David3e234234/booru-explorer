@@ -15,6 +15,7 @@ import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
 import { getCreatorsDirectory, fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
+import { fetchRule34PostById } from '../parsers/rule34.js';
 import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse, isSafeExternalUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
@@ -239,6 +240,23 @@ router.get('/resolve-post', async (req, res) => {
 
       const aiTagsList = settings.aiTags || [];
       const resolvedPost = await fetchPawchivePostById(targetPostId, targetService, targetUser, aiTagsList, settings);
+      if (resolvedPost) {
+        return res.json({ success: true, post: resolvedPost });
+      }
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'rule34') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) {
+        targetPostId = String(targetPostId).replace(/^rule34_/, '').split('_')[0];
+      }
+      if (!targetPostId) {
+        return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      }
+      const rawTags = req.query.tags
+        ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean)
+        : [];
+      const aiTagsList = settings.aiTags || [];
+      const resolvedPost = await fetchRule34PostById(targetPostId, aiTagsList, settings, rawTags);
       if (resolvedPost) {
         return res.json({ success: true, post: resolvedPost });
       }

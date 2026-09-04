@@ -547,3 +547,156 @@ export async function fetchRule34(params, aiTagsList, settings) {
     return [];
   }
 }
+
+export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fallbackTags = []) {
+  const cleanId = String(id || '').replace(/^rule34_/, '').split('_')[0].trim();
+  if (!cleanId) return null;
+
+  // 1. Direct DAPI request when api key is configured
+  if (settings?.rule34ApiKey && settings?.rule34UserId) {
+    try {
+      const dapiUrl = `https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags=id:${cleanId}&limit=1&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`;
+      const res = await fetchSafe(dapiUrl, {
+        headers: {
+          'User-Agent': BROWSER_USER_AGENT,
+          'Referer': 'https://rule34.xxx/'
+        },
+        timeout: 3500,
+        settings,
+        site: 'rule34'
+      });
+      if (res.ok) {
+        const text = await res.text();
+        if (!text.includes('Missing authentication')) {
+          const data = safeJsonParse(text, null);
+          const item = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : null;
+          if (item) {
+            const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
+            let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
+            const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
+            let sampleUrl = item.sample_url || fileUrl;
+            let previewUrl = item.preview_url || '';
+            if (isVideo) {
+              if (sampleUrl && (sampleUrl.endsWith('.jpg') || sampleUrl.endsWith('.jpeg') || sampleUrl.endsWith('.png'))) {
+                if (!previewUrl) previewUrl = sampleUrl;
+              }
+              sampleUrl = fileUrl;
+            }
+            previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
+            const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
+            const createdAt = normalizeDate(item.created_at || item.change);
+            const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
+            const hasChildren = item.has_children === 'true' || item.has_children === true;
+            const seriesKey = extractSeriesKey({
+              source: item.source || '',
+              parentId,
+              hasChildren,
+              originalId: String(item.id),
+              tags: rawTags
+            }, 'rule34');
+
+            return {
+              id: `rule34_${item.id}`,
+              originalId: String(item.id),
+              site: 'rule34',
+              siteName: 'Rule34.xxx',
+              previewUrl,
+              sampleUrl,
+              fileUrl,
+              fileExt,
+              isVideo,
+              isGif,
+              hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+              author,
+              tags: rawTags,
+              tagDetails,
+              score: parseInt(item.score, 10) || 0,
+              rating: item.rating || 'e',
+              width: parseInt(item.width, 10) || 0,
+              height: parseInt(item.height, 10) || 0,
+              source: item.source || '',
+              postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${item.id}`,
+              parentId,
+              hasChildren,
+              seriesKey,
+              createdAt,
+              isAi: checkIsAi(rawTags, aiTagsList)
+            };
+          }
+        }
+      } else {
+        await discardResponse(res);
+      }
+    } catch (err) {
+      logError('Rule34 Resolve', `Ошибка прямого DAPI запроса поста id:${cleanId}`, err);
+    }
+  }
+
+  // 2. Second attempt: scrape single post page https://rule34.xxx/index.php?page=post&s=view&id=...
+  try {
+    const viewUrl = `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`;
+    const res = await fetchSafe(viewUrl, {
+      headers: {
+        'User-Agent': BROWSER_USER_AGENT,
+        'Referer': 'https://rule34.xxx/'
+      },
+      timeout: 5000,
+      settings,
+      site: 'rule34'
+    });
+
+    if (res.ok) {
+      const html = await res.text();
+      const artistMatches = [...html.matchAll(/class="[^"]*tag-type-artist[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+      const copyrightMatches = [...html.matchAll(/class="[^"]*tag-type-copyright[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+      const characterMatches = [...html.matchAll(/class="[^"]*tag-type-character[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+      const generalMatches = [...html.matchAll(/class="[^"]*tag-type-general[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+
+      const sourceMatch = html.match(/Source:\s*<a[^>]+href="([^"]+)"/i) || html.match(/Source:\s*([^\s<]+)/i);
+      const source = sourceMatch ? sourceMatch[1].trim().replace(/&amp;/g, '&') : '';
+
+      const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...generalMatches, ...fallbackTags])];
+      const initialAuthor = artistMatches.join(', ');
+      const { tagDetails, author } = await classifyPostTags(allTags, source, initialAuthor, settings);
+
+      if (artistMatches.length > 0) {
+        tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
+      }
+
+      return {
+        id: `rule34_${cleanId}`,
+        originalId: cleanId,
+        site: 'rule34',
+        siteName: 'Rule34.xxx',
+        source: source || `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
+        postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
+        author: author || artistMatches.join(', '),
+        tags: allTags,
+        tagDetails
+      };
+    } else {
+      await discardResponse(res);
+    }
+  } catch (err) {
+    logError('Rule34 Resolve', `Ошибка HTML-парсинга страницы поста id:${cleanId}`, err);
+  }
+
+  // 3. Fallback: classify from fallbackTags if provided
+  if (Array.isArray(fallbackTags) && fallbackTags.length > 0) {
+    const { tagDetails, author } = await classifyPostTags(fallbackTags, '', '', settings);
+    return {
+      id: `rule34_${cleanId}`,
+      originalId: cleanId,
+      site: 'rule34',
+      siteName: 'Rule34.xxx',
+      source: `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
+      postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
+      author,
+      tags: fallbackTags,
+      tagDetails
+    };
+  }
+
+  return null;
+}
+
