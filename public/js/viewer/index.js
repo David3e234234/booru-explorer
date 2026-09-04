@@ -1,5 +1,5 @@
 import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors, recordSessionInteraction } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus } from '../api.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus, fetchArchiveInspect } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -349,6 +349,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   function closeViewer() {
     if (!modal || modal.style.display === 'none') return;
     if (modal) modal.style.display = 'none';
+    closeArchiveInspectModal();
     document.body.style.overflow = '';
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) {
@@ -927,8 +928,27 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         targetPost.archiveUrls.forEach((url, idx) => {
           const name = (Array.isArray(targetPost.archiveNames) && targetPost.archiveNames[idx]) || `archive_${idx + 1}.zip`;
           const size = (Array.isArray(targetPost.archiveSizes) && targetPost.archiveSizes[idx]) || 0;
+
+          const group = document.createElement('div');
+          group.className = 'archive-item-group';
+
           const btn = createAnimatedArchiveButton({ url, name, size, isSidebar: false });
-          buttonsContainer.appendChild(btn);
+          const inspectBtn = document.createElement('button');
+          inspectBtn.className = 'btn-archive-inspect';
+          inspectBtn.type = 'button';
+          inspectBtn.title = t('viewer.inspectArchiveTitle', 'Проверить архив на ссылки и файлы');
+          inspectBtn.innerHTML = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>${t('viewer.inspectArchive', 'Проверить архив')}</span>
+          `;
+          inspectBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openArchiveInspectModal(url, name);
+          });
+
+          group.appendChild(btn);
+          group.appendChild(inspectBtn);
+          buttonsContainer.appendChild(group);
         });
       }
 
@@ -954,12 +974,203 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       targetPost.archiveUrls.forEach((url, idx) => {
         const name = (Array.isArray(targetPost.archiveNames) && targetPost.archiveNames[idx]) || `archive_${idx + 1}.zip`;
         const size = (Array.isArray(targetPost.archiveSizes) && targetPost.archiveSizes[idx]) || 0;
+
+        const row = document.createElement('div');
+        row.className = 'sidebar-archive-row';
+
         const btn = createAnimatedArchiveButton({ url, name, size, isSidebar: true });
-        listEl.appendChild(btn);
+        const inspectBtn = document.createElement('button');
+        inspectBtn.className = 'btn-archive-inspect-icon';
+        inspectBtn.type = 'button';
+        inspectBtn.title = t('viewer.inspectArchiveTitle', 'Проверить архив на ссылки и файлы');
+        inspectBtn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
+        inspectBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openArchiveInspectModal(url, name);
+        });
+
+        row.appendChild(btn);
+        row.appendChild(inspectBtn);
+        listEl.appendChild(row);
       });
     }
 
-  function formatSafePostContent(rawText) {
+    /* ── Cloud storage detection and link extraction ── */
+    const CLOUD_PROVIDERS = [
+      { id: 'gdrive', name: 'Google Drive', match: /drive\.google\.com/i },
+      { id: 'mega', name: 'MEGA', match: /mega\.(?:nz|co\.nz)/i },
+      { id: 'yandex', name: 'Яндекс Диск', match: /(?:disk\.yandex\.|yadi\.sk)/i },
+      { id: 'dropbox', name: 'Dropbox', match: /dropbox\.com/i },
+      { id: 'mediafire', name: 'MediaFire', match: /mediafire\.com/i },
+      { id: 'terabox', name: 'TeraBox', match: /terabox(?:app)?\.com/i },
+      { id: 'onedrive', name: 'OneDrive', match: /(?:onedrive\.live\.com|1drv\.ms)/i },
+      { id: 'box', name: 'Box', match: /box\.com/i },
+      { id: 'cloud', name: 'Облако', match: /(?:anonfiles\.com|gofile\.io|pixeldrain\.com|qiwi\.gg|catbox\.moe|workupload\.com|fastupload\.io)/i },
+    ];
+
+    function classifyCloudUrl(url) {
+      if (!url || typeof url !== 'string') return null;
+      for (const p of CLOUD_PROVIDERS) {
+        if (p.match.test(url)) return p;
+      }
+      return null;
+    }
+
+    function extractPasswordFromText(text) {
+      if (!text || typeof text !== 'string') return null;
+      const m = text.match(/(?:pass(?:word)?|пароль|pwd|code|код)\s*[:=–—\-]\s*([^\s<>"'\n]+)/i);
+      return m ? m[1].replace(/^[\[({"'`]+|[\])}"':;.,`]+$/g, '') : null;
+    }
+
+    function extractCloudLinks(post) {
+      const links = [];
+      const seen = new Set();
+      const rawText = String(post?.content || post?.description || currentPost?.content || currentPost?.description || '');
+      const globalPassword = extractPasswordFromText(rawText);
+
+      // Inspected links from downloaded/analyzed archive
+      if (Array.isArray(post?.inspectedLinks)) {
+        for (const l of post.inspectedLinks) {
+          if (l && l.url && !seen.has(l.url)) {
+            seen.add(l.url);
+            links.push({
+              url: l.url,
+              name: l.service || 'Облако',
+              id: l.serviceId || 'cloud',
+              password: l.password || globalPassword || null,
+              sourceFile: l.sourceFile || null
+            });
+          }
+        }
+      }
+
+      // Pre-parsed cloud links
+      if (Array.isArray(post?.cloudLinks)) {
+        for (const l of post.cloudLinks) {
+          if (l && l.url && !seen.has(l.url)) {
+            seen.add(l.url);
+            links.push({
+              url: l.url,
+              name: l.name || 'Облако',
+              id: l.id || 'cloud',
+              password: l.password || globalPassword || null,
+              sourceFile: null
+            });
+          }
+        }
+      }
+
+      // Extract from raw description/content
+      if (rawText) {
+        const urlMatches = rawText.match(/https?:\/\/[^\s<>"']+/gi) || [];
+        for (const url of urlMatches) {
+          const cleanUrl = url.replace(/[,;.)>]+$/, '');
+          const svc = classifyCloudUrl(cleanUrl);
+          if (svc && !seen.has(cleanUrl)) {
+            seen.add(cleanUrl);
+            links.push({
+              url: cleanUrl,
+              name: svc.name,
+              id: svc.id,
+              password: globalPassword,
+              sourceFile: null
+            });
+          }
+        }
+      }
+
+      return links;
+    }
+
+    function renderSidebarCloudLinks(targetPost) {
+      const section = document.getElementById('viewerSidebarCloudLinksSection');
+      const countEl = document.getElementById('viewerSidebarCloudLinksCount');
+      const listEl = document.getElementById('viewerSidebarCloudLinksList');
+      if (!section || !listEl) return [];
+
+      const links = extractCloudLinks(targetPost);
+      if (!links || links.length === 0) {
+        section.style.display = 'none';
+        listEl.innerHTML = '';
+        return [];
+      }
+
+      section.style.display = 'block';
+      if (countEl) countEl.textContent = String(links.length);
+      listEl.innerHTML = '';
+
+      links.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'sidebar-cloud-card';
+
+        let displayUrl = item.url;
+        try {
+          const parsed = new URL(item.url);
+          displayUrl = parsed.hostname + (parsed.pathname.length > 24 ? parsed.pathname.slice(0, 24) + '…' : parsed.pathname);
+        } catch {}
+
+        card.innerHTML = `
+          <div class="cloud-card-header">
+            <span class="cloud-card-service-badge" data-service="${item.id}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+              ${item.name}
+            </span>
+            ${item.sourceFile ? `<span class="cloud-card-source-tag" title="${t('vw.foundIn', 'Найдено в:')} ${item.sourceFile}">${item.sourceFile}</span>` : ''}
+          </div>
+          <div class="cloud-card-url" title="${item.url}">${displayUrl}</div>
+          ${item.password ? `
+            <div class="cloud-card-pass-row">
+              <span class="cloud-card-pass-label">${t('vw.password', 'Пароль:')}</span>
+              <code class="cloud-card-pass-code">${item.password}</code>
+              <button type="button" class="btn-copy-pass" title="${t('viewer.copyPassword', 'Скопировать пароль')}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          ` : ''}
+          <div class="cloud-card-actions">
+            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="cloud-card-btn cloud-card-btn-open">
+              <span>${t('vw.openLink', 'Открыть')}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+            <button type="button" class="cloud-card-btn cloud-card-btn-copy" title="${t('viewer.copyLink', 'Копировать ссылку')}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>${t('viewer.copyLink', 'Копировать')}</span>
+            </button>
+          </div>
+        `;
+
+        const copyBtn = card.querySelector('.cloud-card-btn-copy');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            haptic(10);
+            copyToClipboard(item.url);
+            const span = copyBtn.querySelector('span');
+            if (span) {
+              const original = span.textContent;
+              span.textContent = t('viewer.copied', 'Скопировано!');
+              setTimeout(() => { span.textContent = original; }, 1800);
+            }
+          });
+        }
+
+        const copyPassBtn = card.querySelector('.btn-copy-pass');
+        if (copyPassBtn && item.password) {
+          copyPassBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            haptic(10);
+            copyToClipboard(item.password);
+            showToast(t('vw.passCopied', 'Пароль скопирован: ') + item.password);
+          });
+        }
+
+        listEl.appendChild(card);
+      });
+
+      return links;
+    }
+
+  function formatSafePostContent(rawText, excludedCloudUrls = []) {
     if (!rawText || typeof rawText !== 'string') return '';
     const trimmed = rawText.trim();
     if (!trimmed) return '';
@@ -990,6 +1201,35 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             }
           }
         });
+
+        // Strip cloud storage links and empty container blocks
+        if (excludedCloudUrls.length > 0) {
+          const excludedSet = new Set(excludedCloudUrls.map(u => u.toLowerCase()));
+          const aTags = doc.body.querySelectorAll('a[href]');
+          aTags.forEach(a => {
+            const href = (a.getAttribute('href') || '').toLowerCase().replace(/[,;.)>]+$/, '');
+            if (excludedSet.has(href) || classifyCloudUrl(href)) {
+              const p = a.parentElement;
+              if (p && (p.tagName === 'P' || p.tagName === 'DIV' || p.tagName === 'LI')) {
+                const textRest = p.textContent.replace(a.textContent, '').trim();
+                if (!textRest || textRest.length < 25) {
+                  p.remove();
+                  return;
+                }
+              }
+              a.remove();
+            }
+          });
+
+          // Strip standalone password blocks
+          const pTags = doc.body.querySelectorAll('p, div');
+          pTags.forEach(p => {
+            const t = p.textContent.trim();
+            if (/^(?:pass(?:word)?|пароль|pwd|code|код)\s*[:=–—\-]\s*[^\s<>"'\n]+$/i.test(t)) {
+              p.remove();
+            }
+          });
+        }
 
         // Clean up empty or redundant container blocks (<p><br></p>, <p>&nbsp;</p>, etc.)
         const blockTags = doc.body.querySelectorAll('p, div');
@@ -1023,7 +1263,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       .replace(/'/g, '&#039;');
 
     // Normalize unicode whitespace
-    const cleanText = trimmed.replace(/[\u00a0\u200B\u200C\u200D\uFEFF]/g, ' ');
+    let cleanText = trimmed.replace(/[\u00a0\u200B\u200C\u200D\uFEFF]/g, ' ');
+
+    if (excludedCloudUrls.length > 0) {
+      for (const u of excludedCloudUrls) {
+        const escapedUrl = u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const lineRegex = new RegExp(`(?:^|\\n)[^\\n]*?${escapedUrl}[^\\n]*(?:\\n|$)`, 'gi');
+        cleanText = cleanText.replace(lineRegex, '\n');
+      }
+      cleanText = cleanText.replace(/(?:^|\n)(?:pass(?:word)?|пароль|pwd|code|код)\s*[:=–—\-]\s*[^\s<>"'\n]+(?:\n|$)/gi, '\n');
+    }
+
     if (!cleanText.trim()) return '';
 
     const escaped = escapeHtml(cleanText);
@@ -1033,7 +1283,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     return normalizedNewlines.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
   }
 
-  function renderSidebarContent(post) {
+  function renderSidebarContent(post, excludedUrls = []) {
     const section = document.getElementById('viewerSidebarContentSection');
     const contentEl = document.getElementById('viewerPostContent');
     if (!section || !contentEl) return;
@@ -1045,7 +1295,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       return;
     }
 
-    const safeHtml = formatSafePostContent(String(rawContent));
+    const safeHtml = formatSafePostContent(String(rawContent), excludedUrls);
     if (!safeHtml || !safeHtml.trim()) {
       section.style.display = 'none';
       contentEl.innerHTML = '';
@@ -1054,6 +1304,226 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     contentEl.innerHTML = safeHtml;
     section.style.display = 'block';
+  }
+
+  /* ── Archive Inspection Modal ── */
+  function isArchiveInspectModalOpen() {
+    const modal = document.getElementById('archiveInspectModal');
+    return modal && modal.style.display !== 'none';
+  }
+
+  function closeArchiveInspectModal() {
+    const modal = document.getElementById('archiveInspectModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function openArchiveInspectModal(url, name) {
+    const modal = document.getElementById('archiveInspectModal');
+    const bodyEl = document.getElementById('archiveInspectBody');
+    if (!modal || !bodyEl) return;
+
+    const cleanName = name || (url.split('?')[0].split('/').pop()) || 'archive.zip';
+    modal.style.display = 'flex';
+    haptic(10);
+
+    bodyEl.innerHTML = `
+      <div class="archive-inspect-loading">
+        <div class="loading-spinner"></div>
+        <div class="archive-inspect-loading-text">${t('vw.inspectScanning', 'Сканирование файлов архива и поиск ссылок...')}</div>
+        <div class="archive-inspect-loading-sub">${cleanName}</div>
+      </div>
+    `;
+
+    try {
+      const result = await fetchArchiveInspect(url);
+      if (!result || !result.success) {
+        const errMsg = result?.error || t('vw.inspectFailed', 'Не удалось проанализировать архив');
+        bodyEl.innerHTML = `
+          <div class="archive-inspect-error">
+            <div class="archive-inspect-error-msg">${errMsg}</div>
+            <button type="button" class="btn-secondary btn-sm" id="btnRetryArchiveInspect">${t('vw.retry', 'Повторить попытку')}</button>
+          </div>
+        `;
+        const retryBtn = bodyEl.querySelector('#btnRetryArchiveInspect');
+        if (retryBtn) {
+          retryBtn.addEventListener('click', () => openArchiveInspectModal(url, name));
+        }
+        return;
+      }
+
+      renderInspectResults(result, cleanName, bodyEl);
+
+      // If cloud links were found in the archive, update post & sidebar
+      if (Array.isArray(result.scannedLinks) && result.scannedLinks.length > 0 && currentPost) {
+        if (!currentPost.inspectedLinks) currentPost.inspectedLinks = [];
+        for (const sl of result.scannedLinks) {
+          if (!currentPost.inspectedLinks.some(x => x.url === sl.url)) {
+            currentPost.inspectedLinks.push(sl);
+          }
+        }
+        const updatedCloud = renderSidebarCloudLinks(currentPost);
+        renderSidebarContent(currentPost, (updatedCloud || []).map(l => l.url));
+      }
+    } catch (err) {
+      bodyEl.innerHTML = `
+        <div class="archive-inspect-error">
+          <div class="archive-inspect-error-msg">${err.message || t('vw.inspectFailed', 'Не удалось проанализировать архив')}</div>
+          <button type="button" class="btn-secondary btn-sm" id="btnRetryArchiveInspect">${t('vw.retry', 'Повторить попытку')}</button>
+        </div>
+      `;
+      const retryBtn = bodyEl.querySelector('#btnRetryArchiveInspect');
+      if (retryBtn) {
+        retryBtn.addEventListener('click', () => openArchiveInspectModal(url, name));
+      }
+    }
+  }
+
+  function renderInspectResults(data, archiveName, container) {
+    const totalFiles = data.totalFiles || (data.fileTree ? data.fileTree.length : 0);
+    const totalSize = data.archiveSize || data.totalBytes || 0;
+    const links = data.scannedLinks || [];
+    const fileTree = data.fileTree || [];
+
+    container.innerHTML = `
+      <div class="archive-inspect-meta">
+        <div class="archive-inspect-meta-item">
+          <span class="archive-inspect-meta-label">${t('vw.archive', 'Архив')}</span>
+          <span class="archive-inspect-meta-value" style="font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${archiveName}">${archiveName}</span>
+        </div>
+        <div class="archive-inspect-meta-item">
+          <span class="archive-inspect-meta-label">${t('vw.filesCount', 'Файлов')}</span>
+          <span class="archive-inspect-meta-value">${totalFiles}</span>
+        </div>
+        <div class="archive-inspect-meta-item">
+          <span class="archive-inspect-meta-label">${t('vw.archiveSize', 'Размер')}</span>
+          <span class="archive-inspect-meta-value">${totalSize > 0 ? formatBytes(totalSize) : '--'}</span>
+        </div>
+      </div>
+
+      <div class="archive-inspect-links-section">
+        <div class="archive-inspect-section-title">${t('viewer.archiveInspectLinksFound', 'Найденные ссылки и пароли')} (${links.length})</div>
+        ${links.length > 0 ? `
+          <div class="sidebar-cloud-links-list" id="inspectLinksList"></div>
+        ` : `
+          <div class="archive-inspect-no-links">${t('viewer.archiveInspectNoLinks', 'В файлах архива внешних ссылок не обнаружено')}</div>
+        `}
+      </div>
+
+      <div class="archive-inspect-files-section">
+        <div class="archive-inspect-section-title">${t('viewer.archiveInspectFiles', 'Файлы в архиве')} (${fileTree.length})</div>
+        <input type="text" class="archive-inspect-search" id="archiveInspectSearchInput" placeholder="${t('viewer.archiveInspectSearchPlaceholder', 'Поиск по файлам в архиве...')}">
+        <div class="archive-inspect-file-list" id="archiveInspectFileList"></div>
+      </div>
+    `;
+
+    const linksContainer = container.querySelector('#inspectLinksList');
+    if (linksContainer && links.length > 0) {
+      links.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'sidebar-cloud-card';
+        let displayUrl = item.url;
+        try {
+          const parsed = new URL(item.url);
+          displayUrl = parsed.hostname + (parsed.pathname.length > 28 ? parsed.pathname.slice(0, 28) + '…' : parsed.pathname);
+        } catch {}
+
+        card.innerHTML = `
+          <div class="cloud-card-header">
+            <span class="cloud-card-service-badge" data-service="${item.serviceId}">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+              ${item.service || 'Облако'}
+            </span>
+            ${item.sourceFile ? `<span class="cloud-card-source-tag" title="${t('vw.foundIn', 'Найдено в:')} ${item.sourceFile}">${item.sourceFile}</span>` : ''}
+          </div>
+          <div class="cloud-card-url" title="${item.url}">${displayUrl}</div>
+          ${item.password ? `
+            <div class="cloud-card-pass-row">
+              <span class="cloud-card-pass-label">${t('vw.password', 'Пароль:')}</span>
+              <code class="cloud-card-pass-code">${item.password}</code>
+              <button type="button" class="btn-copy-pass" title="${t('viewer.copyPassword', 'Скопировать пароль')}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          ` : ''}
+          <div class="cloud-card-actions">
+            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="cloud-card-btn cloud-card-btn-open">
+              <span>${t('vw.openLink', 'Открыть')}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            </a>
+            <button type="button" class="cloud-card-btn cloud-card-btn-copy" title="${t('viewer.copyLink', 'Копировать ссылку')}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span>${t('viewer.copyLink', 'Копировать')}</span>
+            </button>
+          </div>
+        `;
+
+        const copyBtn = card.querySelector('.cloud-card-btn-copy');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            haptic(10);
+            copyToClipboard(item.url);
+            const span = copyBtn.querySelector('span');
+            if (span) {
+              const orig = span.textContent;
+              span.textContent = t('viewer.copied', 'Скопировано!');
+              setTimeout(() => { span.textContent = orig; }, 1800);
+            }
+          });
+        }
+
+        const copyPass = card.querySelector('.btn-copy-pass');
+        if (copyPass && item.password) {
+          copyPass.addEventListener('click', (e) => {
+            e.stopPropagation();
+            haptic(10);
+            copyToClipboard(item.password);
+            showToast(t('vw.passCopied', 'Пароль скопирован: ') + item.password);
+          });
+        }
+
+        linksContainer.appendChild(card);
+      });
+    }
+
+    const fileListContainer = container.querySelector('#archiveInspectFileList');
+    const searchInput = container.querySelector('#archiveInspectSearchInput');
+
+    function renderFileList(filterText = '') {
+      if (!fileListContainer) return;
+      fileListContainer.innerHTML = '';
+      const q = filterText.toLowerCase().trim();
+      const filtered = q ? fileTree.filter(f => (f.name || '').toLowerCase().includes(q) || (f.path || '').toLowerCase().includes(q)) : fileTree;
+
+      if (filtered.length === 0) {
+        fileListContainer.innerHTML = `<div style="padding: 12px; font-size: 12px; color: var(--text-muted); text-align: center;">${t('vw.noMatchingFiles', 'Файлы не найдены')}</div>`;
+        return;
+      }
+
+      filtered.forEach(f => {
+        const row = document.createElement('div');
+        row.className = 'archive-inspect-file-row';
+        const sizeStr = f.size > 0 ? formatBytes(f.size) : '';
+
+        row.innerHTML = `
+          <div class="archive-inspect-file-info">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted); flex-shrink: 0;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
+            <span class="archive-inspect-file-name" title="${f.path || f.name}">${f.name}</span>
+            ${f.hasLinks ? `<span class="archive-badge-links">🔗 ${t('vw.links', 'Ссылки')}</span>` : ''}
+          </div>
+          ${sizeStr ? `<span class="archive-inspect-file-size">${sizeStr}</span>` : ''}
+        `;
+        fileListContainer.appendChild(row);
+      });
+    }
+
+    renderFileList();
+
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        renderFileList(searchInput.value);
+      });
+    }
   }
 
   function renderViewerPost(skipMediaLoad = false) {
@@ -1258,7 +1728,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     });
 
     renderSidebarArchives(currentPost);
-    renderSidebarContent(currentPost);
+    const cloudLinks = renderSidebarCloudLinks(currentPost);
+    renderSidebarContent(currentPost, (cloudLinks || []).map(l => l.url));
     renderAlbumFilmstrip();
 
     if (!skipMediaLoad) {
@@ -1475,6 +1946,22 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     btnCloseViewerTags.addEventListener('click', (e) => {
       e.stopPropagation();
       if (viewerSidebar) viewerSidebar.classList.remove('open');
+    });
+  }
+
+  const inspectBackdrop = document.getElementById('archiveInspectBackdrop');
+  const btnCloseInspectModal = document.getElementById('btnCloseArchiveInspectModal');
+
+  if (btnCloseInspectModal) {
+    btnCloseInspectModal.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeArchiveInspectModal();
+    });
+  }
+  if (inspectBackdrop) {
+    inspectBackdrop.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeArchiveInspectModal();
     });
   }
 
@@ -2024,6 +2511,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (isArchiveInspectModalOpen()) {
+        closeArchiveInspectModal();
+        return;
+      }
       closeViewer();
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();

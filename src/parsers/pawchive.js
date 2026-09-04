@@ -753,6 +753,8 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
       validPosts = validPosts.filter(p => p.isVideo);
     } else if (typeFilter === 'image') {
       validPosts = validPosts.filter(p => !p.isVideo);
+    } else if (typeFilter === 'zip' || typeFilter === 'archive') {
+      validPosts = validPosts.filter(p => p.isArchive || p.fileExt === 'zip' || (Array.isArray(p.archiveUrls) && p.archiveUrls.length > 0));
     }
 
     return validPosts;

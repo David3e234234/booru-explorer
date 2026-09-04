@@ -207,6 +207,21 @@ export async function fetchArchiveStatus(zipUrl) {
   }
 }
 
+export async function fetchArchiveInspect(zipUrl) {
+  try {
+    const res = await fetch(`/api/archive/inspect?url=${encodeURIComponent(zipUrl)}`, {
+      headers: getAuthHeaders()
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return { success: false, error: errData.error || `HTTP ${res.status}` };
+    }
+    return await res.json();
+  } catch (err) {
+    return { success: false, error: err.message || 'Сетевая ошибка' };
+  }
+}
+
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
   const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`, {

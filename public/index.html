@@ -230,6 +230,7 @@
           <button class="type-pill" data-type="video" title="Все видео и анимации" data-i18n-title="sidebar.typeVideo.title"><span data-i18n="sidebar.typeVideo">Видео</span></button>
           <button class="type-pill" data-type="audio" title="Только видео со звуком (озвучка / музыка)" data-i18n-title="sidebar.typeAudio.title"><span data-i18n="sidebar.typeAudio">Со звуком</span></button>
           <button class="type-pill" data-type="image" title="Только статичные изображения" data-i18n-title="sidebar.typeImage.title"><span data-i18n="sidebar.typeImage">Изображения</span></button>
+          <button class="type-pill" data-type="zip" title="Только посты с ZIP-архивами" data-i18n-title="sidebar.typeZip.title"><span data-i18n="sidebar.typeZip">С ZIP</span></button>
         </div>
       </div>
 
@@ -763,6 +764,13 @@
               <h4 class="sidebar-heading"><span data-i18n="viewer.attachedArchives">Прикреплённые архивы</span> (<span id="viewerSidebarArchivesCount">0</span>)</h4>
             </div>
             <div class="sidebar-archives-list" id="viewerSidebarArchivesList"></div>
+          </div>
+
+          <div class="sidebar-section" id="viewerSidebarCloudLinksSection" style="display: none;">
+            <div class="section-header-flex">
+              <h4 class="sidebar-heading"><span data-i18n="viewer.cloudLinksHeading">Ссылки на диск</span> (<span id="viewerSidebarCloudLinksCount">0</span>)</h4>
+            </div>
+            <div class="sidebar-cloud-links-list" id="viewerSidebarCloudLinksList"></div>
           </div>
 
           <div class="sidebar-section" id="viewerSidebarContentSection" style="display: none;">
@@ -2521,6 +2529,29 @@
     </div>
   </div>
 
+  <!-- Archive Inspection Modal -->
+  <div class="settings-modal" id="archiveInspectModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="archiveInspectModalTitle">
+    <div class="settings-backdrop" id="archiveInspectBackdrop"></div>
+    <div class="settings-dialog archive-inspect-dialog">
+      <div class="settings-header">
+        <div class="settings-header-title-row">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 8v13H3V8"/>
+            <path d="M1 3h22v5H1z"/>
+            <path d="M10 12h4"/>
+          </svg>
+          <h3 class="settings-title" id="archiveInspectModalTitle" data-i18n="viewer.archiveInspectHeading">Содержимое и ссылки архива</h3>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btnCloseArchiveInspectModal" title="Закрыть" data-i18n-title="modal.close.title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body archive-inspect-body" id="archiveInspectBody">
+        <!-- Dynamic content: loading, links, files -->
+      </div>
+    </div>
+  </div>
+
   <!-- AI Activity Status Dock (Bottom-Right) -->
   <div id="aiStatusWidget" class="ai-status-widget" style="display: none;" aria-live="polite">
     <div class="ai-status-icon-wrap">
@@ -2544,6 +2575,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=16.5"></script>
+  <script type="module" src="js/app.js?v=16.6"></script>
 </body>
 </html>

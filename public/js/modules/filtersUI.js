@@ -80,10 +80,12 @@ export function updateSiteCapabilitiesUI(siteId) {
   const typePillVideo = document.querySelector('.type-pill[data-type="video"]');
   const typePillAudio = document.querySelector('.type-pill[data-type="audio"]');
   const typePillImage = document.querySelector('.type-pill[data-type="image"]');
+  const typePillZip = document.querySelector('.type-pill[data-type="zip"]');
 
   if (typePillVideo) typePillVideo.style.display = caps.supportsVideo ? '' : 'none';
   if (typePillAudio) typePillAudio.style.display = caps.supportsVideo ? '' : 'none';
   if (typePillImage) typePillImage.style.display = caps.supportsImages ? '' : 'none';
+  if (typePillZip) typePillZip.style.display = caps.supportsArchives ? '' : 'none';
 
   if (!caps.supportsVideo && (state.typeFilter === 'video' || state.typeFilter === 'audio')) {
     state.typeFilter = 'all';
@@ -91,9 +93,12 @@ export function updateSiteCapabilitiesUI(siteId) {
   if (!caps.supportsImages && state.typeFilter === 'image') {
     state.typeFilter = 'all';
   }
+  if (!caps.supportsArchives && state.typeFilter === 'zip') {
+    state.typeFilter = 'all';
+  }
 
   if (typeFilterBlock) {
-    const hasMultipleMediaTypes = caps.supportsVideo && caps.supportsImages;
+    const hasMultipleMediaTypes = (caps.supportsVideo && caps.supportsImages) || caps.supportsArchives;
     typeFilterBlock.style.display = hasMultipleMediaTypes ? '' : 'none';
   }
 
@@ -217,7 +222,7 @@ export function updateFilterActiveDot() {
   const isCustom = (caps.supportsSort && state.postSort && state.postSort !== 'new') ||
                    (caps.supportsAiFilter && state.aiFilter !== 'no-ai' && state.aiFilter !== 'all') ||
                    (caps.rating === 'all' && state.ratingFilter !== 'all') ||
-                   (caps.supportsVideo && caps.supportsImages && state.typeFilter !== 'all') ||
+                   (((caps.supportsVideo && caps.supportsImages) || caps.supportsArchives) && state.typeFilter !== 'all') ||
                    (caps.supportsShapesFilter && state.ageFilter !== 'all') ||
                    (caps.supportsContentHiding && (!state.hideFurry || !state.hidePregnant || state.hideLgbt)) ||
                    (state.currentSite === 'pawchive' && state.pawchiveService && state.pawchiveService !== 'all') ||

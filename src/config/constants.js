@@ -468,6 +468,7 @@ export const SITES = {
     rating: 'nsfw',
     supportsVideo: true,
     supportsImages: true,
+    supportsArchives: true,
     supportsTags: false,
     supportsAiFilter: false,
     supportsShapesFilter: false,

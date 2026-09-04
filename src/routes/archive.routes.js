@@ -2,10 +2,27 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { ARCHIVES_DIR } from '../config/constants.js';
-import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus } from '../services/archiveService.js';
+import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive } from '../services/archiveService.js';
 import { logError } from '../utils/logger.js';
 
 const router = express.Router();
+
+// GET /api/archive/inspect?url=<zip-url> - inspect zip file structure, list all files, and scan for cloud links/passwords
+router.get('/inspect', async (req, res) => {
+  const zipUrl = req.query.url;
+  if (!zipUrl) return res.json({ success: false, error: 'URL не указан' });
+  if (!isAllowedArchiveUrl(zipUrl)) {
+    return res.json({ success: false, error: 'Недопустимый источник архива' });
+  }
+
+  try {
+    const inspection = await inspectArchive(zipUrl);
+    res.json(inspection);
+  } catch (err) {
+    logError('Archive', 'Ошибка инспекции архива', err);
+    res.json({ success: false, error: err.message || 'Не удалось проверить архив' });
+  }
+});
 
 // GET /api/archive/list?url=<zip-url> - download, unpack (cached) and list media inside
 router.get('/list', async (req, res) => {

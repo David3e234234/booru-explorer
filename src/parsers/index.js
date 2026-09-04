@@ -121,6 +121,9 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
       if (mainSites.length === 0) mainSites = ['rule34video', 'danbooru'];
     } else if (params.typeFilter === 'image') {
       mainSites = mainSites.filter(s => s !== 'rule34video');
+    } else if (params.typeFilter === 'zip' || params.typeFilter === 'archive') {
+      mainSites = mainSites.filter(s => s === 'pawchive');
+      if (mainSites.length === 0) mainSites = ['pawchive'];
     } else if (params.ratingFilter === 'nsfw') {
       const nsfwAllowed = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib', 'pawchive'];
       mainSites = mainSites.filter(s => nsfwAllowed.includes(s));

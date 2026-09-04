@@ -69,6 +69,15 @@ export function isPostMatchingFilters(post, criteria = {}) {
         /\.(mp4|webm|gif|mov|m4v|flv|avi|mkv)(\?.*)?$/i.test(sampleUrl)) {
       return false;
     }
+  } else if (typeFilter === 'zip' || typeFilter === 'archive') {
+    const hasZip = Boolean(
+      post.isArchive ||
+      post.fileExt === 'zip' ||
+      post.fileExt === 'rar' ||
+      post.fileExt === '7z' ||
+      (Array.isArray(post.archiveUrls) && post.archiveUrls.length > 0)
+    );
+    if (!hasZip) return false;
   }
 
   const postTagSet = new Set(Array.isArray(post.tags)
