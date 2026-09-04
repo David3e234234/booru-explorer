@@ -549,6 +549,11 @@ export async function fetchRule34(params, aiTagsList, settings) {
 }
 
 export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fallbackTags = []) {
+  if (Array.isArray(settings) && !Array.isArray(fallbackTags)) {
+    const tmp = settings;
+    settings = fallbackTags;
+    fallbackTags = tmp;
+  }
   const cleanId = String(id || '').replace(/^rule34_/, '').split('_')[0].trim();
   if (!cleanId) return null;
 

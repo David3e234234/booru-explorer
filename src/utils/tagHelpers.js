@@ -279,20 +279,22 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
   // 2. Look for tags with special markers: name_(artist), name_(creator), by_name, etc.
   const markerArtistTags = tags.filter(t => {
     const low = t.toLowerCase();
-    if (low.endsWith('_(artist)') || low.endsWith('_(creator)') || low.endsWith('_(circle)') || low.endsWith('_(studio)')) return true;
+    if (low.endsWith('_(artist)') || low.endsWith('_(creator)') || low.endsWith('_(circle)') || low.endsWith('_(studio)') || low.endsWith('_(animator)') || low.endsWith('_(voice_actor)') || low.endsWith('_(voice)') || low.endsWith('_(va)')) return true;
     if (low.startsWith('by_')) {
       const cand = low.slice(3).trim();
       return !LOCATION_NOUNS.has(cand) && cand.length > 2;
     }
     return false;
-  }).map(t => t.replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/, ''));
+  }).map(t => t.replace(/_?\((artist|creator|circle|studio|animator|voice_actor|voice|va)\)$/i, '').replace(/^by_/, ''));
   if (markerArtistTags.length > 0) {
     return markerArtistTags.join(', ');
   }
 
   // 3. Extract the author from the source URL or source text
   if (source && typeof source === 'string') {
-    const s = source.trim();
+    const s = source.trim()
+      .replace(/\s*\(\.\)\s*/g, '.')
+      .replace(/\s*\[\.\]\s*/g, '.');
     const twitterMatch = s.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)(?:\/status|\/|$)/i);
     if (twitterMatch && !['intent', 'i', 'home', 'search', 'post', 'status'].includes(twitterMatch[1].toLowerCase())) {
       return `@${twitterMatch[1]}`;

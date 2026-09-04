@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fetchSafe, discardResponse } from './network.js';
 import { extractAuthor as extractAuthorFromSource, decodeHtmlEntities } from './tagHelpers.js';
+import { getSettings } from '../services/storageService.js';
 
 // Cache of the global tag map (1 = artist, 3 = copyright, 4 = character, 0 = general, 6 = meta)
 let globalTagMap = null;
@@ -295,18 +296,162 @@ export const META_KEYWORDS = new Set([
   'artist_request', 'artist request', 'character_request', 'character request', 'copyright_request', 'copyright request', 'meta_request', 'source_needed'
 ]);
 
-const ARTIST_SUFFIXES = ['_(artist)', '_(creator)', '_(circle)', '_(studio)', '_(animator)', '_(mangaka)', '_(illustrator)'];
+const ARTIST_SUFFIXES = [
+  '_(artist)', '_(creator)', '_(circle)', '_(studio)', '_(animator)', '_(mangaka)', '_(illustrator)',
+  '_(voice_actor)', '_(voice)', '_(va)', '_(audio)', '_(sound)', '_(music)', '_(sfx)', '_(vocal)'
+];
 const COPYRIGHT_SUFFIXES = ['_(series)', '_(game)', '_(anime)', '_(manga)', '_(vtuber)', '_(novel)', '_(comic)', '_(franchise)', '_(project)', '_(visual_novel)', '_(light_novel)', '_(web_novel)', '_(mobile_game)'];
 const META_SUFFIXES = ['_(medium)', '_(style)', '_(artwork)'];
 const CHARACTER_SUFFIXES = ['_(character)', '_(cosplay)', '_(person)', '_(actor)', '_(actress)'];
 
 const RESERVED_PAREN_WORDS = new Set([
   'artist', 'creator', 'circle', 'studio', 'animator', 'mangaka', 'illustrator', 'doujin_circle', 'cosplayer',
+  'voice_actor', 'voice', 'va', 'audio', 'sound', 'music', 'sfx', 'vocal',
   'series', 'game', 'anime', 'manga', 'vtuber', 'novel', 'comic', 'franchise', 'project', 'visual_novel', 'light_novel', 'web_novel', 'mobile_game', 'company', 'label', 'universe',
   'medium', 'style', 'artwork',
   'character', 'cosplay', 'person', 'actor', 'actress',
   'fruit', 'food', 'animal', 'vehicle', 'object', 'clothing', 'instrument', 'weapon', 'anatomy', 'pose', 'hair', 'eyes', 'color', 'background', 'furniture', 'disambiguation'
 ]);
+
+export const COMMON_DESCRIPTOR_WORDS = new Set([
+  'girl', 'girls', 'boy', 'boys', 'solo', 'duo', 'group', 'multiple_girls', 'multiple_boys',
+  'hair', 'eyes', 'skin', 'breasts', 'penis', 'pussy', 'thighs', 'ass', 'butt', 'feet', 'legs', 'tail', 'ears', 'horns', 'wings',
+  'dress', 'shirt', 'skirt', 'pants', 'boots', 'gloves', 'socks', 'thighhighs', 'panties', 'bra', 'swimsuit', 'bikini', 'uniform', 'outfit', 'costume', 'hat', 'collar',
+  'red', 'blue', 'green', 'black', 'white', 'blonde', 'brown', 'purple', 'pink', 'yellow', 'orange', 'silver', 'grey', 'gray',
+  'long', 'short', 'big', 'small', 'huge', 'flat', 'thick', 'thin', 'tall',
+  'standing', 'sitting', 'lying', 'kneeling', 'looking_at_viewer', 'smile', 'blush', 'holding', 'open_mouth', 'closed_eyes',
+  'cum', 'oral', 'anal', 'vaginal', 'handjob', 'blowjob', 'creampie', 'paizuri', 'fingering', 'masturbation', 'sex', 'nude', 'naked',
+  'indoors', 'outdoors', 'simple_background', 'white_background', 'black_background', 'bed', 'room', 'couch', 'table',
+  'censored', 'uncensored', 'mosaic_censoring', 'bar_censor',
+  'freckles', 'fangs', 'claws', 'tan', 'mole', 'scar', 'glasses', 'piercing', 'ring', 'rings',
+  'jewelry', 'necklace', 'earrings', 'bracelet', 'choker', 'ribbon', 'bow', 'hairband', 'barefoot',
+  'laughing', 'crying', 'panting', 'gasping', 'screaming', 'blushing', 'sweating', 'smiling',
+  'portrait', 'scenery', 'landscape', 'cover', 'panorama',
+  'uncut', 'unfinished', 'silent_male', 'dominant_female', 'fucked_silly', 'head_rest', 'resting'
+]);
+
+const DESCRIPTOR_SUFFIXES = [
+  '_background', '_horns', '_wings', '_eyes', '_rings', '_tail', '_ears', '_hair',
+  '_skin', '_dress', '_shirt', '_skirt', '_socks', '_thighhighs', '_gloves', '_boots',
+  '_panties', '_collar', '_bra', '_outfit', '_costume', '_pupils'
+];
+
+const NON_ARTIST_SUBSTRINGS = [
+  'cum', 'penis', 'pussy', 'cock', 'balls', 'oral', 'anal', 'vaginal', 'throat', 'handjob', 'blowjob',
+  'licking', 'moaning', 'breathing', 'penetration', 'fellatio', 'grool', 'worship',
+  'longer_than', 'video', 'watermark', 'source', 'pov', 'clothed', 'nude', 'sub', 'polish', 'pupils',
+  'foreskin', 'genitals', 'soles', 'toes', 'lips', 'mouth', 'nails'
+];
+
+export function isDescriptiveTag(tag) {
+  if (!tag || typeof tag !== 'string') return true;
+  const t = tag.toLowerCase().trim();
+  if (t.length < 3 || t.length > 35) return true;
+  if (!/^[a-z0-9_]+$/.test(t)) return true;
+  if (/^\d+x\d+$/.test(t) || /^\d+/.test(t)) return true;
+  if (COMMON_DESCRIPTOR_WORDS.has(t)) return true;
+  if (DESCRIPTOR_SUFFIXES.some(s => t.endsWith(s))) return true;
+  if (NON_ARTIST_SUBSTRINGS.some(s => t.includes(s))) return true;
+  const parts = t.split('_');
+  if (parts.length > 2) return true;
+  if (parts.length > 1 && parts.every(p => COMMON_DESCRIPTOR_WORDS.has(p))) return true;
+  return false;
+}
+
+let saveSummaryTimeout = null;
+function debouncedSaveSummary() {
+  if (saveSummaryTimeout) clearTimeout(saveSummaryTimeout);
+  saveSummaryTimeout = setTimeout(async () => {
+    try {
+      if (globalTagMap && globalTagMap.size > 0) {
+        if (!fs.existsSync(CACHE_DIR)) {
+          fs.mkdirSync(CACHE_DIR, { recursive: true });
+        }
+        const serialized = JSON.stringify(Array.from(globalTagMap.entries()));
+        await fs.promises.writeFile(TAGS_SUMMARY_CACHE_FILE, serialized, 'utf8');
+      }
+    } catch {
+      // Non-fatal cache save failure
+    }
+  }, 2000);
+}
+
+/**
+ * Dynamically resolves unknown tags via Rule34 tag DAPI API
+ * @param {string[]} candidateTags - List of potential unknown artist/character/copyright tags
+ * @param {object} settings - User / server settings
+ * @returns {Promise<Map<string, number>>} Map of tagName -> tagType
+ */
+export async function resolveUnknownRule34Tags(candidateTags = [], settings = {}) {
+  const resolved = new Map();
+  if (!Array.isArray(candidateTags) || candidateTags.length === 0) {
+    return resolved;
+  }
+
+  const effectiveSettings = { ...(getSettings ? getSettings() : {}), ...(settings || {}) };
+  const apiKey = effectiveSettings?.rule34ApiKey;
+  const userId = effectiveSettings?.rule34UserId;
+
+  if (!apiKey || !userId) {
+    return resolved;
+  }
+
+  const tagsToFetch = [];
+  for (const tag of candidateTags) {
+    const low = tag.toLowerCase();
+    if (globalTagMap && globalTagMap.has(low)) {
+      resolved.set(low, globalTagMap.get(low));
+    } else {
+      tagsToFetch.push(low);
+    }
+  }
+
+  if (tagsToFetch.length === 0) {
+    return resolved;
+  }
+
+  const tagsBatch = tagsToFetch.slice(0, 8);
+  let hasNewTypes = false;
+
+  await Promise.all(tagsBatch.map(async (tName) => {
+    try {
+      const url = `https://api.rule34.xxx/index.php?page=dapi&s=tag&q=index&name=${encodeURIComponent(tName)}&api_key=${encodeURIComponent(apiKey)}&user_id=${encodeURIComponent(userId)}`;
+      const res = await fetchSafe(url, {
+        timeout: 3000,
+        settings: effectiveSettings,
+        site: 'rule34'
+      });
+      if (res && res.ok) {
+        const text = await res.text();
+        const tagElMatch = text.match(/<tag\s+([^>]+)\/?>/i);
+        if (tagElMatch) {
+          const attrs = tagElMatch[1];
+          const typeM = attrs.match(/type="(\d+)"/i);
+          const nameM = attrs.match(/name="([^"]+)"/i);
+          if (typeM && nameM) {
+            const typeNum = parseInt(typeM[1], 10);
+            const matchedName = nameM[1].toLowerCase();
+            resolved.set(matchedName, typeNum);
+            if (globalTagMap) {
+              globalTagMap.set(matchedName, typeNum);
+              hasNewTypes = true;
+            }
+          }
+        }
+      } else if (res) {
+        await discardResponse(res);
+      }
+    } catch {
+      // Non-fatal per-tag failure
+    }
+  }));
+
+  if (hasNewTypes) {
+    debouncedSaveSummary();
+  }
+
+  return resolved;
+}
 
 async function fetchAndCacheSummary(settings = {}) {
   try {
@@ -589,6 +734,55 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     }
   }
 
+  // 6.5 Dynamic tag resolution for boorus without tag types (e.g. Rule34)
+  const hasMainArtist = artist.some(a => !/_?\((audio|sfx|sound|voice|va|music|voice_actor)\)$/i.test(a));
+  if (!hasMainArtist && general.length > 0) {
+    const candidateTags = general.filter(t => {
+      const low = t.toLowerCase();
+      if (tagMap && tagMap.has(low)) return false;
+      if (isDescriptiveTag(low)) return false;
+      if (GENERIC_NON_ARTIST_TAGS.has(low) || META_KEYWORDS.has(low)) return false;
+      return true;
+    });
+
+    if (candidateTags.length > 0) {
+      candidateTags.sort((a, b) => (a.includes('_') ? 1 : 0) - (b.includes('_') ? 1 : 0));
+      const topCandidates = candidateTags.slice(0, 8);
+      const resolved = await resolveUnknownRule34Tags(topCandidates, settings);
+      if (resolved && resolved.size > 0) {
+        for (let i = general.length - 1; i >= 0; i--) {
+          const gLow = general[i].toLowerCase();
+          const rType = resolved.get(gLow);
+          if (rType !== undefined) {
+            const originalTag = general[i];
+            if (rType === 1 && !GENERIC_NON_ARTIST_TAGS.has(gLow)) {
+              addUnique(artist, originalTag);
+              general.splice(i, 1);
+            } else if (rType === 3) {
+              addUnique(copyright, originalTag);
+              general.splice(i, 1);
+            } else if (rType === 4) {
+              addUnique(character, originalTag);
+              general.splice(i, 1);
+            } else if (rType === 6 || rType === 5 || META_KEYWORDS.has(gLow)) {
+              addUnique(meta, originalTag);
+              general.splice(i, 1);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Sort artist array so that visual creators always come first and audio/VA contributors come last
+  if (artist.length > 1) {
+    artist.sort((a, b) => {
+      const aAudio = /_?\((audio|sfx|sound|voice|va|music|voice_actor)\)$/i.test(a) ? 1 : 0;
+      const bAudio = /_?\((audio|sfx|sound|voice|va|music|voice_actor)\)$/i.test(b) ? 1 : 0;
+      return aAudio - bAudio;
+    });
+  }
+
   // 7. Author extraction and synchronization
   let author = '';
   if (initialAuthor && typeof initialAuthor === 'string' && initialAuthor.trim()) {
@@ -601,7 +795,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     });
   } else if (artist.length > 0) {
     const validArtists = artist
-      .map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/_?\((artist|creator|circle|studio)\)$/i, '').replace(/^by_/i, '').trim())
+      .map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/_?\((artist|creator|circle|studio|animator|voice_actor|voice|va)\)$/i, '').replace(/^by_/i, '').trim())
       .filter(a => a && !GENERIC_NON_ARTIST_TAGS.has(a.toLowerCase()) && !LOCATION_BY_NOUNS.has(a.toLowerCase()));
     if (validArtists.length > 0) {
       author = validArtists.join(', ');
@@ -615,15 +809,6 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
         artist.push(cleanA);
       }
     }
-  }
-
-  // Sort artist array so that visual creators always come first and audio/VA contributors come last
-  if (artist.length > 1) {
-    artist.sort((a, b) => {
-      const aAudio = /_?\((audio|sfx|sound|voice|va|music)\)$/i.test(a) ? 1 : 0;
-      const bAudio = /_?\((audio|sfx|sound|voice|va|music)\)$/i.test(b) ? 1 : 0;
-      return aAudio - bAudio;
-    });
   }
 
   return {
