@@ -17,7 +17,7 @@
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.4">
   <link rel="stylesheet" href="css/main.css?v=9.2">
-  <link rel="stylesheet" href="css/components.css?v=10.1">
+  <link rel="stylesheet" href="css/components.css?v=10.2">
   <link rel="stylesheet" href="css/viewer.css?v=12.3">
   <script src="js/mp4box.all.min.js"></script>
 </head>
@@ -197,6 +197,23 @@
           </button>
           <div class="dropdown-menu" id="pawchiveServiceMenu" role="listbox">
             <button type="button" class="dropdown-item active" data-service="all" role="option" data-i18n="sidebar.pawchiveServiceAll">Все платформы</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1.3 Kemono platform filter (visible only for the Kemono source) -->
+      <div class="sidebar-block" id="kemonoServiceBlock" style="display: none;">
+        <h3 class="sidebar-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          <span data-i18n="sidebar.kemonoService">Платформа</span>
+        </h3>
+        <div class="date-filter-dropdown" id="kemonoServiceDropdown">
+          <button type="button" class="btn-dropdown-toggle" id="btnKemonoServiceToggle" aria-haspopup="listbox" aria-expanded="false" title="Выбрать платформу для поиска" data-i18n-title="sidebar.kemonoService.title">
+            <span class="dropdown-label" id="kemonoServiceLabel" data-i18n="sidebar.kemonoServiceAll">Все платформы</span>
+            <svg class="dropdown-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="dropdown-menu" id="kemonoServiceMenu" role="listbox">
+            <button type="button" class="dropdown-item active" data-service="all" role="option" data-i18n="sidebar.kemonoServiceAll">Все платформы</button>
           </div>
         </div>
       </div>
@@ -1204,6 +1221,23 @@
                   <input type="text" id="inputPawchiveSession" class="input-setting" placeholder="Pawchive Session Token (cookie: session=...)" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.pawchiveSession.placeholder">
                 </div>
               </div>
+
+              <!-- 7. Kemono -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-kemono">Kemono.cr</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestKemonoAuth" title="Проверить авторизацию">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                    <a href="https://kemono.cr/" target="_blank" rel="noopener" class="api-key-link" title="Открыть Kemono" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  </span>
+                </div>
+                <div class="api-keys-grid">
+                  <input type="text" id="inputKemonoSession" class="input-setting" placeholder="Kemono Session Token (cookie: session=...)" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.kemonoSession.placeholder">
+                </div>
+              </div>
             </div>
 
             <!-- External Sync Action Block -->
@@ -1376,6 +1410,22 @@
                 </div>
                 <div>
                   <input type="text" id="inputPawchiveProxy" class="input-setting" placeholder="Прокси для Pawchive (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 9. Kemono -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-kemono">Kemono.cr</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestKemonoProxy" title="Проверить прокси Kemono">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputKemonoProxy" class="input-setting" placeholder="Прокси для Kemono (http://... или socks5://...)" autocomplete="off" spellcheck="false">
                 </div>
               </div>
 
@@ -2179,6 +2229,32 @@
               </div>
             </div>
 
+            <!-- 4. Kemono -->
+            <div class="wiki-source-card highlight-card">
+              <div class="wiki-source-header">
+                <div class="wiki-source-title-row">
+                  <span class="badge-site site-kemono">Kemono</span>
+                  <h4 class="wiki-source-title">Kemono (Patreon, Fanbox, Fantia, Boosty)</h4>
+                </div>
+                <button type="button" class="btn-wiki-switch-site" data-site="kemono" data-i18n="wiki.switchSite">Искать здесь ↗</button>
+              </div>
+              <p class="wiki-source-desc" data-i18n="wiki.kemono.desc">Архив платных подписок (Patreon, Fanbox, Fantia, Boosty, Gumroad, Discord). Поиск работает по именам создателей, сервисам и названиям постов.</p>
+              <div class="wiki-source-details">
+                <div class="wiki-source-feat">
+                  <strong data-i18n="wiki.kemono.artistsTitle">Поиск авторов:</strong>
+                  <span><code>artist:wlop</code>, <code>author:sakimichan</code>, <code>creator:gemba</code> <em>(автоматический поиск по базе создателей)</em>.</span>
+                </div>
+                <div class="wiki-source-feat">
+                  <strong data-i18n="wiki.kemono.servicesTitle">Поиск платформ:</strong>
+                  <span><code>service:patreon</code>, <code>service:fanbox</code>, <code>service:fantia</code>, <code>service:boosty</code>, <code>service:gumroad</code>.</span>
+                </div>
+                <div class="wiki-source-feat">
+                  <strong data-i18n="wiki.kemono.albumsTitle">Вложения и альбомы:</strong>
+                  <span data-i18n="wiki.kemono.albumsDesc">Для постов с несколькими файлами или архивами доступен полноэкранный просмотрщик альбома.</span>
+                </div>
+              </div>
+            </div>
+
             <!-- 4. Rule34 & Rule34 Paheal -->
             <div class="wiki-source-card">
               <div class="wiki-source-header">
@@ -2398,6 +2474,7 @@
             <option value="hypnohub">Hypnohub</option>
             <option value="tbib">TBIB</option>
             <option value="pawchive">Pawchive</option>
+            <option value="kemono">Kemono</option>
           </select>
         </div>
         <div class="modal-footer">
@@ -2437,6 +2514,7 @@
               <option value="hypnohub">Hypnohub</option>
               <option value="tbib">TBIB</option>
               <option value="pawchive">Pawchive</option>
+              <option value="kemono">Kemono</option>
             </select>
           </div>
           <button type="button" class="btn-secondary btn-sm" id="btnRefreshCoverPicker" title="Обновить список работ" data-i18n-title="coverPicker.refresh.title">
@@ -2596,6 +2674,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=17.9"></script>
+  <script type="module" src="js/app.js?v=18.0"></script>
 </body>
 </html>

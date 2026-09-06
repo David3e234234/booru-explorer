@@ -155,6 +155,29 @@ function build404FallbackCandidates(targetUrl) {
     } else if (cleanNoQuery.includes('img.pawchive.pw/thumbnail/data/')) {
       pushCandidate(cleanNoQuery.replace('img.pawchive.pw/thumbnail/data/', 'file.pawchive.pw/data/'));
     }
+  } else if (targetUrl.includes('kemono.cr') || targetUrl.includes('kemono.su')) {
+    const cleanNoQuery = targetUrl.split('?')[0];
+    const isVid = /\.(mp4|webm|mov|m4v|mkv)$/i.test(cleanNoQuery);
+    const kemonoNodes = ['https://n1.kemono.cr', 'https://n2.kemono.cr', 'https://n3.kemono.cr', 'https://n4.kemono.cr'];
+    const matchedNode = kemonoNodes.find(n => targetUrl.startsWith(n));
+    if (matchedNode) {
+      for (const altNode of kemonoNodes) {
+        if (altNode !== matchedNode) {
+          pushCandidate(targetUrl.replace(matchedNode, altNode));
+        }
+      }
+    }
+    if (!isVid) {
+      if (cleanNoQuery.includes('/data/')) {
+        const dataPath = cleanNoQuery.slice(cleanNoQuery.indexOf('/data/'));
+        pushCandidate(`https://img.kemono.cr/thumbnail${dataPath}`);
+      } else if (cleanNoQuery.includes('img.kemono.cr/thumbnail/data/')) {
+        const dataPath = cleanNoQuery.slice(cleanNoQuery.indexOf('/data/'));
+        for (const node of kemonoNodes) {
+          pushCandidate(`${node}${dataPath}`);
+        }
+      }
+    }
   }
 
   return candidates;

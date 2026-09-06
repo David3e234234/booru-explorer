@@ -38,7 +38,8 @@ router.get('/list', async (req, res) => {
 
   try {
     const manifest = await getArchiveManifest(zipUrl, { threads });
-    const albumItems = buildArchiveAlbumItems(manifest);
+    const site = req.query.site || (zipUrl.includes('kemono') ? 'kemono' : 'pawchive');
+    const albumItems = buildArchiveAlbumItems(manifest, site);
     res.json({ success: true, albumItems, albumCount: albumItems.length });
   } catch (err) {
     logError('Archive', 'Ошибка обработки архива', err);

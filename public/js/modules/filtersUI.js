@@ -12,9 +12,25 @@ const PAWCHIVE_SERVICE_LABELS = {
   onlyfans: 'OnlyFans'
 };
 
+const KEMONO_SERVICE_LABELS = {
+  patreon: 'Patreon',
+  fanbox: 'Pixiv Fanbox',
+  fantia: 'Fantia',
+  boosty: 'Boosty',
+  gumroad: 'Gumroad',
+  subscribestar: 'SubscribeStar',
+  discord: 'Discord',
+  dlsite: 'DLsite'
+};
+
 export function getPawchiveServiceLabel(service) {
   if (!service || service === 'all') return t('sidebar.pawchiveServiceAll', 'Все платформы');
   return PAWCHIVE_SERVICE_LABELS[service] || (service.charAt(0).toUpperCase() + service.slice(1));
+}
+
+export function getKemonoServiceLabel(service) {
+  if (!service || service === 'all') return t('sidebar.kemonoServiceAll', 'Все платформы');
+  return KEMONO_SERVICE_LABELS[service] || (service.charAt(0).toUpperCase() + service.slice(1));
 }
 
 export function updateSiteCapabilitiesUI(siteId) {
@@ -138,10 +154,18 @@ export function updateSiteCapabilitiesUI(siteId) {
     pawchiveServiceBlock.style.display = currentSiteId === 'pawchive' ? '' : 'none';
   }
 
+  // 9.2 Kemono platform filter block (exclusive to the Kemono source)
+  const kemonoServiceBlock = document.getElementById('kemonoServiceBlock');
+  if (kemonoServiceBlock) {
+    kemonoServiceBlock.style.display = currentSiteId === 'kemono' ? '' : 'none';
+  }
+
   // 10. Search input placeholder
   const searchInput = document.getElementById('searchInput');
   if (searchInput) {
-    if (!caps.supportsTags) {
+    if (currentSiteId === 'kemono') {
+      searchInput.placeholder = t('sidebar.search.placeholderKemono', 'Поиск по создателю или названию...');
+    } else if (currentSiteId === 'pawchive' || !caps.supportsTags) {
       searchInput.placeholder = t('sidebar.search.placeholderPawchive', 'Поиск по автору или названию...');
     } else {
       searchInput.placeholder = t('sidebar.search.placeholder', 'Введите тег (1girl, video)...');
@@ -156,6 +180,7 @@ export function updateSiteCapabilitiesUI(siteId) {
   updateTypeFilterUI();
   updateAgeFilterUI();
   updatePawchiveServiceUI();
+  updateKemonoServiceUI();
   updateVideoSortUI();
   updateFilterActiveDot();
 }
@@ -215,6 +240,20 @@ export function updatePawchiveServiceUI() {
   updateFilterActiveDot();
 }
 
+export function updateKemonoServiceUI() {
+  const kemonoServiceLabel = document.getElementById('kemonoServiceLabel');
+  if (kemonoServiceLabel) {
+    kemonoServiceLabel.textContent = getKemonoServiceLabel(state.kemonoService);
+  }
+
+  document.querySelectorAll('#kemonoServiceMenu .dropdown-item').forEach(item => {
+    const itemService = item.dataset.service || 'all';
+    item.classList.toggle('active', itemService === (state.kemonoService || 'all'));
+  });
+
+  updateFilterActiveDot();
+}
+
 export function updateFilterActiveDot() {
   const filterActiveDot = document.getElementById('filterActiveDot');
   if (!filterActiveDot) return;
@@ -226,6 +265,7 @@ export function updateFilterActiveDot() {
                    (caps.supportsShapesFilter && state.ageFilter !== 'all') ||
                    (caps.supportsContentHiding && (!state.hideFurry || !state.hidePregnant || state.hideLgbt)) ||
                    (state.currentSite === 'pawchive' && state.pawchiveService && state.pawchiveService !== 'all') ||
+                   (state.currentSite === 'kemono' && state.kemonoService && state.kemonoService !== 'all') ||
                    (caps.supportsTags && state.searchTags && state.searchTags.length > 0);
   filterActiveDot.style.display = isCustom ? 'block' : 'none';
 }

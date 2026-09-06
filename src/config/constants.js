@@ -478,6 +478,23 @@ export const SITES = {
     supportedCategories: ['feed', 'following', 'recommended'],
     accentColor: '#f97316',
     description: 'Архив платных подписок (Fanbox, Patreon, Fantia) с поиском по авторам и названиям'
+  },
+  kemono: {
+    id: 'kemono',
+    name: 'Kemono',
+    baseUrl: 'https://kemono.cr',
+    rating: 'nsfw',
+    supportsVideo: true,
+    supportsImages: true,
+    supportsArchives: true,
+    supportsTags: false,
+    supportsAiFilter: false,
+    supportsShapesFilter: false,
+    supportsContentHiding: false,
+    supportsSort: false,
+    supportedCategories: ['feed', 'following', 'recommended'],
+    accentColor: '#3b82f6',
+    description: 'Архив платных подписок (Patreon, Fanbox, Fantia, Boosty, Gumroad) с поиском по авторам и альбомами'
   }
 };
 

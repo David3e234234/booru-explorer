@@ -23,6 +23,7 @@ export function getAuthHeaders(includeJson = false) {
       yandereLogin: state.settings.yandereLogin || '',
       yanderePassword: state.settings.yanderePassword || '',
       pawchiveSession: state.settings.pawchiveSession || '',
+      kemonoSession: state.settings.kemonoSession || '',
       globalProxy: state.settings.globalProxy || '',
       danbooruProxy: state.settings.danbooruProxy || '',
       gelbooruProxy: state.settings.gelbooruProxy || '',
@@ -35,6 +36,7 @@ export function getAuthHeaders(includeJson = false) {
       hypnohubProxy: state.settings.hypnohubProxy || '',
       tbibProxy: state.settings.tbibProxy || '',
       pawchiveProxy: state.settings.pawchiveProxy || '',
+      kemonoProxy: state.settings.kemonoProxy || '',
       curvyTags: state.settings.curvyTags || [],
       petiteTags: state.settings.petiteTags || [],
       furryTags: state.settings.furryTags || [],
@@ -118,6 +120,16 @@ export async function fetchPawchiveServices() {
   }
 }
 
+export async function fetchKemonoServices() {
+  try {
+    const res = await fetch('/api/kemono-services');
+    if (!res.ok) return { success: false, services: [] };
+    return await res.json();
+  } catch (e) {
+    return { success: false, services: [] };
+  }
+}
+
 export async function fetchPosts({
   site = 'danbooru',
   tags = '',
@@ -133,6 +145,7 @@ export async function fetchPosts({
   hideLgbt = false,
   customSites = '',
   pawchiveService = '',
+  kemonoService = '',
   bustCache = false
 }) {
   const params = {
@@ -156,6 +169,10 @@ export async function fetchPosts({
 
   if (pawchiveService && pawchiveService !== 'all') {
     params.pawchiveService = pawchiveService;
+  }
+
+  if (kemonoService && kemonoService !== 'all') {
+    params.kemonoService = kemonoService;
   }
 
   if (bustCache) {

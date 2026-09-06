@@ -34,6 +34,7 @@ import {
   fetchSettings, 
   saveSettings,
   fetchPawchiveServices,
+  fetchKemonoServices,
   apiGetMe
 } from './api.js';
 import { initAutocomplete } from './autocomplete.js';
@@ -51,6 +52,8 @@ import {
   updateAgeFilterUI, 
   updatePawchiveServiceUI,
   getPawchiveServiceLabel,
+  updateKemonoServiceUI,
+  getKemonoServiceLabel,
   updateCategoryTabsUI,
   updateFilterActiveDot
 } from './modules/filtersUI.js';
@@ -410,6 +413,7 @@ function refreshSearchUiFromState() {
   renderMobileSourcesSheet({ onSelectSite: selectSite });
   updateSiteCapabilitiesUI(state.currentSite);
   if (state.currentSite === 'pawchive') ensurePawchiveServiceOptions();
+  if (state.currentSite === 'kemono') ensureKemonoServiceOptions();
 }
 
 // Opens a post by its original site id: fast path searches the loaded feed,
@@ -479,6 +483,20 @@ function handleExploreAuthor(author) {
   if (!author || !author.name) return;
   if (author.site && state.sites.some(s => s.id === author.site)) {
     state.currentSite = author.site;
+    updateSiteCapabilitiesUI(state.currentSite);
+  }
+  if (state.currentSite === 'pawchive') ensurePawchiveServiceOptions();
+  if (state.currentSite === 'kemono') ensureKemonoServiceOptions();
+
+  searchAuthorPosts(author);
+}
+
+// Global quick search helper to jump to a specific author
+function searchAuthorPosts(author) {
+  if (!author || !author.name) return;
+  if (state.currentSite !== author.site && author.site) {
+    state.currentSite = author.site;
+    updateSiteCapabilitiesUI(author.site);
     updateCurrentSiteLabel();
     renderSitesBar({ onSelectSite: selectSite });
     renderMobileSourcesSheet({ onSelectSite: selectSite });
@@ -487,7 +505,7 @@ function handleExploreAuthor(author) {
   let tagToAdd = author.name;
   if (state.currentSite === 'rule34video' && !author.name.includes(':')) {
     tagToAdd = `artist:${author.name}`;
-  } else if (state.currentSite === 'pawchive') {
+  } else if (state.currentSite === 'pawchive' || state.currentSite === 'kemono') {
     tagToAdd = (author.service && author.user)
       ? `service:${author.service} user:${author.user}`
       : `artist:${author.name}`;
@@ -517,6 +535,7 @@ function selectSite(siteId) {
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
   if (siteId === 'pawchive') ensurePawchiveServiceOptions();
+  if (siteId === 'kemono') ensureKemonoServiceOptions();
   performSearch(true);
 }
 
@@ -556,6 +575,44 @@ async function ensurePawchiveServiceOptions() {
   })();
 
   return pawchiveServicesLoading;
+}
+
+// Kemono platform dropdown: options are loaded once from the server
+let kemonoServicesLoaded = false;
+let kemonoServicesLoading = null;
+
+async function ensureKemonoServiceOptions() {
+  if (kemonoServicesLoaded) return;
+  if (kemonoServicesLoading) return kemonoServicesLoading;
+
+  kemonoServicesLoading = (async () => {
+    try {
+      const data = await fetchKemonoServices();
+      const services = Array.isArray(data?.services) ? data.services.filter(s => s && s !== 'all') : [];
+      const menu = document.getElementById('kemonoServiceMenu');
+      if (!menu) return;
+
+      menu.querySelectorAll('.dropdown-item[data-dynamic="1"]').forEach(el => el.remove());
+      for (const svc of services) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'dropdown-item';
+        btn.dataset.service = svc;
+        btn.dataset.dynamic = '1';
+        btn.setAttribute('role', 'option');
+        btn.textContent = getKemonoServiceLabel(svc);
+        menu.appendChild(btn);
+      }
+      if (services.length > 0) kemonoServicesLoaded = true;
+      updateKemonoServiceUI();
+    } catch (e) {
+      console.warn('Не удалось загрузить список платформ Kemono:', e);
+    } finally {
+      kemonoServicesLoading = null;
+    }
+  })();
+
+  return kemonoServicesLoading;
 }
 
 function selectCategory(category) {
@@ -799,9 +856,10 @@ async function performSearch(reset = false, options = {}) {
       const allFollowed = Array.isArray(state.favoriteAuthors) ? state.favoriteAuthors : [];
       const followedAuthors = allFollowed.filter(author => {
         if (!author) return false;
-        const isPawchiveAuthor = author.site === 'pawchive' || Boolean(author.service && author.user);
-        if (isPawchiveAuthor) {
-          if (isAllSites || (isCustomSites && customSitesList.includes('pawchive')) || state.currentSite === 'pawchive') {
+        const isArchiveAuthor = author.site === 'pawchive' || author.site === 'kemono' || Boolean(author.service && author.user);
+        if (isArchiveAuthor) {
+          const authSite = author.site || 'pawchive';
+          if (isAllSites || (isCustomSites && customSitesList.includes(authSite)) || state.currentSite === authSite) {
             return true;
           }
           return false;
@@ -827,13 +885,14 @@ async function performSearch(reset = false, options = {}) {
         const baseName = (fallbackName || rawName.split(',')[0]).replace(/^@/, '').replace(/^pixiv:/i, '').trim();
         if (!baseName) continue;
 
-        const isPawchiveAuthor = author.site === 'pawchive' || Boolean(author.service && author.user);
+        const isArchiveAuthor = author.site === 'pawchive' || author.site === 'kemono' || Boolean(author.service && author.user);
         let targetSite = state.currentSite;
         let queryTag = '';
 
-        if (isPawchiveAuthor) {
-          if (state.currentSite === 'all' || (isCustomSites && customSitesList.includes('pawchive')) || state.currentSite === 'pawchive') {
-            targetSite = 'pawchive';
+        if (isArchiveAuthor) {
+          const authSite = author.site || 'pawchive';
+          if (state.currentSite === 'all' || (isCustomSites && customSitesList.includes(authSite)) || state.currentSite === authSite) {
+            targetSite = authSite;
             if (author.service && author.user) {
               queryTag = `service:${author.service} user:${author.user}`;
             } else {
@@ -843,7 +902,7 @@ async function performSearch(reset = false, options = {}) {
             continue;
           }
         } else {
-          queryTag = (targetSite === 'pawchive')
+          queryTag = (targetSite === 'pawchive' || targetSite === 'kemono')
             ? `artist:${baseName.replace(/\s+/g, '_')}`
             : baseName.replace(/\s+/g, '_');
         }
@@ -880,6 +939,7 @@ async function performSearch(reset = false, options = {}) {
             category: effectiveSort,
             customSites: aQuery.site === 'custom' ? (state.settings?.customSources || customSitesList) : '',
             pawchiveService: aQuery.site === 'pawchive' ? (state.pawchiveService || 'all') : '',
+            kemonoService: aQuery.site === 'kemono' ? (state.kemonoService || 'all') : '',
             aiFilter: state.aiFilter,
             ratingFilter: state.ratingFilter,
             typeFilter: state.typeFilter,
@@ -971,13 +1031,13 @@ async function performSearch(reset = false, options = {}) {
       const isPostByFollowedAuthor = (post) => {
         if (!post) return false;
 
-        if (post.site === 'pawchive' || (post.service && post.user)) {
-          const matchPawchive = followedAuthors.some(a => 
+        if (post.site === 'pawchive' || post.site === 'kemono' || (post.service && post.user)) {
+          const matchAuthor = followedAuthors.some(a => 
             a.service && a.user && 
             String(a.service).toLowerCase() === String(post.service || '').toLowerCase() && 
             String(a.user) === String(post.user)
           );
-          if (matchPawchive) return true;
+          if (matchAuthor) return true;
         }
 
         const artists = Array.isArray(post.tagDetails?.artist) && post.tagDetails.artist.length > 0
@@ -1078,8 +1138,9 @@ async function performSearch(reset = false, options = {}) {
       } else {
         const fetchTasks = [];
 
-        if (state.currentSite === 'pawchive') {
-          // Pawchive creator-centric recommendation: extract liked and favorite artists
+        if (state.currentSite === 'pawchive' || state.currentSite === 'kemono') {
+          const recSite = state.currentSite;
+          // Creator-centric recommendation: extract liked and favorite artists
           const candidateArtists = [];
           if (userInterests.length > 0) {
             const creatorInterests = userInterests.filter(i => i.category === 'artist' || i.score >= 5.0);
@@ -1109,11 +1170,13 @@ async function performSearch(reset = false, options = {}) {
             for (const creator of selectedAuthors) {
               fetchTasks.push(
                 fetchPosts({
-                  site: 'pawchive',
+                  site: recSite,
                   tags: `artist:${creator}`,
                   page: authorPageNum,
                   limit: 30,
                   category: 'new',
+                  pawchiveService: recSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
+                  kemonoService: recSite === 'kemono' ? (state.kemonoService || 'all') : '',
                   aiFilter: state.aiFilter,
                   ratingFilter: state.ratingFilter,
                   typeFilter: state.typeFilter,
@@ -1129,11 +1192,13 @@ async function performSearch(reset = false, options = {}) {
 
           fetchTasks.push(
             fetchPosts({
-              site: 'pawchive',
+              site: recSite,
               tags: '',
               page: state.page,
               limit: Math.min(currentLimit, 50),
               category: 'new',
+              pawchiveService: recSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
+              kemonoService: recSite === 'kemono' ? (state.kemonoService || 'all') : '',
               aiFilter: state.aiFilter,
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
@@ -1144,11 +1209,13 @@ async function performSearch(reset = false, options = {}) {
               bustCache: options.bustCache || false
             }).catch(() => null),
             fetchPosts({
-              site: 'pawchive',
+              site: recSite,
               tags: '',
               page: state.page,
               limit: Math.min(currentLimit, 50),
               category: 'random',
+              pawchiveService: recSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
+              kemonoService: recSite === 'kemono' ? (state.kemonoService || 'all') : '',
               aiFilter: state.aiFilter,
               ratingFilter: state.ratingFilter,
               typeFilter: state.typeFilter,
@@ -1488,6 +1555,7 @@ async function performSearch(reset = false, options = {}) {
       hideLgbt: state.hideLgbt,
       customSites: state.currentSite === 'custom' ? state.settings.customSources : '',
       pawchiveService: state.currentSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
+      kemonoService: state.currentSite === 'kemono' ? (state.kemonoService || 'all') : '',
       bustCache: options.bustCache || false
     });
 
@@ -1558,6 +1626,7 @@ function scheduleNextPagePrefetch() {
       hideLgbt: state.hideLgbt,
       customSites: state.currentSite === 'custom' ? state.settings?.customSources : '',
       pawchiveService: state.currentSite === 'pawchive' ? (state.pawchiveService || 'all') : '',
+      kemonoService: state.currentSite === 'kemono' ? (state.kemonoService || 'all') : '',
       bustCache: false
     }).catch(() => {});
   }, 1200);
@@ -1682,6 +1751,54 @@ function setupEventListeners() {
       if (e.key === 'Escape' && pawchiveServiceDropdown.classList.contains('open')) {
         pawchiveServiceDropdown.classList.remove('open');
         btnPawchiveServiceToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  // Kemono platform dropdown (only visible for the Kemono source)
+  const kemonoServiceDropdown = document.getElementById('kemonoServiceDropdown');
+  const btnKemonoServiceToggle = document.getElementById('btnKemonoServiceToggle');
+  if (btnKemonoServiceToggle && kemonoServiceDropdown) {
+    btnKemonoServiceToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      ensureKemonoServiceOptions();
+      const isOpen = kemonoServiceDropdown.classList.toggle('open');
+      btnKemonoServiceToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    // Items are populated lazily, so clicks are delegated on the menu
+    const kemonoServiceMenu = document.getElementById('kemonoServiceMenu');
+    if (kemonoServiceMenu) {
+      kemonoServiceMenu.addEventListener('click', (e) => {
+        const item = e.target.closest('.dropdown-item');
+        if (!item) return;
+        e.stopPropagation();
+        const serviceVal = item.dataset.service || 'all';
+        if (state.kemonoService === serviceVal) {
+          kemonoServiceDropdown.classList.remove('open');
+          btnKemonoServiceToggle.setAttribute('aria-expanded', 'false');
+          return;
+        }
+        state.kemonoService = serviceVal;
+        updateKemonoServiceUI();
+        persistSettings({ kemonoService: serviceVal });
+        kemonoServiceDropdown.classList.remove('open');
+        btnKemonoServiceToggle.setAttribute('aria-expanded', 'false');
+        performSearch(true);
+      });
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!kemonoServiceDropdown.contains(e.target)) {
+        kemonoServiceDropdown.classList.remove('open');
+        btnKemonoServiceToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && kemonoServiceDropdown.classList.contains('open')) {
+        kemonoServiceDropdown.classList.remove('open');
+        btnKemonoServiceToggle.setAttribute('aria-expanded', 'false');
       }
     });
   }

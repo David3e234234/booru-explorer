@@ -24,7 +24,7 @@ import {
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
-import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updatePawchiveServiceUI } from './filtersUI.js';
+import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updatePawchiveServiceUI, updateKemonoServiceUI } from './filtersUI.js';
 import { updateHeaderAuthUI } from './authModal.js';
 import { getLocalCacheCount, clearAllEmbeddingsCache } from './aiVision.js';
 
@@ -425,6 +425,10 @@ export function applySettingsToUIAndState(s) {
     state.pawchiveService = s.pawchiveService;
     updatePawchiveServiceUI();
   }
+  if (s.kemonoService) {
+    state.kemonoService = s.kemonoService;
+    updateKemonoServiceUI();
+  }
   const checkHideFurry = document.getElementById('checkHideFurry');
   if (typeof s.hideFurry === 'boolean') {
     state.hideFurry = s.hideFurry;
@@ -451,6 +455,7 @@ export function applySettingsToUIAndState(s) {
   const inputYandereLogin = document.getElementById('inputYandereLogin');
   const inputYanderePassword = document.getElementById('inputYanderePassword');
   const inputPawchiveSession = document.getElementById('inputPawchiveSession');
+  const inputKemonoSession = document.getElementById('inputKemonoSession');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
@@ -472,6 +477,7 @@ export function applySettingsToUIAndState(s) {
   if (s.yandereLogin && inputYandereLogin) inputYandereLogin.value = s.yandereLogin;
   if (s.yanderePassword && inputYanderePassword) inputYanderePassword.value = s.yanderePassword;
   if (s.pawchiveSession && inputPawchiveSession) inputPawchiveSession.value = s.pawchiveSession;
+  if (s.kemonoSession && inputKemonoSession) inputKemonoSession.value = s.kemonoSession;
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -483,6 +489,7 @@ export function applySettingsToUIAndState(s) {
     { key: 'safebooruProxy', id: 'inputSafebooruProxy' },
     { key: 'rule34videoProxy', id: 'inputRule34videoProxy' },
     { key: 'pawchiveProxy', id: 'inputPawchiveProxy' },
+    { key: 'kemonoProxy', id: 'inputKemonoProxy' },
     { key: 'xbooruProxy', id: 'inputXbooruProxy' },
     { key: 'hypnohubProxy', id: 'inputHypnohubProxy' },
     { key: 'tbibProxy', id: 'inputTbibProxy' }
@@ -1035,6 +1042,7 @@ export function openSettingsModal() {
   if (inputYandereLogin) inputYandereLogin.value = state.settings.yandereLogin || '';
   if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
   if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
+  if (inputKemonoSession) inputKemonoSession.value = state.settings.kemonoSession || '';
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -1046,6 +1054,7 @@ export function openSettingsModal() {
     { key: 'safebooruProxy', id: 'inputSafebooruProxy' },
     { key: 'rule34videoProxy', id: 'inputRule34videoProxy' },
     { key: 'pawchiveProxy', id: 'inputPawchiveProxy' },
+    { key: 'kemonoProxy', id: 'inputKemonoProxy' },
     { key: 'xbooruProxy', id: 'inputXbooruProxy' },
     { key: 'hypnohubProxy', id: 'inputHypnohubProxy' },
     { key: 'tbibProxy', id: 'inputTbibProxy' }
@@ -1600,6 +1609,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         const inputYandereLogin = document.getElementById('inputYandereLogin');
         const inputYanderePassword = document.getElementById('inputYanderePassword');
         const inputPawchiveSession = document.getElementById('inputPawchiveSession');
+        const inputKemonoSession = document.getElementById('inputKemonoSession');
 
         if (inputRule34ApiKey) inputRule34ApiKey.value = state.settings.rule34ApiKey || '';
         if (inputRule34UserId) inputRule34UserId.value = state.settings.rule34UserId || '';
@@ -1612,6 +1622,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         if (inputYandereLogin) inputYandereLogin.value = state.settings.yandereLogin || '';
         if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
         if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
+        if (inputKemonoSession) inputKemonoSession.value = state.settings.kemonoSession || '';
         tempBlacklist = state.settings.blacklist || [];
         tempAiTags = state.settings.aiTags || [];
         tempCurvyTags = state.settings.curvyTags || [...DEFAULT_CURVY_TAGS];
@@ -1692,7 +1703,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     { btnId: 'btnTestDanbooruAuth', site: 'danbooru', fields: { apiKey: 'inputDanbooruApiKey', login: 'inputDanbooruLogin' } },
     { btnId: 'btnTestKonachanAuth', site: 'konachan', fields: { login: 'inputKonachanLogin', password: 'inputKonachanPassword' } },
     { btnId: 'btnTestYandereAuth', site: 'yandere', fields: { login: 'inputYandereLogin', password: 'inputYanderePassword' } },
-    { btnId: 'btnTestPawchiveAuth', site: 'pawchive', fields: { session: 'inputPawchiveSession' } }
+    { btnId: 'btnTestPawchiveAuth', site: 'pawchive', fields: { session: 'inputPawchiveSession' } },
+    { btnId: 'btnTestKemonoAuth', site: 'kemono', fields: { session: 'inputKemonoSession' } }
   ];
   authTestConfigs.forEach(({ btnId, site, fields }) => {
     const btn = document.getElementById(btnId);
@@ -1764,7 +1776,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
           konachanPassword: inputKonachanPassword ? inputKonachanPassword.value.trim() : (state.settings?.konachanPassword || ''),
           yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : (state.settings?.yandereLogin || ''),
           yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : (state.settings?.yanderePassword || ''),
-          pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : (state.settings?.pawchiveSession || '')
+          pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : (state.settings?.pawchiveSession || ''),
+          kemonoSession: inputKemonoSession ? inputKemonoSession.value.trim() : (state.settings?.kemonoSession || '')
         };
 
         const res = await syncExternalAccounts({ 
@@ -1810,6 +1823,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     { btnId: 'btnTestSafebooruProxy', site: 'safebooru', inputId: 'inputSafebooruProxy' },
     { btnId: 'btnTestRule34videoProxy', site: 'rule34video', inputId: 'inputRule34videoProxy' },
     { btnId: 'btnTestPawchiveProxy', site: 'pawchive', inputId: 'inputPawchiveProxy' },
+    { btnId: 'btnTestKemonoProxy', site: 'kemono', inputId: 'inputKemonoProxy' },
     { btnId: 'btnTestXbooruProxy', site: 'xbooru', inputId: 'inputXbooruProxy' },
     { btnId: 'btnTestHypnohubProxy', site: 'hypnohub', inputId: 'inputHypnohubProxy' },
     { btnId: 'btnTestTbibProxy', site: 'tbib', inputId: 'inputTbibProxy' }
@@ -2032,6 +2046,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : '',
         yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : '',
         pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : '',
+        kemonoSession: inputKemonoSession ? inputKemonoSession.value.trim() : '',
         globalProxy: document.getElementById('inputGlobalProxy')?.value.trim() || '',
         danbooruProxy: document.getElementById('inputDanbooruProxy')?.value.trim() || '',
         gelbooruProxy: document.getElementById('inputGelbooruProxy')?.value.trim() || '',
@@ -2041,6 +2056,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         safebooruProxy: document.getElementById('inputSafebooruProxy')?.value.trim() || '',
         rule34videoProxy: document.getElementById('inputRule34videoProxy')?.value.trim() || '',
         pawchiveProxy: document.getElementById('inputPawchiveProxy')?.value.trim() || '',
+        kemonoProxy: document.getElementById('inputKemonoProxy')?.value.trim() || '',
         xbooruProxy: document.getElementById('inputXbooruProxy')?.value.trim() || '',
         hypnohubProxy: document.getElementById('inputHypnohubProxy')?.value.trim() || '',
         tbibProxy: document.getElementById('inputTbibProxy')?.value.trim() || '',

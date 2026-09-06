@@ -414,6 +414,44 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
       return { success: false, site: 'pawchive', message: 'Недостаточно данных поста Pawchive' };
     }
 
+    // 4. Kemono
+    else if (effectiveSite === 'kemono') {
+      if (!settings.kemonoSession) {
+        return { success: false, site: 'kemono', message: 'Не указан Session Token Kemono' };
+      }
+      const token = String(settings.kemonoSession).replace(/^session=/i, '').trim();
+      let service = postObj.service || null;
+      let creatorId = postObj.user || null;
+      let realPostId = cleanId.split('_')[0];
+
+      if (String(rawId).includes(':')) {
+        const parts = String(rawId).split(':');
+        if (parts.length === 4 && parts[0] === 'kemono') {
+          service = parts[1];
+          creatorId = parts[2];
+          realPostId = parts[3];
+        }
+      }
+      if (service && creatorId && realPostId) {
+        const method = isLike ? 'POST' : 'DELETE';
+        const kemRes = await fetchSafe(`https://kemono.cr/api/v1/favorites/post/${service}/${creatorId}/${realPostId}`, {
+          method,
+          headers: {
+            'Cookie': `session=${token}`,
+            'Accept': 'text/css, application/json, */*',
+            'User-Agent': BROWSER_USER_AGENT
+          },
+          settings,
+          site: 'kemono'
+        }).catch(err => ({ ok: false, error: err.message }));
+        logInfo('Sync', `Kemono like [${realPostId}]: status=${kemRes?.status || (kemRes?.ok ? 200 : 'err')}`);
+        await discardResponse(kemRes);
+        const isOk = kemRes?.ok || kemRes?.status === 200 || kemRes?.status === 201;
+        return { success: isOk, site: 'kemono', id: realPostId, status: kemRes?.status };
+      }
+      return { success: false, site: 'kemono', message: 'Недостаточно данных поста Kemono' };
+    }
+
     return { success: false, site: effectiveSite, message: `Сайт ${effectiveSite} не поддерживает синхронизацию` };
   } catch (err) {
     logError('LikeSync', `Ошибка отправки лайка на ${site}:`, err);
@@ -466,6 +504,40 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
         return { success: isOk, site: 'pawchive', service, creatorId, status: res?.status };
       }
       return { success: false, site: 'pawchive', message: 'Не указан сервис и автор Pawchive' };
+    }
+
+    if (targetSite === 'kemono') {
+      if (!settings.kemonoSession) {
+        return { success: false, site: 'kemono', message: 'Не указан Session Token Kemono' };
+      }
+      const token = String(settings.kemonoSession).replace(/^session=/i, '').trim();
+      let service = (typeof authorOrName === 'object' && authorOrName.service) || '';
+      let creatorId = cleanName;
+      if (cleanName.includes(':')) {
+        const parts = cleanName.split(':');
+        if (parts.length >= 2) {
+          service = parts[0];
+          creatorId = parts[1];
+        }
+      }
+      if (service && creatorId) {
+        const method = isFollow ? 'POST' : 'DELETE';
+        const res = await fetchSafe(`https://kemono.cr/api/v1/favorites/creator/${encodeURIComponent(service)}/${encodeURIComponent(creatorId)}`, {
+          method,
+          headers: {
+            'Cookie': `session=${token}`,
+            'Accept': 'text/css, application/json, */*',
+            'User-Agent': BROWSER_USER_AGENT
+          },
+          settings,
+          site: 'kemono'
+        }).catch(err => ({ ok: false, error: err.message }));
+        logInfo('Sync', `Kemono follow [${service}:${creatorId}]: status=${res?.status || (res?.ok ? 200 : 'err')}`);
+        const isOk = res?.ok || res?.status === 200 || res?.status === 201;
+        await discardResponse(res);
+        return { success: isOk, site: 'kemono', service, creatorId, status: res?.status };
+      }
+      return { success: false, site: 'kemono', message: 'Не указан сервис и автор Kemono' };
     }
 
     return { success: false, site: targetSite, message: `Сайт ${targetSite} не поддерживает отслеживание авторов через API` };

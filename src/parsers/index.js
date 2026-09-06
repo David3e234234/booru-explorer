@@ -6,6 +6,7 @@ import { fetchGelbooru } from './gelbooru.js';
 import { fetchRule34Video } from './rule34video.js';
 import { fetchXbooru, fetchHypnohub, fetchTbib, fetchXbooruPostById } from './dapi.js';
 import { fetchPawchive } from './pawchive.js';
+import { fetchKemono } from './kemono.js';
 import { isPostMatchingFilters } from '../utils/tagHelpers.js';
 import { runWithDeadlineSignal } from '../utils/network.js';
 import { 
@@ -27,7 +28,8 @@ export {
   fetchXbooru,
   fetchXbooruPostById,
   fetchHypnohub,
-  fetchPawchive
+  fetchPawchive,
+  fetchKemono
 };
 
 async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
@@ -52,6 +54,8 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
       return await fetchTbib(params, aiTagsList, settings);
     case 'pawchive':
       return await fetchPawchive(params, aiTagsList, settings);
+    case 'kemono':
+      return await fetchKemono(params, aiTagsList, settings);
     default:
       return [];
   }
@@ -97,7 +101,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   }
 
   if (site === 'all' || site === 'custom' || site.includes(',')) {
-    let mainSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive'];
+    let mainSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive', 'kemono'];
 
     if (site === 'custom' || site.includes(',')) {
       let customList = [];
@@ -110,26 +114,26 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
       } else {
         customList = ['danbooru', 'gelbooru', 'rule34', 'yandere'];
       }
-      const availableSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive'];
+      const availableSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive', 'kemono'];
       mainSites = customList.filter(s => availableSites.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'gelbooru'];
     }
 
     if (params.typeFilter === 'video' || params.typeFilter === 'audio' || params.typeFilter === 'sound') {
-      const videoSupported = ['rule34video', 'danbooru', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'pawchive'];
+      const videoSupported = ['rule34video', 'danbooru', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'pawchive', 'kemono'];
       mainSites = mainSites.filter(s => videoSupported.includes(s));
       if (mainSites.length === 0) mainSites = ['rule34video', 'danbooru'];
     } else if (params.typeFilter === 'image') {
       mainSites = mainSites.filter(s => s !== 'rule34video');
     } else if (params.typeFilter === 'zip' || params.typeFilter === 'archive') {
-      mainSites = mainSites.filter(s => s === 'pawchive');
-      if (mainSites.length === 0) mainSites = ['pawchive'];
+      mainSites = mainSites.filter(s => s === 'pawchive' || s === 'kemono');
+      if (mainSites.length === 0) mainSites = ['pawchive', 'kemono'];
     } else if (params.ratingFilter === 'nsfw') {
-      const nsfwAllowed = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib', 'pawchive'];
+      const nsfwAllowed = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib', 'pawchive', 'kemono'];
       mainSites = mainSites.filter(s => nsfwAllowed.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'rule34'];
     } else if (params.ratingFilter === 'questionable' || params.ratingFilter === '16+') {
-      const qAllowed = ['danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib', 'pawchive'];
+      const qAllowed = ['danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib', 'pawchive', 'kemono'];
       mainSites = mainSites.filter(s => qAllowed.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'rule34', 'gelbooru'];
     } else if (params.ratingFilter === 'sfw') {

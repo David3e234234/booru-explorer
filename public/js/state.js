@@ -11,7 +11,8 @@ export const DEFAULT_SITES = [
   { id: 'xbooru', name: 'Xbooru', accentColor: '#f43f5e', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportsSort: true, supportedCategories: ['feed', 'following', 'recommended'] },
   { id: 'hypnohub', name: 'Hypnohub', accentColor: '#8b5cf6', rating: 'all', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportsSort: true, supportedCategories: ['feed', 'following', 'recommended'] },
   { id: 'tbib', name: 'TBIB', accentColor: '#f59e0b', rating: 'all', supportsVideo: false, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportsSort: true, supportedCategories: ['feed', 'following', 'recommended'] },
-  { id: 'pawchive', name: 'Pawchive', accentColor: '#f97316', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsArchives: true, supportsTags: false, supportsAiFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportsSort: false, supportedCategories: ['feed', 'following', 'recommended'] }
+  { id: 'pawchive', name: 'Pawchive', accentColor: '#f97316', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsArchives: true, supportsTags: false, supportsAiFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportsSort: false, supportedCategories: ['feed', 'following', 'recommended'] },
+  { id: 'kemono', name: 'Kemono', accentColor: '#3b82f6', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsArchives: true, supportsTags: false, supportsAiFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportsSort: false, supportedCategories: ['feed', 'following', 'recommended'] }
 ];
 
 export function getSiteCapabilities(siteId) {
@@ -78,6 +79,7 @@ export const DEFAULT_CLIENT_SETTINGS = {
   typeFilter: 'all',
   ageFilter: 'all',
   pawchiveService: 'all',
+  kemonoService: 'all',
   hideFurry: true,
   hidePregnant: true,
   hideLgbt: false,
@@ -101,6 +103,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   yandereLogin: '',
   yanderePassword: '',
   pawchiveSession: '',
+  kemonoSession: '',
+  kemonoProxy: '',
   deepFetchPages: 2,
   prioritizeUserTags: false,
   enableJsDemuxing: true,
@@ -152,6 +156,7 @@ export const state = {
   typeFilter: 'all', // 'all', 'video', 'audio', 'image', 'zip'
   ageFilter: 'all', // 'all', 'adult', 'young'
   pawchiveService: 'all', // 'all' or a Pawchive platform id: 'patreon', 'fanbox', ...
+  kemonoService: 'all', // 'all' or a Kemono platform id: 'patreon', 'fanbox', ...
   videoDurationSort: 'none', // 'none' | 'longest' | 'shortest'
   hideFurry: true,
   hidePregnant: true,
@@ -855,7 +860,7 @@ export function getRecommendationSeeds({ limit = 5, page = 1, focusMode = 'all' 
 }
 
 const IGNORED_INTEREST_TAGS = new Set([
-  'fanbox', 'patreon', 'fantia', 'boosty', 'subscribestar', 'gumroad', 'afdian', 'discord', 'pawchive',
+  'fanbox', 'patreon', 'fantia', 'boosty', 'subscribestar', 'gumroad', 'afdian', 'discord', 'pawchive', 'kemono', 'dlsite',
   'rule34video', 'danbooru', 'gelbooru', 'safebooru', 'yande.re', 'konachan', 'rule34', 'xbooru', 'hypnohub', 'tbib',
   'highres', 'absurdres', 'superabsurdres', 'translation_request', 'translated',
   'tagme', 'bad_id', 'duplicate', 'watermark', 'sample', 'thumbnail', 'reward', 'psd', 'clip', 'zip', 'rar'

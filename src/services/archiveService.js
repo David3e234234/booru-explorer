@@ -15,6 +15,7 @@ function isAllowedArchiveHost(hostname) {
   return (
     h === 'pawchive.pw' || h.endsWith('.pawchive.pw') ||
     h === 'pawchive.st' || h.endsWith('.pawchive.st') ||
+    h === 'kemono.cr' || h.endsWith('.kemono.cr') ||
     h === 'kemono.su' || h.endsWith('.kemono.su') ||
     h === 'kemono.party' || h.endsWith('.kemono.party') ||
     h === 'coomer.su' || h.endsWith('.coomer.su') ||
@@ -666,15 +667,17 @@ export async function getArchiveManifest(zipUrl, options = {}) {
   return job;
 }
 
-export function buildArchiveAlbumItems(manifest) {
+export function buildArchiveAlbumItems(manifest, targetSite = 'pawchive') {
   const { key, items } = manifest;
+  const site = targetSite === 'kemono' ? 'kemono' : 'pawchive';
+  const siteName = site === 'kemono' ? 'Kemono' : 'Pawchive';
   return items.map(item => {
     const fileUrl = `/api/archive/file?key=${key}&n=${item.n}`;
     return {
-      id: `pawchive_zip_${key}_${item.n}`,
+      id: `${site}_zip_${key}_${item.n}`,
       originalId: `zip_${item.n}`,
-      site: 'pawchive',
-      siteName: 'Pawchive',
+      site,
+      siteName,
       previewUrl: fileUrl,
       sampleUrl: fileUrl,
       fileUrl,

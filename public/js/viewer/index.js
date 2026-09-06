@@ -186,13 +186,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           return data;
         })
         .catch(() => null);
-    } else if (currentPost?.site === 'pawchive' && (currentPost.originalId || currentPost.id)) {
-      // For Pawchive posts, resolve full metadata (content, complete attachments, clean tags)
+    } else if ((currentPost?.site === 'pawchive' || currentPost?.site === 'kemono') && (currentPost.originalId || currentPost.id)) {
+      // For Pawchive / Kemono posts, resolve full metadata (content, complete attachments, clean tags)
+      const targetSite = currentPost.site;
       const targetPostId = currentPost.id;
-      const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^pawchive_/, '').split('_')[0];
+      const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(pawchive|kemono)_/, '').split('_')[0];
       const targetService = currentPost.service || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[1] : '') || '';
       const targetUser = currentPost.user || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[2] : '') || '';
-      const reqUrl = `/api/resolve-post?site=pawchive&postId=${encodeURIComponent(cleanOrigId)}&service=${encodeURIComponent(targetService)}&user=${encodeURIComponent(targetUser)}&seriesKey=${encodeURIComponent(currentPost.seriesKey || '')}&postUrl=${encodeURIComponent(currentPost.postUrl || currentPost.source || '')}`;
+      const reqUrl = `/api/resolve-post?site=${encodeURIComponent(targetSite)}&postId=${encodeURIComponent(cleanOrigId)}&service=${encodeURIComponent(targetService)}&user=${encodeURIComponent(targetUser)}&seriesKey=${encodeURIComponent(currentPost.seriesKey || '')}&postUrl=${encodeURIComponent(currentPost.postUrl || currentPost.source || '')}`;
       
       activeResolvePromise = fetch(reqUrl)
         .then(r => r.json())
@@ -2420,7 +2421,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     // Automatically trigger full album/set load in background if not already fully fetched
-    if (!currentPost._albumFullyFetched && currentPost.site !== 'pawchive' && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:')) || currentPost.pixiv_id)) {
+    if (!currentPost._albumFullyFetched && currentPost.site !== 'pawchive' && currentPost.site !== 'kemono' && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:') && !currentPost.seriesKey.startsWith('kemono:')) || currentPost.pixiv_id)) {
       loadFullAlbumForPost(currentPost, false);
     }
   }
@@ -2428,8 +2429,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let albumFetchSeq = 0;
 
   async function loadFullAlbumForPost(targetPost, isUserExplicit = false) {
-    if (!targetPost || targetPost.site === 'pawchive') return;
-    const canFetch = Boolean(targetPost.canFetchAlbum || targetPost.hasChildren || targetPost.parentId || (targetPost.seriesKey && !targetPost.seriesKey.startsWith('pawchive:')) || targetPost.pixiv_id);
+    if (!targetPost || targetPost.site === 'pawchive' || targetPost.site === 'kemono') return;
+    const canFetch = Boolean(targetPost.canFetchAlbum || targetPost.hasChildren || targetPost.parentId || (targetPost.seriesKey && !targetPost.seriesKey.startsWith('pawchive:') && !targetPost.seriesKey.startsWith('kemono:')) || targetPost.pixiv_id);
     if (!canFetch) return;
     if (targetPost._albumFetchInProgress) return;
 

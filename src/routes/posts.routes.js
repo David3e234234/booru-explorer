@@ -15,6 +15,7 @@ import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
 import { getCreatorsDirectory, fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
+import { getCreatorsDirectory as getKemonoCreatorsDirectory, fetchKemonoPostById, getKemonoServices } from '../parsers/kemono.js';
 import { fetchRule34PostById } from '../parsers/rule34.js';
 import { fetchXbooruPostById } from '../parsers/dapi.js';
 import { groupPostsIntoAlbums, sortAlbumItems } from '../utils/albumHelper.js';
@@ -36,10 +37,10 @@ const AUTH_CACHE_FIELDS = [
   // key, toggling the setting kept serving a cached page built for the other value
   'enablePaheal',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
-  'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession',
+  'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession', 'kemonoSession',
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
-  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy',
-  'siteSortTags'
+  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy',
+  'siteSortTags', 'kemonoService', 'pawchiveService'
 ];
 
 function parseClientAuth(req) {
@@ -197,6 +198,33 @@ async function runAuthTest(site, creds, settings = {}) {
     return { success: false, message: `Pawchive: ошибка сайта (HTTP ${res.status})` };
   }
 
+  if (site === 'kemono') {
+    const rawSession = String(creds.session || settings.kemonoSession || '').trim();
+    if (!rawSession) return { success: false, message: 'Введите Kemono Session Token' };
+    const sessionToken = rawSession.replace(/^session=/i, '').trim();
+    let res;
+    try {
+      res = await fetchSafe('https://kemono.cr/api/v1/account/favorites', { 
+        timeout: AUTH_TEST_TIMEOUT_MS, 
+        headers: {
+          'Cookie': `session=${sessionToken}`,
+          'Accept': 'text/css, application/json, */*'
+        },
+        settings, 
+        site: 'kemono' 
+      });
+    } catch {
+      return { success: false, message: 'Kemono недоступен' };
+    }
+    if (res.status === 401 || res.status === 403) return { success: false, message: 'Kemono: неверный Session Token или сессия истекла' };
+    if (res.ok) {
+      const data = await readJsonSafe(res);
+      const count = Array.isArray(data) ? data.length : (Array.isArray(data?.posts) ? data.posts.length : 0);
+      return { success: true, message: `Kemono: сессия активна (в избранном постов: ${count})` };
+    }
+    return { success: false, message: `Kemono: ошибка сайта (HTTP ${res.status})` };
+  }
+
   return { success: false, message: 'Для этого сайта нет данных для проверки' };
 }
 
@@ -241,6 +269,43 @@ router.get('/resolve-post', async (req, res) => {
 
       const aiTagsList = settings.aiTags || [];
       const resolvedPost = await fetchPawchivePostById(targetPostId, targetService, targetUser, aiTagsList, settings);
+      if (resolvedPost) {
+        return res.json({ success: true, post: resolvedPost });
+      }
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'kemono') {
+      let targetPostId = postId || id || '';
+      let targetService = service || null;
+      let targetUser = user || null;
+
+      if (seriesKey) {
+        const kemonoMatch = String(seriesKey).match(/^kemono:([^:]+):([^:]+):([^:]+)$/);
+        if (kemonoMatch) {
+          targetService = targetService || kemonoMatch[1];
+          targetUser = targetUser || kemonoMatch[2];
+          targetPostId = targetPostId || kemonoMatch[3];
+        }
+      }
+
+      if (postUrl) {
+        const urlMatch = String(postUrl).match(/kemono\.(?:cr|su|party)\/([^/]+)\/user\/([^/]+)\/post\/([^/?#]+)/);
+        if (urlMatch) {
+          targetService = targetService || urlMatch[1];
+          targetUser = targetUser || urlMatch[2];
+          targetPostId = targetPostId || urlMatch[3];
+        }
+      }
+
+      if (targetPostId) {
+        targetPostId = String(targetPostId).replace(/^kemono_/, '').split('_')[0];
+      }
+
+      if (!targetPostId) {
+        return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      }
+
+      const aiTagsList = settings.aiTags || [];
+      const resolvedPost = await fetchKemonoPostById(targetPostId, targetService, targetUser, aiTagsList, settings);
       if (resolvedPost) {
         return res.json({ success: true, post: resolvedPost });
       }
@@ -372,6 +437,17 @@ router.get('/pawchive-services', async (req, res) => {
   }
 });
 
+// GET /api/kemono-services - active Kemono platforms (patreon, fanbox, ...) for the dropdown
+router.get('/kemono-services', async (req, res) => {
+  try {
+    const services = await getKemonoServices();
+    res.json({ success: true, services });
+  } catch (err) {
+    logError('Search', 'Ошибка получения списка платформ Kemono', err);
+    res.json({ success: false, services: [] });
+  }
+});
+
 // GET /api/version
 router.get('/version', (req, res) => {
   res.json({
@@ -405,6 +481,8 @@ router.get('/posts', async (req, res) => {
     const customSites = req.query.customSites || '';
     const pawchiveServiceRaw = String(req.query.pawchiveService || '').trim().toLowerCase();
     const pawchiveService = /^[a-z0-9_-]+$/.test(pawchiveServiceRaw) ? pawchiveServiceRaw : '';
+    const kemonoServiceRaw = String(req.query.kemonoService || '').trim().toLowerCase();
+    const kemonoService = /^[a-z0-9_-]+$/.test(kemonoServiceRaw) ? kemonoServiceRaw : '';
 
     // Check the in-memory cache (for everything except random)
     let clientAuth = parseClientAuth(req);
@@ -415,7 +493,7 @@ router.get('/posts', async (req, res) => {
     };
 
     // groupAlbums changes the response shape (album collapsing), so it belongs in the key
-    const cacheKey = `v5_persite_sort:${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
+    const cacheKey = `v5_persite_sort:${site}:${tags}:${page}:${limit}:${category}:${aiFilter}:${ratingFilter}:${typeFilter}:${ageFilter}:${hideFurry}:${hidePregnant}:${hideLgbt}:${excludeSites}:${customSites}:${pawchiveService}:${kemonoService}:albums=${req.query.groupAlbums !== 'false'}:${buildAuthCacheKey(clientAuth, settings)}`;
     if (category !== 'random' && !req.query._t && !req.query._bust && !req.query._reload) {
       const cached = apiPostsCache.get(cacheKey);
       if (cached && Array.isArray(cached.posts) && cached.posts.length > 0) {
@@ -439,6 +517,7 @@ router.get('/posts', async (req, res) => {
       excludeSites,
       customSites,
       pawchiveService,
+      kemonoService,
       hideFurry,
       hidePregnant,
       hideLgbt
@@ -528,6 +607,37 @@ router.get('/posts/album', async (req, res) => {
           pPost.albumItems.forEach(item => {
             if (item && item.id && !foundPostsMap.has(item.id)) {
               const clean = { ...item, content: item.content || pPost.content || '' };
+              delete clean.albumItems;
+              foundPostsMap.set(item.id, clean);
+            }
+          });
+        }
+      }
+
+      const items = Array.from(foundPostsMap.values());
+      const responsePayload = {
+        success: items.length > 0,
+        count: items.length,
+        albumItems: items
+      };
+      apiPostsCache.set(albumCacheKey, responsePayload);
+      return res.json(responsePayload);
+    }
+
+    // Kemono posts are self-contained archives; do not query Booru-style parent: or source: tags
+    if (site === 'kemono' || seriesKey.startsWith('kemono:')) {
+      const kemonoMatch = seriesKey.match(/^kemono:([^:]+):([^:]+):(\d+)$/) ||
+        (postUrl).match(/kemono\.(?:cr|su|party)\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
+      const targetPostId = kemonoMatch ? kemonoMatch[3] : (originalId || parentId || '').replace(/^kemono_/, '').split('_')[0];
+      const targetService = kemonoMatch ? kemonoMatch[1] : null;
+      const targetUser = kemonoMatch ? kemonoMatch[2] : null;
+
+      if (targetPostId) {
+        const kPost = await fetchKemonoPostById(targetPostId, targetService, targetUser, aiTagsList, settings);
+        if (kPost && Array.isArray(kPost.albumItems) && kPost.albumItems.length > 1) {
+          kPost.albumItems.forEach(item => {
+            if (item && item.id && !foundPostsMap.has(item.id)) {
+              const clean = { ...item, content: item.content || kPost.content || '' };
               delete clean.albumItems;
               foundPostsMap.set(item.id, clean);
             }
@@ -967,6 +1077,24 @@ router.get('/tags/autocomplete', async (req, res) => {
     } else if (site === 'pawchive') {
       try {
         const { list } = await getCreatorsDirectory(settings);
+        if (Array.isArray(list) && list.length > 0) {
+          const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
+          const matches = list.filter(c => {
+            const nameClean = (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '');
+            return nameClean.includes(cleanQ) || (c.service && c.service.toLowerCase().includes(cleanQ));
+          }).slice(0, 15);
+
+          tagsResult = matches.map(c => ({
+            value: `artist:${(c.name || '').toLowerCase().replace(/[\s_.-]+/g, '_')}`,
+            label: `🎨 ${c.name} (${c.service})`,
+            count: 0,
+            category: 'artist'
+          }));
+        }
+      } catch {}
+    } else if (site === 'kemono') {
+      try {
+        const { list } = await getKemonoCreatorsDirectory(settings);
         if (Array.isArray(list) && list.length > 0) {
           const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
           const matches = list.filter(c => {

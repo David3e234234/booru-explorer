@@ -69,6 +69,7 @@ export function resolveSiteFromUrl(targetUrl) {
     if (h.includes('hypnohub.net')) return 'hypnohub';
     if (h.includes('tbib.org')) return 'tbib';
     if (h.includes('pawchive.pw') || h.includes('pawchive.st')) return 'pawchive';
+    if (h.includes('kemono.cr') || h.includes('kemono.su') || h.includes('kemono.party')) return 'kemono';
     return null;
   } catch {
     return null;
@@ -292,7 +293,9 @@ export async function fetchSafe(url, options = {}) {
 
   try {
     const isDanbooru = typeof url === 'string' && url.includes('donmai.us');
+    const isKemono = site === 'kemono' || (typeof url === 'string' && (url.includes('kemono.cr') || url.includes('kemono.su') || url.includes('kemono.party')));
     const defaultUa = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
+    const defaultAccept = isKemono ? 'text/css, application/json, */*' : 'application/json, text/xml, text/html, */*';
 
     // Resolve proxy dispatcher
     let dispatcher = externalDispatcher || null;
@@ -311,7 +314,7 @@ export async function fetchSafe(url, options = {}) {
       signal,
       headers: {
         'User-Agent': defaultUa,
-        'Accept': 'application/json, text/xml, text/html, */*',
+        'Accept': defaultAccept,
         ...(requestOptions.headers || {})
       }
     };
@@ -365,6 +368,7 @@ export function resolveSiteReferer(targetUrl) {
     if (h.includes('xbooru.com')) return 'https://xbooru.com/';
     if (h.includes('hypnohub.net')) return 'https://hypnohub.net/';
     if (h.includes('pawchive.pw') || h.includes('pawchive.st')) return 'https://pawchive.pw/';
+    if (h.includes('kemono.cr') || h.includes('kemono.su') || h.includes('kemono.party')) return 'https://kemono.cr/';
     return `${parsed.protocol}//${parsed.host}/`;
   } catch {
     return 'https://danbooru.donmai.us/';

@@ -159,6 +159,12 @@ export function extractAllSeriesKeys(post, site = '') {
     keys.add(`pawchive:${pawchiveMatch[1]}:${pawchiveMatch[2]}:${pawchiveMatch[3]}`);
   }
 
+  // 7b. Kemono (always namespaced to avoid collisions)
+  const kemonoMatch = source.match(/kemono\.(?:cr|su|party)\/([a-z0-9_-]+)\/user\/([a-z0-9_-]+)\/post\/([a-z0-9_-]+)/i);
+  if (kemonoMatch && kemonoMatch[1] && kemonoMatch[2] && kemonoMatch[3]) {
+    keys.add(`kemono:${kemonoMatch[1]}:${kemonoMatch[2]}:${kemonoMatch[3]}`);
+  }
+
   // 8. Ci-en
   const cienMatch = source.match(/ci-en\.(?:dlsite\.com|net)\/(?:[^\s"'<>]*\/)?article\/(\d+)/i);
   if (cienMatch && cienMatch[1]) keys.add(`cien:${cienMatch[1]}`);
@@ -229,7 +235,18 @@ export function extractAllSeriesKeys(post, site = '') {
 export function extractSeriesKey(post, site = '') {
   const keys = extractAllSeriesKeys(post, site);
   if (keys.length === 0) return null;
-  // Priority: pixiv -> fanbox -> fantia -> patreon -> parent -> pawchive -> twitter -> others
+  const targetSite = site || post?.site || '';
+
+  if (targetSite === 'kemono') {
+    const kemonoKey = keys.find(k => k.startsWith('kemono:'));
+    if (kemonoKey) return kemonoKey;
+  }
+  if (targetSite === 'pawchive') {
+    const pawchiveKey = keys.find(k => k.startsWith('pawchive:'));
+    if (pawchiveKey) return pawchiveKey;
+  }
+
+  // Priority: pixiv -> fanbox -> fantia -> patreon -> parent -> pawchive -> kemono -> twitter -> others
   const pixivKey = keys.find(k => k.startsWith('pixiv:'));
   if (pixivKey) return pixivKey;
   const fanboxKey = keys.find(k => k.startsWith('fanbox:'));
@@ -242,6 +259,8 @@ export function extractSeriesKey(post, site = '') {
   if (parentKey) return parentKey;
   const pawchiveKey = keys.find(k => k.startsWith('pawchive:'));
   if (pawchiveKey) return pawchiveKey;
+  const kemonoKey = keys.find(k => k.startsWith('kemono:'));
+  if (kemonoKey) return kemonoKey;
   const twitterKey = keys.find(k => k.startsWith('twitter:'));
   if (twitterKey) return twitterKey;
   return keys[0];
@@ -417,6 +436,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
       const primaryKey = Array.from(allKeysSet).find(k => k.startsWith('pixiv:')) ||
                          Array.from(allKeysSet).find(k => k.startsWith('parent:')) ||
                          Array.from(allKeysSet).find(k => k.startsWith('pawchive:')) ||
+                         Array.from(allKeysSet).find(k => k.startsWith('kemono:')) ||
                          Array.from(allKeysSet)[0] || '';
 
       // Use the most recent upload/update date among album items

@@ -295,6 +295,7 @@
 .badge-site.site-hypnohub { border-color: rgba(139, 92, 246, 0.45); color: #c4b5fd; }
 .badge-site.site-tbib { border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; }
 .badge-site.site-pawchive { border-color: rgba(249, 115, 22, 0.45); color: #fdba74; }
+.badge-site.site-kemono { border-color: rgba(59, 130, 246, 0.45); color: #93c5fd; }
 
 .badge-ai {
   display: inline-flex;
@@ -2010,6 +2011,12 @@
   border: 1px solid rgba(236, 72, 153, 0.3);
 }
 
+.api-key-site-badge.site-kemono {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
 [data-theme="warm-paper"] .api-key-site-badge.site-global { color: #7e22ce; border-color: rgba(126, 34, 206, 0.35); background: rgba(126, 34, 206, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-r34 { color: #15803d; border-color: rgba(21, 128, 61, 0.35); background: rgba(21, 128, 61, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-gelbooru { color: #4338ca; border-color: rgba(67, 56, 202, 0.35); background: rgba(67, 56, 202, 0.08); }
@@ -2019,6 +2026,7 @@
 [data-theme="warm-paper"] .api-key-site-badge.site-safebooru { color: #0369a1; border-color: rgba(3, 105, 161, 0.35); background: rgba(3, 105, 161, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-rule34video { color: #c2410c; border-color: rgba(194, 65, 12, 0.35); background: rgba(194, 65, 12, 0.08); }
 [data-theme="warm-paper"] .api-key-site-badge.site-pawchive { color: #be185d; border-color: rgba(190, 24, 93, 0.35); background: rgba(190, 24, 93, 0.08); }
+[data-theme="warm-paper"] .api-key-site-badge.site-kemono { color: #2563eb; border-color: rgba(37, 99, 235, 0.35); background: rgba(37, 99, 235, 0.08); }
 
 .api-key-link {
   font-size: 11px;

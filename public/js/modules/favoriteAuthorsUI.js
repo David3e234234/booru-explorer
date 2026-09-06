@@ -92,7 +92,7 @@ async function loadAuthorPostsForCover(author, site) {
   try {
     const targetSite = site || author.site || 'danbooru';
     let authorTag = author.name;
-    if (targetSite === 'pawchive') {
+    if (targetSite === 'pawchive' || targetSite === 'kemono') {
       authorTag = (author.service && author.user)
         ? `service:${author.service} user:${author.user}`
         : `artist:${author.name}`;
