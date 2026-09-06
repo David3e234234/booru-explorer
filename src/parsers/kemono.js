@@ -207,6 +207,31 @@ export async function resolveKemonoCreators(authorQuery, preferredService = null
 
   const cleanLower = clean.toLowerCase();
   const cleanNoSpace = cleanLower.replace(/[\s_.-]+/g, '');
+  const baseClean = clean.replace(/\s*\([^)]*\)/g, '').trim();
+
+  const exactVariants = new Set([cleanLower]);
+  const noSpaceVariants = new Set([cleanNoSpace]);
+
+  // Strip parenthetical disambiguations (circle, alias, group, platform)
+  if (baseClean && baseClean !== clean) {
+    exactVariants.add(baseClean.toLowerCase());
+    noSpaceVariants.add(baseClean.toLowerCase().replace(/[\s_.-]+/g, ''));
+  }
+
+  // Strip leading 'the '
+  const withoutThe = cleanLower.replace(/^the\s+/i, '');
+  if (withoutThe !== cleanLower) {
+    exactVariants.add(withoutThe);
+    noSpaceVariants.add(withoutThe.replace(/[\s_.-]+/g, ''));
+  }
+
+  // Strip trailing/intermediate digits when name is long enough (e.g. delights2s -> delightss)
+  const withoutDigits = cleanNoSpace.replace(/\d+/g, '');
+  if (withoutDigits !== cleanNoSpace && withoutDigits.length >= 4) {
+    exactVariants.add(withoutDigits);
+    noSpaceVariants.add(withoutDigits);
+  }
+
   const targetService = (preferredService && preferredService !== 'all')
     ? String(preferredService).toLowerCase()
     : null;
@@ -217,18 +242,32 @@ export async function resolveKemonoCreators(authorQuery, preferredService = null
 
   if (candidates.length === 0) return [];
 
-  let matches = candidates.filter(c => (c.name || '').toLowerCase() === cleanLower);
+  // 1. Exact string match across variants
+  let matches = candidates.filter(c => exactVariants.has((c.name || '').toLowerCase()));
 
+  // 2. Normalized no-space match across variants
   if (matches.length === 0) {
-    matches = candidates.filter(c => (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '') === cleanNoSpace);
+    matches = candidates.filter(c => noSpaceVariants.has((c.name || '').toLowerCase().replace(/[\s_.-]+/g, '')));
   }
 
+  // 3. ID match or prefix match
   if (matches.length === 0) {
-    const idMatches = candidates.filter(c => String(c.id) === clean);
+    const idMatches = candidates.filter(c => String(c.id) === clean || String(c.id) === baseClean);
     if (idMatches.length > 0) {
       matches = idMatches;
-    } else if (cleanLower.length >= 3) {
-      matches = candidates.filter(c => (c.name || '').toLowerCase().includes(cleanLower));
+    } else {
+      for (const v of noSpaceVariants) {
+        if (v.length >= 4 && !v.startsWith('the')) {
+          const inc = candidates.filter(c => {
+            const cn = (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '');
+            return cn.length >= 3 && cn.startsWith(v);
+          });
+          if (inc.length > 0) {
+            matches = inc;
+            break;
+          }
+        }
+      }
     }
   }
 
@@ -660,6 +699,11 @@ export async function fetchKemono(params, aiTagsList, settings = {}) {
       try {
         const res = await fetchSafe(apiUrl, { timeout: 20000, headers: authHeaders, settings, site: 'kemono' });
         if (!res.ok) {
+          if (res.status === 429 && attempt === 0) {
+            await discardResponse(res);
+            await new Promise(r => setTimeout(r, 1200));
+            continue;
+          }
           await discardResponse(res);
           return null;
         }

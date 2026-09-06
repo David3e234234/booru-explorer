@@ -7,6 +7,18 @@ import { logError } from '../utils/logger.js';
 
 const router = express.Router();
 
+function getRequestSettings(req) {
+  let clientAuth = null;
+  if (req.headers['x-booru-auth']) {
+    try {
+      clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
+    } catch {
+      try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
+    }
+  }
+  return clientAuth || {};
+}
+
 // GET /api/archive/inspect?url=<zip-url> - inspect zip file structure, list all files, and scan for cloud links/passwords
 router.get('/inspect', async (req, res) => {
   const zipUrl = req.query.url;
@@ -16,13 +28,19 @@ router.get('/inspect', async (req, res) => {
   }
 
   const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
+  const settings = getRequestSettings(req);
 
   try {
-    const inspection = await inspectArchive(zipUrl, { threads });
+    const inspection = await inspectArchive(zipUrl, { threads, settings });
     res.json(inspection);
   } catch (err) {
-    logError('Archive', 'Ошибка инспекции архива', err);
-    res.json({ success: false, error: err.message || 'Не удалось проверить архив' });
+    const msg = err.message || '';
+    const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('ECONNRESET');
+    const userMsg = isNetworkErr
+      ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
+      : (err.message || 'Не удалось проверить архив');
+    logError('Archive', `Ошибка инспекции архива: ${userMsg}`);
+    res.json({ success: false, error: userMsg });
   }
 });
 
@@ -35,15 +53,21 @@ router.get('/list', async (req, res) => {
   }
 
   const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
+  const settings = getRequestSettings(req);
 
   try {
-    const manifest = await getArchiveManifest(zipUrl, { threads });
+    const manifest = await getArchiveManifest(zipUrl, { threads, settings });
     const site = req.query.site || (zipUrl.includes('kemono') ? 'kemono' : 'pawchive');
     const albumItems = buildArchiveAlbumItems(manifest, site);
     res.json({ success: true, albumItems, albumCount: albumItems.length });
   } catch (err) {
-    logError('Archive', 'Ошибка обработки архива', err);
-    res.json({ success: false, error: err.message || 'Не удалось распаковать архив' });
+    const msg = err.message || '';
+    const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('ECONNRESET');
+    const userMsg = isNetworkErr
+      ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
+      : (err.message || 'Не удалось распаковать архив');
+    logError('Archive', `Ошибка обработки архива: ${userMsg}`);
+    res.json({ success: false, error: userMsg });
   }
 });
 

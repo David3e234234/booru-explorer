@@ -8,6 +8,32 @@ import { pipeline } from 'stream/promises';
 import { ARCHIVES_DIR } from '../config/constants.js';
 import { fetchSafe, resolveSiteReferer } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
+import { getSettings } from './storageService.js';
+
+export function getArchiveCandidateUrls(url) {
+  const candidates = [url];
+  const kemonoNodes = ['https://n1.kemono.cr', 'https://n2.kemono.cr', 'https://n3.kemono.cr', 'https://n4.kemono.cr'];
+  const matched = kemonoNodes.find(n => url.startsWith(n));
+  if (matched) {
+    for (const alt of kemonoNodes) {
+      if (alt !== matched && !candidates.includes(alt)) {
+        candidates.push(url.replace(matched, alt));
+      }
+    }
+  }
+  return candidates;
+}
+
+export function resolveArchiveFetchOptions(zipUrl, options = {}) {
+  const serverSettings = getSettings();
+  const mergedSettings = options.settings ? { ...serverSettings, ...options.settings } : serverSettings;
+  const isKemono = zipUrl.includes('kemono.cr') || zipUrl.includes('kemono.su') || zipUrl.includes('kemono.party');
+  const site = isKemono ? 'kemono' : (zipUrl.includes('pawchive') ? 'pawchive' : undefined);
+  return {
+    settings: mergedSettings,
+    site
+  };
+}
 
 function isAllowedArchiveHost(hostname) {
   if (!hostname) return false;
@@ -315,7 +341,7 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
  * Downloads a remote archive in multiple concurrent byte-range segments directly to disk.
  * Safe concurrent writes are coordinated via an internal promise queue to prevent OS handle collisions.
  */
-async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer) {
+async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer, options = {}) {
   logInfo('Archive', `Многопоточное скачивание архива: ${zipUrl.split('?')[0]} (${(totalBytes / 1024 / 1024).toFixed(1)} МБ, ${threads} потоков)`);
 
   jobStatus.set(zipUrl, {
@@ -360,7 +386,8 @@ async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer)
         },
         timeout: DOWNLOAD_TIMEOUT_MS,
         streamBody: true,
-        signal: abortController.signal
+        signal: abortController.signal,
+        ...resolveArchiveFetchOptions(zipUrl, options)
       });
 
       if (segRes.status !== 206 || !segRes.body) {
@@ -416,7 +443,7 @@ async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer)
 /**
  * Standard single-stream pipeline download with progress reporting.
  */
-async function downloadSingleStream(zipUrl, destPath, referer) {
+async function downloadSingleStream(zipUrl, destPath, referer, options = {}) {
   logInfo('Archive', `Обычное скачивание архива (1 поток): ${zipUrl.split('?')[0]}`);
   const response = await fetchSafe(zipUrl, {
     timeout: DOWNLOAD_TIMEOUT_MS,
@@ -425,7 +452,8 @@ async function downloadSingleStream(zipUrl, destPath, referer) {
       'User-Agent': 'Mozilla/5.0',
       'Referer': referer,
       'Accept': '*/*'
-    }
+    },
+    ...resolveArchiveFetchOptions(zipUrl, options)
   });
 
   if (!response.ok || !response.body) {
@@ -458,6 +486,59 @@ async function downloadSingleStream(zipUrl, destPath, referer) {
  * High-performance archive downloader. Automatically probes for HTTP Range support
  * and downloads in parallel segments if enabled, falling back to single-stream.
  */
+async function downloadArchiveFromUrl(targetUrl, tmpPath, options, referer) {
+  const threads = Math.max(1, Math.min(16, parseInt(options.threads, 10) || 4));
+  const fetchOpts = resolveArchiveFetchOptions(targetUrl, options);
+
+  // 1. Probe for Range support and total bytes
+  let totalBytes = 0;
+  let supportsRange = false;
+
+  try {
+    const probeRes = await fetchSafe(targetUrl, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': referer,
+        'Range': 'bytes=0-0'
+      },
+      timeout: options.timeout || (targetUrl.includes('kemono') ? 6000 : 15000),
+      ...fetchOpts
+    });
+
+    if (probeRes.status === 206) {
+      const cr = probeRes.headers.get('content-range') || '';
+      const match = cr.match(/\/(\d+)$/);
+      if (match) {
+        totalBytes = parseInt(match[1], 10);
+        supportsRange = totalBytes > 0;
+      }
+    } else if (probeRes.ok) {
+      const cl = probeRes.headers.get('content-length');
+      if (cl) totalBytes = parseInt(cl, 10) || 0;
+    }
+  } catch (probeErr) {
+    logInfo('Archive', `Range-проба не удалась (${probeErr.message}), переключаемся на один поток`);
+  }
+
+  const minSegmentSize = 5 * 1024 * 1024;
+  let downloaded = false;
+
+  if (threads > 1 && supportsRange && totalBytes >= minSegmentSize) {
+    try {
+      await downloadSegmented(targetUrl, tmpPath, totalBytes, threads, referer, options);
+      downloaded = true;
+    } catch (segErr) {
+      logError('Archive', `Сегментированное скачивание завершилось с ошибкой (${segErr.message}), откат на 1 поток`, segErr);
+      await fs.promises.unlink(tmpPath).catch(() => {});
+    }
+  }
+
+  if (!downloaded) {
+    await downloadSingleStream(targetUrl, tmpPath, referer, options);
+  }
+}
+
 export async function downloadArchiveFile(zipUrl, finalZipPath, options = {}) {
   if (fs.existsSync(finalZipPath)) {
     return;
@@ -468,58 +549,32 @@ export async function downloadArchiveFile(zipUrl, finalZipPath, options = {}) {
     return inflight;
   }
 
+  const candidates = getArchiveCandidateUrls(zipUrl);
+  const referer = resolveSiteReferer(zipUrl) || 'https://pawchive.pw/';
+
   const job = (async () => {
     await fs.promises.mkdir(ARCHIVES_DIR, { recursive: true });
     const tmpPath = `${finalZipPath}.downloading`;
 
-    const threads = Math.max(1, Math.min(16, parseInt(options.threads, 10) || 4));
-    const referer = resolveSiteReferer(zipUrl) || 'https://pawchive.pw/';
-
-    // 1. Probe for Range support and total bytes
-    let totalBytes = 0;
-    let supportsRange = false;
-
-    try {
-      const probeRes = await fetchSafe(zipUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Referer': referer,
-          'Range': 'bytes=0-0'
-        },
-        timeout: 15000
-      });
-
-      if (probeRes.status === 206) {
-        const cr = probeRes.headers.get('content-range') || '';
-        const match = cr.match(/\/(\d+)$/);
-        if (match) {
-          totalBytes = parseInt(match[1], 10);
-          supportsRange = totalBytes > 0;
-        }
-      } else if (probeRes.ok) {
-        const cl = probeRes.headers.get('content-length');
-        if (cl) totalBytes = parseInt(cl, 10) || 0;
-      }
-    } catch (probeErr) {
-      logInfo('Archive', `Range-проба не удалась (${probeErr.message}), переключаемся на один поток`);
-    }
-
-    const minSegmentSize = 5 * 1024 * 1024;
     let downloaded = false;
+    let lastErr = null;
 
-    if (threads > 1 && supportsRange && totalBytes >= minSegmentSize) {
+    for (const candidateUrl of candidates) {
       try {
-        await downloadSegmented(zipUrl, tmpPath, totalBytes, threads, referer);
+        await downloadArchiveFromUrl(candidateUrl, tmpPath, options, referer);
         downloaded = true;
-      } catch (segErr) {
-        logError('Archive', `Сегментированное скачивание завершилось с ошибкой (${segErr.message}), откат на 1 поток`, segErr);
+        break;
+      } catch (err) {
+        lastErr = err;
         await fs.promises.unlink(tmpPath).catch(() => {});
+        if (candidates.length > 1) {
+          logInfo('Archive', `Скачивание с узла ${candidateUrl.split('/data/')[0]} не удалось, пробуем альтернативный узел`);
+        }
       }
     }
 
     if (!downloaded) {
-      await downloadSingleStream(zipUrl, tmpPath, referer);
+      throw lastErr || new Error('Не удалось скачать архив со всех доступных узлов');
     }
 
     await fs.promises.rename(tmpPath, finalZipPath).catch(() => {});
@@ -700,7 +755,7 @@ export function buildArchiveAlbumItems(manifest, targetSite = 'pawchive') {
  * Inspects a remote ZIP archive via partial HTTP Range requests without downloading
  * the entire payload (reads EOCD and Central Directory from the tail of the archive in < 500ms).
  */
-async function inspectArchiveRemote(zipUrl, key) {
+async function inspectArchiveRemoteSingle(zipUrl, key, options = {}) {
   const reqHeaders = {
     'User-Agent': 'Mozilla/5.0',
     'Referer': resolveSiteReferer(zipUrl) || 'https://pawchive.pw/',
@@ -709,9 +764,12 @@ async function inspectArchiveRemote(zipUrl, key) {
 
   jobStatus.set(zipUrl, { phase: 'inspect', percent: 10, scannedFiles: 0, totalFiles: 0, currentFile: '' });
 
+  const fetchTimeout = options.timeout || (zipUrl.includes('kemono') ? 6000 : 15000);
+
   const res = await fetchSafe(zipUrl, {
-    timeout: 15000,
-    headers: reqHeaders
+    timeout: fetchTimeout,
+    headers: reqHeaders,
+    ...resolveArchiveFetchOptions(zipUrl, options)
   });
 
   if (res.status !== 206) {
@@ -738,8 +796,9 @@ async function inspectArchiveRemote(zipUrl, key) {
   if (eocdOffset === -1 && totalFileSize > 65536) {
     const fetchSize = Math.min(totalFileSize, 262144);
     const res2 = await fetchSafe(zipUrl, {
-      timeout: 15000,
-      headers: { ...reqHeaders, 'Range': `bytes=-${fetchSize}` }
+      timeout: fetchTimeout,
+      headers: { ...reqHeaders, 'Range': `bytes=-${fetchSize}` },
+      ...resolveArchiveFetchOptions(zipUrl, options)
     });
     if (res2.status === 206) {
       buf = Buffer.from(await res2.arrayBuffer());
@@ -767,8 +826,9 @@ async function inspectArchiveRemote(zipUrl, key) {
     if (locatorPos >= 0 && buf.readUInt32LE(locatorPos) === 0x07064b50) {
       const zip64EocdOffset = Number(buf.readBigUInt64LE(locatorPos + 8));
       const resZip64 = await fetchSafe(zipUrl, {
-        timeout: 15000,
-        headers: { ...reqHeaders, 'Range': `bytes=${zip64EocdOffset}-${zip64EocdOffset + 60}` }
+        timeout: fetchTimeout,
+        headers: { ...reqHeaders, 'Range': `bytes=${zip64EocdOffset}-${zip64EocdOffset + 60}` },
+        ...resolveArchiveFetchOptions(zipUrl, options)
       });
       if (resZip64.status === 206) {
         const z64Buf = Buffer.from(await resZip64.arrayBuffer());
@@ -789,8 +849,9 @@ async function inspectArchiveRemote(zipUrl, key) {
     cdPos = cdOffset - bufferStart;
   } else {
     const resCD = await fetchSafe(zipUrl, {
-      timeout: 15000,
-      headers: { ...reqHeaders, 'Range': `bytes=${cdOffset}-${cdOffset + cdSize + 128}` }
+      timeout: fetchTimeout,
+      headers: { ...reqHeaders, 'Range': `bytes=${cdOffset}-${cdOffset + cdSize + 128}` },
+      ...resolveArchiveFetchOptions(zipUrl, options)
     });
     if (resCD.status !== 206) throw new Error('Failed to fetch ZIP Central Directory');
     cdBuffer = Buffer.from(await resCD.arrayBuffer());
@@ -897,7 +958,8 @@ async function inspectArchiveRemote(zipUrl, key) {
       const resDoc = await fetchSafe(zipUrl, {
         timeout: 25000,
         bodyTimeout: 60000,
-        headers: { ...reqHeaders, 'Range': `bytes=${doc.localHeaderOffset}-${fetchRangeEnd}` }
+        headers: { ...reqHeaders, 'Range': `bytes=${doc.localHeaderOffset}-${fetchRangeEnd}` },
+        ...resolveArchiveFetchOptions(zipUrl, options)
       });
       if (resDoc.status === 206) {
         const reader = resDoc.body.getReader();
@@ -993,6 +1055,26 @@ async function inspectArchiveRemote(zipUrl, key) {
   };
 }
 
+async function inspectArchiveRemote(zipUrl, key, options = {}) {
+  const candidates = getArchiveCandidateUrls(zipUrl);
+  let lastErr = null;
+
+  for (const candidateUrl of candidates) {
+    try {
+      return await inspectArchiveRemoteSingle(candidateUrl, key, options);
+    } catch (err) {
+      lastErr = err;
+      if (err.message?.includes('Remote range not supported') || err.message?.includes('Cannot determine file size')) {
+        throw err;
+      }
+      if (candidates.length > 1) {
+        logInfo('Archive', `Инспекция через узел ${candidateUrl.split('/data/')[0]} не удалась (${err.message}), пробуем альтернативный узел`);
+      }
+    }
+  }
+  throw lastErr || new Error('Не удалось связаться с сервером архива');
+}
+
 /**
  * Inspects a remote or cached ZIP archive:
  * - Scans file tree
@@ -1036,7 +1118,7 @@ export async function inspectArchive(zipUrl, options = {}) {
     if (!fs.existsSync(zipPath)) {
       try {
         logInfo('Archive', `Мгновенная проверка архива через Range-запрос: ${zipUrl.split('?')[0]}`);
-        const remoteResult = await inspectArchiveRemote(zipUrl, key);
+        const remoteResult = await inspectArchiveRemote(zipUrl, key, options);
         if (remoteResult && Array.isArray(remoteResult.fileTree)) {
           await fs.promises.writeFile(inspectPath, JSON.stringify(remoteResult, null, 2), 'utf8');
           jobStatus.set(zipUrl, {
@@ -1050,7 +1132,21 @@ export async function inspectArchive(zipUrl, options = {}) {
           return remoteResult;
         }
       } catch (remoteErr) {
-        logInfo('Archive', `Range-инспекция недоступна (${remoteErr.message}), переключение на полное скачивание`);
+        logInfo('Archive', `Range-инспекция недоступна (${remoteErr.message})`);
+        const errStr = (remoteErr.message || '').toLowerCase();
+        if (
+          errStr.includes('fetch failed') ||
+          errStr.includes('enotfound') ||
+          errStr.includes('econnrefused') ||
+          errStr.includes('econnreset') ||
+          errStr.includes('etimedout') ||
+          errStr.includes('abort') ||
+          errStr.includes('timeout') ||
+          errStr.includes('не удалось связаться')
+        ) {
+          throw remoteErr;
+        }
+        logInfo('Archive', 'Переключение на полное скачивание архива');
       }
 
       // Fallback: download full zip if range inspection wasn't supported
