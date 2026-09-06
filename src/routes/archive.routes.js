@@ -34,8 +34,8 @@ router.get('/inspect', async (req, res) => {
     const inspection = await inspectArchive(zipUrl, { threads, settings });
     res.json(inspection);
   } catch (err) {
-    const msg = err.message || '';
-    const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('ECONNRESET');
+    const msg = (err.message || '').toLowerCase();
+    const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('econnreset') || msg.includes('abort') || msg.includes('не удалось связаться');
     const userMsg = isNetworkErr
       ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
       : (err.message || 'Не удалось проверить архив');
@@ -61,8 +61,8 @@ router.get('/list', async (req, res) => {
     const albumItems = buildArchiveAlbumItems(manifest, site);
     res.json({ success: true, albumItems, albumCount: albumItems.length });
   } catch (err) {
-    const msg = err.message || '';
-    const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('ECONNRESET');
+    const msg = (err.message || '').toLowerCase();
+    const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('econnreset') || msg.includes('abort') || msg.includes('не удалось связаться');
     const userMsg = isNetworkErr
       ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
       : (err.message || 'Не удалось распаковать архив');
@@ -146,8 +146,10 @@ router.get('/download-file', async (req, res) => {
   if (!zipUrl) return res.status(400).send('URL не указан');
   if (!targetName) return res.status(400).send('Имя файла не указано');
 
+  const settings = getRequestSettings(req);
+
   try {
-    await downloadArchiveEntry(zipUrl, targetName, res, { threads });
+    await downloadArchiveEntry(zipUrl, targetName, res, { threads, settings });
   } catch (err) {
     logError('Archive', `Ошибка скачивания файла ${targetName} из архива`, err);
     if (!res.headersSent) {
@@ -161,6 +163,7 @@ router.get('/download-archive', async (req, res) => {
   const zipUrl = String(req.query.url || '');
   const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
   const name = String(req.query.name || '');
+  const settings = getRequestSettings(req);
 
   if (!zipUrl) return res.status(400).send('URL не указан');
   if (!isAllowedArchiveUrl(zipUrl)) {
@@ -168,7 +171,7 @@ router.get('/download-archive', async (req, res) => {
   }
 
   try {
-    await downloadFullArchive(zipUrl, res, { threads, name });
+    await downloadFullArchive(zipUrl, res, { threads, name, settings });
   } catch (err) {
     logError('Archive', `Ошибка скачивания архива ${zipUrl}`, err);
     if (!res.headersSent) {

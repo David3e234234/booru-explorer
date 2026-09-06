@@ -803,6 +803,8 @@ Object.assign(en, {
   'vw.downloading': 'Downloading',
   'vw.openedInViewer': 'Opened in player ✓',
   'vw.inspectedDone': 'Inspected ✓',
+  'vw.downloadDirectly': 'Download directly',
+  'vw.setupProxy': 'Configure proxy',
   'vw.unpackError': 'Unpack error',
   'vw.archiveDownloadProgress': 'Downloading: {p}% ({done}/{total} MB)',
   'vw.archiveEtaSec': '~{n}s left',

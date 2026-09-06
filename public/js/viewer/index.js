@@ -6,6 +6,7 @@ import { createVideoPlayer } from './videoPlayer.js';
 import { renderSidebarTags, formatRating } from './viewerSidebar.js';
 import { notifyViewerOpened, notifyViewerMoved, notifyViewerClosed } from '../router.js';
 import { downloadManager } from '../modules/downloadManager.js';
+import { openSettingsModal, switchSettingsTab } from '../modules/settingsModal.js';
 import { t } from '../i18n.js';
 
 function isVideoUrl(url) {
@@ -1826,18 +1827,50 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       unsubscribe();
       notifyArchiveJob(url, { active: false, action: 'inspect', completed: true, phase: 'inspected', summary: result });
 
-      if (!result || !result.success) {
-        const errMsg = result?.error || t('vw.inspectFailed', 'Не удалось проанализировать архив');
+      function renderInspectError(errMsg) {
+        const isKemonoBlocked = (url.includes('kemono.cr') || url.includes('kemono.su')) &&
+          (errMsg.includes('Сервер архивов недоступен') || errMsg.includes('прокси') || errMsg.includes('fetch failed'));
+
         bodyEl.innerHTML = `
-          <div class="archive-inspect-error">
-            <div class="archive-inspect-error-msg">${errMsg}</div>
-            <button type="button" class="btn-secondary btn-sm" id="btnRetryArchiveInspect">${t('vw.retry', 'Повторить попытку')}</button>
+          <div class="archive-inspect-error" style="text-align: center; padding: 20px 14px;">
+            <div class="archive-inspect-error-msg" style="margin-bottom: 16px; line-height: 1.5;">${errMsg}</div>
+            <div class="archive-inspect-error-actions" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+              <button type="button" class="btn-secondary btn-sm" id="btnRetryArchiveInspect">${t('vw.retry', 'Повторить попытку')}</button>
+              <a href="${url}" download="${cleanName}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-sm" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                ${t('vw.downloadDirectly', 'Скачать напрямую')}
+              </a>
+              ${isKemonoBlocked ? `
+                <button type="button" class="btn-secondary btn-sm" id="btnOpenProxySettings" style="display: inline-flex; align-items: center; gap: 6px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                  ${t('vw.setupProxy', 'Настроить прокси')}
+                </button>
+              ` : ''}
+            </div>
           </div>
         `;
+
         const retryBtn = bodyEl.querySelector('#btnRetryArchiveInspect');
         if (retryBtn) {
           retryBtn.addEventListener('click', () => openArchiveInspectModal(url, name));
         }
+
+        const proxyBtn = bodyEl.querySelector('#btnOpenProxySettings');
+        if (proxyBtn) {
+          proxyBtn.addEventListener('click', () => {
+            closeArchiveInspectModal();
+            openSettingsModal();
+            switchSettingsTab('proxy');
+            setTimeout(() => {
+              document.getElementById('inputKemonoProxy')?.focus();
+            }, 250);
+          });
+        }
+      }
+
+      if (!result || !result.success) {
+        const errMsg = result?.error || t('vw.inspectFailed', 'Не удалось проанализировать архив');
+        renderInspectError(errMsg);
         return;
       }
 
@@ -1869,16 +1902,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       stopArchivePolling(url);
       unsubscribe();
       notifyArchiveJob(url, { active: false, action: 'inspect', error: err.message, phase: 'inspected' });
-      bodyEl.innerHTML = `
-        <div class="archive-inspect-error">
-          <div class="archive-inspect-error-msg">${err.message || t('vw.inspectFailed', 'Не удалось проанализировать архив')}</div>
-          <button type="button" class="btn-secondary btn-sm" id="btnRetryArchiveInspect">${t('vw.retry', 'Повторить попытку')}</button>
-        </div>
-      `;
-      const retryBtn = bodyEl.querySelector('#btnRetryArchiveInspect');
-      if (retryBtn) {
-        retryBtn.addEventListener('click', () => openArchiveInspectModal(url, name));
-      }
+      renderInspectError(err.message || t('vw.inspectFailed', 'Не удалось проанализировать архив'));
     }
   }
 
