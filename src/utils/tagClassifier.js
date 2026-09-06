@@ -894,20 +894,24 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   // Sort artist array so that visual creators always come first and audio/VA contributors come last
   if (artist.length > 1) {
     artist.sort((a, b) => {
-      const aAudio = /_?\((audio|sfx|sound|voice|va|music|voice_actor)\)$/i.test(a) ? 1 : 0;
-      const bAudio = /_?\((audio|sfx|sound|voice|va|music|voice_actor)\)$/i.test(b) ? 1 : 0;
+      const aAudio = /_?\((audio|sfx|sound|voice|va|music|voice_actor|translator|typesetter|colorist|assistant)\)$/i.test(a) ? 1 : 0;
+      const bAudio = /_?\((audio|sfx|sound|voice|va|music|voice_actor|translator|typesetter|colorist|assistant)\)$/i.test(b) ? 1 : 0;
       return aAudio - bAudio;
     });
   }
 
-  // 7. Author extraction and synchronization
+  // 7. Author and assistants extraction and synchronization
   let author = '';
+  let assistants = [];
+  const ASSISTANT_ROLE_REGEX = /_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$/i;
+
   const validInitialAuthors = (initialAuthor && typeof initialAuthor === 'string')
     ? initialAuthor.split(',').map(a => a.trim()).filter(a => a && !isInvalidArtist(a))
     : [];
 
+  let candidateList = [];
   if (validInitialAuthors.length > 0) {
-    author = validInitialAuthors.join(', ');
+    candidateList = [...validInitialAuthors];
     validInitialAuthors.forEach(a => {
       const cleanA = a.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
       if (cleanA && !artist.includes(cleanA) && !artist.includes(a)) {
@@ -915,25 +919,110 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       }
     });
   } else if (artist.length > 0) {
-    const validArtists = artist
-      .map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/_?\((artist|creator|circle|studio|animator|voice_actor|voice|va)\)$/i, '').replace(/^by_/i, '').trim())
+    candidateList = artist
+      .map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/^by_/i, '').trim())
       .filter(a => a && !GENERIC_NON_ARTIST_TAGS.has(a.toLowerCase()) && !LOCATION_BY_NOUNS.has(a.toLowerCase()) && !isInvalidArtist(a));
-    if (validArtists.length > 0) {
-      author = validArtists.join(', ');
-    }
   } else if (sourceUrl) {
     const authorFromSource = extractAuthorFromSource(tags, sourceUrl, '');
     if (authorFromSource && !isInvalidArtist(authorFromSource)) {
-      author = authorFromSource;
-      const cleanA = author.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
+      candidateList = [authorFromSource];
+      const cleanA = authorFromSource.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
       if (cleanA && !artist.includes(cleanA)) {
         artist.push(cleanA);
       }
     }
   }
 
+  if (candidateList.length > 0) {
+    // Primary author is the first candidate that is not an audio/voice assistant
+    let primaryIndex = candidateList.findIndex(c => !ASSISTANT_ROLE_REGEX.test(c));
+    if (primaryIndex === -1) primaryIndex = 0;
+
+    const rawMain = candidateList[primaryIndex];
+    author = rawMain.replace(/_?\((artist|creator|circle|studio|doujin|illustrator|animator)\)$/i, '').trim();
+
+    candidateList.forEach((c, idx) => {
+      if (idx !== primaryIndex) {
+        const cleanAssistant = c.trim();
+        if (cleanAssistant && !assistants.includes(cleanAssistant)) {
+          assistants.push(cleanAssistant);
+        }
+      }
+    });
+  }
+
+  const visualArtists = [];
+  const assistantTags = [];
+  artist.forEach(a => {
+    if (ASSISTANT_ROLE_REGEX.test(a)) {
+      assistantTags.push(a);
+    } else {
+      visualArtists.push(a);
+    }
+  });
+
   return {
-    tagDetails: { artist, copyright, character, general, meta },
-    author
+    tagDetails: { artist: visualArtists, assistant: assistantTags, copyright, character, general, meta },
+    author,
+    assistants
   };
+}
+
+/**
+ * Separates an author string or artist tag array into primary author and assistants
+ * @param {string|string[]} rawAuthor 
+ * @param {string[]} artistTags 
+ * @returns {{ author: string, assistants: string[] }}
+ */
+export function separateAuthorAndAssistants(rawAuthor = '', artistTags = []) {
+  const ASSISTANT_ROLE_REGEX = /_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$/i;
+  let candidates = [];
+
+  if (Array.isArray(rawAuthor)) {
+    candidates = rawAuthor.map(s => String(s || '').trim()).filter(Boolean);
+  } else if (typeof rawAuthor === 'string' && rawAuthor.trim()) {
+    candidates = rawAuthor.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  if (candidates.length === 0 && Array.isArray(artistTags) && artistTags.length > 0) {
+    candidates = [...artistTags];
+  }
+
+  if (candidates.length === 0) {
+    return { author: '', assistants: [] };
+  }
+
+  let primaryIndex = candidates.findIndex(c => !ASSISTANT_ROLE_REGEX.test(c));
+  if (primaryIndex === -1) primaryIndex = 0;
+
+  const mainAuthor = candidates[primaryIndex]
+    .replace(/^(artist|creator|author|draw|channel|uploader):/i, '')
+    .replace(/^by_/i, '')
+    .replace(/^@/, '')
+    .replace(/^pixiv:/i, '')
+    .replace(/_?\((artist|creator|circle|studio|doujin|illustrator|animator)\)$/i, '')
+    .replace(/_\(([^)]+)\)$/, ' ($1)')
+    .trim();
+
+  const assistants = [];
+  const fromTagList = !rawAuthor || (Array.isArray(rawAuthor) && rawAuthor.length === 0);
+  candidates.forEach((c, idx) => {
+    if (idx !== primaryIndex) {
+      if (fromTagList && !ASSISTANT_ROLE_REGEX.test(c)) {
+        return;
+      }
+      const clean = c
+        .replace(/^(artist|creator|author|draw|channel|uploader):/i, '')
+        .replace(/^by_/i, '')
+        .replace(/^@/, '')
+        .replace(/^pixiv:/i, '')
+        .replace(/_\(([^)]+)\)$/, ' ($1)')
+        .trim();
+      if (clean && !assistants.includes(clean)) {
+        assistants.push(clean);
+      }
+    }
+  });
+
+  return { author: mainAuthor, assistants };
 }

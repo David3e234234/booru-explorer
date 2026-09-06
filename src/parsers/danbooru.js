@@ -10,6 +10,7 @@ import {
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { checkIsAi, checkMediaTypes, isPostMatchingFilters } from '../utils/tagHelpers.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
+import { separateAuthorAndAssistants } from '../utils/tagClassifier.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 export async function fetchDanbooru(params, aiTagsList, settings) {
@@ -356,7 +357,11 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     const thumbOriginal = (!isVideo && (findImgVariant(['original'])?.url || item.file_url || fileUrl)) || '';
     const previewUrl = resolvePreviewUrl(thumb180 || item.preview_file_url, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList) || (item.tag_string_meta && item.tag_string_meta.includes('ai_generated'));
-    const author = (item.tag_string_artist || '').split(' ').filter(Boolean).join(', ');
+    const artistTags = (item.tag_string_artist || '').split(' ').filter(Boolean);
+    const { author, assistants } = separateAuthorAndAssistants('', artistTags);
+    const ASSISTANT_ROLE_REGEX = /_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$/i;
+    const visualArtistTags = artistTags.filter(t => !ASSISTANT_ROLE_REGEX.test(t));
+    const assistantArtistTags = artistTags.filter(t => ASSISTANT_ROLE_REGEX.test(t));
 
     const duration = item.media_asset?.duration || any_video?.duration || 0;
     let durationText = '';
@@ -397,9 +402,11 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       duration,
       durationText,
       author,
+      assistants: assistants || [],
       tags: rawTags,
       tagDetails: {
-        artist: (item.tag_string_artist || '').split(' ').filter(Boolean),
+        artist: visualArtistTags,
+        assistant: assistantArtistTags,
         character: (item.tag_string_character || '').split(' ').filter(Boolean),
         copyright: (item.tag_string_copyright || '').split(' ').filter(Boolean),
         general: (item.tag_string_general || '').split(' ').filter(Boolean),

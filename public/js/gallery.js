@@ -622,8 +622,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         post.author = data.author;
         if (card._post) card._post.author = data.author;
 
-        const bottomGroup = card.querySelector('.badge-group-bottom');
-        if (!bottomGroup) return;
+        if (Array.isArray(data.assistants)) {
+          post.assistants = data.assistants;
+          if (card._post) card._post.assistants = data.assistants;
+        }
 
         const parts = data.author.split(',').map(s => s.trim()).filter(Boolean);
         const mainAuthor = parts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || parts[0] || '';
@@ -631,15 +633,22 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         cleanA = cleanA.replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').replace(/\([^)]*\)$/, '').trim();
 
         if (cleanA && cleanA.length >= 2 && !INVALID_AUTHOR_NAMES.has(cleanA.toLowerCase())) {
-          let badge = bottomGroup.querySelector('.badge-format.author');
-          if (!badge) {
-            badge = document.createElement('span');
-            badge.className = 'badge-format author';
-            bottomGroup.appendChild(badge);
+          const rowTop = card.querySelector('.card-overlay-row-top');
+          if (rowTop) {
+            let authorChip = rowTop.querySelector('.card-author-chip');
+            if (!authorChip) {
+              authorChip = document.createElement('div');
+              authorChip.className = 'card-author-chip';
+              const spacer = rowTop.querySelector('.card-author-spacer');
+              if (spacer) spacer.remove();
+              rowTop.prepend(authorChip);
+            }
+            authorChip.setAttribute('data-author', cleanA);
+            authorChip.setAttribute('title', t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanA));
+            const asstCount = Array.isArray(post.assistants) ? post.assistants.length : 0;
+            const asstBadge = asstCount > 0 ? `<span class="card-author-assistants-badge">+${asstCount}</span>` : '';
+            authorChip.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-user"/></svg><span class="card-author-name">${cleanA}</span>${asstBadge}`;
           }
-          badge.setAttribute('data-author', cleanA);
-          badge.setAttribute('title', t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanA));
-          badge.textContent = cleanA;
         }
 
         if (data.duration && (!post.duration || post.duration === 20)) {
@@ -773,14 +782,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       formatBadge = `<span class="badge-format" style="background-color: rgba(249, 115, 22, 0.85);" title="${zipBadgeTitle}">ZIP</span>`;
     } else if (post.isGif) {
       formatBadge = `<span class="badge-format gif">GIF</span>`;
-    } else if (post.width && post.height) {
-      if (post.width >= 3800 || post.height >= 3800) {
-        formatBadge = `<span class="badge-format" style="background-color: rgba(59, 130, 246, 0.85);">4K UHD</span>`;
-      } else if (post.width >= 2000 || post.height >= 2000) {
-        formatBadge = `<span class="badge-format" style="background-color: rgba(99, 102, 241, 0.75);">2K QHD</span>`;
-      } else if (post.width >= 1200 || post.height >= 1200) {
-        formatBadge = `<span class="badge-format" style="background-color: rgba(71, 85, 105, 0.75);">HD</span>`;
-      }
     }
 
     const aiBadge = post.isAi ? `<span class="badge-ai" title="${t('gal.badgeAi.title', 'Работа создана с помощью ИИ')}">${t('gal.badgeAi', 'ИИ')}</span>` : '';
@@ -791,7 +792,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       ratingBadge = `<span class="badge-format" style="background-color: rgba(244,63,94,0.85);">18+</span>`;
     }
 
-    // Strip junk suffixes from the author and prioritize primary visual animator
+    // Strip junk suffixes from the author and prioritize primary visual creator
     const authorParts = (post.author || '').split(',').map(s => s.trim()).filter(Boolean);
     const mainAuthorCandidate = authorParts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || authorParts[0] || '';
     const rawAuthor = mainAuthorCandidate || (post.tagDetails?.artist && post.tagDetails.artist.find(a => !/_?\((audio|sfx|sound|voice|va|music)\)$/i.test(a))) || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
@@ -800,26 +801,21 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (cleanAuthor && (INVALID_AUTHOR_NAMES.has(cleanAuthor.toLowerCase()) || cleanAuthor.length < 2)) {
       cleanAuthor = '';
     }
-    const authorBadge = cleanAuthor ? `<span class="badge-format author" data-author="${cleanAuthor}" title="${t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor)}">${cleanAuthor}</span>` : '';
+
+    const assistantsCount = Array.isArray(post.assistants) ? post.assistants.length : 0;
+    const assistantsTitle = assistantsCount > 0 ? (t('viewer.labelAssistants', 'Помощники:') + ' ' + post.assistants.join(', ')) : '';
+    const assistantsBadge = assistantsCount > 0
+      ? `<span class="card-author-assistants-badge" title="${assistantsTitle}">+${assistantsCount}</span>`
+      : '';
+
+    const authorChip = cleanAuthor
+      ? `<div class="card-author-chip" data-author="${cleanAuthor}" title="${t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor)}"><svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-user"/></svg><span class="card-author-name">${cleanAuthor}</span>${assistantsBadge}</div>`
+      : `<div class="card-author-spacer"></div>`;
 
     let durationBadge = '';
     if (post.isVideo && (post.durationText || post.duration > 0)) {
       const durLabel = post.durationText || `${Math.floor(post.duration / 60)}:${Math.floor(post.duration % 60) < 10 ? '0' : ''}${Math.floor(post.duration % 60)}`;
       durationBadge = `<span class="badge-format badge-duration" title="${t('gal.durationBadge.title', 'Длительность: {d}').replace('{d}', durLabel)}">${durLabel}</span>`;
-    }
-
-    let dateBadge = '';
-    if (post.createdAt) {
-      try {
-        const d = new Date(post.createdAt);
-        if (!isNaN(d.getTime())) {
-          const day = String(d.getDate()).padStart(2, '0');
-          const month = String(d.getMonth() + 1).padStart(2, '0');
-          const year = String(d.getFullYear()).slice(-2);
-          const shortDate = `${day}.${month}.${year}`;
-          dateBadge = `<span class="badge-format badge-date" title="${t('gal.dateBadge.title', 'Дата: {d}').replace('{d}', d.toLocaleString(document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU'))}">${shortDate}</span>`;
-        }
-      } catch (e) {}
     }
 
     let matchBadge = '';
@@ -861,7 +857,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     card.innerHTML = `
       <div class="media-thumb-container">
         <div class="badge-group-top">
-          <div style="display: flex; gap: 3px; align-items: center; flex-wrap: wrap; max-width: 65%;">
+          <div style="display: flex; gap: 3px; align-items: center; flex-wrap: wrap; max-width: 68%;">
             ${siteBadge}
             ${albumBadge}
             ${formatBadge}
@@ -869,7 +865,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             ${matchBadge}
           </div>
           <div style="display: flex; gap: 3px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
-            ${dateBadge}
             ${ratingBadge}
             ${aiBadge}
           </div>
@@ -885,41 +880,42 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         
         ${post.isVideo ? `<video class="hover-video-preview" loop muted playsinline preload="none" referrerpolicy="no-referrer"></video>` : ''}
 
-        <div class="badge-group-bottom">
-          ${authorBadge}
-        </div>
-
         <div class="card-overlay-bottom">
-          <div class="card-meta-indicators">
+          <div class="card-overlay-row-top">
+            ${authorChip}
             <div class="card-score" title="${t('gal.scoreBadge.title', 'Оценка / Рейтинг: {n}').replace('{n}', post.score || 0)}">
               <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-star-filled"/></svg>
               <span>${post.score || 0}</span>
             </div>
-            ${(post.views > 0 || post.viewsText) ? `
-              <div class="card-views" title="${t('gal.viewsBadge.title', 'Просмотры: {n}').replace('{n}', post.viewsText || post.views)}">
-                <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-eye"/></svg>
-                <span>${post.viewsText || formatCompactNumber(post.views)}</span>
-              </div>
-            ` : (post.favCount > 0 ? `
-              <div class="card-views card-favs" title="${t('gal.favsBadge.title', 'В закладках: {n}').replace('{n}', post.favCount)}">
-                <svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-bookmark-filled"/></svg>
-                <span>${formatCompactNumber(post.favCount)}</span>
-              </div>
-            ` : '')}
           </div>
-          <div class="card-action-btns">
-            <button class="btn-card-action btn-card-similar" data-post-id="${post.id}" title="${t('gal.findSimilar.title', 'Найти визуально похожие арты с помощью нейросети')}">
-              <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
-            </button>
-            <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="${t('viewer.dislike.title', 'Не интересно (скрыть и меньше рекомендовать)')}">
-              <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-dislike"/></svg>
-            </button>
-            <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? t('gal.unlike.title', 'Убрать лайк') : t('gal.like.title', 'Нравится')}">
-              <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isLiked ? '#ic-heart-filled' : '#ic-heart'}"/></svg>
-            </button>
-            <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? t('gal.unfav.title', 'Удалить из закладок') : t('gal.fav.title', 'Сохранить в закладки')}">
-              <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isFav ? '#ic-bookmark-filled' : '#ic-bookmark'}"/></svg>
-            </button>
+          <div class="card-overlay-row-bottom">
+            <div class="card-meta-indicators">
+              ${(post.views > 0 || post.viewsText) ? `
+                <div class="card-views" title="${t('gal.viewsBadge.title', 'Просмотры: {n}').replace('{n}', post.viewsText || post.views)}">
+                  <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-eye"/></svg>
+                  <span>${post.viewsText || formatCompactNumber(post.views)}</span>
+                </div>
+              ` : (post.favCount > 0 ? `
+                <div class="card-views card-favs" title="${t('gal.favsBadge.title', 'В закладках: {n}').replace('{n}', post.favCount)}">
+                  <svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-bookmark-filled"/></svg>
+                  <span>${formatCompactNumber(post.favCount)}</span>
+                </div>
+              ` : '')}
+            </div>
+            <div class="card-action-btns">
+              <button class="btn-card-action btn-card-similar" data-post-id="${post.id}" title="${t('gal.findSimilar.title', 'Найти визуально похожие арты с помощью нейросети')}">
+                <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
+              </button>
+              <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="${t('viewer.dislike.title', 'Не интересно (скрыть и меньше рекомендовать)')}">
+                <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-dislike"/></svg>
+              </button>
+              <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? t('gal.unlike.title', 'Убрать лайк') : t('gal.like.title', 'Нравится')}">
+                <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isLiked ? '#ic-heart-filled' : '#ic-heart'}"/></svg>
+              </button>
+              <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? t('gal.unfav.title', 'Удалить из закладок') : t('gal.fav.title', 'Сохранить в закладки')}">
+                <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isFav ? '#ic-bookmark-filled' : '#ic-bookmark'}"/></svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1072,10 +1068,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
       return;
     }
-    const authorBadgeEl = e.target.closest('.badge-format.author');
+    const authorBadgeEl = e.target.closest('.card-author-chip, .badge-format.author');
     if (authorBadgeEl) {
       e.stopPropagation();
-      const rawA = post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
+      const rawA = authorBadgeEl.getAttribute('data-author') || post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
       let cleanTag = rawA.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/\s+/g, '_');
       if (cleanTag && onTagSelect) {
         onTagSelect(cleanTag);

@@ -17,7 +17,7 @@ import { fetchPosts } from '../parsers/index.js';
 import { getCreatorsDirectory, fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
 import { fetchRule34PostById } from '../parsers/rule34.js';
 import { fetchXbooruPostById } from '../parsers/dapi.js';
-import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
+import { groupPostsIntoAlbums, sortAlbumItems } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse, isSafeExternalUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
@@ -624,28 +624,8 @@ router.get('/posts/album', async (req, res) => {
       } catch {}
     }
 
-    // Sort the set pages
-    items.sort((a, b) => {
-      const aIsParent = Boolean(a.hasChildren && !a.parentId);
-      const bIsParent = Boolean(b.hasChildren && !b.parentId);
-      if (aIsParent && !bIsParent) return -1;
-      if (!aIsParent && bIsParent) return 1;
-
-      const getPageNum = (item) => {
-        const target = item.fileUrl || item.sampleUrl || item.previewUrl || item.source || '';
-        const pMatch = target.match(/_p(\d+)\./i) || target.match(/page_?(\d+)/i);
-        if (pMatch) return parseInt(pMatch[1], 10);
-        return null;
-      };
-
-      const pageA = getPageNum(a);
-      const pageB = getPageNum(b);
-      if (pageA !== null && pageB !== null) return pageA - pageB;
-
-      const idA = parseInt(String(a.originalId || a.id).replace(/\D/g, ''), 10) || 0;
-      const idB = parseInt(String(b.originalId || b.id).replace(/\D/g, ''), 10) || 0;
-      return idA - idB;
-    });
+    // Sort the set pages using canonical page numbers
+    items = sortAlbumItems(items);
 
     logInfo('AlbumSearch', `Успешно найдено ${items.length} частей серии для site=${site}`);
 

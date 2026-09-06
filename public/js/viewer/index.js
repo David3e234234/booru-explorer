@@ -44,6 +44,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const viewerFavAuthorBtn = document.getElementById('viewerFavAuthorBtn');
   const infoAuthorRow = document.getElementById('infoAuthorRow');
   const infoAuthor = document.getElementById('infoAuthor');
+  const infoAssistantsRow = document.getElementById('infoAssistantsRow');
+  const infoAssistantsList = document.getElementById('infoAssistantsList');
   const btnFavAuthorSidebar = document.getElementById('btnFavAuthorSidebar');
   const btnFavAuthorSidebarText = document.getElementById('btnFavAuthorSidebarText');
   const btnSetAuthorCoverSidebar = document.getElementById('btnSetAuthorCoverSidebar');
@@ -720,7 +722,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     function notifyArchiveJob(url, state) {
       if (!url) return;
       const prev = activeArchiveJobs.get(url) || {};
-      const next = { ...prev, ...state };
+      const action = state.action || prev.action || 'view';
+      const next = { ...prev, ...state, action };
       if (state.active === false && !state.completed && !state.error) {
         activeArchiveJobs.delete(url);
       } else {
@@ -831,14 +834,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             <div class="btn-archive-progress-fill" style="width: 0%;"></div>
             <span class="btn-archive-pill-content">
               <svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              <span class="btn-archive-pill-text">${t('viewer.viewArchive', 'Просмотреть')}</span>
+              <span class="btn-archive-pill-text">${t('viewer.viewArchive', 'Просмотр')}</span>
             </span>
           </button>
-          <button type="button" class="btn-archive-pill btn-archive-pill-inspect" title="${t('viewer.inspectArchiveTitle', 'Проверить архив на ссылки и файлы')}">
+          <button type="button" class="btn-archive-pill btn-archive-pill-inspect" title="${t('viewer.inspectArchiveTitle', 'Проверить содержимое архива (файлы, ссылки, пароли)')}">
             <div class="btn-archive-progress-fill" style="width: 0%;"></div>
             <span class="btn-archive-pill-content">
               <svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span class="btn-archive-pill-text">${t('viewer.inspectArchive', 'Проверить')}</span>
+              <span class="btn-archive-pill-text">${t('viewer.inspectArchive', 'Проверить архив')}</span>
             </span>
           </button>
         </div>
@@ -852,6 +855,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             <span class="sidebar-archive-live-pct">0%</span>
           </div>
         </div>
+
+        <div class="sidebar-archive-summary" style="display: none;"></div>
       `;
 
       const btnDownload = card.querySelector('.btn-archive-pill-download');
@@ -862,6 +867,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const liveBarFill = card.querySelector('.sidebar-archive-live-bar-fill');
       const livePhase = card.querySelector('.sidebar-archive-live-phase');
       const livePct = card.querySelector('.sidebar-archive-live-pct');
+      const summaryEl = card.querySelector('.sidebar-archive-summary');
 
       const dlFill = btnDownload.querySelector('.btn-archive-progress-fill');
       const dlText = btnDownload.querySelector('.btn-archive-pill-text');
@@ -879,6 +885,68 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       let isServerUnpacking = false;
       let resetTimer = null;
 
+      const renderSummary = (data) => {
+        if (!summaryEl || !data) return;
+        const totalFiles = data.totalFiles || (data.fileTree ? data.fileTree.length : 0);
+        const links = data.scannedLinks || [];
+        const fileTree = data.fileTree || [];
+        const videos = fileTree.filter(f => /\.(mp4|webm|mov|mkv|avi|flv)$/i.test(f.name || ''));
+        const images = fileTree.filter(f => /\.(jpe?g|png|gif|webp|avif)$/i.test(f.name || ''));
+        const sizeMb = (data.archiveSize || data.totalBytes)
+          ? (Number(data.archiveSize || data.totalBytes) / (1024 * 1024)).toFixed(1) + ' MB'
+          : '';
+
+        let descText = '';
+        let iconHtml = '📁';
+        if (links.length > 0) {
+          iconHtml = '🔗';
+          const services = [...new Set(links.map(l => l.service || l.name || 'Облако'))].slice(0, 2).join(', ');
+          descText = `${t('vw.linksFoundSummary', 'Найдено ссылок')}: ${links.length} (${services})`;
+          summaryEl.className = 'sidebar-archive-summary has-links';
+        } else if (videos.length > 0 && images.length === 0) {
+          descText = `${t('vw.inArchive', 'В архиве')}: ${videos.length} ${t('vw.videosShort', 'видео')}${sizeMb ? ` (${sizeMb})` : ''}. ${t('vw.noExternalLinks', 'Внешних ссылок нет.')}`;
+          summaryEl.className = 'sidebar-archive-summary';
+        } else if (images.length > 0 && videos.length === 0) {
+          descText = `${t('vw.inArchive', 'В архиве')}: ${images.length} ${t('vw.imagesShort', 'изображений')}${sizeMb ? ` (${sizeMb})` : ''}. ${t('vw.noExternalLinks', 'Внешних ссылок нет.')}`;
+          summaryEl.className = 'sidebar-archive-summary';
+        } else if (totalFiles > 0) {
+          descText = `${t('vw.inArchive', 'В архиве')}: ${totalFiles} ${t('vw.filesCountShort', 'файлов')}${sizeMb ? ` (${sizeMb})` : ''}. ${t('vw.noExternalLinks', 'Внешних ссылок нет.')}`;
+          summaryEl.className = 'sidebar-archive-summary';
+        } else {
+          descText = t('vw.archiveEmptySummary', 'В архиве нет файлов или ссылок.');
+          summaryEl.className = 'sidebar-archive-summary';
+        }
+
+        const canOpen = Boolean(data.hasMedia || videos.length > 0 || images.length > 0);
+
+        summaryEl.innerHTML = `
+          <div class="sidebar-archive-summary-header">
+            <span class="sidebar-archive-summary-icon">${iconHtml}</span>
+            <span class="sidebar-archive-summary-text">${descText}</span>
+          </div>
+          <div class="sidebar-archive-summary-actions">
+            ${canOpen ? `<button type="button" class="btn-archive-summary-action btn-summary-open">${t('viewer.viewArchive', 'Просмотр')}</button>` : ''}
+            <button type="button" class="btn-archive-summary-action btn-summary-details">${t('vw.details', 'Детали')}</button>
+          </div>
+        `;
+        summaryEl.style.display = 'flex';
+
+        const openBtn = summaryEl.querySelector('.btn-summary-open');
+        if (openBtn) {
+          openBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            unpackAndViewArchive(url, cleanName);
+          });
+        }
+        const detailsBtn = summaryEl.querySelector('.btn-summary-details');
+        if (detailsBtn) {
+          detailsBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openArchiveInspectModal(url, cleanName);
+          });
+        }
+      };
+
       const resetToDefault = () => {
         btnDownload.className = 'btn-archive-pill btn-archive-pill-download';
         btnView.className = 'btn-archive-pill btn-archive-pill-view';
@@ -889,8 +957,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (inspFill) inspFill.style.width = '0%';
 
         if (dlText) dlText.textContent = t('viewer.downloadArchive', 'Скачать');
-        if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотреть');
-        if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить');
+        if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотр');
+        if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить архив');
 
         if (dlIcon) dlIcon.outerHTML = `<svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
         if (viewIcon) viewIcon.outerHTML = `<svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
@@ -984,6 +1052,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (!state) return;
         clearTimeout(resetTimer);
 
+        if (state.summary) {
+          renderSummary(state.summary);
+        }
+
         if (state.active) {
           if (liveStatus) {
             liveStatus.style.display = 'flex';
@@ -995,21 +1067,54 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           if (livePct) livePct.textContent = `${pct}%`;
 
           if (state.phase === 'download') {
-            btnView.classList.remove('is-completed', 'is-error', 'is-extracting');
-            btnView.classList.add('is-downloading');
-            const vIcon = btnView.querySelector('.btn-archive-icon');
-            if (vIcon && !vIcon.classList.contains('btn-archive-spinner')) {
-              vIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
+            const isInspectDownload = state.action === 'inspect';
+            if (isInspectDownload) {
+              btnInspect.classList.remove('is-completed', 'is-error');
+              btnInspect.classList.add('is-inspecting');
+              const iIcon = btnInspect.querySelector('.btn-archive-icon');
+              if (iIcon && !iIcon.classList.contains('btn-archive-spinner')) {
+                iIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
+              }
+              if (inspFill) inspFill.style.width = `${pct}%`;
+              if (inspText) inspText.textContent = `${pct}%`;
+
+              // Keep btnView clean in its idle state
+              btnView.classList.remove('is-downloading', 'is-extracting', 'is-completed', 'is-error');
+              if (viewFill) viewFill.style.width = '0%';
+              if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотр');
+              const vIcon = btnView.querySelector('.btn-archive-icon');
+              if (vIcon && vIcon.classList.contains('btn-archive-spinner')) {
+                vIcon.outerHTML = ARCHIVE_PLAY_ICON_SVG;
+              }
+            } else {
+              btnView.classList.remove('is-completed', 'is-error', 'is-extracting');
+              btnView.classList.add('is-downloading');
+              const vIcon = btnView.querySelector('.btn-archive-icon');
+              if (vIcon && !vIcon.classList.contains('btn-archive-spinner')) {
+                vIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
+              }
+              if (viewFill) viewFill.style.width = `${pct}%`;
+              if (viewText) viewText.textContent = `${pct}%`;
+
+              // Keep btnInspect clean
+              btnInspect.classList.remove('is-inspecting');
+              if (inspFill) inspFill.style.width = '0%';
+              if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить архив');
+              const iIcon = btnInspect.querySelector('.btn-archive-icon');
+              if (iIcon && iIcon.classList.contains('btn-archive-spinner')) {
+                iIcon.outerHTML = ARCHIVE_SEARCH_ICON_SVG;
+              }
             }
-            if (viewFill) viewFill.style.width = `${pct}%`;
-            if (viewText) viewText.textContent = `${pct}%`;
 
             const recMb = (state.received / (1024 * 1024)).toFixed(1);
             const totMb = state.total > 0 ? (state.total / (1024 * 1024)).toFixed(1) + ' MB' : '';
             if (livePhase) {
+              const label = isInspectDownload
+                ? t('vw.archiveDownloadingInspect', 'Скачивание для проверки')
+                : t('vw.archiveDownloading', 'Загрузка на сервер');
               livePhase.textContent = totMb
-                ? `${t('vw.archiveDownloading', 'Загрузка на сервер')}: ${recMb} / ${totMb} (${pct}%)`
-                : `${t('vw.archiveDownloading', 'Загрузка на сервер')}: ${recMb} MB`;
+                ? `${label}: ${recMb} / ${totMb} (${pct}%)`
+                : `${label}: ${recMb} MB`;
             }
           } else if (state.phase === 'extract') {
             btnView.classList.remove('is-completed', 'is-error', 'is-downloading');
@@ -1020,6 +1125,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             }
             if (viewFill) viewFill.style.width = `${pct}%`;
             if (viewText) viewText.textContent = `${pct}%`;
+
+            btnInspect.classList.remove('is-inspecting');
+            if (inspFill) inspFill.style.width = '0%';
+            if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить архив');
+            const iIcon = btnInspect.querySelector('.btn-archive-icon');
+            if (iIcon && iIcon.classList.contains('btn-archive-spinner')) {
+              iIcon.outerHTML = ARCHIVE_SEARCH_ICON_SVG;
+            }
 
             if (livePhase) {
               if (state.totalFiles > 0) {
@@ -1039,11 +1152,21 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             if (inspFill) inspFill.style.width = `${pct}%`;
             if (inspText) inspText.textContent = `${pct}%`;
 
+            // Keep btnView clean
+            btnView.classList.remove('is-downloading', 'is-extracting', 'is-completed', 'is-error');
+            if (viewFill) viewFill.style.width = '0%';
+            if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотр');
+            const vIcon = btnView.querySelector('.btn-archive-icon');
+            if (vIcon && vIcon.classList.contains('btn-archive-spinner')) {
+              vIcon.outerHTML = ARCHIVE_PLAY_ICON_SVG;
+            }
+
             if (livePhase) {
+              const fileHint = state.currentFile ? ` · ${state.currentFile}` : '';
               if (state.totalFiles > 0) {
-                livePhase.textContent = `${t('vw.inspectScanning', 'Анализ')}: ${state.scannedFiles || 0} / ${state.totalFiles} файлов (${pct}%)`;
+                livePhase.textContent = `${t('vw.inspectScanning', 'Анализ')}: ${state.scannedFiles || 0} / ${state.totalFiles} файлов (${pct}%)${fileHint}`;
               } else {
-                livePhase.textContent = t('vw.archiveAnalyzing', 'Анализ архива: поиск ссылок и файлов...');
+                livePhase.textContent = `${t('vw.archiveAnalyzing', 'Анализ архива: поиск ссылок и файлов...')}${fileHint}`;
               }
             }
           }
@@ -1055,6 +1178,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             if (viewText) viewText.textContent = t('vw.openedInViewer', 'Открыто ✓');
             const vIcon = btnView.querySelector('.btn-archive-icon');
             if (vIcon) vIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
+
+            btnInspect.classList.remove('is-inspecting');
+            if (inspFill) inspFill.style.width = '0%';
+            if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить архив');
+            const iIcon = btnInspect.querySelector('.btn-archive-icon');
+            if (iIcon && iIcon.classList.contains('btn-archive-spinner')) {
+              iIcon.outerHTML = ARCHIVE_SEARCH_ICON_SVG;
+            }
 
             if (liveStatus) {
               liveStatus.style.display = 'flex';
@@ -1071,6 +1202,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             if (inspText) inspText.textContent = t('vw.inspectedDone', 'Проверено ✓');
             const iIcon = btnInspect.querySelector('.btn-archive-icon');
             if (iIcon) iIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
+
+            // Reset btnView to ensure no leftover spinner or download classes
+            btnView.classList.remove('is-downloading', 'is-extracting', 'is-completed', 'is-error');
+            if (viewFill) viewFill.style.width = '0%';
+            if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотр');
+            const vIcon = btnView.querySelector('.btn-archive-icon');
+            if (vIcon && vIcon.classList.contains('btn-archive-spinner')) {
+              vIcon.outerHTML = ARCHIVE_PLAY_ICON_SVG;
+            }
 
             if (liveStatus) {
               liveStatus.style.display = 'flex';
@@ -1569,14 +1709,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const modal = document.getElementById('archiveInspectModal');
     if (modal) modal.style.display = 'none';
 
-    notifyArchiveJob(url, { active: true, phase: 'download', percent: 0, received: 0, total: 0 });
+    notifyArchiveJob(url, { active: true, action: 'view', phase: 'download', percent: 0, received: 0, total: 0 });
     startArchivePolling(url);
 
     try {
       const res = await fetchArchiveList(url);
       stopArchivePolling(url);
       if (res && res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
-        notifyArchiveJob(url, { active: false, completed: true, phase: 'unpack', percent: 100 });
+        notifyArchiveJob(url, { active: false, action: 'view', completed: true, phase: 'unpack', percent: 100 });
         currentPost.albumItems = res.albumItems;
         currentPost.albumCount = res.albumItems.length;
         currentPost.isAlbum = true;
@@ -1589,12 +1729,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         renderSidebar(currentPost);
         showToast(t('vw.archiveOpenedInViewer', 'Архив распакован: открыто {n} файлов').replace('{n}', String(res.albumItems.length)));
       } else {
-        notifyArchiveJob(url, { active: false, error: res?.error || 'No media', phase: 'unpack' });
+        notifyArchiveJob(url, { active: false, action: 'view', error: res?.error || 'No media', phase: 'unpack' });
         showToast(res?.error || t('vw.archiveNoMedia', 'В архиве не найдено поддерживаемых медиафайлов'), 3500);
       }
     } catch (err) {
       stopArchivePolling(url);
-      notifyArchiveJob(url, { active: false, error: err.message, phase: 'unpack' });
+      notifyArchiveJob(url, { active: false, action: 'view', error: err.message, phase: 'unpack' });
       showToast(err.message || t('vw.archiveUnpackFailed', 'Ошибка при распаковке архива'), 3500);
     }
   }
@@ -1636,7 +1776,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       </div>
     `;
 
-    notifyArchiveJob(url, { active: true, phase: 'inspect', percent: 5 });
+    notifyArchiveJob(url, { active: true, action: 'inspect', phase: 'inspect', percent: 5 });
     startArchivePolling(url);
 
     const unsubscribe = subscribeArchiveJob(url, (status) => {
@@ -1683,7 +1823,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const result = await fetchArchiveInspect(url);
       stopArchivePolling(url);
       unsubscribe();
-      notifyArchiveJob(url, { active: false, completed: true, phase: 'inspected' });
+      notifyArchiveJob(url, { active: false, action: 'inspect', completed: true, phase: 'inspected', summary: result });
 
       if (!result || !result.success) {
         const errMsg = result?.error || t('vw.inspectFailed', 'Не удалось проанализировать архив');
@@ -1702,6 +1842,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
       renderInspectResults(result, cleanName, bodyEl, url);
 
+      // Feedback toast with clear details
+      const totalFiles = result.totalFiles || (result.fileTree ? result.fileTree.length : 0);
+      const mediaCount = (result.fileTree || []).filter(f => f.isMedia).length;
+      if (Array.isArray(result.scannedLinks) && result.scannedLinks.length > 0) {
+        showToast(`${t('vw.inspectFoundLinksToast', 'В архиве найдено ссылок')}: ${result.scannedLinks.length}`);
+      } else if (mediaCount > 0) {
+        showToast(`${t('vw.inArchive', 'В архиве')}: ${mediaCount} ${t('vw.mediaFilesCount', 'медиафайлов')}, ${t('vw.noExternalLinks', 'внешних ссылок нет')}`);
+      } else {
+        showToast(`${t('vw.inspectDoneToast', 'Архив проверен')}: ${totalFiles} ${t('vw.filesCountShort', 'файлов')}, ${t('vw.noExternalLinks', 'внешних ссылок нет')}`);
+      }
+
       // If cloud links were found in the archive, update post & sidebar
       if (Array.isArray(result.scannedLinks) && result.scannedLinks.length > 0 && currentPost) {
         if (!currentPost.inspectedLinks) currentPost.inspectedLinks = [];
@@ -1716,7 +1867,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     } catch (err) {
       stopArchivePolling(url);
       unsubscribe();
-      notifyArchiveJob(url, { active: false, error: err.message, phase: 'inspected' });
+      notifyArchiveJob(url, { active: false, action: 'inspect', error: err.message, phase: 'inspected' });
       bodyEl.innerHTML = `
         <div class="archive-inspect-error">
           <div class="archive-inspect-error-msg">${err.message || t('vw.inspectFailed', 'Не удалось проанализировать архив')}</div>
@@ -1886,6 +2037,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         const row = document.createElement('div');
         row.className = 'archive-inspect-file-row';
         const sizeStr = f.size > 0 ? formatBytes(f.size) : '';
+        const downloadUrl = effectiveUrl
+          ? `/api/archive/download-file?url=${encodeURIComponent(effectiveUrl)}&name=${encodeURIComponent(f.path || f.name)}`
+          : '';
 
         row.innerHTML = `
           <div class="archive-inspect-file-info">
@@ -1893,8 +2047,26 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             <span class="archive-inspect-file-name" title="${f.path || f.name}">${f.name}</span>
             ${f.hasLinks ? `<span class="archive-badge-links">🔗 ${t('vw.links', 'Ссылки')}</span>` : ''}
           </div>
-          ${sizeStr ? `<span class="archive-inspect-file-size">${sizeStr}</span>` : ''}
+          <div class="archive-inspect-file-meta">
+            ${sizeStr ? `<span class="archive-inspect-file-size">${sizeStr}</span>` : ''}
+            ${downloadUrl ? `
+              <a href="${downloadUrl}" download="${f.name}" class="btn-archive-file-download" title="${t('viewer.downloadThisFile', 'Скачать этот файл')}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span class="btn-archive-file-download-text">${t('viewer.downloadFileBtn', 'Скачать')}</span>
+              </a>
+            ` : ''}
+          </div>
         `;
+
+        const dlBtn = row.querySelector('.btn-archive-file-download');
+        if (dlBtn) {
+          dlBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            haptic(10);
+            showToast(`${t('vw.downloading', 'Загрузка')}: ${f.name}`);
+          });
+        }
+
         fileListContainer.appendChild(row);
       });
     }
@@ -1959,7 +2131,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
       }
       if (infoAuthorRow && infoAuthor) {
-        infoAuthor.textContent = authorName;
+        infoAuthor.textContent = mainAuthorName;
         infoAuthorRow.style.display = 'flex';
         infoAuthor.onclick = () => {
           const targetSite = currentPost?.site;
@@ -1969,6 +2141,33 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             : cleanAuthorTag;
           if (onTagSelect) onTagSelect(tagToSearch);
         };
+      }
+
+      // Render assistants if present
+      const assistants = Array.isArray(currentPost.assistants) ? currentPost.assistants : [];
+      if (infoAssistantsRow && infoAssistantsList) {
+        if (assistants.length > 0) {
+          infoAssistantsList.innerHTML = '';
+          assistants.forEach(asst => {
+            const asstChip = document.createElement('span');
+            asstChip.className = 'info-assistant-chip';
+            asstChip.textContent = asst;
+            asstChip.title = t('viewer.author.title', 'Автор / Создатель (нажмите для поиска всех работ)');
+            asstChip.onclick = () => {
+              const targetSite = currentPost?.site;
+              closeViewer();
+              const cleanAsstTag = asst.replace(/\s*\([^)]*\)/g, '').trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+              const tagToSearch = (targetSite === 'rule34video' && !cleanAsstTag.includes(':'))
+                ? `artist:${cleanAsstTag}`
+                : cleanAsstTag;
+              if (onTagSelect) onTagSelect(tagToSearch);
+            };
+            infoAssistantsList.appendChild(asstChip);
+          });
+          infoAssistantsRow.style.display = 'flex';
+        } else {
+          infoAssistantsRow.style.display = 'none';
+        }
       }
       if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
         btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
@@ -2004,7 +2203,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
             target.site = currentPost.site || target.site || 'danbooru';
           }
           setFavoriteAuthors([...state.favoriteAuthors]);
-          showToast(t('vw.coverSetForAuthor', 'Этот арт установлен обложкой автора {name}!').replace('{name}', authorName));
+          showToast(t('vw.coverSetForAuthor', 'Этот арт установлен обложкой автора {name}!').replace('{name}', mainAuthorName));
           if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
 
           try {
@@ -2019,6 +2218,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
       if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
       if (infoAuthorRow) infoAuthorRow.style.display = 'none';
+      if (infoAssistantsRow) infoAssistantsRow.style.display = 'none';
       if (btnSetAuthorCoverSidebar) btnSetAuthorCoverSidebar.style.display = 'none';
     }
 
@@ -2173,16 +2373,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           targetPost.content = res.albumItems[0].content;
         }
 
-        // Keep current viewed image positioned correctly in the album
-        if (targetPost.originalId || targetPost.id) {
-          const matchIdx = res.albumItems.findIndex(item => 
-            String(item.originalId) === String(targetPost.originalId) || 
-            String(item.id) === String(targetPost.id)
-          );
-          if (matchIdx !== -1) {
-            currentAlbumIndex = matchIdx;
-          }
+        // Always start album from the very first photo (slide 0 / index 0)
+        const firstItem = res.albumItems[0];
+        if (firstItem) {
+          if (firstItem.previewUrl) targetPost.previewUrl = firstItem.previewUrl;
+          if (firstItem.thumb180) targetPost.thumb180 = firstItem.thumb180;
+          if (firstItem.thumb360) targetPost.thumb360 = firstItem.thumb360;
+          if (firstItem.thumb720) targetPost.thumb720 = firstItem.thumb720;
+          if (firstItem.sampleUrl) targetPost.sampleUrl = firstItem.sampleUrl;
+          if (firstItem.fileUrl) targetPost.fileUrl = firstItem.fileUrl;
         }
+        currentAlbumIndex = 0;
 
         // Sync the updated album back into global gallery state
         const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
@@ -2196,10 +2397,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           }
         }
 
-        // Update the card badge in the gallery DOM
+        // Update the card badge and preview in the gallery DOM
         const cardEl = document.querySelector(`.media-card[data-post-id="${targetPost.id}"]`);
         if (cardEl) {
           cardEl.classList.add('is-album-card');
+          if (firstItem) {
+            const imgEl = cardEl.querySelector('.media-thumb');
+            const newThumb = firstItem.thumb360 || firstItem.previewUrl || firstItem.fileUrl;
+            if (imgEl && newThumb) {
+              imgEl.src = getProxiedUrl(newThumb);
+            }
+          }
           const topGroup = cardEl.querySelector('.badge-group-top > div');
           let badgeAlbum = topGroup ? topGroup.querySelector('.badge-album') : null;
           if (!badgeAlbum && topGroup) {
@@ -2221,9 +2429,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         // Re-render viewer UI if the user is currently viewing this post
         if (currentPost?.id === targetPost.id) {
           renderAlbumFilmstrip();
-          if (viewerAlbumPageText) {
-            viewerAlbumPageText.textContent = `${currentAlbumIndex + 1} / ${targetPost.albumItems.length}`;
-          }
+          switchAlbumSlide(0);
           if (btnFetchFullAlbumText) {
             btnFetchFullAlbumText.textContent = t('vw.refreshSet', 'Обновить сет ({n} фото)').replace('{n}', targetPost.albumItems.length);
           }

@@ -61,7 +61,8 @@
   /* On mobile the bottom like/bookmark bar is always visible */
   .card-overlay-bottom {
     opacity: 1 !important;
-    padding: 20px 8px 6px !important;
+    padding: 22px 6px 6px !important;
+    gap: 4px !important;
   }
 
   .btn-card-action {
@@ -176,15 +177,7 @@
 }
 
 .badge-group-bottom {
-  position: absolute;
-  bottom: 40px;
-  left: 6px;
-  right: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  z-index: 4;
-  pointer-events: none;
+  display: none !important;
 }
 
 .badge-format {
@@ -323,18 +316,79 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 24px 8px 8px;
-  background: linear-gradient(to top, rgba(8, 5, 2, 0.82) 0%, transparent 100%);
+  padding: 26px 8px 8px;
+  background: linear-gradient(to top, rgba(8, 5, 2, 0.88) 0%, rgba(8, 5, 2, 0.45) 60%, transparent 100%);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 6px;
   z-index: 3;
   opacity: 0;
   transition: opacity var(--transition-fast);
+  pointer-events: none;
 }
 
 .media-card:hover .card-overlay-bottom {
   opacity: 1;
+}
+
+.card-overlay-row-top,
+.card-overlay-row-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+}
+
+.card-author-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 55px);
+  min-width: 0;
+  background: rgba(12, 9, 6, 0.88);
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--tag-artist);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  transition: all var(--transition-fast);
+}
+
+.card-author-chip:hover {
+  background: rgba(251, 113, 133, 0.22);
+  border-color: rgba(251, 113, 133, 0.8);
+  transform: translateY(-1px);
+}
+
+.card-author-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-author-assistants-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: var(--radius-full, 9999px);
+  padding: 0 4px;
+  font-size: 8.5px;
+  line-height: 12px;
+  color: #fca5a5;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.card-author-spacer {
+  flex: 1;
 }
 
 .card-meta-indicators {
@@ -342,6 +396,7 @@
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  pointer-events: auto;
 }
 
 .card-score, .card-views {
@@ -349,13 +404,18 @@
   font-size: 11px;
   font-weight: 600;
   color: #ffffff;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 3.5px;
-  background: rgba(12, 9, 6, 0.7);
-  padding: 3px 6px;
+  background: rgba(12, 9, 6, 0.72);
+  padding: 2.5px 6px;
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  pointer-events: auto;
+}
+
+.card-score {
+  flex-shrink: 0;
 }
 
 .card-views {
@@ -370,6 +430,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  pointer-events: auto;
 }
 
 .btn-card-action {
@@ -566,6 +627,7 @@
 }
 
 .ac-tag-name.category-artist { color: var(--tag-artist); }
+.ac-tag-name.category-assistant { color: var(--tag-assistant); }
 .ac-tag-name.category-character { color: var(--tag-character); }
 .ac-tag-name.category-copyright { color: var(--tag-copyright); }
 .ac-tag-name.category-meta { color: var(--tag-meta); }

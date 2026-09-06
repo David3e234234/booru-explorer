@@ -17,11 +17,12 @@ export function formatRating(r) {
   return map[raw] || t('vsb.ratingSafe', 'Safe (Безопасный 0+)');
 }
 
-export const CATEGORY_ORDER = ['artist', 'copyright', 'character', 'general', 'meta'];
+export const CATEGORY_ORDER = ['artist', 'assistant', 'copyright', 'character', 'general', 'meta'];
 
 export function getCategoryLabel(catKey) {
   const map = {
     artist: t('vsb.groupArtist', 'Художник'),
+    assistant: t('vsb.groupAssistant', 'Помощник / Озвучка'),
     copyright: t('vsb.groupSeries', 'Серия / Франшиза'),
     character: t('vsb.groupCharacter', 'Персонаж'),
     general: t('vsb.groupGeneral', 'Общие теги'),
@@ -36,6 +37,12 @@ export const CATEGORY_CONFIG = {
     get label() { return getCategoryLabel('artist'); },
     colorClass: 'category-artist',
     tagClass: 'tag-artist'
+  },
+  assistant: {
+    key: 'assistant',
+    get label() { return getCategoryLabel('assistant'); },
+    colorClass: 'category-assistant',
+    tagClass: 'tag-assistant'
   },
   copyright: {
     key: 'copyright',
@@ -80,35 +87,58 @@ const NON_CHARACTER_PAREN_SUFFIXES = new Set([
   'artist', 'creator', 'circle', 'studio', 'animator', 'mangaka', 'illustrator', 'doujin_circle', 'cosplayer',
   'series', 'game', 'anime', 'manga', 'vtuber', 'novel', 'comic', 'franchise', 'project', 'visual_novel', 'light_novel', 'web_novel', 'mobile_game', 'company', 'label', 'universe',
   'medium', 'style', 'artwork', 'parody', 'group',
-  'fruit', 'food', 'animal', 'vehicle', 'object', 'clothing', 'instrument', 'weapon', 'anatomy', 'pose', 'hair', 'eyes', 'color', 'background', 'furniture', 'disambiguation'
+  'fruit', 'food', 'animal', 'vehicle', 'object', 'clothing', 'instrument', 'weapon', 'anatomy', 'pose', 'hair', 'eyes', 'color', 'background', 'furniture', 'disambiguation',
+  'voice_actor', 'voice actor', 'voice', 'va', 'audio', 'sound', 'music', 'sfx', 'assistant', 'translator', 'typesetter', 'colorist'
 ]);
 
-export function getTagCategory(tag, tagDetails, author = '') {
+const ASSISTANT_ROLE_REGEX = /_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$/i;
+
+export function getTagCategory(tag, tagDetails, author = '', assistants = []) {
   if (!tag) return 'general';
   const clean = String(tag).toLowerCase().trim();
   const rawClean = clean.replace(/^(artist|character|copyright|meta):/i, '').replace(/_?\((artist|creator|circle|studio|character|cosplay|person|series|game|anime|manga|vtuber|novel|comic|franchise|project)\)$/i, '');
 
+  // 1. Authoritative booru tag categories from database
   if (tagDetails) {
-    if (tagDetails.artist && (tagDetails.artist.includes(clean) || tagDetails.artist.includes(rawClean))) return 'artist';
-    if (tagDetails.copyright && (tagDetails.copyright.includes(clean) || tagDetails.copyright.includes(rawClean))) return 'copyright';
     if (tagDetails.character && (tagDetails.character.includes(clean) || tagDetails.character.includes(rawClean))) return 'character';
+    if (tagDetails.copyright && (tagDetails.copyright.includes(clean) || tagDetails.copyright.includes(rawClean))) return 'copyright';
     if (tagDetails.meta && (tagDetails.meta.includes(clean) || tagDetails.meta.includes(rawClean))) return 'meta';
+    if (tagDetails.assistant && (tagDetails.assistant.includes(clean) || tagDetails.assistant.includes(rawClean))) return 'assistant';
+    if (tagDetails.artist && (tagDetails.artist.includes(clean) || tagDetails.artist.includes(rawClean))) {
+      return ASSISTANT_ROLE_REGEX.test(clean) ? 'assistant' : 'artist';
+    }
     if (tagDetails.general && (tagDetails.general.includes(clean) || tagDetails.general.includes(rawClean))) return 'general';
   }
 
+  // 2. Explicit assistant / voice actor role annotations
+  if (ASSISTANT_ROLE_REGEX.test(clean) || ASSISTANT_ROLE_REGEX.test(rawClean)) {
+    return 'assistant';
+  }
+
+  // 3. Known assistants exact match
+  if (Array.isArray(assistants) && assistants.length > 0) {
+    const isExactAssistant = assistants.some(a => {
+      const cleanA = String(a).toLowerCase().trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
+      const cleanABase = cleanA.replace(/_\([^)]+\)$/, '');
+      const cleanBase = clean.replace(/_\([^)]+\)$/, '');
+      return clean === cleanA || cleanBase === cleanABase;
+    });
+    if (isExactAssistant && (ASSISTANT_ROLE_REGEX.test(clean) || ASSISTANT_ROLE_REGEX.test(rawClean))) {
+      return 'assistant';
+    }
+  }
+
+  // 4. Fallback matching against author (exact match only, never substring)
   if (author) {
     const authorClean = String(author).toLowerCase().replace(/^[@pixiv:]+/, '').trim().replace(/\s+/g, '_');
-    if (authorClean && (clean === authorClean || clean.includes(authorClean) || authorClean.includes(clean))) {
+    const authorBase = authorClean.replace(/_\([^)]+\)$/, '');
+    const cleanBase = clean.replace(/_\([^)]+\)$/, '');
+    if (clean === authorClean || cleanBase === authorBase) {
       return 'artist';
     }
   }
 
-  if (clean.startsWith('artist:') || clean.startsWith('channel:') || clean.startsWith('uploader:') || 
-      clean.endsWith('_(artist)') || clean.endsWith('_(creator)') || clean.startsWith('by_') || 
-      clean.endsWith('_(circle)') || clean.endsWith('_(studio)')) {
-    return 'artist';
-  }
-
+  // 5. Conventional booru prefixes/suffixes
   if (clean.startsWith('character:') || clean.endsWith('_(character)') || clean.endsWith('_(cosplay)') || clean.endsWith('_(person)')) {
     return 'character';
   }
@@ -119,11 +149,17 @@ export function getTagCategory(tag, tagDetails, author = '') {
     return 'copyright';
   }
 
+  if (clean.startsWith('artist:') || clean.startsWith('channel:') || clean.startsWith('uploader:') || 
+      clean.endsWith('_(artist)') || clean.endsWith('_(creator)') || clean.startsWith('by_') || 
+      clean.endsWith('_(circle)') || clean.endsWith('_(studio)')) {
+    return 'artist';
+  }
+
   if (clean.startsWith('meta:') || clean.startsWith('service:') || /^user_\d+$/i.test(clean) || META_KEYWORDS.has(clean) || clean.endsWith('_(medium)') || clean.endsWith('_(style)')) {
     return 'meta';
   }
 
-  // Universal Booru character detection: name_(series) where series is not a reserved meta keyword
+  // 6. Universal Booru character detection: name_(series) where series is not in NON_CHARACTER_PAREN_SUFFIXES
   const parenMatch = clean.match(/^(.+)_\(([^)]+)\)$/);
   if (parenMatch) {
     const suffix = parenMatch[2].toLowerCase().trim();
@@ -158,9 +194,10 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
     return;
   }
 
-  // Group tags into 5 categories in the given order
+  // Group tags into 6 categories in the given order
   const groups = {
     artist: [],
+    assistant: [],
     copyright: [],
     character: [],
     general: [],
@@ -173,13 +210,25 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
     if (seenTags.has(cleanLower)) return;
     seenTags.add(cleanLower);
 
-    const category = getTagCategory(tag, post?.tagDetails, post?.author);
+    const category = getTagCategory(tag, post?.tagDetails, post?.author, post?.assistants);
     if (groups[category]) {
       groups[category].push(tag);
     } else {
       groups.general.push(tag);
     }
   });
+
+  // Sort groups.artist so the primary author always appears at index 0
+  if (post?.author && groups.artist.length > 1) {
+    const authorClean = post.author.toLowerCase().replace(/^[@pixiv:]+/, '').trim().replace(/\s+/g, '_');
+    groups.artist.sort((a, b) => {
+      const aMatch = a.toLowerCase().includes(authorClean);
+      const bMatch = b.toLowerCase().includes(authorClean);
+      if (aMatch && !bMatch) return -1;
+      if (!aMatch && bMatch) return 1;
+      return 0;
+    });
+  }
 
   const container = document.createElement('div');
   container.className = 'viewer-tags-container';

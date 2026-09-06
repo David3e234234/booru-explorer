@@ -935,6 +935,7 @@ input.search-input:focus,
 }
 
 .s-group-title.category-artist { color: var(--tag-artist); }
+.s-group-title.category-assistant { color: var(--tag-assistant); }
 .s-group-title.category-copyright { color: var(--tag-copyright); }
 .s-group-title.category-character { color: var(--tag-character); }
 .s-group-title.category-general { color: var(--tag-general); }
@@ -976,6 +977,7 @@ input.search-input:focus,
 }
 
 .s-tag-name.category-artist { color: var(--tag-artist); }
+.s-tag-name.category-assistant { color: var(--tag-assistant); }
 .s-tag-name.category-character { color: var(--tag-character); }
 .s-tag-name.category-copyright { color: var(--tag-copyright); }
 .s-tag-name.category-meta { color: var(--tag-meta); }

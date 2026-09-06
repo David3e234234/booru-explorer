@@ -44,6 +44,7 @@ export function renderSidebarPageTags({ onTagSelect }) {
   // Group tags by category: Artist -> Copyright -> Character -> General -> Meta
   const groups = {
     artist: [],
+    assistant: [],
     copyright: [],
     character: [],
     general: [],

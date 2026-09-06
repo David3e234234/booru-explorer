@@ -13,14 +13,79 @@ function isValidRelationKey(key) {
   if (parts.length < 2) return false;
   if (parts.some(p => !p || p.trim() === '')) return false;
   if (parts[0] === 'parent' && parts[2] && (parts[2].length < 2 || parts[2] === '0')) return false;
+
+  const lastPart = parts[parts.length - 1].toLowerCase();
+  // Filter out generic paths, profile URLs, and store pages
+  if (['home', 'profile', 'photos', 'albums', 'posts', 'artwork', 'status', 'user', 'store', 'shop', 'all'].includes(lastPart)) {
+    return false;
+  }
   return true;
+}
+
+/**
+ * Extracts page number from post metadata (source, fileUrl, sampleUrl, tags)
+ * @param {Object} item 
+ * @returns {number|null} 0-indexed or positive page number, or null if unknown
+ */
+export function extractPageNumber(item) {
+  if (!item) return null;
+  if (typeof item.pageIndex === 'number' && !isNaN(item.pageIndex)) return item.pageIndex;
+  if (typeof item.order === 'number' && !isNaN(item.order)) return item.order;
+  if (typeof item.page === 'number' && !isNaN(item.page)) return item.page;
+
+  // Search all string fields: source, originalFilename, fileUrl, sampleUrl, previewUrl
+  const targets = [
+    item.source || '',
+    item.originalFilename || '',
+    item.fileUrl || '',
+    item.sampleUrl || '',
+    item.previewUrl || ''
+  ];
+
+  for (const str of targets) {
+    if (!str || typeof str !== 'string') continue;
+
+    // Pixiv standard: _p0.jpg, _p1.png, /p0.jpg, p0.png, _p0_master
+    const pixivMatch = str.match(/_p(\d+)(?:\.[a-z0-9]+|[_\b])/i) || str.match(/\/p(\d+)(?:\.[a-z0-9]+|[_\b])/i);
+    if (pixivMatch) return parseInt(pixivMatch[1], 10);
+
+    // Pixiv artwork page anchor: /artworks/12345#1 or /artworks/12345/1 or #page_0
+    const pixivArtMatch = str.match(/artworks\/\d+[#\/](\d+)/i) || str.match(/#page_?(\d+)/i) || str.match(/#(\d+)$/);
+    if (pixivArtMatch) return parseInt(pixivArtMatch[1], 10);
+
+    // Twitter photo index: /photo/1, /photo/2 -> convert to 0-indexed
+    const twMatch = str.match(/\/photo\/(\d+)/i);
+    if (twMatch) return parseInt(twMatch[1], 10) - 1;
+
+    // page_0, page01, page-2
+    const pageMatch = str.match(/(?:^|[^\w])page[_-]?(\d+)/i);
+    if (pageMatch) return parseInt(pageMatch[1], 10);
+
+    // [01], (02) before extension
+    const bracketMatch = str.match(/[\[\(](\d{1,3})[\]\)]\.[a-z0-9]+$/i);
+    if (bracketMatch) return parseInt(bracketMatch[1], 10);
+
+    // Trailing numbers in filename like name_01.jpg, art-02.png
+    const trailingMatch = str.match(/[_-](\d{1,3})\.[a-z0-9]+$/i);
+    if (trailingMatch) return parseInt(trailingMatch[1], 10);
+  }
+
+  // Also check tags: page_1, p1
+  if (Array.isArray(item.tags)) {
+    for (const tag of item.tags) {
+      const tagMatch = tag.match(/^page[_-]?(\d+)$/i) || tag.match(/^p(\d+)$/i);
+      if (tagMatch) return parseInt(tagMatch[1], 10);
+    }
+  }
+
+  return null;
 }
 
 /**
  * Extracts ALL possible series/album keys from post metadata
  * @param {Object} post - Normalized or raw post object
  * @param {string} site - Booru site identifier
- * @returns {Array<string>} Array of relation keys (Pixiv, Twitter, Parent/Child, Pool, etc.)
+ * @returns {Array<string>} Array of relation keys (Pixiv, Twitter, Parent/Child, Fanbox, etc.)
  */
 export function extractAllSeriesKeys(post, site = '') {
   if (!post) return [];
@@ -29,32 +94,32 @@ export function extractAllSeriesKeys(post, site = '') {
   const source = (post.source || '').trim();
   const tags = Array.isArray(post.tags) ? post.tags : (typeof post.tag_string === 'string' ? post.tag_string.split(/\s+/) : []);
 
-  // 1. Pixiv ID (source, tags, pixiv_id field)
+  // 1. Pixiv ID (source, tags, pixiv_id field) - require at least 5 digits to avoid tag false positives
   const pixivPatterns = [
-    /pixiv\.net\/(?:en\/)?artworks\/(\d+)/i,
-    /pixiv\.net\/member_illust\.php\?.*illust_id=(\d+)/i,
-    /i\.pximg\.net\/.*\/(\d+)_p\d+/i,
-    /pixiv_(\d+)/i
+    /pixiv\.net\/(?:en\/)?artworks\/(\d{5,})/i,
+    /pixiv\.net\/member_illust\.php\?.*illust_id=(\d{5,})/i,
+    /i\.pximg\.net\/.*\/(\d{5,})_p\d+/i
   ];
   for (const regex of pixivPatterns) {
     const match = source.match(regex);
     if (match && match[1]) keys.add(`pixiv:${match[1]}`);
   }
   for (const tag of tags) {
-    const tagMatch = tag.match(/^(?:pixiv|pixiv_id):(\d+)$/i);
+    const tagMatch = tag.match(/^(?:pixiv|pixiv_id):(\d{5,})$/i);
     if (tagMatch && tagMatch[1]) keys.add(`pixiv:${tagMatch[1]}`);
   }
   if (post.pixiv_id || post.pixivId) {
-    keys.add(`pixiv:${String(post.pixiv_id || post.pixivId)}`);
+    const pid = String(post.pixiv_id || post.pixivId);
+    if (pid.length >= 5) keys.add(`pixiv:${pid}`);
   }
 
-  // 2. Twitter / X Status ID (source and tags)
-  const twitterMatch = source.match(/(?:twitter\.com|x\.com)\/(?:[^\s"'<>]+\/)*status\/(\d+)/i);
+  // 2. Twitter / X Status ID (source and tags) - snowflake IDs are at least 8 digits
+  const twitterMatch = source.match(/(?:twitter\.com|x\.com)\/(?:[^\s"'<>]+\/)*status\/(\d{8,})/i);
   if (twitterMatch && twitterMatch[1]) {
     keys.add(`twitter:${twitterMatch[1]}`);
   }
   for (const tag of tags) {
-    const twitterTagMatch = tag.match(/^(?:twitter|twitter_id|x_id):(\d+)$/i);
+    const twitterTagMatch = tag.match(/^(?:twitter|twitter_id|x_id):(\d{8,})$/i);
     if (twitterTagMatch && twitterTagMatch[1]) keys.add(`twitter:${twitterTagMatch[1]}`);
   }
 
@@ -64,7 +129,7 @@ export function extractAllSeriesKeys(post, site = '') {
     keys.add(`bsky:${bskyMatch[1]}`);
   }
 
-  // 4. Fanbox (supports subdomain https://creator.fanbox.cc/posts/123, path https://fanbox.cc/@creator/posts/123, pixiv.fanbox.cc, etc.)
+  // 4. Fanbox
   const fanboxMatch = source.match(/(?:(?:[\w.-]+\.)?fanbox\.(?:cc|pixiv\.net)\/(?:@[\w.-]+\/|[\w.-]+\/)?posts?\/|fanbox\/user\/\d+\/post\/)(\d+)/i);
   if (fanboxMatch && fanboxMatch[1]) keys.add(`fanbox:${fanboxMatch[1]}`);
   for (const tag of tags) {
@@ -88,19 +153,18 @@ export function extractAllSeriesKeys(post, site = '') {
     if (patreonTagMatch && patreonTagMatch[1]) keys.add(`patreon:${patreonTagMatch[1]}`);
   }
 
-  // 7. Pawchive
+  // 7. Pawchive (always namespaced to avoid collisions)
   const pawchiveMatch = source.match(/pawchive\.pw\/([a-z0-9_-]+)\/user\/(\d+)\/post\/(\d+)/i);
   if (pawchiveMatch && pawchiveMatch[1] && pawchiveMatch[2] && pawchiveMatch[3]) {
     keys.add(`pawchive:${pawchiveMatch[1]}:${pawchiveMatch[2]}:${pawchiveMatch[3]}`);
-    keys.add(`${pawchiveMatch[1]}:${pawchiveMatch[3]}`);
   }
 
   // 8. Ci-en
   const cienMatch = source.match(/ci-en\.(?:dlsite\.com|net)\/(?:[^\s"'<>]*\/)?article\/(\d+)/i);
   if (cienMatch && cienMatch[1]) keys.add(`cien:${cienMatch[1]}`);
 
-  // 9. Gumroad
-  const gumroadMatch = source.match(/gumroad\.com\/(?:l\/|posts\/)([a-zA-Z0-9_-]+)/i);
+  // 9. Gumroad - only posts/, avoid generic store links (/l/...)
+  const gumroadMatch = source.match(/gumroad\.com\/posts\/([a-zA-Z0-9_-]+)/i);
   if (gumroadMatch && gumroadMatch[1]) keys.add(`gumroad:${gumroadMatch[1]}`);
 
   // 10. Boosty
@@ -115,8 +179,8 @@ export function extractAllSeriesKeys(post, site = '') {
   const aipictorsMatch = source.match(/aipictors\.com\/works\/(\d+)/i);
   if (aipictorsMatch && aipictorsMatch[1]) keys.add(`aipictors:${aipictorsMatch[1]}`);
 
-  // 13. Weibo
-  const weiboMatch = source.match(/(?:weibo\.(?:com|cn)\/(?:[^\s"'<>]*\/)?status\/|weibo\.com\/\d+\/)([a-zA-Z0-9]+)/i);
+  // 13. Weibo - status IDs only
+  const weiboMatch = source.match(/(?:weibo\.(?:com|cn)\/(?:[^\s"'<>]*\/)?status\/)(\d+|[a-zA-Z0-9]{9,})/i);
   if (weiboMatch && weiboMatch[1]) keys.add(`weibo:${weiboMatch[1]}`);
 
   // 14. Lofter
@@ -131,12 +195,12 @@ export function extractAllSeriesKeys(post, site = '') {
   const plurkMatch = source.match(/plurk\.com\/p\/([a-zA-Z0-9]+)/i);
   if (plurkMatch && plurkMatch[1]) keys.add(`plurk:${plurkMatch[1]}`);
 
-  if (post.seriesKey) keys.add(post.seriesKey);
+  if (post.seriesKey && !post.seriesKey.startsWith('pool:')) keys.add(post.seriesKey);
   if (Array.isArray(post.allSeriesKeys)) {
-    post.allSeriesKeys.forEach(k => { if (k) keys.add(k); });
+    post.allSeriesKeys.forEach(k => { if (k && !k.startsWith('pool:')) keys.add(k); });
   }
 
-  // 17. Booru Parent/Child relation (a reliable bridge between different sources)
+  // 17. Booru Parent/Child relation (verified bridge within the same site)
   const rawParentId = post.parentId || post.parent_id;
   if (rawParentId && String(rawParentId) !== '0' && String(rawParentId) !== 'null') {
     keys.add(`parent:${siteId}:${String(rawParentId)}`);
@@ -152,21 +216,9 @@ export function extractAllSeriesKeys(post, site = '') {
     }
   }
 
-  // 18. Pool - series/chapters/collections
-  const poolId = post.poolId || post.pool_id;
-  if (poolId) {
-    keys.add(`pool:${siteId}:${String(poolId)}`);
-  }
-  if (Array.isArray(post.pools)) {
-    post.pools.forEach(p => {
-      const pid = (p && typeof p === 'object') ? (p.id || p.pool_id) : p;
-      if (pid) keys.add(`pool:${siteId}:${String(pid)}`);
-    });
-  }
-  for (const tag of tags) {
-    const poolTagMatch = tag.match(/^(?:pool|series):(\d+)$/i);
-    if (poolTagMatch && poolTagMatch[1]) keys.add(`pool:${siteId}:${poolTagMatch[1]}`);
-  }
+  // NOTE: pool: tags/IDs are intentionally NOT included in automatic feed series keys.
+  // In Boorus, pools are user collections / playlists that contain hundreds of unrelated images.
+  // Automatic merging by pool was a primary cause of unrelated images collapsing into single posts.
 
   return Array.from(keys).filter(isValidRelationKey);
 }
@@ -177,7 +229,7 @@ export function extractAllSeriesKeys(post, site = '') {
 export function extractSeriesKey(post, site = '') {
   const keys = extractAllSeriesKeys(post, site);
   if (keys.length === 0) return null;
-  // Priority: pixiv -> fanbox -> fantia -> patreon -> parent -> pool -> pawchive -> twitter -> others
+  // Priority: pixiv -> fanbox -> fantia -> patreon -> parent -> pawchive -> twitter -> others
   const pixivKey = keys.find(k => k.startsWith('pixiv:'));
   if (pixivKey) return pixivKey;
   const fanboxKey = keys.find(k => k.startsWith('fanbox:'));
@@ -188,8 +240,6 @@ export function extractSeriesKey(post, site = '') {
   if (patreonKey) return patreonKey;
   const parentKey = keys.find(k => k.startsWith('parent:'));
   if (parentKey) return parentKey;
-  const poolKey = keys.find(k => k.startsWith('pool:'));
-  if (poolKey) return poolKey;
   const pawchiveKey = keys.find(k => k.startsWith('pawchive:'));
   if (pawchiveKey) return pawchiveKey;
   const twitterKey = keys.find(k => k.startsWith('twitter:'));
@@ -198,36 +248,51 @@ export function extractSeriesKey(post, site = '') {
 }
 
 /**
- * Sort pages within a set (by _p0/_p1 page number, parent placed first, or by ID)
+ * Sort pages within a set: explicit page numbers are the highest priority!
  */
-function sortAlbumItems(items) {
+export function sortAlbumItems(items) {
   return [...items].sort((a, b) => {
-    // 1. The parent post always goes first unless it has a page number
+    const pageA = extractPageNumber(a);
+    const pageB = extractPageNumber(b);
+
+    // 1. Explicit page numbers are the highest truth!
+    if (pageA !== null && pageB !== null) {
+      if (pageA !== pageB) return pageA - pageB;
+    } else if (pageA !== null && pageB === null) {
+      return -1; // Numbered page comes before unnumbered
+    } else if (pageA === null && pageB !== null) {
+      return 1;
+    }
+
+    // 2. Parent post comes first if no page numbers
     const aIsParent = Boolean(a.hasChildren && !a.parentId);
     const bIsParent = Boolean(b.hasChildren && !b.parentId);
     if (aIsParent && !bIsParent) return -1;
     if (!aIsParent && bIsParent) return 1;
 
-    // 2. Check for an explicit page number in the URL (e.g. 12345_p0.jpg, 12345_p1.jpg)
-    const getPageNum = (item) => {
-      const target = item.fileUrl || item.sampleUrl || item.previewUrl || item.source || '';
-      const pMatch = target.match(/_p(\d+)\./i) || target.match(/page_?(\d+)/i);
-      if (pMatch) return parseInt(pMatch[1], 10);
-      return null;
-    };
-
-    const pageA = getPageNum(a);
-    const pageB = getPageNum(b);
-
-    if (pageA !== null && pageB !== null) {
-      return pageA - pageB;
-    }
-
-    // 3. With no _p0, sort by ascending ID
+    // 3. Fallback: sort by ascending original ID
     const idA = parseInt(String(a.originalId || a.id).replace(/\D/g, ''), 10) || 0;
     const idB = parseInt(String(b.originalId || b.id).replace(/\D/g, ''), 10) || 0;
     return idA - idB;
   });
+}
+
+/**
+ * Checks whether two posts have compatible authors (i.e. not different creators)
+ */
+function arePostsAuthorCompatible(postA, postB) {
+  if (!postA || !postB) return true;
+  const authorA = (postA.author || '').trim().toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' ');
+  const authorB = (postB.author || '').trim().toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' ');
+  // If both posts have distinct non-empty authors, they cannot be merged
+  if (authorA && authorB && authorA !== authorB) {
+    const assistantsA = (Array.isArray(postA.assistants) ? postA.assistants : []).map(a => a.toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' '));
+    const assistantsB = (Array.isArray(postB.assistants) ? postB.assistants : []).map(a => a.toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' '));
+    if (!assistantsA.includes(authorB) && !assistantsB.includes(authorA)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -265,7 +330,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
   const postKeysList = [];
   const keysByPost = new Map();
 
-  // 1. Collect all relation keys for each post and union related posts
+  // 1. Collect all relation keys for each post and union related posts (with author check)
   posts.forEach((post, idx) => {
     const keys = extractAllSeriesKeys(post, post.site);
     postKeysList[idx] = keys;
@@ -273,7 +338,10 @@ export function groupPostsIntoAlbums(posts, options = {}) {
 
     keys.forEach(key => {
       if (keyToPostIdx.has(key)) {
-        union(idx, keyToPostIdx.get(key));
+        const otherIdx = keyToPostIdx.get(key);
+        if (arePostsAuthorCompatible(post, posts[otherIdx])) {
+          union(idx, otherIdx);
+        }
       } else {
         keyToPostIdx.set(key, idx);
       }
@@ -320,6 +388,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
       });
 
       const sortedItems = sortAlbumItems(flattenedItems);
+      // The first item in sorted order is guaranteed to be the first photo (page 0)
       const rootPost = sortedItems[0];
 
       // Strip circular references from nested items
@@ -337,7 +406,6 @@ export function groupPostsIntoAlbums(posts, options = {}) {
         if (Array.isArray(item.tags)) {
           item.tags.forEach(t => allTagsSet.add(t));
         }
-        // Top-level posts already have keys from step 1; only nested albumItems need a recompute
         const kList = keysByPost.get(item) || extractAllSeriesKeys(item, item.site);
         kList.forEach(k => allKeysSet.add(k));
       });
@@ -351,7 +419,7 @@ export function groupPostsIntoAlbums(posts, options = {}) {
                          Array.from(allKeysSet).find(k => k.startsWith('pawchive:')) ||
                          Array.from(allKeysSet)[0] || '';
 
-      // Use the most recent upload/update date among album items so feed sorting by new remains consistent
+      // Use the most recent upload/update date among album items
       const validDates = cleanItems
         .map(i => i.createdAt)
         .filter(d => typeof d === 'string' && d.trim().length > 0);
@@ -366,8 +434,23 @@ export function groupPostsIntoAlbums(posts, options = {}) {
         });
       }
 
+      // Root post always represents photo #1 (preview, thumbs, and video state)
       const albumPost = {
         ...rootPost,
+        previewUrl: rootPost.previewUrl,
+        thumb180: rootPost.thumb180,
+        thumb360: rootPost.thumb360,
+        thumb720: rootPost.thumb720,
+        thumbSample: rootPost.thumbSample,
+        thumbOriginal: rootPost.thumbOriginal,
+        sampleUrl: rootPost.sampleUrl,
+        fileUrl: rootPost.fileUrl,
+        fileExt: rootPost.fileExt,
+        isVideo: rootPost.isVideo,
+        isGif: rootPost.isGif,
+        hasSound: rootPost.hasSound,
+        author: rootPost.author,
+        assistants: rootPost.assistants || [],
         isAlbum: true,
         albumCount: cleanItems.length,
         albumItems: cleanItems,

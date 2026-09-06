@@ -570,6 +570,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
           siteName: 'Rule34Video',
           title,
           author,
+          assistants: [],
           previewUrl: resolvePreviewUrl(thumb, previewMp4, previewMp4, true),
           sampleUrl: previewMp4,
           fileUrl: previewMp4,
@@ -756,7 +757,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
       flashTagsMatch[1].split(',').map(s => s.trim()).filter(Boolean).forEach(t => rawTagsList.push(t));
     }
 
-    const { tagDetails } = await classifyPostTags(rawTagsList, `https://rule34video.com/video/${id}/`, finalAuthor, settings);
+    const { tagDetails, author: classifiedAuthor, assistants } = await classifyPostTags(rawTagsList, `https://rule34video.com/video/${id}/`, finalAuthor, settings);
 
     let duration = 0;
     let durationText = '';
@@ -793,7 +794,8 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
         hasSound: true,
         duration,
         durationText,
-        author: finalAuthor,
+        author: classifiedAuthor || finalAuthor,
+        assistants: assistants || [],
         artist,
         uploaderName,
         channelName,

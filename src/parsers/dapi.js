@@ -129,7 +129,7 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
+      const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
 
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
@@ -155,6 +155,7 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
         isGif,
         hasSound: isVideo && hasSound,
         author,
+        assistants: assistants || [],
         tags: rawTags,
         tagDetails,
         score: parseInt(item.score, 10) || 0,
@@ -248,7 +249,7 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
+      const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
       const hasChildren = Boolean(item.has_children);
@@ -273,6 +274,7 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
         isGif,
         hasSound: isVideo && hasSound,
         author,
+        assistants: assistants || [],
         tags: rawTags,
         tagDetails,
         score: parseInt(item.score, 10) || 0,
@@ -364,7 +366,7 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
+      const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
 
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
@@ -390,6 +392,7 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
         isGif,
         hasSound: isVideo && hasSound,
         author,
+        assistants: assistants || [],
         tags: rawTags,
         tagDetails,
         score: parseInt(item.score, 10) || 0,
@@ -477,9 +480,11 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
     const rawTags = allTags.length > 0 ? allTags : (decodeHtmlEntities(postItem?.tags || '').split(' ').filter(Boolean));
     const finalSource = pageSource || postItem?.source || '';
     let author = tagDetails.artist[0] || '';
-    if (!author && rawTags.length > 0) {
-      const classified = await classifyPostTags(rawTags, finalSource, '', settings, false);
+    let assistants = [];
+    if (rawTags.length > 0) {
+      const classified = await classifyPostTags(rawTags, finalSource, author, settings, false);
       if (classified.author) author = classified.author;
+      if (classified.assistants?.length > 0) assistants = classified.assistants;
       if (tagDetails.artist.length === 0 && classified.tagDetails?.artist?.length > 0) {
         tagDetails.artist = classified.tagDetails.artist;
       }
@@ -525,6 +530,7 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
       isGif,
       hasSound: isVideo && hasSound,
       author,
+      assistants: assistants || [],
       tags: rawTags,
       tagDetails,
       score: parseInt(postItem?.score, 10) || 0,

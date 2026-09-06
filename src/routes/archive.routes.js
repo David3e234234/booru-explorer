@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { ARCHIVES_DIR } from '../config/constants.js';
-import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive, getArchiveKey, readManifest } from '../services/archiveService.js';
+import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive, getArchiveKey, readManifest, downloadArchiveEntry } from '../services/archiveService.js';
 import { logError } from '../utils/logger.js';
 
 const router = express.Router();
@@ -104,6 +104,24 @@ router.get('/file', async (req, res) => {
     res.sendFile(filePath, { acceptRanges: true });
   } catch (err) {
     res.status(404).send('Архив не найден в кэше');
+  }
+});
+
+// GET /api/archive/download-file?url=<zip-url>&name=<entry-name> - download an individual file from archive
+router.get('/download-file', async (req, res) => {
+  const zipUrl = String(req.query.url || '');
+  const targetName = String(req.query.name || req.query.path || req.query.file || '');
+
+  if (!zipUrl) return res.status(400).send('URL не указан');
+  if (!targetName) return res.status(400).send('Имя файла не указано');
+
+  try {
+    await downloadArchiveEntry(zipUrl, targetName, res);
+  } catch (err) {
+    logError('Archive', `Ошибка скачивания файла ${targetName} из архива`, err);
+    if (!res.headersSent) {
+      res.status(500).send('Не удалось скачать файл из архива');
+    }
   }
 });
 

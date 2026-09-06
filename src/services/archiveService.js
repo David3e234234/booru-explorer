@@ -6,7 +6,7 @@ import StreamZip from 'node-stream-zip';
 import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import { ARCHIVES_DIR } from '../config/constants.js';
-import { fetchSafe } from '../utils/network.js';
+import { fetchSafe, resolveSiteReferer } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
 
 function isAllowedArchiveHost(hostname) {
@@ -224,9 +224,29 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
       } catch {}
     }
 
-    const streamRegex = /stream[\r\n]+([\s\S]*?)[\r\n]+endstream/g;
-    while ((m = streamRegex.exec(rawLatin1)) !== null) {
-      const streamBytes = Buffer.from(m[1], 'latin1');
+    // Fast stream scanning via indexOf (avoids regex backtracking and skips large image streams)
+    let streamPos = 0;
+    while ((streamPos = rawLatin1.indexOf('stream', streamPos)) !== -1) {
+      const after = streamPos + 6;
+      let dataStart = after;
+      if (rawLatin1[dataStart] === '\r') dataStart++;
+      if (rawLatin1[dataStart] === '\n') dataStart++;
+
+      const endPos = rawLatin1.indexOf('endstream', dataStart);
+      if (endPos === -1) break;
+
+      let dataEnd = endPos;
+      if (rawLatin1[dataEnd - 1] === '\n') dataEnd--;
+      if (rawLatin1[dataEnd - 1] === '\r') dataEnd--;
+
+      const streamLen = dataEnd - dataStart;
+      streamPos = endPos + 9;
+
+      if (streamLen <= 0) continue;
+      // Skip large image/font streams (> 1 MB) to prevent CPU lockup
+      if (streamLen > 1024 * 1024) continue;
+
+      const streamBytes = Buffer.from(rawLatin1.slice(dataStart, dataEnd), 'latin1');
       let inflatedStr = '';
       try {
         inflatedStr = zlib.inflateSync(streamBytes).toString('utf8');
@@ -240,7 +260,7 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
         scanText(inflatedStr);
 
         // Also extract text inside PDF text operators: (text) Tj
-        const tjRegex = /\(([^)]*)\)\s*Tj/g;
+        const tjRegex = /\(([^)]{1,500})\)\s*Tj/g;
         let tjMatch;
         const pdfTextFragments = [];
         while ((tjMatch = tjRegex.exec(inflatedStr)) !== null) {
@@ -248,6 +268,32 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
         }
         if (pdfTextFragments.length > 0) {
           scanText(pdfTextFragments.join(' '));
+        }
+
+        // Extract hex text: <hex> Tj
+        const tjHexRegex = /<([0-9a-fA-F]{2,500})>\s*Tj/g;
+        while ((tjMatch = tjHexRegex.exec(inflatedStr)) !== null) {
+          try {
+            const decoded = Buffer.from(tjMatch[1], 'hex').toString('utf8');
+            scanText(decoded);
+          } catch {}
+        }
+
+        // Extract TJ arrays with kerning: [(text1) 20 (text2)] TJ
+        const tjArrRegex = /\[([^\]]{1,2000})\]\s*TJ/g;
+        let tjArrMatch;
+        while ((tjArrMatch = tjArrRegex.exec(inflatedStr)) !== null) {
+          const inner = tjArrMatch[1];
+          const parts = [];
+          const partRegex = /\(([^)]{1,300})\)/g;
+          let pm;
+          while ((pm = partRegex.exec(inner)) !== null) {
+            parts.push(pm[1]);
+          }
+          if (parts.length > 0) {
+            scanText(parts.join(''));
+            scanText(parts.join(' '));
+          }
         }
       }
     }
@@ -290,18 +336,23 @@ async function extractArchive(zipUrl, key) {
 
       const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
       jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0 });
+      let lastProgressTime = 0;
       const progressCounter = new Transform({
         transform(chunk, enc, cb) {
           const st = jobStatus.get(zipUrl);
           if (st) {
             st.received += chunk.length;
-            st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
+            const now = Date.now();
+            if (now - lastProgressTime >= 150) {
+              lastProgressTime = now;
+              st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
+            }
           }
           cb(null, chunk);
         }
       });
 
-      await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(tmpPath));
+      await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(tmpPath, { highWaterMark: 1024 * 1024 }));
       await fs.promises.rename(tmpPath, cachedZip).catch(() => {});
     }
 
@@ -464,6 +515,303 @@ export function buildArchiveAlbumItems(manifest) {
 }
 
 /**
+ * Inspects a remote ZIP archive via partial HTTP Range requests without downloading
+ * the entire payload (reads EOCD and Central Directory from the tail of the archive in < 500ms).
+ */
+async function inspectArchiveRemote(zipUrl, key) {
+  const reqHeaders = {
+    'User-Agent': 'Mozilla/5.0',
+    'Referer': resolveSiteReferer(zipUrl) || 'https://pawchive.pw/',
+    'Range': 'bytes=-65536'
+  };
+
+  jobStatus.set(zipUrl, { phase: 'inspect', percent: 10, scannedFiles: 0, totalFiles: 0, currentFile: '' });
+
+  const res = await fetchSafe(zipUrl, {
+    timeout: 15000,
+    headers: reqHeaders
+  });
+
+  if (res.status !== 206) {
+    throw new Error(`Remote range not supported (status ${res.status})`);
+  }
+
+  const contentRange = res.headers.get('content-range') || '';
+  const totalFileSize = parseInt(contentRange.split('/').pop(), 10) || 0;
+  if (!totalFileSize) throw new Error('Cannot determine file size from Content-Range');
+
+  let buf = Buffer.from(await res.arrayBuffer());
+  let bufferStart = totalFileSize - buf.length;
+
+  // Search backwards for EOCD signature 0x06054b50
+  let eocdOffset = -1;
+  for (let i = buf.length - 22; i >= 0; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) {
+      eocdOffset = i;
+      break;
+    }
+  }
+
+  // If EOCD not found in last 64KB and file is bigger, fetch last 256KB
+  if (eocdOffset === -1 && totalFileSize > 65536) {
+    const fetchSize = Math.min(totalFileSize, 262144);
+    const res2 = await fetchSafe(zipUrl, {
+      timeout: 15000,
+      headers: { ...reqHeaders, 'Range': `bytes=-${fetchSize}` }
+    });
+    if (res2.status === 206) {
+      buf = Buffer.from(await res2.arrayBuffer());
+      bufferStart = totalFileSize - buf.length;
+      for (let i = buf.length - 22; i >= 0; i--) {
+        if (buf.readUInt32LE(i) === 0x06054b50) {
+          eocdOffset = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (eocdOffset === -1) {
+    throw new Error('Could not find ZIP End of Central Directory');
+  }
+
+  let totalEntries = buf.readUInt16LE(eocdOffset + 10);
+  let cdSize = buf.readUInt32LE(eocdOffset + 12);
+  let cdOffset = buf.readUInt32LE(eocdOffset + 16);
+
+  // Check for Zip64 EOCD Locator if standard fields are maxed out
+  if (totalEntries === 0xFFFF || cdOffset === 0xFFFFFFFF || cdSize === 0xFFFFFFFF) {
+    const locatorPos = eocdOffset - 20;
+    if (locatorPos >= 0 && buf.readUInt32LE(locatorPos) === 0x07064b50) {
+      const zip64EocdOffset = Number(buf.readBigUInt64LE(locatorPos + 8));
+      const resZip64 = await fetchSafe(zipUrl, {
+        timeout: 15000,
+        headers: { ...reqHeaders, 'Range': `bytes=${zip64EocdOffset}-${zip64EocdOffset + 60}` }
+      });
+      if (resZip64.status === 206) {
+        const z64Buf = Buffer.from(await resZip64.arrayBuffer());
+        if (z64Buf.readUInt32LE(0) === 0x06064b50) {
+          totalEntries = Number(z64Buf.readBigUInt64LE(32));
+          cdSize = Number(z64Buf.readBigUInt64LE(40));
+          cdOffset = Number(z64Buf.readBigUInt64LE(48));
+        }
+      }
+    }
+  }
+
+  // Load Central Directory buffer
+  let cdBuffer;
+  let cdPos;
+  if (cdOffset >= bufferStart && (cdOffset + cdSize) <= (bufferStart + buf.length)) {
+    cdBuffer = buf;
+    cdPos = cdOffset - bufferStart;
+  } else {
+    const resCD = await fetchSafe(zipUrl, {
+      timeout: 15000,
+      headers: { ...reqHeaders, 'Range': `bytes=${cdOffset}-${cdOffset + cdSize + 128}` }
+    });
+    if (resCD.status !== 206) throw new Error('Failed to fetch ZIP Central Directory');
+    cdBuffer = Buffer.from(await resCD.arrayBuffer());
+    cdPos = 0;
+  }
+
+  const fileTree = [];
+  const docsToScan = [];
+  let totalBytes = 0;
+  let isEncrypted = false;
+
+  for (let i = 0; i < totalEntries; i++) {
+    if (cdPos + 46 > cdBuffer.length) break;
+    const sig = cdBuffer.readUInt32LE(cdPos);
+    if (sig !== 0x02014b50) break;
+
+    const flags = cdBuffer.readUInt16LE(cdPos + 8);
+    const method = cdBuffer.readUInt16LE(cdPos + 10);
+    const compSize = cdBuffer.readUInt32LE(cdPos + 20);
+    const uncompSize = cdBuffer.readUInt32LE(cdPos + 24);
+    const nameLen = cdBuffer.readUInt16LE(cdPos + 28);
+    const extraLen = cdBuffer.readUInt16LE(cdPos + 30);
+    const commentLen = cdBuffer.readUInt16LE(cdPos + 32);
+    const localHeaderOffset = cdBuffer.readUInt32LE(cdPos + 42);
+
+    const rawName = cdBuffer.toString('utf8', cdPos + 46, cdPos + 46 + nameLen);
+    cdPos += 46 + nameLen + extraLen + commentLen;
+
+    const normName = rawName.replace(/\\/g, '/');
+    const base = normName.split('/').pop();
+    if (!base || base.startsWith('.') || normName.includes('__MACOSX') || normName.endsWith('/')) {
+      continue;
+    }
+
+    if ((flags & 1) !== 0) isEncrypted = true;
+    const ext = getExt(base);
+    const isMedia = IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext);
+    const isDoc = ['txt', 'pdf', 'url', 'webloc', 'html', 'htm', 'md', 'nfo', 'json', 'doc', 'docx', 'rtf'].includes(ext);
+
+    totalBytes += uncompSize;
+
+    const entryInfo = {
+      name: base,
+      path: normName,
+      ext,
+      size: uncompSize,
+      compSize,
+      method,
+      localHeaderOffset,
+      isMedia,
+      isDocument: isDoc,
+      hasLinks: false,
+      linksCount: 0
+    };
+    fileTree.push(entryInfo);
+
+    if (isDoc && compSize > 0 && compSize <= 35 * 1024 * 1024 && !((flags & 1) !== 0)) {
+      docsToScan.push(entryInfo);
+    }
+  }
+
+  fileTree.sort((a, b) => nameCollator.compare(a.name, b.name));
+
+  // Prioritize documents likely to contain links/passwords
+  const docPriorityScore = (d) => {
+    const n = (d.name || '').toLowerCase();
+    let score = 0;
+    if (n.includes('read') || n.includes('link') || n.includes('pass') || n.includes('info') || n.includes('tier') || n.includes('download') || n.includes('url')) score += 100;
+    if (d.ext === 'url' || d.ext === 'webloc' || d.ext === 'txt') score += 50;
+    if (d.ext === 'pdf') score += 30;
+    score -= Math.min(20, Math.floor(d.compSize / (1024 * 1024)));
+    return score;
+  };
+  docsToScan.sort((a, b) => docPriorityScore(b) - docPriorityScore(a));
+
+  const scannedLinks = [];
+  const passwords = new Set();
+  const MAX_TOTAL_REMOTE_DOC_BYTES = 45 * 1024 * 1024;
+  let totalDocBytesScanned = 0;
+
+  // Scan doc files via targeted Range requests
+  for (let dIdx = 0; dIdx < docsToScan.length; dIdx++) {
+    const doc = docsToScan[dIdx];
+    if (totalDocBytesScanned + doc.compSize > MAX_TOTAL_REMOTE_DOC_BYTES && totalDocBytesScanned > 0) {
+      break;
+    }
+    totalDocBytesScanned += doc.compSize;
+
+    const startPct = Math.round(15 + (dIdx / docsToScan.length) * 80);
+    const spanPct = Math.max(1, Math.round(80 / docsToScan.length));
+    const totalToRead = doc.compSize;
+    const totalMbStr = (totalToRead / (1024 * 1024)).toFixed(1);
+
+    jobStatus.set(zipUrl, {
+      phase: 'inspect',
+      percent: startPct,
+      scannedFiles: dIdx,
+      totalFiles: fileTree.length,
+      currentFile: `${doc.name} (0.0/${totalMbStr} МБ)`
+    });
+
+    try {
+      const fetchRangeEnd = doc.localHeaderOffset + 30 + (doc.path || doc.name).length + 500 + doc.compSize;
+      const resDoc = await fetchSafe(zipUrl, {
+        timeout: 25000,
+        bodyTimeout: 60000,
+        headers: { ...reqHeaders, 'Range': `bytes=${doc.localHeaderOffset}-${fetchRangeEnd}` }
+      });
+      if (resDoc.status === 206) {
+        const reader = resDoc.body.getReader();
+        const chunks = [];
+        let received = 0;
+        let lastReport = Date.now();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          received += value.length;
+
+          const now = Date.now();
+          if (now - lastReport >= 150) {
+            lastReport = now;
+            const fraction = totalToRead > 0 ? Math.min(1, received / totalToRead) : 0;
+            const stepPct = Math.round(startPct + fraction * spanPct);
+            const mbStr = (received / (1024 * 1024)).toFixed(1);
+            jobStatus.set(zipUrl, {
+              phase: 'inspect',
+              percent: stepPct,
+              scannedFiles: dIdx,
+              totalFiles: fileTree.length,
+              currentFile: `${doc.name} (${mbStr}/${totalMbStr} МБ)`
+            });
+          }
+        }
+        const localBuf = Buffer.concat(chunks);
+        if (localBuf.length >= 30 && localBuf.readUInt32LE(0) === 0x04034b50) {
+          const lNameLen = localBuf.readUInt16LE(26);
+          const lExtraLen = localBuf.readUInt16LE(28);
+          const dataStart = 30 + lNameLen + lExtraLen;
+          const compressedData = localBuf.subarray(dataStart, dataStart + doc.compSize);
+
+          let decompressedBuf = null;
+          if (doc.method === 0) {
+            decompressedBuf = compressedData;
+          } else if (doc.method === 8) {
+            try {
+              decompressedBuf = zlib.inflateRawSync(compressedData);
+            } catch {}
+          }
+
+          if (decompressedBuf) {
+            const scanned = scanBufferForLinksAndPasswords(decompressedBuf, doc.name);
+            if (scanned.links.length > 0) {
+              doc.hasLinks = true;
+              doc.linksCount = scanned.links.length;
+            }
+            for (const p of scanned.passwords) passwords.add(p);
+            for (const l of scanned.links) {
+              const svc = classifyCloudService(l);
+              if (!scannedLinks.some(sl => sl.url === l)) {
+                let assignedPass = scanned.passwords[0] || null;
+                if (scanned.passwords.length > 1) {
+                  const passForSvc = scanned.passwords.find(p => p.toLowerCase().includes(svc.id) || p.toLowerCase().includes(svc.name.toLowerCase()));
+                  if (passForSvc) assignedPass = passForSvc;
+                }
+                scannedLinks.push({
+                  url: l,
+                  service: svc.name,
+                  serviceId: svc.id,
+                  icon: svc.icon,
+                  sourceFile: doc.name,
+                  password: assignedPass
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      logError('Archive Inspect Remote', `Ошибка чтения документа ${doc.name}`, e);
+    }
+  }
+
+  const hasMedia = fileTree.some(f => /\.(jpe?g|png|gif|webp|mp4|webm|mov|mkv)$/i.test(f.name || ''));
+  return {
+    success: true,
+    inspectVersion: 2,
+    key,
+    zipUrl,
+    archiveName: zipUrl.split('?')[0].split('/').pop() || 'archive.zip',
+    archiveSize: totalFileSize,
+    totalFiles: fileTree.length,
+    totalBytes,
+    isEncrypted,
+    hasMedia,
+    scannedLinks,
+    passwords: Array.from(passwords),
+    fileTree
+  };
+}
+
+/**
  * Inspects a remote or cached ZIP archive:
  * - Scans file tree
  * - Parses text, pdf, url, html files to detect cloud drive links and passwords
@@ -482,10 +830,16 @@ export async function inspectArchive(zipUrl) {
     const raw = await fs.promises.readFile(inspectPath, 'utf8');
     const cached = JSON.parse(raw);
     if (cached && Array.isArray(cached.fileTree)) {
-      if (typeof cached.hasMedia !== 'boolean') {
-        cached.hasMedia = cached.fileTree.some(f => /\.(jpe?g|png|gif|webp|mp4|webm|mov|mkv)$/i.test(f.name || ''));
+      const needsRescan = (!cached.inspectVersion || cached.inspectVersion < 2) &&
+        (!cached.scannedLinks || cached.scannedLinks.length === 0) &&
+        cached.fileTree.some(f => f.isDocument && (f.size || 0) > 100 * 1024);
+
+      if (!needsRescan) {
+        if (typeof cached.hasMedia !== 'boolean') {
+          cached.hasMedia = cached.fileTree.some(f => /\.(jpe?g|png|gif|webp|mp4|webm|mov|mkv)$/i.test(f.name || ''));
+        }
+        return cached;
       }
-      return cached;
     }
   } catch {}
 
@@ -497,40 +851,64 @@ export async function inspectArchive(zipUrl) {
     const zipPath = path.join(ARCHIVES_DIR, `${key}.zip`);
     const downloadingPath = path.join(ARCHIVES_DIR, `${key}.downloading`);
 
-    // 2. Download zip if not already on disk
-  if (!fs.existsSync(zipPath)) {
-    // If downloading is in progress or extractArchive has a file, check
-    logInfo('Archive', `Скачивание архива для инспекции: ${zipUrl.split('?')[0]}`);
-    const response = await fetchSafe(zipUrl, {
-      timeout: DOWNLOAD_TIMEOUT_MS,
-      streamBody: true,
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://pawchive.pw/',
-        'Accept': '*/*'
-      }
-    });
-    if (!response.ok || !response.body) {
-      try { await response.body?.cancel(); } catch {}
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
-    jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0 });
-    const progressCounter = new Transform({
-      transform(chunk, enc, cb) {
-        const st = jobStatus.get(zipUrl);
-        if (st) {
-          st.received += chunk.length;
-          st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
+    // 2. If zip file is not on disk, attempt instant Remote Range Inspection
+    if (!fs.existsSync(zipPath)) {
+      try {
+        logInfo('Archive', `Мгновенная проверка архива через Range-запрос: ${zipUrl.split('?')[0]}`);
+        const remoteResult = await inspectArchiveRemote(zipUrl, key);
+        if (remoteResult && Array.isArray(remoteResult.fileTree)) {
+          await fs.promises.writeFile(inspectPath, JSON.stringify(remoteResult, null, 2), 'utf8');
+          jobStatus.set(zipUrl, {
+            phase: 'completed',
+            percent: 100,
+            scannedFiles: remoteResult.fileTree.length,
+            totalFiles: remoteResult.totalFiles,
+            currentFile: ''
+          });
+          setTimeout(() => jobStatus.delete(zipUrl), 10000);
+          return remoteResult;
         }
-        cb(null, chunk);
+      } catch (remoteErr) {
+        logInfo('Archive', `Range-инспекция недоступна (${remoteErr.message}), переключение на полное скачивание`);
       }
-    });
 
-    await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(downloadingPath));
-    await fs.promises.rename(downloadingPath, zipPath);
-  }
+      // Fallback: download full zip if range inspection wasn't supported
+      logInfo('Archive', `Скачивание архива для инспекции: ${zipUrl.split('?')[0]}`);
+      const response = await fetchSafe(zipUrl, {
+        timeout: DOWNLOAD_TIMEOUT_MS,
+        streamBody: true,
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Referer': 'https://pawchive.pw/',
+          'Accept': '*/*'
+        }
+      });
+      if (!response.ok || !response.body) {
+        try { await response.body?.cancel(); } catch {}
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
+      jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0 });
+      let lastProgressTime = 0;
+      const progressCounter = new Transform({
+        transform(chunk, enc, cb) {
+          const st = jobStatus.get(zipUrl);
+          if (st) {
+            st.received += chunk.length;
+            const now = Date.now();
+            if (now - lastProgressTime >= 150) {
+              lastProgressTime = now;
+              st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
+            }
+          }
+          cb(null, chunk);
+        }
+      });
+
+      await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(downloadingPath, { highWaterMark: 1024 * 1024 }));
+      await fs.promises.rename(downloadingPath, zipPath);
+    }
 
   jobStatus.set(zipUrl, {
     phase: 'inspect',
@@ -642,6 +1020,7 @@ export async function inspectArchive(zipUrl) {
     const hasMedia = fileTree.some(f => /\.(jpe?g|png|gif|webp|mp4|webm|mov|mkv)$/i.test(f.name || ''));
     const result = {
       success: true,
+      inspectVersion: 2,
       key,
       zipUrl,
       archiveName: zipUrl.split('?')[0].split('/').pop() || 'archive.zip',
@@ -676,4 +1055,160 @@ export async function inspectArchive(zipUrl) {
 
   inflightInspects.set(zipUrl, job);
   return job;
+}
+
+const MIME_MAP = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  avif: 'image/avif',
+  bmp: 'image/bmp',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  mov: 'video/quicktime',
+  mkv: 'video/x-matroska',
+  pdf: 'application/pdf',
+  txt: 'text/plain; charset=utf-8',
+  zip: 'application/zip',
+  json: 'application/json'
+};
+
+function getFileMime(ext) {
+  return MIME_MAP[String(ext || '').toLowerCase()] || 'application/octet-stream';
+}
+
+/**
+ * Streams or sends an individual file from an archive (from local extracted cache,
+ * disk zip file, or on-the-fly remote HTTP Range extraction).
+ */
+export async function downloadArchiveEntry(zipUrl, targetPathOrName, res) {
+  if (!zipUrl || !isAllowedArchiveUrl(zipUrl)) {
+    return res.status(403).send('Недопустимый источник архива');
+  }
+
+  const cleanTarget = String(targetPathOrName || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
+  if (!cleanTarget || cleanTarget.includes('..')) {
+    return res.status(400).send('Неверное имя файла');
+  }
+
+  const baseTarget = cleanTarget.split('/').pop();
+  const key = getArchiveKey(zipUrl);
+
+  // 1. If archive was already unpacked locally, serve directly from disk
+  const manifestPath = path.join(ARCHIVES_DIR, `${key}.manifest.json`);
+  if (fs.existsSync(manifestPath)) {
+    try {
+      const raw = await fs.promises.readFile(manifestPath, 'utf8');
+      const manifest = JSON.parse(raw);
+      const item = Array.isArray(manifest?.items)
+        ? manifest.items.find(it => it.name === baseTarget || it.name === cleanTarget)
+        : null;
+      if (item) {
+        const filePath = path.join(ARCHIVES_DIR, `${key}_${item.n}.${item.ext}`);
+        if (fs.existsSync(filePath)) {
+          return res.download(filePath, item.name || baseTarget);
+        }
+      }
+    } catch {}
+  }
+
+  // 2. If full zip file is saved on disk, stream entry directly using yauzl
+  const zipPath = path.join(ARCHIVES_DIR, `${key}.zip`);
+  if (fs.existsSync(zipPath)) {
+    let zip;
+    try {
+      zip = await openZip(zipPath);
+      for await (const entry of zip) {
+        const norm = entry.name.replace(/\\/g, '/');
+        const base = norm.split('/').pop();
+        if (norm === cleanTarget || base === baseTarget || norm.endsWith('/' + cleanTarget)) {
+          const ext = getExt(base);
+          const mime = getFileMime(ext);
+          const asciiSafe = base.replace(/[^\x20-\x7E]/g, '_');
+          res.setHeader('Content-Type', mime);
+          res.setHeader('Content-Disposition', `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodeURIComponent(base)}`);
+          if (entry.size > 0) res.setHeader('Content-Length', entry.size);
+
+          const readStream = await zip.openReadStream(entry);
+          return readStream.pipe(res);
+        }
+      }
+    } catch (err) {
+      logError('Archive Download Entry', `Ошибка извлечения файла ${baseTarget} из локального zip`, err);
+    } finally {
+      if (zip) try { await zip.close(); } catch {}
+    }
+  }
+
+  // 3. Remote extract: retrieve entry info via inspectArchive
+  const inspection = await inspectArchive(zipUrl);
+  const fileTree = Array.isArray(inspection?.fileTree) ? inspection.fileTree : [];
+  const entry = fileTree.find(f => {
+    const fn = (f.path || f.name || '').replace(/\\/g, '/');
+    const fb = fn.split('/').pop();
+    return fn === cleanTarget || fb === baseTarget || fn.endsWith('/' + cleanTarget);
+  });
+
+  if (!entry) {
+    return res.status(404).send('Файл не найден в архиве');
+  }
+
+  const baseName = entry.name || baseTarget;
+  const ext = getExt(baseName);
+  const mime = getFileMime(ext);
+  const asciiSafe = baseName.replace(/[^\x20-\x7E]/g, '_');
+
+  // If localHeaderOffset is present, fetch via Range
+  if (entry.localHeaderOffset !== undefined && entry.compSize > 0) {
+    const fetchRangeEnd = entry.localHeaderOffset + 30 + (entry.path || baseName).length + 600 + entry.compSize;
+    const reqHeaders = {
+      'User-Agent': 'Mozilla/5.0',
+      'Referer': resolveSiteReferer(zipUrl) || 'https://pawchive.pw/',
+      'Range': `bytes=${entry.localHeaderOffset}-${fetchRangeEnd}`
+    };
+
+    const rangeRes = await fetchSafe(zipUrl, { timeout: 60000, headers: reqHeaders });
+    if (rangeRes.status === 206) {
+      const localBuf = Buffer.from(await rangeRes.arrayBuffer());
+      if (localBuf.length >= 30 && localBuf.readUInt32LE(0) === 0x04034b50) {
+        const lNameLen = localBuf.readUInt16LE(26);
+        const lExtraLen = localBuf.readUInt16LE(28);
+        const dataStart = 30 + lNameLen + lExtraLen;
+        const compressedData = localBuf.subarray(dataStart, dataStart + entry.compSize);
+
+        res.setHeader('Content-Type', mime);
+        res.setHeader('Content-Disposition', `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodeURIComponent(baseName)}`);
+        if (entry.size > 0) {
+          res.setHeader('Content-Length', entry.size);
+        }
+
+        if (entry.method === 0) {
+          return res.send(compressedData);
+        } else if (entry.method === 8) {
+          if (entry.compSize > 30 * 1024 * 1024) {
+            const { Readable } = await import('node:stream');
+            return Readable.from(compressedData).pipe(zlib.createInflateRaw()).pipe(res);
+          } else {
+            const decompressed = zlib.inflateRawSync(compressedData);
+            return res.send(decompressed);
+          }
+        }
+      }
+    }
+  }
+
+  // Fallback: If Range extraction failed or offset missing, download archive to local cache and stream file
+  await extractArchive(zipUrl, key);
+  const updatedManifest = readManifest(key);
+  const updatedItem = updatedManifest?.items?.find(it => it.name === baseTarget || it.name === cleanTarget);
+  if (updatedItem) {
+    const filePath = path.join(ARCHIVES_DIR, `${key}_${updatedItem.n}.${updatedItem.ext}`);
+    if (fs.existsSync(filePath)) {
+      return res.download(filePath, updatedItem.name || baseTarget);
+    }
+  }
+
+  res.status(404).send('Не удалось извлечь файл из архива');
 }

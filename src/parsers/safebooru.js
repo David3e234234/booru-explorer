@@ -98,7 +98,7 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList);
-    const { tagDetails, author } = await classifyPostTags(rawTags, item.source, '', settings);
+    const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
     const createdAt = normalizeDate(item.created_at || item.change);
     const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
     const hasChildren = Boolean(item.has_children);
@@ -123,6 +123,7 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
       isGif,
       hasSound: isVideo && hasSound,
       author,
+      assistants: assistants || [],
       tags: rawTags,
       tagDetails,
       score: parseInt(item.score, 10) || 0,

@@ -48,6 +48,9 @@
   --tag-artist: #fb7185;
   --tag-artist-bg: rgba(251, 113, 133, 0.14);
 
+  --tag-assistant: #fb923c;
+  --tag-assistant-bg: rgba(251, 146, 60, 0.14);
+
   --tag-character: #34d399;
   --tag-character-bg: rgba(52, 211, 153, 0.14);
 
@@ -124,6 +127,9 @@
   --tag-artist: #fb7185;
   --tag-artist-bg: rgba(251, 113, 133, 0.15);
 
+  --tag-assistant: #f97316;
+  --tag-assistant-bg: rgba(249, 115, 22, 0.15);
+
   --tag-character: #2dd4bf;
   --tag-character-bg: rgba(45, 212, 191, 0.15);
 
@@ -170,6 +176,9 @@
 
   --tag-artist: #c2344a;
   --tag-artist-bg: rgba(194, 52, 74, 0.1);
+
+  --tag-assistant: #ea580c;
+  --tag-assistant-bg: rgba(234, 88, 12, 0.1);
 
   --tag-character: #047857;
   --tag-character-bg: rgba(4, 120, 87, 0.1);

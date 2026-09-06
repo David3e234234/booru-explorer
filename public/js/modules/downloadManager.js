@@ -120,10 +120,35 @@ class DownloadManager {
     const { url, abortController } = task;
 
     try {
-      const targetUrl = getProxiedUrl(url);
-      const res = await fetch(targetUrl, {
-        signal: abortController.signal
-      });
+      // Pawchive and Kemono/Coomer CDN servers support CORS (Access-Control-Allow-Origin: *).
+      // Fetching directly connects to the nearest CDN edge and eliminates double-proxying overhead.
+      let res = null;
+      const isCorsFriendly = (u) => {
+        try {
+          const host = new URL(u).hostname.toLowerCase();
+          return host.includes('pawchive') || host.includes('kemono') || host.includes('coomer');
+        } catch {
+          return false;
+        }
+      };
+
+      if (isCorsFriendly(url)) {
+        try {
+          const directRes = await fetch(url, { signal: abortController.signal });
+          if (directRes && directRes.ok) {
+            res = directRes;
+          }
+        } catch {
+          // Direct fetch failed (CORS or network), fallback to proxy below
+        }
+      }
+
+      if (!res) {
+        const targetUrl = getProxiedUrl(url);
+        res = await fetch(targetUrl, {
+          signal: abortController.signal
+        });
+      }
 
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
