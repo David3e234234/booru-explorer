@@ -168,8 +168,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           const videoEl = card.querySelector('.hover-video-preview');
           const post = card._post || state.posts.find(p => p.id === card.dataset.postId) || (state.displayedPosts || state.posts)[parseInt(card.dataset.index, 10)];
           if (videoEl && post && post.isVideo && !post.duration) {
-            // Rule34Video post.fileUrl is a 20-second teaser clip; probing it yields a false 20s duration
-            if (post.site === 'rule34video') {
+            // Rule34Video post.fileUrl is a 20s teaser; Kemono videos lack duration metadata and heavy probing triggers storage rate-limits
+            if (post.site === 'rule34video' || post.site === 'kemono') {
               obs.unobserve(card);
               return;
             }

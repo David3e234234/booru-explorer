@@ -74,7 +74,7 @@ async function writeCacheFileAtomic(cacheFilePath, buf) {
 const inflightImages = new Map();
 
 function buildUpstreamHeaders(targetUrl, isImage, currentSettings) {
-  const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net') || targetUrl.includes('tbib.org') || targetUrl.includes('pawchive.pw') || targetUrl.includes('pawchive.st');
+  const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net') || targetUrl.includes('tbib.org') || targetUrl.includes('pawchive.pw') || targetUrl.includes('pawchive.st') || targetUrl.includes('kemono.cr') || targetUrl.includes('kemono.su');
   const headers = {
     'User-Agent': isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT,
     'Accept': '*/*',
@@ -160,6 +160,13 @@ function build404FallbackCandidates(targetUrl) {
     const isVid = /\.(mp4|webm|mov|m4v|mkv)$/i.test(cleanNoQuery);
     const kemonoNodes = ['https://n1.kemono.cr', 'https://n2.kemono.cr', 'https://n3.kemono.cr', 'https://n4.kemono.cr'];
     const matchedNode = kemonoNodes.find(n => targetUrl.startsWith(n));
+
+    // For images, prioritize DDoS-Guard CDN thumbnail first (bypasses ISP blocks on n1-n4)
+    if (!isVid && cleanNoQuery.includes('/data/')) {
+      const dataPath = cleanNoQuery.slice(cleanNoQuery.indexOf('/data/'));
+      pushCandidate(`https://img.kemono.cr/thumbnail${dataPath}`);
+    }
+
     if (matchedNode) {
       for (const altNode of kemonoNodes) {
         if (altNode !== matchedNode) {
@@ -167,15 +174,11 @@ function build404FallbackCandidates(targetUrl) {
         }
       }
     }
-    if (!isVid) {
-      if (cleanNoQuery.includes('/data/')) {
-        const dataPath = cleanNoQuery.slice(cleanNoQuery.indexOf('/data/'));
-        pushCandidate(`https://img.kemono.cr/thumbnail${dataPath}`);
-      } else if (cleanNoQuery.includes('img.kemono.cr/thumbnail/data/')) {
-        const dataPath = cleanNoQuery.slice(cleanNoQuery.indexOf('/data/'));
-        for (const node of kemonoNodes) {
-          pushCandidate(`${node}${dataPath}`);
-        }
+
+    if (!isVid && cleanNoQuery.includes('img.kemono.cr/thumbnail/data/')) {
+      const dataPath = cleanNoQuery.slice(cleanNoQuery.indexOf('/data/'));
+      for (const node of kemonoNodes) {
+        pushCandidate(`${node}${dataPath}`);
       }
     }
   }
@@ -243,23 +246,35 @@ function pruneUpstreamCooldown() {
 // undici keeps the socket checked out until the body is consumed or cancelled,
 // so a leaking fallback loop exhausts the pool during gallery scroll
 async function fetchWith404Fallback(url, headers, signal, settings, options = {}) {
-  const { headersFor = null, shouldFallback = (r) => r.status === 404 } = options;
+  const { headersFor = null, shouldFallback = (r) => !r || !r.ok || r.status === 404 } = options;
 
-  let response = await fetchUpstreamWithRetry(url, headers, signal, settings);
-  if (!shouldFallback(response)) return { response, effectiveUrl: url };
+  let response = null;
+  let initialError = null;
+  try {
+    response = await fetchUpstreamWithRetry(url, headers, signal, settings);
+  } catch (err) {
+    initialError = err;
+  }
+
+  if (response && !shouldFallback(response)) return { response, effectiveUrl: url };
 
   for (const altUrl of build404FallbackCandidates(url)) {
+    if (signal?.aborted) break;
     let altResp = null;
     try {
       altResp = await tryFetch(altUrl, headersFor ? headersFor(altUrl) : headers, signal, settings);
       if (altResp.ok || altResp.status === 206) {
-        await discardResponse(response);
+        if (response) await discardResponse(response);
         return { response: altResp, effectiveUrl: altUrl };
       }
     } catch {}
     await discardResponse(altResp);
   }
-  return { response, effectiveUrl: url };
+
+  if (response) {
+    return { response, effectiveUrl: url };
+  }
+  throw initialError || new Error(`Не удалось загрузить ${url}`);
 }
 
 async function fetchUpstreamWithRetry(targetUrl, headers, signal, settings, maxRetries = 2) {

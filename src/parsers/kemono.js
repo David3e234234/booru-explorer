@@ -62,7 +62,7 @@ function isKemonoArchive(nameOrPath) {
 
 export function getKemonoAuthHeaders(settings = {}) {
   const headers = {
-    'Accept': 'text/css, application/json, */*'
+    'Accept': 'text/css'
   };
   const rawSession = String(settings.kemonoSession || '').trim();
   if (rawSession) {
@@ -400,7 +400,7 @@ export async function normalizeKemonoPost(item, creatorMap, resolvedCreator, aiT
     const previewUrlRaw = isVid
       ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium`
       : `https://img.kemono.cr/thumbnail/data${m.path}`;
-    const sampleUrl = (isPrevOnly && !isVid) ? previewUrlRaw : fileUrl;
+    const sampleUrl = !isVid ? previewUrlRaw : fileUrl;
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVid);
     const thumb180 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=low` : previewUrl;
     const thumb360 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium` : previewUrl;
