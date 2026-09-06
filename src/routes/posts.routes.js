@@ -19,7 +19,7 @@ import { getCreatorsDirectory as getKemonoCreatorsDirectory, fetchKemonoPostById
 import { fetchRule34PostById } from '../parsers/rule34.js';
 import { fetchXbooruPostById } from '../parsers/dapi.js';
 import { groupPostsIntoAlbums, sortAlbumItems } from '../utils/albumHelper.js';
-import { fetchSafe, safeJsonParse, isSafeExternalUrl } from '../utils/network.js';
+import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
@@ -373,7 +373,7 @@ router.post('/proxy/test', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Укажите URL прокси (например: http://127.0.0.1:8080 или socks5://127.0.0.1:1080)' });
     }
 
-    const cleanProxy = proxyUrl.trim();
+    const cleanProxy = normalizeProxyUrl(proxyUrl.trim());
     const siteConfig = site && SITES[site] ? SITES[site] : null;
     const testTargetUrl = siteConfig ? `${siteConfig.baseUrl}/` : 'https://danbooru.donmai.us/';
     const targetName = siteConfig ? siteConfig.name : 'интернет';

@@ -28,6 +28,29 @@ import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingF
 import { updateHeaderAuthUI } from './authModal.js';
 import { getLocalCacheCount, clearAllEmbeddingsCache } from './aiVision.js';
 
+export function normalizeProxyString(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  let clean = raw.trim();
+  if (!clean) return '';
+  let proto = 'http';
+  const match = clean.match(/^([a-zA-Z0-9+.-]+):\/\//);
+  if (match) {
+    proto = match[1].toLowerCase();
+    clean = clean.slice(match[0].length);
+  }
+  if (clean.includes('@')) return `${proto}://${clean}`;
+  const parts = clean.split(':');
+  if (parts.length === 4) {
+    if (/^\d+$/.test(parts[1]) && !/^\d+$/.test(parts[3])) {
+      return `${proto}://${encodeURIComponent(parts[2])}:${encodeURIComponent(parts[3])}@${parts[0]}:${parts[1]}`;
+    }
+    if (/^\d+$/.test(parts[3]) && !/^\d+$/.test(parts[1])) {
+      return `${proto}://${encodeURIComponent(parts[0])}:${encodeURIComponent(parts[1])}@${parts[2]}:${parts[3]}`;
+    }
+  }
+  return `${proto}://${clean}`;
+}
+
 export const DEFAULT_AI_TAGS = [
   'ai_generated',
   'ai_art',
@@ -1061,7 +1084,19 @@ export function openSettingsModal() {
   ];
   proxyInputs.forEach(({ key, id }) => {
     const el = document.getElementById(id);
-    if (el) el.value = state.settings[key] || '';
+    if (el) {
+      el.value = state.settings[key] || '';
+      if (!el._hasProxyNormalizeListener) {
+        el._hasProxyNormalizeListener = true;
+        el.addEventListener('blur', () => {
+          const val = el.value.trim();
+          if (val) {
+            const norm = normalizeProxyString(val);
+            if (norm && norm !== val) el.value = norm;
+          }
+        });
+      }
+    }
   });
   if (selectItemsPerPage) selectItemsPerPage.value = String(state.limit || 100);
   if (selectPreviewQuality) selectPreviewQuality.value = state.settings.previewQuality || 'medium';
@@ -1833,11 +1868,16 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     if (!btn) return;
     btn.addEventListener('click', async () => {
       const el = document.getElementById(inputId);
-      const proxyUrl = el ? el.value.trim() : '';
+      const rawProxy = el ? el.value.trim() : '';
 
-      if (!proxyUrl) {
+      if (!rawProxy) {
         showToast(t('set.proxyTestNeedsUrl', 'Введите URL прокси (например: http://127.0.0.1:8080)'));
         return;
+      }
+
+      const proxyUrl = normalizeProxyString(rawProxy);
+      if (el && proxyUrl !== rawProxy) {
+        el.value = proxyUrl;
       }
 
       const originalHtml = btn.innerHTML;
@@ -2047,19 +2087,19 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : '',
         pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : '',
         kemonoSession: inputKemonoSession ? inputKemonoSession.value.trim() : '',
-        globalProxy: document.getElementById('inputGlobalProxy')?.value.trim() || '',
-        danbooruProxy: document.getElementById('inputDanbooruProxy')?.value.trim() || '',
-        gelbooruProxy: document.getElementById('inputGelbooruProxy')?.value.trim() || '',
-        rule34Proxy: document.getElementById('inputRule34Proxy')?.value.trim() || '',
-        yandereProxy: document.getElementById('inputYandereProxy')?.value.trim() || '',
-        konachanProxy: document.getElementById('inputKonachanProxy')?.value.trim() || '',
-        safebooruProxy: document.getElementById('inputSafebooruProxy')?.value.trim() || '',
-        rule34videoProxy: document.getElementById('inputRule34videoProxy')?.value.trim() || '',
-        pawchiveProxy: document.getElementById('inputPawchiveProxy')?.value.trim() || '',
-        kemonoProxy: document.getElementById('inputKemonoProxy')?.value.trim() || '',
-        xbooruProxy: document.getElementById('inputXbooruProxy')?.value.trim() || '',
-        hypnohubProxy: document.getElementById('inputHypnohubProxy')?.value.trim() || '',
-        tbibProxy: document.getElementById('inputTbibProxy')?.value.trim() || '',
+        globalProxy: normalizeProxyString(document.getElementById('inputGlobalProxy')?.value.trim() || ''),
+        danbooruProxy: normalizeProxyString(document.getElementById('inputDanbooruProxy')?.value.trim() || ''),
+        gelbooruProxy: normalizeProxyString(document.getElementById('inputGelbooruProxy')?.value.trim() || ''),
+        rule34Proxy: normalizeProxyString(document.getElementById('inputRule34Proxy')?.value.trim() || ''),
+        yandereProxy: normalizeProxyString(document.getElementById('inputYandereProxy')?.value.trim() || ''),
+        konachanProxy: normalizeProxyString(document.getElementById('inputKonachanProxy')?.value.trim() || ''),
+        safebooruProxy: normalizeProxyString(document.getElementById('inputSafebooruProxy')?.value.trim() || ''),
+        rule34videoProxy: normalizeProxyString(document.getElementById('inputRule34videoProxy')?.value.trim() || ''),
+        pawchiveProxy: normalizeProxyString(document.getElementById('inputPawchiveProxy')?.value.trim() || ''),
+        kemonoProxy: normalizeProxyString(document.getElementById('inputKemonoProxy')?.value.trim() || ''),
+        xbooruProxy: normalizeProxyString(document.getElementById('inputXbooruProxy')?.value.trim() || ''),
+        hypnohubProxy: normalizeProxyString(document.getElementById('inputHypnohubProxy')?.value.trim() || ''),
+        tbibProxy: normalizeProxyString(document.getElementById('inputTbibProxy')?.value.trim() || ''),
         telegramBackupEnabled: checkTgEnabled ? checkTgEnabled.checked : false,
         telegramBotToken: inputTgToken ? inputTgToken.value.trim() : '',
         telegramChatId: inputTgChat ? inputTgChat.value.trim() : '',

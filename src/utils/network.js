@@ -8,19 +8,57 @@ import { logError, logInfo } from './logger.js';
 const proxyAgentCache = new Map();
 
 /**
+ * Normalizes user-entered proxy strings into valid WHATWG URLs.
+ * Supports:
+ * - standard URLs: http://user:pass@host:port, socks5://host:port
+ * - host:port -> http://host:port
+ * - host:port:user:pass -> http://user:pass@host:port
+ * - user:pass:host:port -> http://user:pass@host:port
+ */
+export function normalizeProxyUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  let clean = rawUrl.trim();
+  if (!clean) return '';
+
+  let protocol = 'http';
+  const protoMatch = clean.match(/^([a-zA-Z0-9+.-]+):\/\//);
+  if (protoMatch) {
+    protocol = protoMatch[1].toLowerCase();
+    clean = clean.slice(protoMatch[0].length);
+  }
+
+  // Already standard user:pass@host:port format
+  if (clean.includes('@')) {
+    return `${protocol}://${clean}`;
+  }
+
+  // Check for colon-separated formats: host:port:user:pass or user:pass:host:port
+  const parts = clean.split(':');
+  if (parts.length === 4) {
+    // Case A: host:port:user:pass (part 1 is numeric port)
+    if (/^\d+$/.test(parts[1]) && !/^\d+$/.test(parts[3])) {
+      const [ip, port, user, pass] = parts;
+      return `${protocol}://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${ip}:${port}`;
+    }
+    // Case B: user:pass:host:port (part 3 is numeric port)
+    if (/^\d+$/.test(parts[3]) && !/^\d+$/.test(parts[1])) {
+      const [user, pass, ip, port] = parts;
+      return `${protocol}://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${ip}:${port}`;
+    }
+  }
+
+  return `${protocol}://${clean}`;
+}
+
+/**
  * Returns or creates an Undici Dispatcher (ProxyAgent or Socks5ProxyAgent) for a given proxy URL
  * @param {string} proxyUrl - Proxy URL (http://, https://, socks5://, socks5h://, socks4://, socks://)
  * @returns {import('undici').Dispatcher|null}
  */
 export function getProxyAgent(proxyUrl) {
   if (!proxyUrl || typeof proxyUrl !== 'string') return null;
-  let cleanUrl = proxyUrl.trim();
+  const cleanUrl = normalizeProxyUrl(proxyUrl);
   if (!cleanUrl) return null;
-
-  // Add default protocol if missing (e.g. 127.0.0.1:8080 -> http://127.0.0.1:8080)
-  if (!cleanUrl.includes('://')) {
-    cleanUrl = `http://${cleanUrl}`;
-  }
 
   if (proxyAgentCache.has(cleanUrl)) {
     return proxyAgentCache.get(cleanUrl);
@@ -88,11 +126,11 @@ export function getProxyForSite(site, settings) {
   if (site) {
     const specific = settings[`${site}Proxy`];
     if (typeof specific === 'string' && specific.trim()) {
-      return specific.trim();
+      return normalizeProxyUrl(specific.trim());
     }
   }
   if (typeof settings.globalProxy === 'string' && settings.globalProxy.trim()) {
-    return settings.globalProxy.trim();
+    return normalizeProxyUrl(settings.globalProxy.trim());
   }
   return '';
 }
