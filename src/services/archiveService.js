@@ -758,13 +758,15 @@ export function buildArchiveAlbumItems(manifest, targetSite = 'pawchive') {
 async function inspectArchiveRemoteSingle(zipUrl, key, options = {}) {
   const reqHeaders = {
     'User-Agent': 'Mozilla/5.0',
-    'Referer': resolveSiteReferer(zipUrl) || 'https://pawchive.pw/',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+    'Referer': resolveSiteReferer(zipUrl) || 'https://kemono.cr/',
     'Range': 'bytes=-65536'
   };
 
   jobStatus.set(zipUrl, { phase: 'inspect', percent: 10, scannedFiles: 0, totalFiles: 0, currentFile: '' });
 
-  const fetchTimeout = options.timeout || (zipUrl.includes('kemono') ? 6000 : 15000);
+  const fetchTimeout = options.timeout || (zipUrl.includes('kemono') ? 10000 : 15000);
 
   const res = await fetchSafe(zipUrl, {
     timeout: fetchTimeout,

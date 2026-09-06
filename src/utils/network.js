@@ -331,9 +331,9 @@ export async function fetchSafe(url, options = {}) {
 
   try {
     const isDanbooru = typeof url === 'string' && url.includes('donmai.us');
-    const isKemono = site === 'kemono' || (typeof url === 'string' && (url.includes('kemono.cr') || url.includes('kemono.su') || url.includes('kemono.party')));
+    const isKemonoApi = typeof url === 'string' && (url.includes('kemono.cr/api/') || url.includes('kemono.su/api/') || url.includes('coomer.st/api/'));
     const defaultUa = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
-    const defaultAccept = isKemono ? 'text/css' : 'application/json, text/xml, text/html, */*';
+    const defaultAccept = isKemonoApi ? 'text/css' : (isDanbooru ? 'application/json, text/xml, text/html, */*' : '*/*');
 
     // Resolve proxy dispatcher
     let dispatcher = externalDispatcher || null;
