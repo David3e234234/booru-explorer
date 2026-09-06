@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { DATA_DIR, DEFAULT_SETTINGS } from '../config/constants.js';
+import { DATA_DIR, DEFAULT_SETTINGS, SECRET_SETTING_FIELDS } from '../config/constants.js';
 import { readJsonFile, writeJsonFile, writeJsonFileAsync } from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
@@ -293,7 +293,7 @@ export function restoreUser(account = {}) {
 /**
  * Log a user in
  */
-export function loginUser(username, password) {
+export function loginUser(username, password, initialData = null) {
   const cleanUsername = (username || '').trim();
   const user = findUserByUsername(cleanUsername);
   if (!user) {
@@ -313,9 +313,32 @@ export function loginUser(username, password) {
     saveUsersList(users);
   }
 
+  // Read the user's saved settings on disk
+  const userDir = getUserDataDir(user.id);
+  const settingsFile = path.join(userDir, 'settings.json');
+  const userSettings = { ...DEFAULT_SETTINGS, ...readJsonFile(settingsFile, {}) };
+
+  // If client provided local settings on login, carry over any non-empty API keys / credentials
+  // that are currently missing or empty in the account on the server
+  if (initialData?.settings && typeof initialData.settings === 'object') {
+    let changed = false;
+    for (const field of SECRET_SETTING_FIELDS) {
+      const existingVal = userSettings[field];
+      const incomingVal = initialData.settings[field];
+      if ((!existingVal || String(existingVal).trim() === '') && incomingVal && String(incomingVal).trim() !== '') {
+        userSettings[field] = incomingVal;
+        changed = true;
+      }
+    }
+    if (changed) {
+      writeJsonFile(settingsFile, userSettings);
+      logInfo('Auth', `Локальные API-ключи перенесены в аккаунт: ${cleanUsername}`);
+    }
+  }
+
   const token = generateToken({ id: user.id, username: user.username });
   const { passwordHash, salt: _, ...safeUser } = user;
-  return { user: safeUser, token };
+  return { user: safeUser, token, settings: userSettings };
 }
 
 /**

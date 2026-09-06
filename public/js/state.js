@@ -132,6 +132,16 @@ export const DEFAULT_CLIENT_SETTINGS = {
   siteSortTags: {}
 };
 
+export const SECRET_SETTING_FIELDS = [
+  'rule34ApiKey', 'rule34UserId',
+  'gelbooruApiKey', 'gelbooruUserId',
+  'danbooruApiKey', 'danbooruLogin',
+  'konachanLogin', 'konachanPassword',
+  'yandereLogin', 'yanderePassword',
+  'pawchiveSession', 'kemonoSession',
+  'telegramBotToken', 'telegramChatId'
+];
+
 export function getInitialSettings() {
   try {
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('booru_settings') : null;
@@ -253,6 +263,20 @@ export function clearLocalAuth() {
     localStorage.removeItem(STORAGE_KEYS.LIKES);
     localStorage.removeItem(STORAGE_KEYS.DISLIKES);
     localStorage.removeItem(STORAGE_KEYS.FAVORITE_AUTHORS);
+    const current = loadLocalSettings() || {};
+    let changed = false;
+    for (const field of SECRET_SETTING_FIELDS) {
+      if (current[field]) {
+        delete current[field];
+        changed = true;
+      }
+      if (state.settings && state.settings[field]) {
+        state.settings[field] = '';
+      }
+    }
+    if (changed) {
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(current));
+    }
   } catch (e) {}
 }
 

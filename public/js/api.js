@@ -61,11 +61,13 @@ export async function apiRegister(username, password, initialData = {}) {
   return await res.json();
 }
 
-export async function apiLogin(username, password) {
+export async function apiLogin(username, password, initialData = null) {
+  const body = { username, password };
+  if (initialData) body.initialData = initialData;
   const res = await fetch('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password })
+    body: JSON.stringify(body)
   });
   return await res.json();
 }

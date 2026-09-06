@@ -19,7 +19,8 @@ import {
   getUserInterestSeedPairs,
   getRecommendationSeeds,
   calculatePostMatchPercent,
-  isAuthorFavorite
+  isAuthorFavorite,
+  SECRET_SETTING_FIELDS
 } from './state.js';
 import { 
   fetchPosts, 
@@ -630,9 +631,54 @@ async function loadUserSettings() {
     }
     const data = await fetchSettings();
     const serverSettings = data?.settings || {};
-    const merged = { ...serverSettings, ...local };
+
+    let merged;
+    let shouldSyncToServer = false;
+
+    if (state.currentUser) {
+      // Authenticated user: server settings are authoritative, never wipe them out with empty local values
+      merged = { ...state.settings, ...serverSettings };
+
+      // Ensure that credentials in SECRET_SETTING_FIELDS from server are preserved,
+      // and any non-empty local credentials the server account is missing get migrated
+      for (const field of SECRET_SETTING_FIELDS) {
+        const serverVal = serverSettings[field];
+        const localVal = local[field];
+        if (serverVal && String(serverVal).trim() !== '') {
+          merged[field] = serverVal;
+        } else if (localVal && String(localVal).trim() !== '') {
+          merged[field] = localVal;
+          shouldSyncToServer = true;
+        }
+      }
+
+      // Also transfer any proxy settings that the account is missing
+      const proxyFields = [
+        'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy',
+        'yandereProxy', 'konachanProxy', 'safebooruProxy', 'rule34videoProxy',
+        'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy'
+      ];
+      for (const field of proxyFields) {
+        const serverVal = serverSettings[field];
+        const localVal = local[field];
+        if (serverVal && String(serverVal).trim() !== '') {
+          merged[field] = serverVal;
+        } else if (localVal && String(localVal).trim() !== '') {
+          merged[field] = localVal;
+          shouldSyncToServer = true;
+        }
+      }
+    } else {
+      // Anonymous / logged out: local settings override server defaults
+      merged = { ...serverSettings, ...local };
+    }
+
     applySettingsToUIAndState(merged);
     saveLocalSettings(merged);
+
+    if (shouldSyncToServer && state.currentUser) {
+      saveSettings(merged).catch(() => {});
+    }
   } catch (err) {
     console.error('Ошибка настроек:', err);
   }

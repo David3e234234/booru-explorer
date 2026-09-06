@@ -466,18 +466,18 @@ export function applySettingsToUIAndState(s) {
   const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
   const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
 
-  if (s.rule34ApiKey && inputRule34ApiKey) inputRule34ApiKey.value = s.rule34ApiKey;
-  if (s.rule34UserId && inputRule34UserId) inputRule34UserId.value = s.rule34UserId;
-  if (s.gelbooruApiKey && inputGelbooruApiKey) inputGelbooruApiKey.value = s.gelbooruApiKey;
-  if (s.gelbooruUserId && inputGelbooruUserId) inputGelbooruUserId.value = s.gelbooruUserId;
-  if (s.danbooruApiKey && inputDanbooruApiKey) inputDanbooruApiKey.value = s.danbooruApiKey;
-  if (s.danbooruLogin && inputDanbooruLogin) inputDanbooruLogin.value = s.danbooruLogin;
-  if (s.konachanLogin && inputKonachanLogin) inputKonachanLogin.value = s.konachanLogin;
-  if (s.konachanPassword && inputKonachanPassword) inputKonachanPassword.value = s.konachanPassword;
-  if (s.yandereLogin && inputYandereLogin) inputYandereLogin.value = s.yandereLogin;
-  if (s.yanderePassword && inputYanderePassword) inputYanderePassword.value = s.yanderePassword;
-  if (s.pawchiveSession && inputPawchiveSession) inputPawchiveSession.value = s.pawchiveSession;
-  if (s.kemonoSession && inputKemonoSession) inputKemonoSession.value = s.kemonoSession;
+  if (inputRule34ApiKey && s.rule34ApiKey !== undefined) inputRule34ApiKey.value = s.rule34ApiKey || '';
+  if (inputRule34UserId && s.rule34UserId !== undefined) inputRule34UserId.value = s.rule34UserId || '';
+  if (inputGelbooruApiKey && s.gelbooruApiKey !== undefined) inputGelbooruApiKey.value = s.gelbooruApiKey || '';
+  if (inputGelbooruUserId && s.gelbooruUserId !== undefined) inputGelbooruUserId.value = s.gelbooruUserId || '';
+  if (inputDanbooruApiKey && s.danbooruApiKey !== undefined) inputDanbooruApiKey.value = s.danbooruApiKey || '';
+  if (inputDanbooruLogin && s.danbooruLogin !== undefined) inputDanbooruLogin.value = s.danbooruLogin || '';
+  if (inputKonachanLogin && s.konachanLogin !== undefined) inputKonachanLogin.value = s.konachanLogin || '';
+  if (inputKonachanPassword && s.konachanPassword !== undefined) inputKonachanPassword.value = s.konachanPassword || '';
+  if (inputYandereLogin && s.yandereLogin !== undefined) inputYandereLogin.value = s.yandereLogin || '';
+  if (inputYanderePassword && s.yanderePassword !== undefined) inputYanderePassword.value = s.yanderePassword || '';
+  if (inputPawchiveSession && s.pawchiveSession !== undefined) inputPawchiveSession.value = s.pawchiveSession || '';
+  if (inputKemonoSession && s.kemonoSession !== undefined) inputKemonoSession.value = s.kemonoSession || '';
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },

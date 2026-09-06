@@ -254,6 +254,7 @@ export const DEFAULT_SETTINGS = {
   yandereLogin: '',
   yanderePassword: '',
   pawchiveSession: '',
+  kemonoSession: '',
   globalProxy: '',
   danbooruProxy: '',
   gelbooruProxy: '',
@@ -297,7 +298,7 @@ export const SECRET_SETTING_FIELDS = [
   'danbooruApiKey', 'danbooruLogin',
   'konachanLogin', 'konachanPassword',
   'yandereLogin', 'yanderePassword',
-  'pawchiveSession',
+  'pawchiveSession', 'kemonoSession',
   'telegramBotToken', 'telegramChatId'
 ];
 

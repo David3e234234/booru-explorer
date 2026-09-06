@@ -26,8 +26,8 @@ router.post('/register', (req, res) => {
 // POST /api/auth/login
 router.post('/login', (req, res) => {
   try {
-    const { username, password } = req.body || {};
-    const result = loginUser(username, password);
+    const { username, password, initialData } = req.body || {};
+    const result = loginUser(username, password, initialData);
     res.json({ success: true, ...result });
   } catch (err) {
     res.status(401).json({ success: false, message: err.message });
