@@ -357,6 +357,12 @@ export async function fetchSafe(url, options = {}) {
       }
     };
 
+    // Kemono's DDoS-Guard scraper protection strictly requires Accept: text/css for all API endpoints.
+    // Overriding any composite Accept headers prevents HTTP 403 Forbidden.
+    if (isKemonoApi) {
+      fetchOptions.headers['Accept'] = 'text/css';
+    }
+
     if (dispatcher) {
       fetchOptions.dispatcher = dispatcher;
     }

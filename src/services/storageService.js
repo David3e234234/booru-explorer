@@ -419,7 +419,15 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
       if (!settings.kemonoSession) {
         return { success: false, site: 'kemono', message: 'Не указан Session Token Kemono' };
       }
-      const token = String(settings.kemonoSession).replace(/^session=/i, '').trim();
+      let token = String(settings.kemonoSession).trim();
+      const sessionMatch = token.match(/(?:^|;\s*)session=([^;]+)/i);
+      if (sessionMatch) {
+        token = sessionMatch[1];
+      } else {
+        token = token.replace(/^session=/i, '');
+      }
+      token = token.trim().replace(/^["']|["']$/g, '');
+
       let service = postObj.service || null;
       let creatorId = postObj.user || null;
       let realPostId = cleanId.split('_')[0];
@@ -438,7 +446,7 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
           method,
           headers: {
             'Cookie': `session=${token}`,
-            'Accept': 'text/css, application/json, */*',
+            'Accept': 'text/css',
             'User-Agent': BROWSER_USER_AGENT
           },
           settings,
@@ -510,7 +518,15 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
       if (!settings.kemonoSession) {
         return { success: false, site: 'kemono', message: 'Не указан Session Token Kemono' };
       }
-      const token = String(settings.kemonoSession).replace(/^session=/i, '').trim();
+      let token = String(settings.kemonoSession).trim();
+      const sessionMatch = token.match(/(?:^|;\s*)session=([^;]+)/i);
+      if (sessionMatch) {
+        token = sessionMatch[1];
+      } else {
+        token = token.replace(/^session=/i, '');
+      }
+      token = token.trim().replace(/^["']|["']$/g, '');
+
       let service = (typeof authorOrName === 'object' && authorOrName.service) || '';
       let creatorId = cleanName;
       if (cleanName.includes(':')) {
@@ -526,7 +542,7 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
           method,
           headers: {
             'Cookie': `session=${token}`,
-            'Accept': 'text/css, application/json, */*',
+            'Accept': 'text/css',
             'User-Agent': BROWSER_USER_AGENT
           },
           settings,

@@ -175,7 +175,16 @@ async function runAuthTest(site, creds, settings = {}) {
   if (site === 'pawchive') {
     const rawSession = String(creds.session || settings.pawchiveSession || '').trim();
     if (!rawSession) return { success: false, message: 'Введите Pawchive Session Token' };
-    const sessionToken = rawSession.replace(/^session=/i, '').trim();
+    let sessionToken = rawSession;
+    const sessionMatch = sessionToken.match(/(?:^|;\s*)session=([^;]+)/i);
+    if (sessionMatch) {
+      sessionToken = sessionMatch[1];
+    } else {
+      sessionToken = sessionToken.replace(/^session=/i, '');
+    }
+    sessionToken = sessionToken.trim().replace(/^["']|["']$/g, '');
+    if (!sessionToken) return { success: false, message: 'Введите корректный Pawchive Session Token' };
+
     let res;
     try {
       res = await fetchSafe('https://pawchive.pw/api/v1/account/favorites', { 
@@ -186,10 +195,11 @@ async function runAuthTest(site, creds, settings = {}) {
         settings, 
         site: 'pawchive' 
       });
-    } catch {
-      return { success: false, message: 'Pawchive недоступен' };
+    } catch (err) {
+      return { success: false, message: `Pawchive недоступен (${err.message || 'сеть'})` };
     }
-    if (res.status === 401 || res.status === 403) return { success: false, message: 'Pawchive: неверный Session Token или сессия истекла' };
+    if (res.status === 401) return { success: false, message: 'Pawchive: неверный Session Token или сессия истекла' };
+    if (res.status === 403) return { success: false, message: 'Pawchive: доступ заблокирован (HTTP 403). Попробуйте прокси' };
     if (res.ok) {
       const data = await readJsonSafe(res);
       const count = Array.isArray(data) ? data.length : 0;
@@ -201,26 +211,55 @@ async function runAuthTest(site, creds, settings = {}) {
   if (site === 'kemono') {
     const rawSession = String(creds.session || settings.kemonoSession || '').trim();
     if (!rawSession) return { success: false, message: 'Введите Kemono Session Token' };
-    const sessionToken = rawSession.replace(/^session=/i, '').trim();
+    let sessionToken = rawSession;
+    const sessionMatch = sessionToken.match(/(?:^|;\s*)session=([^;]+)/i);
+    if (sessionMatch) {
+      sessionToken = sessionMatch[1];
+    } else {
+      sessionToken = sessionToken.replace(/^session=/i, '');
+    }
+    sessionToken = sessionToken.trim().replace(/^["']|["']$/g, '');
+    if (!sessionToken) return { success: false, message: 'Введите корректный Kemono Session Token' };
+
     let res;
     try {
       res = await fetchSafe('https://kemono.cr/api/v1/account/favorites', { 
         timeout: AUTH_TEST_TIMEOUT_MS, 
         headers: {
           'Cookie': `session=${sessionToken}`,
-          'Accept': 'text/css, application/json, */*'
+          'Accept': 'text/css'
         },
         settings, 
         site: 'kemono' 
       });
-    } catch {
-      return { success: false, message: 'Kemono недоступен' };
+    } catch (err) {
+      return { success: false, message: `Kemono недоступен (${err.message || 'сеть'})` };
     }
-    if (res.status === 401 || res.status === 403) return { success: false, message: 'Kemono: неверный Session Token или сессия истекла' };
+    if (res.status === 401) return { success: false, message: 'Kemono: неверный Session Token или сессия истекла' };
+    if (res.status === 403) return { success: false, message: 'Kemono: доступ заблокирован защитой сайта (HTTP 403). Попробуйте прокси' };
     if (res.ok) {
       const data = await readJsonSafe(res);
       const count = Array.isArray(data) ? data.length : (Array.isArray(data?.posts) ? data.posts.length : 0);
       return { success: true, message: `Kemono: сессия активна (в избранном постов: ${count})` };
+    }
+    if (res.status === 404) {
+      // Fallback check on account endpoint if favorites route structure varies
+      try {
+        const accRes = await fetchSafe('https://kemono.cr/api/v1/account', {
+          timeout: AUTH_TEST_TIMEOUT_MS,
+          headers: {
+            'Cookie': `session=${sessionToken}`,
+            'Accept': 'text/css'
+          },
+          settings,
+          site: 'kemono'
+        });
+        if (accRes.ok) {
+          const accData = await readJsonSafe(accRes);
+          const name = accData?.username || accData?.name || '';
+          return { success: true, message: name ? `Kemono: сессия активна (${name})` : 'Kemono: сессия активна' };
+        }
+      } catch {}
     }
     return { success: false, message: `Kemono: ошибка сайта (HTTP ${res.status})` };
   }

@@ -59,7 +59,14 @@ export function getPawchiveAuthHeaders(settings = {}) {
   const headers = {};
   const rawSession = String(settings.pawchiveSession || '').trim();
   if (rawSession) {
-    const token = rawSession.replace(/^session=/i, '').trim();
+    let token = rawSession;
+    const sessionMatch = token.match(/(?:^|;\s*)session=([^;]+)/i);
+    if (sessionMatch) {
+      token = sessionMatch[1];
+    } else {
+      token = token.replace(/^session=/i, '');
+    }
+    token = token.trim().replace(/^["']|["']$/g, '');
     if (token) {
       headers['Cookie'] = `session=${token}`;
     }
