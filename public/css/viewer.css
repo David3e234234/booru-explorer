@@ -2583,11 +2583,22 @@
   flex-shrink: 0;
 }
 
+.archive-inspect-file-size {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .btn-archive-file-download {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 76px;
   gap: 4px;
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: var(--radius-sm, 6px);
   font-size: 11px;
   font-weight: 500;
@@ -2600,22 +2611,73 @@
   line-height: 1;
 }
 
-.btn-archive-file-download:hover {
+.btn-archive-file-download .btn-archive-file-content {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-archive-file-download .btn-archive-file-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0%;
+  background: var(--accent-primary, #6366f1);
+  opacity: 0.25;
+  transition: width 0.15s ease;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.btn-archive-file-download.is-downloading {
+  border-color: var(--accent-primary, #6366f1);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.btn-archive-file-download.is-downloading .btn-archive-file-progress {
+  opacity: 0.4;
+}
+
+.btn-archive-file-download.is-completed {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.btn-archive-file-download.is-completed .btn-archive-file-progress {
+  background: rgba(16, 185, 129, 0.25);
+}
+
+.btn-archive-file-download.is-error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.btn-archive-file-icon.btn-archive-spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+.btn-archive-file-download:hover:not(.is-downloading):not(.is-completed) {
   background: var(--accent-primary, #6366f1);
   color: #fff;
   border-color: var(--accent-primary, #6366f1);
 }
 
-.btn-archive-file-download:active {
+.btn-archive-file-download:active:not(.is-downloading) {
   transform: scale(0.96);
 }
 
 @media (max-width: 480px) {
-  .btn-archive-file-download-text {
+  .btn-archive-file-download:not(.is-downloading):not(.is-completed) .btn-archive-file-download-text {
     display: none;
   }
   .btn-archive-file-download {
     padding: 4px 6px;
   }
 }
+
 

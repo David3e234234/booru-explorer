@@ -39,6 +39,7 @@ const nameCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 
 // Deduplicate concurrent extractions and inspections of the same archive
 const inflightJobs = new Map();
 const inflightInspects = new Map();
+const inflightDownloads = new Map();
 
 // Download/extract progress, polled by the client loading indicator
 const jobStatus = new Map(); // zipUrl -> { phase: 'download'|'extract'|'inspect', received, total }
@@ -309,160 +310,338 @@ export function scanBufferForLinksAndPasswords(buf, filename = '') {
   };
 }
 
-async function extractArchive(zipUrl, key) {
-  const cachedZip = path.join(ARCHIVES_DIR, `${key}.zip`);
-  const tmpPath = path.join(ARCHIVES_DIR, `${key}.downloading`);
+/**
+ * Downloads a remote archive in multiple concurrent byte-range segments directly to disk.
+ * Safe concurrent writes are coordinated via an internal promise queue to prevent OS handle collisions.
+ */
+async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer) {
+  logInfo('Archive', `Многопоточное скачивание архива: ${zipUrl.split('?')[0]} (${(totalBytes / 1024 / 1024).toFixed(1)} МБ, ${threads} потоков)`);
+
+  jobStatus.set(zipUrl, {
+    phase: 'download',
+    received: 0,
+    total: totalBytes,
+    percent: 0,
+    threads
+  });
+
+  const fileHandle = await fs.promises.open(destPath, 'w+');
+  await fileHandle.truncate(totalBytes);
+
+  let writeLock = Promise.resolve();
+  const writeSafe = (buf, pos) => {
+    writeLock = writeLock.then(() => fileHandle.write(buf, 0, buf.length, pos));
+    return writeLock;
+  };
+
+  const abortController = new AbortController();
+  const segmentSize = Math.ceil(totalBytes / threads);
+  const segments = [];
+
+  for (let i = 0; i < threads; i++) {
+    const start = i * segmentSize;
+    const end = Math.min(start + segmentSize - 1, totalBytes - 1);
+    if (start <= end) {
+      segments.push({ index: i, start, end, size: end - start + 1 });
+    }
+  }
+
+  let totalReceived = 0;
+  let lastProgressUpdate = 0;
 
   try {
-    await fs.promises.mkdir(ARCHIVES_DIR, { recursive: true });
-    if (!fs.existsSync(cachedZip)) {
-      logInfo('Archive', `Скачивание архива: ${zipUrl.split('?')[0]}`);
-      const response = await fetchSafe(zipUrl, {
-        timeout: DOWNLOAD_TIMEOUT_MS,
-        // Archives run to hundreds of megabytes and are streamed straight to disk,
-        // so the header deadline must not be armed against the body read
-        streamBody: true,
+    const workerPromises = segments.map(async (seg) => {
+      const segRes = await fetchSafe(zipUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0',
-          'Referer': 'https://pawchive.pw/',
-          'Accept': '*/*'
-        }
+          'Referer': referer,
+          'Range': `bytes=${seg.start}-${seg.end}`
+        },
+        timeout: DOWNLOAD_TIMEOUT_MS,
+        streamBody: true,
+        signal: abortController.signal
       });
-      if (!response.ok || !response.body) {
-        // An unreleased response body keeps the undici socket checked out
-        try { await response.body?.cancel(); } catch {}
-        throw new Error(`HTTP ${response.status}`);
+
+      if (segRes.status !== 206 || !segRes.body) {
+        try { await segRes.body?.cancel(); } catch {}
+        throw new Error(`Поток ${seg.index} получил статус ${segRes.status}`);
       }
 
-      const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
-      jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0 });
-      let lastProgressTime = 0;
-      const progressCounter = new Transform({
-        transform(chunk, enc, cb) {
-          const st = jobStatus.get(zipUrl);
-          if (st) {
-            st.received += chunk.length;
-            const now = Date.now();
-            if (now - lastProgressTime >= 150) {
-              lastProgressTime = now;
-              st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
+      let writeOffset = seg.start;
+      const reader = segRes.body.getReader();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value && value.length > 0) {
+          await writeSafe(value, writeOffset);
+          writeOffset += value.length;
+          totalReceived += value.length;
+
+          const now = Date.now();
+          if (now - lastProgressUpdate >= 150) {
+            lastProgressUpdate = now;
+            const st = jobStatus.get(zipUrl);
+            if (st) {
+              st.received = totalReceived;
+              st.percent = Math.min(100, Math.round((totalReceived / totalBytes) * 100));
             }
           }
-          cb(null, chunk);
         }
+      }
+
+      if (writeOffset !== seg.end + 1) {
+        throw new Error(`Поток ${seg.index} прочитал неполный сегмент: ${writeOffset - seg.start}/${seg.size}`);
+      }
+    });
+
+    await Promise.all(workerPromises);
+    await writeLock;
+    await fileHandle.sync();
+
+    const st = jobStatus.get(zipUrl);
+    if (st) {
+      st.received = totalBytes;
+      st.percent = 100;
+    }
+  } catch (err) {
+    abortController.abort();
+    throw err;
+  } finally {
+    await fileHandle.close().catch(() => {});
+  }
+}
+
+/**
+ * Standard single-stream pipeline download with progress reporting.
+ */
+async function downloadSingleStream(zipUrl, destPath, referer) {
+  logInfo('Archive', `Обычное скачивание архива (1 поток): ${zipUrl.split('?')[0]}`);
+  const response = await fetchSafe(zipUrl, {
+    timeout: DOWNLOAD_TIMEOUT_MS,
+    streamBody: true,
+    headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Referer': referer,
+      'Accept': '*/*'
+    }
+  });
+
+  if (!response.ok || !response.body) {
+    try { await response.body?.cancel(); } catch {}
+    throw new Error(`HTTP ${response.status}`);
+  }
+
+  const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
+  jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0, threads: 1 });
+  let lastProgressTime = 0;
+  const progressCounter = new Transform({
+    transform(chunk, enc, cb) {
+      const st = jobStatus.get(zipUrl);
+      if (st) {
+        st.received += chunk.length;
+        const now = Date.now();
+        if (now - lastProgressTime >= 150) {
+          lastProgressTime = now;
+          st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
+        }
+      }
+      cb(null, chunk);
+    }
+  });
+
+  await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(destPath, { highWaterMark: 1024 * 1024 }));
+}
+
+/**
+ * High-performance archive downloader. Automatically probes for HTTP Range support
+ * and downloads in parallel segments if enabled, falling back to single-stream.
+ */
+export async function downloadArchiveFile(zipUrl, finalZipPath, options = {}) {
+  if (fs.existsSync(finalZipPath)) {
+    return;
+  }
+
+  const inflight = inflightDownloads.get(zipUrl);
+  if (inflight) {
+    return inflight;
+  }
+
+  const job = (async () => {
+    await fs.promises.mkdir(ARCHIVES_DIR, { recursive: true });
+    const tmpPath = `${finalZipPath}.downloading`;
+
+    const threads = Math.max(1, Math.min(16, parseInt(options.threads, 10) || 4));
+    const referer = resolveSiteReferer(zipUrl) || 'https://pawchive.pw/';
+
+    // 1. Probe for Range support and total bytes
+    let totalBytes = 0;
+    let supportsRange = false;
+
+    try {
+      const probeRes = await fetchSafe(zipUrl, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Referer': referer,
+          'Range': 'bytes=0-0'
+        },
+        timeout: 15000
       });
 
-      await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(tmpPath, { highWaterMark: 1024 * 1024 }));
-      await fs.promises.rename(tmpPath, cachedZip).catch(() => {});
+      if (probeRes.status === 206) {
+        const cr = probeRes.headers.get('content-range') || '';
+        const match = cr.match(/\/(\d+)$/);
+        if (match) {
+          totalBytes = parseInt(match[1], 10);
+          supportsRange = totalBytes > 0;
+        }
+      } else if (probeRes.ok) {
+        const cl = probeRes.headers.get('content-length');
+        if (cl) totalBytes = parseInt(cl, 10) || 0;
+      }
+    } catch (probeErr) {
+      logInfo('Archive', `Range-проба не удалась (${probeErr.message}), переключаемся на один поток`);
     }
 
+    const minSegmentSize = 5 * 1024 * 1024;
+    let downloaded = false;
+
+    if (threads > 1 && supportsRange && totalBytes >= minSegmentSize) {
+      try {
+        await downloadSegmented(zipUrl, tmpPath, totalBytes, threads, referer);
+        downloaded = true;
+      } catch (segErr) {
+        logError('Archive', `Сегментированное скачивание завершилось с ошибкой (${segErr.message}), откат на 1 поток`, segErr);
+        await fs.promises.unlink(tmpPath).catch(() => {});
+      }
+    }
+
+    if (!downloaded) {
+      await downloadSingleStream(zipUrl, tmpPath, referer);
+    }
+
+    await fs.promises.rename(tmpPath, finalZipPath).catch(() => {});
+  })().finally(() => {
+    inflightDownloads.delete(zipUrl);
+  });
+
+  inflightDownloads.set(zipUrl, job);
+  return job;
+}
+
+async function extractArchive(zipUrl, key, options = {}) {
+  const cachedZip = path.join(ARCHIVES_DIR, `${key}.zip`);
+
+  await fs.promises.mkdir(ARCHIVES_DIR, { recursive: true });
+  if (!fs.existsSync(cachedZip)) {
+    await downloadArchiveFile(zipUrl, cachedZip, options);
+  }
+
+  jobStatus.set(zipUrl, {
+    phase: 'extract',
+    percent: 0,
+    extractedFiles: 0,
+    totalFiles: 0,
+    currentFile: ''
+  });
+
+  const zip = new StreamZip.async({ file: cachedZip });
+  try {
+    const entries = Object.values(await zip.entries()).filter(entry => {
+      if (entry.isDirectory) return false;
+      const name = entry.name.replace(/\\/g, '/');
+      const base = name.split('/').pop();
+      if (!base || base.startsWith('.') || name.includes('__MACOSX')) return false;
+      const ext = getExt(base);
+      return IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext);
+    });
+
+    entries.sort((a, b) => nameCollator.compare(a.name, b.name));
+
+    const totalEntries = entries.length;
     jobStatus.set(zipUrl, {
       phase: 'extract',
       percent: 0,
       extractedFiles: 0,
-      totalFiles: 0,
+      totalFiles: totalEntries,
       currentFile: ''
     });
 
-    const zip = new StreamZip.async({ file: cachedZip });
-    try {
-      const entries = Object.values(await zip.entries()).filter(entry => {
-        if (entry.isDirectory) return false;
-        const name = entry.name.replace(/\\/g, '/');
-        const base = name.split('/').pop();
-        if (!base || base.startsWith('.') || name.includes('__MACOSX')) return false;
-        const ext = getExt(base);
-        return IMAGE_EXTS.has(ext) || VIDEO_EXTS.has(ext);
-      });
+    let totalBytes = 0;
+    const items = [];
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      if (items.length >= MAX_FILES) break;
+      const size = entry.size || 0;
+      if (size > MAX_ENTRY_BYTES) continue;
+      if (totalBytes + size > MAX_TOTAL_BYTES) break;
 
-      entries.sort((a, b) => nameCollator.compare(a.name, b.name));
+      const base = entry.name.replace(/\\/g, '/').split('/').pop();
+      const ext = getExt(base);
+      const n = items.length + 1;
+      const destPath = path.join(ARCHIVES_DIR, `${key}_${n}.${ext}`);
 
-      const totalEntries = entries.length;
       jobStatus.set(zipUrl, {
         phase: 'extract',
-        percent: 0,
-        extractedFiles: 0,
-        totalFiles: totalEntries,
-        currentFile: ''
-      });
-
-      let totalBytes = 0;
-      const items = [];
-      for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i];
-        if (items.length >= MAX_FILES) break;
-        const size = entry.size || 0;
-        if (size > MAX_ENTRY_BYTES) continue;
-        if (totalBytes + size > MAX_TOTAL_BYTES) break;
-
-        const base = entry.name.replace(/\\/g, '/').split('/').pop();
-        const ext = getExt(base);
-        const n = items.length + 1;
-        const destPath = path.join(ARCHIVES_DIR, `${key}_${n}.${ext}`);
-
-        jobStatus.set(zipUrl, {
-          phase: 'extract',
-          percent: totalEntries > 0 ? Math.min(100, Math.round(((i + 1) / totalEntries) * 100)) : 0,
-          extractedFiles: items.length,
-          totalFiles: totalEntries,
-          currentFile: base
-        });
-
-        try {
-          await zip.extract(entry.name, destPath);
-        } catch (extractErr) {
-          logError('Archive', `Не удалось извлечь файл ${base}`, extractErr);
-          fs.promises.unlink(destPath).catch(() => {});
-          continue;
-        }
-        totalBytes += size;
-        items.push({
-          n,
-          ext,
-          name: base,
-          isVideo: VIDEO_EXTS.has(ext),
-          size
-        });
-
-        jobStatus.set(zipUrl, {
-          phase: 'extract',
-          percent: totalEntries > 0 ? Math.min(100, Math.round(((i + 1) / totalEntries) * 100)) : 100,
-          extractedFiles: items.length,
-          totalFiles: totalEntries,
-          currentFile: base
-        });
-      }
-
-      if (items.length === 0) {
-        throw new Error('В архиве нет изображений или видео');
-      }
-
-      const manifest = { key, zipUrl, extractedAt: Date.now(), items };
-      await fs.promises.writeFile(
-        path.join(ARCHIVES_DIR, `${key}.manifest.json`),
-        JSON.stringify(manifest)
-      );
-      logInfo('Archive', `Архив ${key} распакован: ${items.length} файлов (${(totalBytes / 1024 / 1024).toFixed(1)} МБ)`);
-
-      jobStatus.set(zipUrl, {
-        phase: 'completed',
-        percent: 100,
+        percent: totalEntries > 0 ? Math.min(100, Math.round(((i + 1) / totalEntries) * 100)) : 0,
         extractedFiles: items.length,
         totalFiles: totalEntries,
-        currentFile: ''
+        currentFile: base
       });
-      setTimeout(() => jobStatus.delete(zipUrl), 10000);
 
-      return manifest;
-    } finally {
-      zip.close().catch(() => {});
+      try {
+        await zip.extract(entry.name, destPath);
+      } catch (extractErr) {
+        logError('Archive', `Не удалось извлечь файл ${base}`, extractErr);
+        fs.promises.unlink(destPath).catch(() => {});
+        continue;
+      }
+      totalBytes += size;
+      items.push({
+        n,
+        ext,
+        name: base,
+        isVideo: VIDEO_EXTS.has(ext),
+        size
+      });
+
+      jobStatus.set(zipUrl, {
+        phase: 'extract',
+        percent: totalEntries > 0 ? Math.min(100, Math.round(((i + 1) / totalEntries) * 100)) : 100,
+        extractedFiles: items.length,
+        totalFiles: totalEntries,
+        currentFile: base
+      });
     }
+
+    if (items.length === 0) {
+      throw new Error('В архиве нет изображений или видео');
+    }
+
+    const manifest = { key, zipUrl, extractedAt: Date.now(), items };
+    await fs.promises.writeFile(
+      path.join(ARCHIVES_DIR, `${key}.manifest.json`),
+      JSON.stringify(manifest)
+    );
+    logInfo('Archive', `Архив ${key} распакован: ${items.length} файлов (${(totalBytes / 1024 / 1024).toFixed(1)} МБ)`);
+
+    jobStatus.set(zipUrl, {
+      phase: 'completed',
+      percent: 100,
+      extractedFiles: items.length,
+      totalFiles: totalEntries,
+      currentFile: ''
+    });
+    setTimeout(() => jobStatus.delete(zipUrl), 10000);
+
+    return manifest;
   } finally {
-    fs.promises.unlink(tmpPath).catch(() => {});
+    zip.close().catch(() => {});
   }
 }
 
-export async function getArchiveManifest(zipUrl) {
+export async function getArchiveManifest(zipUrl, options = {}) {
   if (!isAllowedArchiveUrl(zipUrl)) {
     throw new Error('Недопустимый URL архива');
   }
@@ -475,7 +654,7 @@ export async function getArchiveManifest(zipUrl) {
   const inflight = inflightJobs.get(zipUrl);
   if (inflight) return inflight;
 
-  const job = extractArchive(zipUrl, key)
+  const job = extractArchive(zipUrl, key, options)
     .catch(err => {
       logError('Archive', `Не удалось распаковать ${zipUrl.split('?')[0]}`, err);
       throw err;
@@ -817,7 +996,7 @@ async function inspectArchiveRemote(zipUrl, key) {
  * - Parses text, pdf, url, html files to detect cloud drive links and passwords
  * - Returns structured file list and extracted links/passwords
  */
-export async function inspectArchive(zipUrl) {
+export async function inspectArchive(zipUrl, options = {}) {
   if (!zipUrl || !isAllowedArchiveUrl(zipUrl)) {
     throw new Error('Недопустимый источник архива');
   }
@@ -849,7 +1028,6 @@ export async function inspectArchive(zipUrl) {
   const job = (async () => {
     await fs.promises.mkdir(ARCHIVES_DIR, { recursive: true });
     const zipPath = path.join(ARCHIVES_DIR, `${key}.zip`);
-    const downloadingPath = path.join(ARCHIVES_DIR, `${key}.downloading`);
 
     // 2. If zip file is not on disk, attempt instant Remote Range Inspection
     if (!fs.existsSync(zipPath)) {
@@ -873,41 +1051,7 @@ export async function inspectArchive(zipUrl) {
       }
 
       // Fallback: download full zip if range inspection wasn't supported
-      logInfo('Archive', `Скачивание архива для инспекции: ${zipUrl.split('?')[0]}`);
-      const response = await fetchSafe(zipUrl, {
-        timeout: DOWNLOAD_TIMEOUT_MS,
-        streamBody: true,
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Referer': 'https://pawchive.pw/',
-          'Accept': '*/*'
-        }
-      });
-      if (!response.ok || !response.body) {
-        try { await response.body?.cancel(); } catch {}
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
-      jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0 });
-      let lastProgressTime = 0;
-      const progressCounter = new Transform({
-        transform(chunk, enc, cb) {
-          const st = jobStatus.get(zipUrl);
-          if (st) {
-            st.received += chunk.length;
-            const now = Date.now();
-            if (now - lastProgressTime >= 150) {
-              lastProgressTime = now;
-              st.percent = st.total > 0 ? Math.min(100, Math.round((st.received / st.total) * 100)) : 0;
-            }
-          }
-          cb(null, chunk);
-        }
-      });
-
-      await pipeline(Readable.fromWeb(response.body), progressCounter, fs.createWriteStream(downloadingPath, { highWaterMark: 1024 * 1024 }));
-      await fs.promises.rename(downloadingPath, zipPath);
+      await downloadArchiveFile(zipUrl, zipPath, options);
     }
 
   jobStatus.set(zipUrl, {
@@ -1083,7 +1227,7 @@ function getFileMime(ext) {
  * Streams or sends an individual file from an archive (from local extracted cache,
  * disk zip file, or on-the-fly remote HTTP Range extraction).
  */
-export async function downloadArchiveEntry(zipUrl, targetPathOrName, res) {
+export async function downloadArchiveEntry(zipUrl, targetPathOrName, res, options = {}) {
   if (!zipUrl || !isAllowedArchiveUrl(zipUrl)) {
     return res.status(403).send('Недопустимый источник архива');
   }
@@ -1143,7 +1287,7 @@ export async function downloadArchiveEntry(zipUrl, targetPathOrName, res) {
   }
 
   // 3. Remote extract: retrieve entry info via inspectArchive
-  const inspection = await inspectArchive(zipUrl);
+  const inspection = await inspectArchive(zipUrl, options);
   const fileTree = Array.isArray(inspection?.fileTree) ? inspection.fileTree : [];
   const entry = fileTree.find(f => {
     const fn = (f.path || f.name || '').replace(/\\/g, '/');
@@ -1160,47 +1304,86 @@ export async function downloadArchiveEntry(zipUrl, targetPathOrName, res) {
   const mime = getFileMime(ext);
   const asciiSafe = baseName.replace(/[^\x20-\x7E]/g, '_');
 
-  // If localHeaderOffset is present, fetch via Range
+  // If entry is empty (0 bytes)
+  if (entry.size === 0 || entry.compSize === 0) {
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodeURIComponent(baseName)}`);
+    res.setHeader('Content-Length', 0);
+    return res.end();
+  }
+
+  // If localHeaderOffset is present, stream payload via HTTP Range without buffering into RAM
   if (entry.localHeaderOffset !== undefined && entry.compSize > 0) {
-    const fetchRangeEnd = entry.localHeaderOffset + 30 + (entry.path || baseName).length + 600 + entry.compSize;
-    const reqHeaders = {
+    // Probe local file header (first 256 bytes) to determine actual variable header lengths
+    const probeRangeEnd = entry.localHeaderOffset + 256;
+    const reqHeadersProbe = {
       'User-Agent': 'Mozilla/5.0',
       'Referer': resolveSiteReferer(zipUrl) || 'https://pawchive.pw/',
-      'Range': `bytes=${entry.localHeaderOffset}-${fetchRangeEnd}`
+      'Range': `bytes=${entry.localHeaderOffset}-${probeRangeEnd}`
     };
 
-    const rangeRes = await fetchSafe(zipUrl, { timeout: 60000, headers: reqHeaders });
-    if (rangeRes.status === 206) {
-      const localBuf = Buffer.from(await rangeRes.arrayBuffer());
-      if (localBuf.length >= 30 && localBuf.readUInt32LE(0) === 0x04034b50) {
-        const lNameLen = localBuf.readUInt16LE(26);
-        const lExtraLen = localBuf.readUInt16LE(28);
-        const dataStart = 30 + lNameLen + lExtraLen;
-        const compressedData = localBuf.subarray(dataStart, dataStart + entry.compSize);
+    try {
+      const probeRes = await fetchSafe(zipUrl, { timeout: 15000, headers: reqHeadersProbe });
+      if (probeRes.status === 206) {
+        const localBuf = Buffer.from(await probeRes.arrayBuffer());
+        if (localBuf.length >= 30 && localBuf.readUInt32LE(0) === 0x04034b50) {
+          const lNameLen = localBuf.readUInt16LE(26);
+          const lExtraLen = localBuf.readUInt16LE(28);
+          const dataStart = entry.localHeaderOffset + 30 + lNameLen + lExtraLen;
+          const dataEnd = dataStart + entry.compSize - 1;
 
-        res.setHeader('Content-Type', mime);
-        res.setHeader('Content-Disposition', `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodeURIComponent(baseName)}`);
-        if (entry.size > 0) {
-          res.setHeader('Content-Length', entry.size);
-        }
+          // Headers sent to client immediately so progress bar starts from 0 to total size
+          res.setHeader('Content-Type', mime);
+          res.setHeader('Content-Disposition', `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodeURIComponent(baseName)}`);
+          if (entry.size > 0) {
+            res.setHeader('Content-Length', entry.size);
+          }
 
-        if (entry.method === 0) {
-          return res.send(compressedData);
-        } else if (entry.method === 8) {
-          if (entry.compSize > 30 * 1024 * 1024) {
-            const { Readable } = await import('node:stream');
-            return Readable.from(compressedData).pipe(zlib.createInflateRaw()).pipe(res);
-          } else {
-            const decompressed = zlib.inflateRawSync(compressedData);
-            return res.send(decompressed);
+          const dataHeaders = {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': resolveSiteReferer(zipUrl) || 'https://pawchive.pw/',
+            'Range': `bytes=${dataStart}-${dataEnd}`
+          };
+
+          const dataRes = await fetchSafe(zipUrl, { timeout: 300000, headers: dataHeaders });
+          if (dataRes.status === 206 && dataRes.body) {
+            const readable = Readable.fromWeb(dataRes.body);
+
+            readable.on('error', (err) => {
+              logError('Archive', `Ошибка потока при отдаче файла ${baseName}`, err);
+              if (!res.headersSent) res.status(500).end();
+              else res.destroy(err);
+            });
+
+            if (entry.method === 0) {
+              // Stored / uncompressed: stream directly to client
+              res.on('close', () => readable.destroy());
+              readable.pipe(res);
+              return;
+            } else if (entry.method === 8) {
+              // Deflate: stream through raw inflator into client response
+              const inflator = zlib.createInflateRaw();
+              inflator.on('error', (err) => {
+                logError('Archive', `Ошибка декомпрессии файла ${baseName}`, err);
+                res.destroy(err);
+              });
+              res.on('close', () => {
+                readable.destroy();
+                inflator.destroy();
+              });
+              readable.pipe(inflator).pipe(res);
+              return;
+            }
           }
         }
       }
+    } catch (rangeErr) {
+      logError('Archive', `Прямое Range-извлечение не удалось для ${baseName}, откат к распаковке архива`, rangeErr);
     }
   }
 
   // Fallback: If Range extraction failed or offset missing, download archive to local cache and stream file
-  await extractArchive(zipUrl, key);
+  await extractArchive(zipUrl, key, options);
   const updatedManifest = readManifest(key);
   const updatedItem = updatedManifest?.items?.find(it => it.name === baseTarget || it.name === cleanTarget);
   if (updatedItem) {
@@ -1212,3 +1395,26 @@ export async function downloadArchiveEntry(zipUrl, targetPathOrName, res) {
 
   res.status(404).send('Не удалось извлечь файл из архива');
 }
+
+/**
+ * Downloads full archive to server cache (multithreaded if enabled) and sends to client.
+ */
+export async function downloadFullArchive(zipUrl, res, options = {}) {
+  if (!zipUrl || !isAllowedArchiveUrl(zipUrl)) {
+    return res.status(403).send('Недопустимый источник архива');
+  }
+
+  const key = getArchiveKey(zipUrl);
+  const zipPath = path.join(ARCHIVES_DIR, `${key}.zip`);
+  const rawName = options.name || (zipUrl.split('?')[0].split('/').pop()) || 'archive.zip';
+  const cleanName = rawName.replace(/[/\\?%*:|"<>]/g, '_');
+
+  await downloadArchiveFile(zipUrl, zipPath, options);
+
+  if (!fs.existsSync(zipPath)) {
+    return res.status(404).send('Не удалось загрузить архив');
+  }
+
+  return res.download(zipPath, cleanName);
+}
+

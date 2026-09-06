@@ -217,6 +217,7 @@ export const DEFAULT_SETTINGS = {
   hideLgbt: false,
   hideZipPosts: false,
   unpackArchivesOnDownload: false,
+  archiveDownloadThreads: 4,
   excludedInterestTags: [],
   showVideoStatusBanner: true,
   aiTags: DEFAULT_AI_TAGS,

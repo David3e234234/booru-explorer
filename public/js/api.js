@@ -2,7 +2,7 @@ import { state } from './state.js';
 
 export const isMyLiveDemoHost = false;
 
-function getAuthHeaders(includeJson = false) {
+export function getAuthHeaders(includeJson = false) {
   const headers = {};
   if (includeJson) {
     headers['Content-Type'] = 'application/json';
@@ -187,8 +187,9 @@ export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', paren
   return await res.json();
 }
 
-export async function fetchArchiveList(zipUrl) {
-  const res = await fetch(`/api/archive/list?url=${encodeURIComponent(zipUrl)}`, {
+export async function fetchArchiveList(zipUrl, options = {}) {
+  const threads = options.threads ?? state.settings?.archiveDownloadThreads ?? 4;
+  const res = await fetch(`/api/archive/list?url=${encodeURIComponent(zipUrl)}&threads=${threads}`, {
     headers: getAuthHeaders()
   });
   if (!res.ok) return { success: false, albumItems: [], albumCount: 0 };
@@ -207,9 +208,10 @@ export async function fetchArchiveStatus(zipUrl) {
   }
 }
 
-export async function fetchArchiveInspect(zipUrl) {
+export async function fetchArchiveInspect(zipUrl, options = {}) {
   try {
-    const res = await fetch(`/api/archive/inspect?url=${encodeURIComponent(zipUrl)}`, {
+    const threads = options.threads ?? state.settings?.archiveDownloadThreads ?? 4;
+    const res = await fetch(`/api/archive/inspect?url=${encodeURIComponent(zipUrl)}&threads=${threads}`, {
       headers: getAuthHeaders()
     });
     if (!res.ok) {

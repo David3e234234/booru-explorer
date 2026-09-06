@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { ARCHIVES_DIR } from '../config/constants.js';
-import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive, getArchiveKey, readManifest, downloadArchiveEntry } from '../services/archiveService.js';
+import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive, getArchiveKey, readManifest, downloadArchiveEntry, downloadFullArchive } from '../services/archiveService.js';
 import { logError } from '../utils/logger.js';
 
 const router = express.Router();
@@ -15,8 +15,10 @@ router.get('/inspect', async (req, res) => {
     return res.json({ success: false, error: 'Недопустимый источник архива' });
   }
 
+  const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
+
   try {
-    const inspection = await inspectArchive(zipUrl);
+    const inspection = await inspectArchive(zipUrl, { threads });
     res.json(inspection);
   } catch (err) {
     logError('Archive', 'Ошибка инспекции архива', err);
@@ -32,8 +34,10 @@ router.get('/list', async (req, res) => {
     return res.json({ success: false, error: 'Недопустимый источник архива' });
   }
 
+  const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
+
   try {
-    const manifest = await getArchiveManifest(zipUrl);
+    const manifest = await getArchiveManifest(zipUrl, { threads });
     const albumItems = buildArchiveAlbumItems(manifest);
     res.json({ success: true, albumItems, albumCount: albumItems.length });
   } catch (err) {
@@ -70,6 +74,7 @@ router.get('/status', (req, res) => {
     received: status.received || 0,
     total: status.total || 0,
     percent,
+    threads: status.threads || 1,
     extractedFiles: status.extractedFiles || 0,
     scannedFiles: status.scannedFiles || 0,
     totalFiles: status.totalFiles || 0,
@@ -107,20 +112,42 @@ router.get('/file', async (req, res) => {
   }
 });
 
-// GET /api/archive/download-file?url=<zip-url>&name=<entry-name> - download an individual file from archive
+// GET /api/archive/download-file?url=<zip-url>&name=<entry-name>&threads=<threads> - download an individual file from archive
 router.get('/download-file', async (req, res) => {
   const zipUrl = String(req.query.url || '');
   const targetName = String(req.query.name || req.query.path || req.query.file || '');
+  const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
 
   if (!zipUrl) return res.status(400).send('URL не указан');
   if (!targetName) return res.status(400).send('Имя файла не указано');
 
   try {
-    await downloadArchiveEntry(zipUrl, targetName, res);
+    await downloadArchiveEntry(zipUrl, targetName, res, { threads });
   } catch (err) {
     logError('Archive', `Ошибка скачивания файла ${targetName} из архива`, err);
     if (!res.headersSent) {
       res.status(500).send('Не удалось скачать файл из архива');
+    }
+  }
+});
+
+// GET /api/archive/download-archive?url=<zip-url>&name=<entry-name>&threads=<threads> - download full archive with multi-threaded acceleration
+router.get('/download-archive', async (req, res) => {
+  const zipUrl = String(req.query.url || '');
+  const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
+  const name = String(req.query.name || '');
+
+  if (!zipUrl) return res.status(400).send('URL не указан');
+  if (!isAllowedArchiveUrl(zipUrl)) {
+    return res.status(403).send('Недопустимый источник архива');
+  }
+
+  try {
+    await downloadFullArchive(zipUrl, res, { threads, name });
+  } catch (err) {
+    logError('Archive', `Ошибка скачивания архива ${zipUrl}`, err);
+    if (!res.headersSent) {
+      res.status(500).send('Не удалось скачать архив');
     }
   }
 });

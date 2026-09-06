@@ -2022,8 +2022,16 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     const fileListContainer = container.querySelector('#archiveInspectFileList');
     const searchInput = container.querySelector('#archiveInspectSearchInput');
 
+    let fileListUnsubscribers = [];
+
     function renderFileList(filterText = '') {
       if (!fileListContainer) return;
+
+      fileListUnsubscribers.forEach(u => {
+        try { u(); } catch {}
+      });
+      fileListUnsubscribers = [];
+
       fileListContainer.innerHTML = '';
       const q = filterText.toLowerCase().trim();
       const filtered = q ? fileTree.filter(f => (f.name || '').toLowerCase().includes(q) || (f.path || '').toLowerCase().includes(q)) : fileTree;
@@ -2033,12 +2041,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         return;
       }
 
+      const defaultIconHtml = `<svg class="btn-archive-file-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+      const spinnerIconHtml = `<svg class="btn-archive-file-icon btn-archive-spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="38" stroke-dashoffset="12"/></svg>`;
+      const checkIconHtml = `<svg class="btn-archive-file-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>`;
+
       filtered.forEach(f => {
         const row = document.createElement('div');
         row.className = 'archive-inspect-file-row';
         const sizeStr = f.size > 0 ? formatBytes(f.size) : '';
+        const threads = state.settings?.archiveDownloadThreads || 4;
         const downloadUrl = effectiveUrl
-          ? `/api/archive/download-file?url=${encodeURIComponent(effectiveUrl)}&name=${encodeURIComponent(f.path || f.name)}`
+          ? `/api/archive/download-file?url=${encodeURIComponent(effectiveUrl)}&name=${encodeURIComponent(f.path || f.name)}&threads=${threads}`
           : '';
 
         row.innerHTML = `
@@ -2050,20 +2063,97 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           <div class="archive-inspect-file-meta">
             ${sizeStr ? `<span class="archive-inspect-file-size">${sizeStr}</span>` : ''}
             ${downloadUrl ? `
-              <a href="${downloadUrl}" download="${f.name}" class="btn-archive-file-download" title="${t('viewer.downloadThisFile', 'Скачать этот файл')}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                <span class="btn-archive-file-download-text">${t('viewer.downloadFileBtn', 'Скачать')}</span>
-              </a>
+              <button type="button" class="btn-archive-file-download" title="${t('viewer.downloadThisFile', 'Скачать этот файл')}">
+                <div class="btn-archive-file-progress" style="width: 0%;"></div>
+                <span class="btn-archive-file-content">
+                  <svg class="btn-archive-file-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span class="btn-archive-file-download-text">${t('viewer.downloadFileBtn', 'Скачать')}</span>
+                </span>
+              </button>
             ` : ''}
           </div>
         `;
 
         const dlBtn = row.querySelector('.btn-archive-file-download');
-        if (dlBtn) {
+        const sizeEl = row.querySelector('.archive-inspect-file-size');
+        if (dlBtn && downloadUrl) {
+          const progressFill = dlBtn.querySelector('.btn-archive-file-progress');
+          const dlText = dlBtn.querySelector('.btn-archive-file-download-text');
+          let resetTimer = null;
+
+          const updateBtnState = (task) => {
+            if (!task) return;
+            clearTimeout(resetTimer);
+
+            if (task.status === 'downloading' || task.status === 'saving') {
+              dlBtn.classList.remove('is-completed', 'is-error');
+              dlBtn.classList.add('is-downloading');
+              const curIcon = dlBtn.querySelector('.btn-archive-file-icon');
+              if (curIcon && !curIcon.classList.contains('btn-archive-spinner')) {
+                curIcon.outerHTML = spinnerIconHtml;
+              }
+              const pct = Math.round(task.percent || 0);
+              if (progressFill) progressFill.style.width = `${pct}%`;
+              if (task.status === 'saving') {
+                if (dlText) dlText.textContent = t('dl.saving', 'Сохранение...');
+              } else {
+                if (dlText) dlText.textContent = pct > 0 ? `${pct}%` : t('vw.downloading', 'Загрузка');
+              }
+              if (sizeEl) {
+                const totalBytes = task.total || f.size || 0;
+                if (task.loaded > 0 && totalBytes > 0) {
+                  sizeEl.textContent = `${formatBytes(task.loaded)} / ${formatBytes(totalBytes)}`;
+                }
+              }
+            } else if (task.status === 'completed') {
+              dlBtn.classList.remove('is-downloading', 'is-error');
+              dlBtn.classList.add('is-completed');
+              if (progressFill) progressFill.style.width = '100%';
+              const curIcon = dlBtn.querySelector('.btn-archive-file-icon');
+              if (curIcon) curIcon.outerHTML = checkIconHtml;
+              if (dlText) dlText.textContent = t('vw.archiveDownloadedShort', 'Скачано ✓');
+              if (sizeEl) sizeEl.textContent = sizeStr;
+              resetTimer = setTimeout(() => {
+                dlBtn.classList.remove('is-completed', 'is-downloading', 'is-error');
+                if (progressFill) progressFill.style.width = '0%';
+                const resetIcon = dlBtn.querySelector('.btn-archive-file-icon');
+                if (resetIcon) resetIcon.outerHTML = defaultIconHtml;
+                if (dlText) dlText.textContent = t('viewer.downloadFileBtn', 'Скачать');
+              }, 4000);
+            } else if (task.status === 'error') {
+              dlBtn.classList.remove('is-downloading');
+              dlBtn.classList.add('is-error');
+              if (progressFill) progressFill.style.width = '0%';
+              if (dlText) dlText.textContent = t('vw.error', 'Ошибка');
+              if (sizeEl) sizeEl.textContent = sizeStr;
+              resetTimer = setTimeout(() => {
+                dlBtn.classList.remove('is-error', 'is-downloading', 'is-completed');
+                const resetIcon = dlBtn.querySelector('.btn-archive-file-icon');
+                if (resetIcon) resetIcon.outerHTML = defaultIconHtml;
+                if (dlText) dlText.textContent = t('viewer.downloadFileBtn', 'Скачать');
+              }, 3000);
+            } else if (task.status === 'cancelled') {
+              dlBtn.classList.remove('is-downloading', 'is-completed', 'is-error');
+              if (progressFill) progressFill.style.width = '0%';
+              const resetIcon = dlBtn.querySelector('.btn-archive-file-icon');
+              if (resetIcon) resetIcon.outerHTML = defaultIconHtml;
+              if (dlText) dlText.textContent = t('viewer.downloadFileBtn', 'Скачать');
+              if (sizeEl) sizeEl.textContent = sizeStr;
+            }
+          };
+
+          const unsub = downloadManager.subscribeToUrl(downloadUrl, updateBtnState);
+          fileListUnsubscribers.push(unsub);
+
           dlBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             haptic(10);
-            showToast(`${t('vw.downloading', 'Загрузка')}: ${f.name}`);
+            downloadManager.startDownload({
+              url: downloadUrl,
+              filename: f.name,
+              size: Number(f.size) || 0,
+              showDock: false
+            });
           });
         }
 

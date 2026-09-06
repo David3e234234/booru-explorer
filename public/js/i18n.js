@@ -432,6 +432,17 @@ Object.assign(en, {
   'settings.unpackArchivesOnDownload.title': 'When clicking download on a ZIP archive, unpack it on the server and download extracted files individually',
   'settings.groupAlbums': 'Group multi-image posts into albums',
   'settings.groupAlbums.title': 'Automatically combine multi-page posts and post series into browsable albums',
+  'settings.archiveDownloadThreads': 'Archive download threads:',
+  'settings.archiveDownloadThreadsHint': 'Number of concurrent HTTP Range streams to accelerate archive downloads (1 = single stream, 4 = default, up to 16 threads).',
+  'settings.archiveThreads1': '1 thread (standard mode)',
+  'settings.archiveThreads2': '2 threads',
+  'settings.archiveThreads3': '3 threads',
+  'settings.archiveThreads4': '4 threads (recommended)',
+  'settings.archiveThreads6': '6 threads',
+  'settings.archiveThreads8': '8 threads',
+  'settings.archiveThreads10': '10 threads',
+  'settings.archiveThreads12': '12 threads',
+  'settings.archiveThreads16': '16 threads (maximum)',
 
   'settings.storageHeading': 'Device cache and memory:',
   'settings.storageHint': 'Cached media files and requests for instant offline/online work.',
@@ -976,6 +987,7 @@ Object.assign(en, {
   'dl.cancel': 'Cancel download',
   'dl.clear': 'Clear completed',
   'dl.toastSaved': 'Archive "{name}" saved to device',
+  'dl.toastFileSaved': 'File "{name}" saved to device',
   'dl.toastStarted': 'Download "{name}" started in background',
 
   'viewer.contentHeading': 'Description'

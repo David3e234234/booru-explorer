@@ -18,7 +18,7 @@
   <link rel="stylesheet" href="css/variables.css?v=8.4">
   <link rel="stylesheet" href="css/main.css?v=9.2">
   <link rel="stylesheet" href="css/components.css?v=10.1">
-  <link rel="stylesheet" href="css/viewer.css?v=12.1">
+  <link rel="stylesheet" href="css/viewer.css?v=12.3">
   <script src="js/mp4box.all.min.js"></script>
 </head>
 <body>
@@ -1515,6 +1515,22 @@
               </label>
             </div>
           </div>
+
+          <div class="settings-group">
+            <label class="settings-label" for="selectArchiveDownloadThreads" data-i18n="settings.archiveDownloadThreads">Количество потоков загрузки архивов:</label>
+            <p class="settings-hint" data-i18n="settings.archiveDownloadThreadsHint">Многопоточное скачивание через параллельные запросы HTTP Range для значительного ускорения загрузки архивов (1 — один поток, 4 — по умолчанию, до 16 потоков).</p>
+            <select id="selectArchiveDownloadThreads" class="input-setting">
+              <option value="1" data-i18n="settings.archiveThreads1">1 поток (обычный режим)</option>
+              <option value="2" data-i18n="settings.archiveThreads2">2 потока</option>
+              <option value="3" data-i18n="settings.archiveThreads3">3 потока</option>
+              <option value="4" selected data-i18n="settings.archiveThreads4">4 потока (рекомендуется)</option>
+              <option value="6" data-i18n="settings.archiveThreads6">6 потоков</option>
+              <option value="8" data-i18n="settings.archiveThreads8">8 потоков</option>
+              <option value="10" data-i18n="settings.archiveThreads10">10 потоков</option>
+              <option value="12" data-i18n="settings.archiveThreads12">12 потоков</option>
+              <option value="16" data-i18n="settings.archiveThreads16">16 потоков (максимум)</option>
+            </select>
+          </div>
         </div>
 
         <!-- 5. TAB: AI & VISION RECOMMENDATIONS -->
@@ -2580,6 +2596,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=17.6"></script>
+  <script type="module" src="js/app.js?v=17.9"></script>
 </body>
 </html>

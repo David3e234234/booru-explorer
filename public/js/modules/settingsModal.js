@@ -537,6 +537,10 @@ export function applySettingsToUIAndState(s) {
   if (checkGroupAlbumsApply && typeof s.groupAlbums === 'boolean') {
     checkGroupAlbumsApply.checked = s.groupAlbums;
   }
+  const selectArchiveDownloadThreadsApply = document.getElementById('selectArchiveDownloadThreads');
+  if (selectArchiveDownloadThreadsApply && s.archiveDownloadThreads !== undefined) {
+    selectArchiveDownloadThreadsApply.value = String(s.archiveDownloadThreads);
+  }
 
   const selectMaxServerCache = document.getElementById('selectMaxServerCache');
   if (selectMaxServerCache && s.maxServerCacheMb !== undefined) {
@@ -1063,6 +1067,8 @@ export function openSettingsModal() {
   if (checkUnpackArchivesModal) checkUnpackArchivesModal.checked = state.settings.unpackArchivesOnDownload === true;
   const checkGroupAlbumsModal = document.getElementById('checkGroupAlbums');
   if (checkGroupAlbumsModal) checkGroupAlbumsModal.checked = state.settings.groupAlbums !== false;
+  const selectArchiveDownloadThreadsModal = document.getElementById('selectArchiveDownloadThreads');
+  if (selectArchiveDownloadThreadsModal) selectArchiveDownloadThreadsModal.value = String(state.settings.archiveDownloadThreads || 4);
   const checkEnableJsDemuxingModal = document.getElementById('checkEnableJsDemuxing');
   if (checkEnableJsDemuxingModal) checkEnableJsDemuxingModal.checked = state.settings.enableJsDemuxing !== false;
   if (selectDeepFetchPages) selectDeepFetchPages.value = String(state.settings.deepFetchPages || 2);
@@ -1968,6 +1974,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkUnpackArchives = document.getElementById('checkUnpackArchivesOnDownload');
       const unpackArchivesOnDownloadVal = checkUnpackArchives ? checkUnpackArchives.checked : false;
 
+      const selectArchiveDownloadThreads = document.getElementById('selectArchiveDownloadThreads');
+      const archiveDownloadThreadsVal = selectArchiveDownloadThreads ? (parseInt(selectArchiveDownloadThreads.value, 10) || 4) : 4;
+
       const checkGroupAlbums = document.getElementById('checkGroupAlbums');
       const groupAlbumsVal = checkGroupAlbums ? checkGroupAlbums.checked : true;
 
@@ -2045,6 +2054,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         enableJsDemuxing: enableJsDemuxingVal,
         hideZipPosts: hideZipPostsVal,
         unpackArchivesOnDownload: unpackArchivesOnDownloadVal,
+        archiveDownloadThreads: archiveDownloadThreadsVal,
         groupAlbums: groupAlbumsVal,
         recommendationMode: document.getElementById('selectRecommendationMode')?.value || 'hybrid',
         enableRecommendations: document.getElementById('selectRecommendationMode')?.value !== 'off',

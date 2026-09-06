@@ -1,4 +1,5 @@
-import { getProxiedUrl } from '../api.js';
+import { getProxiedUrl, getAuthHeaders } from '../api.js';
+import { state } from '../state.js';
 import { showToast, haptic } from './uiUtils.js';
 import { t } from '../i18n.js';
 
@@ -64,14 +65,16 @@ class DownloadManager {
   }
 
   // Starts an in-page streaming download
-  startDownload({ url, filename, size = 0, isZip = true }) {
+  startDownload({ url, filename, size = 0, isZip = true, showDock = true }) {
     if (!url) return null;
 
-    // If already downloading this URL, expand dock and return existing task
+    // If already downloading this URL, expand dock (if showDock) and return existing task
     const existing = this.getTaskByUrl(url);
     if (existing && (existing.status === 'downloading' || existing.status === 'saving')) {
-      this.isMinimized = false;
-      this._scheduleRender();
+      if (showDock) {
+        this.isMinimized = false;
+        this._scheduleRender();
+      }
       showToast(t('dl.alreadyDownloading', 'Файл уже скачивается'));
       return existing;
     }
@@ -94,6 +97,7 @@ class DownloadManager {
       status: 'downloading', // 'downloading' | 'saving' | 'completed' | 'error' | 'cancelled'
       errorMessage: null,
       abortController,
+      showInDock: showDock !== false,
       startTime: Date.now(),
       lastSpeedSampleTime: Date.now(),
       lastSpeedSampleLoaded: 0,
@@ -105,11 +109,13 @@ class DownloadManager {
     this.tasks.set(id, task);
     this.urlToId.set(url, id);
 
-    this.isMinimized = false;
+    if (showDock) {
+      this.isMinimized = false;
+      showToast(t('dl.toastStarted', 'Скачивание "{name}" начато на сайте').replace('{name}', cleanFilename));
+    }
     this._scheduleRender();
     this._notify(task, 'start');
 
-    showToast(t('dl.toastStarted', 'Скачивание "{name}" начато на сайте').replace('{name}', cleanFilename));
     haptic(10);
 
     this._runStreamDownload(task);
@@ -120,9 +126,36 @@ class DownloadManager {
     const { url, abortController } = task;
 
     try {
+      let res = null;
+
+      // 1. Same-origin endpoints (e.g. /api/archive/download-file) are fetched directly
+      if (typeof url === 'string' && url.startsWith('/api/')) {
+        res = await fetch(url, {
+          signal: abortController.signal,
+          headers: getAuthHeaders()
+        });
+      }
+
+      // 2. Accelerated multi-threaded Range download for remote full ZIP archives via server
+      const isRemoteZip = !res && Boolean(task.isZip || (typeof url === 'string' && !url.includes('/api/') && url.split('?')[0].toLowerCase().endsWith('.zip')));
+      if (isRemoteZip) {
+        try {
+          const threads = state.settings?.archiveDownloadThreads || 4;
+          const dlUrl = `/api/archive/download-archive?url=${encodeURIComponent(url)}&name=${encodeURIComponent(task.filename || '')}&threads=${threads}`;
+          const acceleratedRes = await fetch(dlUrl, {
+            signal: abortController.signal,
+            headers: getAuthHeaders()
+          });
+          if (acceleratedRes && acceleratedRes.ok) {
+            res = acceleratedRes;
+          }
+        } catch {
+          // Direct fetch failed or aborted, fallback below
+        }
+      }
+
       // Pawchive and Kemono/Coomer CDN servers support CORS (Access-Control-Allow-Origin: *).
       // Fetching directly connects to the nearest CDN edge and eliminates double-proxying overhead.
-      let res = null;
       const isCorsFriendly = (u) => {
         try {
           const host = new URL(u).hostname.toLowerCase();
@@ -132,7 +165,7 @@ class DownloadManager {
         }
       };
 
-      if (isCorsFriendly(url)) {
+      if (!res && isCorsFriendly(url)) {
         try {
           const directRes = await fetch(url, { signal: abortController.signal });
           if (directRes && directRes.ok) {
@@ -243,7 +276,11 @@ class DownloadManager {
 
       this._notify(task, 'complete');
       haptic([15, 20]);
-      showToast(t('dl.toastSaved', 'Архив "{name}" сохранён на устройство').replace('{name}', task.filename));
+      if (task.showInDock !== false) {
+        showToast(t('dl.toastSaved', 'Архив "{name}" сохранён на устройство').replace('{name}', task.filename));
+      } else {
+        showToast(t('dl.toastFileSaved', 'Файл "{name}" сохранён').replace('{name}', task.filename));
+      }
 
     } catch (err) {
       if (err.name === 'AbortError' || abortController.signal.aborted) {
@@ -435,7 +472,9 @@ class DownloadManager {
   _render() {
     if (!this.containerEl) return;
 
-    const allTasks = Array.from(this.tasks.values()).sort((a, b) => b.createdAt - a.createdAt);
+    const allTasks = Array.from(this.tasks.values())
+      .filter(t => t.showInDock !== false)
+      .sort((a, b) => b.createdAt - a.createdAt);
 
     if (allTasks.length === 0) {
       this.containerEl.style.display = 'none';
