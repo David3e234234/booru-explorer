@@ -1,5 +1,5 @@
-import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors, recordSessionInteraction } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus, fetchArchiveInspect } from '../api.js';
+import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors, recordSessionInteraction, getSimilarPostPlan, calculatePostSimilarityScore } from '../state.js';
+import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus, fetchArchiveInspect, fetchPosts } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -15,7 +15,7 @@ function isVideoUrl(url) {
   return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.mkv') || clean.endsWith('.avi');
 }
 
-export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle }) {
+export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle, onFindSimilar }) {
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
   const btnClose = document.getElementById('btnCloseViewer');
@@ -32,6 +32,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const btnDislikeModal = document.getElementById('btnDislikeModal');
   const btnLikeModal = document.getElementById('btnLikeModal');
   const btnFavModal = document.getElementById('btnFavModal');
+  const btnSimilarModal = document.getElementById('btnSimilarModal');
   const btnDownload = document.getElementById('btnDownload');
   const btnDownloadAlbum = document.getElementById('btnDownloadAlbum');
   const btnCopyLink = document.getElementById('btnCopyLink');
@@ -58,6 +59,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const btnDownloadAlbumSidebar = document.getElementById('btnDownloadAlbumSidebar');
   const btnDislikeSidebar = document.getElementById('btnDislikeSidebar');
   const btnDislikeSidebarText = document.getElementById('btnDislikeSidebarText');
+  const viewerSimilarSection = document.getElementById('viewerSidebarSimilarSection');
+  const viewerSimilarContainer = document.getElementById('viewerSimilarContainer');
+  const viewerSimilarGrid = document.getElementById('viewerSimilarGrid');
+  const viewerSimilarLoading = document.getElementById('viewerSimilarLoading');
+  const viewerSimilarCount = document.getElementById('viewerSimilarCount');
+  const btnRefreshSimilar = document.getElementById('btnRefreshSimilar');
   const infoRating = document.getElementById('infoRating');
   const infoScore = document.getElementById('infoScore');
   const infoAi = document.getElementById('infoAi');
@@ -65,6 +72,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   const viewerAlbumFilmstrip = document.getElementById('viewerAlbumFilmstrip');
   const albumFilmstripInner = document.getElementById('albumFilmstripInner');
+  const viewerSimilarFilmstrip = document.getElementById('viewerSimilarFilmstrip');
+  const similarFilmstripInner = document.getElementById('similarFilmstripInner');
+  const similarFilmstripCount = document.getElementById('similarFilmstripCount');
 
   let currentPost = null;
   let currentAlbumIndex = 0;
@@ -76,6 +86,54 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   // Shared /api/resolve-video result for the currently opened post - both the
   // metadata refresh here and createVideoPlayer consume the same request
   let activeResolvePromise = null;
+
+  // Stack of previously opened posts inside the viewer for back-navigation
+  const viewerHistory = [];
+
+  function updateViewerBackButton() {
+    const btnBack = document.getElementById('btnBackViewer');
+    if (btnBack) {
+      btnBack.style.display = viewerHistory.length > 0 ? 'inline-flex' : 'none';
+    }
+  }
+
+  function handleViewerBack() {
+    if (isArchiveInspectModalOpen && isArchiveInspectModalOpen()) {
+      closeArchiveInspectModal();
+      return;
+    }
+    if (viewerSidebar && viewerSidebar.classList.contains('open')) {
+      viewerSidebar.classList.remove('open');
+      return;
+    }
+    if (viewerHistory.length > 0) {
+      haptic(15);
+      const prev = viewerHistory.pop();
+      updateViewerBackButton();
+      if (prev.directPostRef) {
+        openViewer(-1, {
+          directPost: prev.directPostRef,
+          initialAlbumIndex: prev.albumIndex || 0,
+          skipHistoryPush: true
+        });
+      } else if (prev.viewerIndex >= 0) {
+        openViewer(prev.viewerIndex, {
+          initialAlbumIndex: prev.albumIndex || 0,
+          skipHistoryPush: true
+        });
+      } else if (prev.post) {
+        openViewer(-1, {
+          directPost: prev.post,
+          initialAlbumIndex: prev.albumIndex || 0,
+          skipHistoryPush: true
+        });
+      } else {
+        closeViewer();
+      }
+      return;
+    }
+    closeViewer();
+  }
 
   // Touch state variables for gestures
   let touchStartX = 0;
@@ -89,8 +147,20 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   function openViewer(index, opts = {}) {
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+
+    // Track navigation history if transitioning to another post from within the viewer
+    if (opts.pushHistory && currentPost) {
+      viewerHistory.push({
+        post: currentPost,
+        albumIndex: currentAlbumIndex,
+        viewerIndex: state.currentViewerIndex,
+        directPostRef: directPostRef
+      });
+    }
+    updateViewerBackButton();
+
     if (opts.directPost) {
-      // Standalone post opened by deep link: no neighbors, not part of the grid
+      // Standalone post opened by deep link or similar post click: no neighbors, not part of the grid
       directPostRef = opts.directPost;
       state.currentViewerIndex = -1;
       currentPost = opts.directPost;
@@ -100,7 +170,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       state.currentViewerIndex = index;
       currentPost = list[index];
     }
-    currentAlbumIndex = 0;
+    currentAlbumIndex = opts.initialAlbumIndex || 0;
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) viewerContent.classList.remove('ui-hidden');
 
@@ -357,6 +427,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (viewerContent) {
       viewerContent.classList.remove('ui-hidden');
       viewerContent.classList.remove('has-album');
+      viewerContent.classList.remove('has-similar');
     }
     
     if (activeAbortController) {
@@ -385,6 +456,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     if (mediaWrapper) mediaWrapper.innerHTML = '';
+    viewerHistory.length = 0;
+    updateViewerBackButton();
+    if (viewerSimilarFilmstrip) viewerSimilarFilmstrip.style.display = 'none';
+    if (similarFilmstripInner) similarFilmstripInner.innerHTML = '';
     currentPost = null;
     currentAlbumIndex = 0;
     directPostRef = null;
@@ -405,7 +480,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       const isAlbum = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 1);
 
       if (isAlbum) {
-        if (viewerContent) viewerContent.classList.add('has-album');
+        if (viewerContent) {
+          viewerContent.classList.add('has-album');
+        }
         viewerAlbumFilmstrip.style.display = 'block';
         if (viewerAlbumBadge && viewerAlbumPageText) {
           viewerAlbumBadge.style.display = 'inline-flex';
@@ -2425,6 +2502,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     renderSidebarArchives(currentPost);
     const cloudLinks = renderSidebarCloudLinks(currentPost);
     renderSidebarContent(currentPost, (cloudLinks || []).map(l => l.url));
+    renderSidebarSimilarPosts(currentPost);
     renderAlbumFilmstrip();
 
     if (!skipMediaLoad) {
@@ -2575,6 +2653,293 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       haptic(15);
       loadFullAlbumForPost(currentPost, true);
     });
+  }
+
+  // Multi-tier similar posts retrieval and bottom filmstrip rendering
+  let similarFetchSeq = 0;
+
+  async function renderSidebarSimilarPosts(targetPost, forceRefresh = false) {
+    if (!targetPost) return;
+    const seq = ++similarFetchSeq;
+
+    if (targetPost._similarSession && !forceRefresh) {
+      resumeSimilarSession(targetPost);
+      return;
+    }
+
+    try {
+      const plan = getSimilarPostPlan(targetPost);
+      if (!plan.queries || plan.queries.length === 0) {
+        if (seq === similarFetchSeq) {
+          renderSimilarFilmstrip([]);
+        }
+        return;
+      }
+
+      const session = {
+        plan,
+        pool: [],
+        seenIds: new Set(),
+        renderedCount: 0,
+        currentPage: 1,
+        queryIndex: 0,
+        hasMore: true,
+        isLoadingMore: false,
+        loaderEl: null
+      };
+      targetPost._similarSession = session;
+
+      const postSite = targetPost.site || state.currentSite || 'danbooru';
+      const initialQueries = plan.queries.slice(0, 4);
+      session.queryIndex = initialQueries.length;
+
+      const tasks = initialQueries.map(query => {
+        return fetchPosts({
+          site: postSite,
+          tags: query,
+          page: 1,
+          limit: 30,
+          category: 'new',
+          aiFilter: state.aiFilter || 'all',
+          ratingFilter: state.ratingFilter || 'all',
+          typeFilter: state.typeFilter || 'all',
+          ageFilter: state.ageFilter || 'all',
+          hideFurry: state.hideFurry,
+          hidePregnant: state.hidePregnant,
+          hideLgbt: state.hideLgbt
+        }).catch(() => null);
+      });
+
+      const results = await Promise.allSettled(tasks);
+      if (seq !== similarFetchSeq) return;
+
+      const candidateMap = new Map();
+      for (const res of results) {
+        if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts)) {
+          for (const p of res.value.posts) {
+            if (!p || !p.id || p.id === targetPost.id) continue;
+            if (state.dislikedIds?.has(p.id)) continue;
+            if (!candidateMap.has(p.id)) {
+              candidateMap.set(p.id, p);
+            }
+          }
+        }
+      }
+
+      for (const p of candidateMap.values()) {
+        const score = calculatePostSimilarityScore(p, targetPost);
+        session.pool.push({ post: p, score });
+        session.seenIds.add(p.id);
+      }
+
+      session.pool.sort((a, b) => b.score - a.score);
+      targetPost._similarPosts = session.pool;
+
+      renderSimilarFilmstripSession(targetPost);
+    } catch (err) {
+      console.warn('Ошибка загрузки похожих постов:', err);
+      if (seq === similarFetchSeq) {
+        renderSimilarFilmstrip([]);
+      }
+    }
+  }
+
+  function renderSimilarFilmstripSession(targetPost) {
+    if (!viewerSimilarFilmstrip || !similarFilmstripInner) return;
+    const session = targetPost._similarSession;
+    if (!session || session.pool.length === 0) {
+      viewerSimilarFilmstrip.style.display = 'none';
+      if (viewerContent) viewerContent.classList.remove('has-similar');
+      return;
+    }
+
+    if (viewerContent) viewerContent.classList.add('has-similar');
+    viewerSimilarFilmstrip.style.display = 'flex';
+
+    similarFilmstripInner.innerHTML = '';
+    session.renderedCount = 0;
+    appendSimilarItems(targetPost, 18);
+  }
+
+  function resumeSimilarSession(targetPost) {
+    if (!viewerSimilarFilmstrip || !similarFilmstripInner) return;
+    const session = targetPost._similarSession;
+    if (!session || session.pool.length === 0) {
+      viewerSimilarFilmstrip.style.display = 'none';
+      if (viewerContent) viewerContent.classList.remove('has-similar');
+      return;
+    }
+
+    if (viewerContent) viewerContent.classList.add('has-similar');
+    viewerSimilarFilmstrip.style.display = 'flex';
+
+    if (similarFilmstripInner.children.length > 0 && session.renderedCount > 0) {
+      if (similarFilmstripCount) {
+        similarFilmstripCount.textContent = session.hasMore ? `${session.renderedCount}+` : `${session.renderedCount}`;
+      }
+      return;
+    }
+
+    renderSimilarFilmstripSession(targetPost);
+  }
+
+  function appendSimilarItems(targetPost, count = 18) {
+    if (!similarFilmstripInner || !targetPost?._similarSession) return;
+    const session = targetPost._similarSession;
+    const toRender = session.pool.slice(session.renderedCount, session.renderedCount + count);
+    if (toRender.length === 0) return;
+
+    const frag = document.createDocumentFragment();
+    toRender.forEach(({ post: item, score }) => {
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'similar-filmstrip-item';
+      const rawThumb = item.thumb360 || item.previewUrl || item.sampleUrl || item.thumb180 || item.fileUrl || '';
+      const thumbSrc = rawThumb ? (rawThumb.startsWith('/api/') ? rawThumb : getProxiedUrl(rawThumb)) : '';
+      const isHighMatch = score >= 65;
+
+      itemDiv.title = `${t('vw.similarity', 'Сходство:')} ${score}%${item.author ? `\n@${item.author}` : ''}`;
+      itemDiv.innerHTML = `
+        <img class="similar-filmstrip-img" src="${thumbSrc}" alt="Similar post" loading="lazy" referrerpolicy="no-referrer">
+        <span class="similar-filmstrip-score ${isHighMatch ? 'score-high' : ''}">${score}%</span>
+      `;
+
+      itemDiv.addEventListener('click', (e) => {
+        e.stopPropagation();
+        haptic(15);
+        openViewer(-1, { directPost: item, pushHistory: true });
+      });
+
+      frag.appendChild(itemDiv);
+    });
+
+    if (session.loaderEl && session.loaderEl.parentNode === similarFilmstripInner) {
+      similarFilmstripInner.insertBefore(frag, session.loaderEl);
+    } else {
+      similarFilmstripInner.appendChild(frag);
+    }
+
+    session.renderedCount += toRender.length;
+    if (similarFilmstripCount) {
+      similarFilmstripCount.textContent = session.hasMore ? `${session.renderedCount}+` : `${session.renderedCount}`;
+    }
+  }
+
+  async function loadMoreSimilarPosts(targetPost) {
+    if (!targetPost || !targetPost._similarSession) return;
+    const session = targetPost._similarSession;
+    if (session.isLoadingMore || !session.hasMore) return;
+
+    const unrenderedInPool = session.pool.length - session.renderedCount;
+    if (unrenderedInPool >= 8) {
+      appendSimilarItems(targetPost, 12);
+      return;
+    }
+
+    session.isLoadingMore = true;
+
+    if (!session.loaderEl) {
+      session.loaderEl = document.createElement('div');
+      session.loaderEl.className = 'similar-filmstrip-loader';
+      session.loaderEl.innerHTML = '<div class="similar-filmstrip-loader-spinner"></div>';
+      similarFilmstripInner.appendChild(session.loaderEl);
+      similarFilmstripInner.scrollLeft += 40;
+    }
+
+    try {
+      const postSite = targetPost.site || state.currentSite || 'danbooru';
+      let queriesToFetch = [];
+
+      if (session.queryIndex < session.plan.queries.length) {
+        queriesToFetch = session.plan.queries.slice(session.queryIndex, session.queryIndex + 3);
+        session.queryIndex += queriesToFetch.length;
+      } else {
+        session.currentPage++;
+        if (session.currentPage > 5) {
+          session.hasMore = false;
+        } else {
+          queriesToFetch = session.plan.queries.slice(0, 3);
+        }
+      }
+
+      if (queriesToFetch.length > 0 && session.hasMore) {
+        const tasks = queriesToFetch.map(query => {
+          return fetchPosts({
+            site: postSite,
+            tags: query,
+            page: session.currentPage,
+            limit: 30,
+            category: 'new',
+            aiFilter: state.aiFilter || 'all',
+            ratingFilter: state.ratingFilter || 'all',
+            typeFilter: state.typeFilter || 'all',
+            ageFilter: state.ageFilter || 'all',
+            hideFurry: state.hideFurry,
+            hidePregnant: state.hidePregnant,
+            hideLgbt: state.hideLgbt
+          }).catch(() => null);
+        });
+
+        const results = await Promise.allSettled(tasks);
+        let newItemsAdded = 0;
+
+        for (const res of results) {
+          if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts)) {
+            for (const p of res.value.posts) {
+              if (!p || !p.id || p.id === targetPost.id) continue;
+              if (state.dislikedIds?.has(p.id) || session.seenIds.has(p.id)) continue;
+              session.seenIds.add(p.id);
+              const score = calculatePostSimilarityScore(p, targetPost);
+              session.pool.push({ post: p, score });
+              newItemsAdded++;
+            }
+          }
+        }
+
+        if (newItemsAdded === 0 && session.queryIndex >= session.plan.queries.length && session.currentPage >= 3) {
+          session.hasMore = false;
+        }
+      }
+    } catch (err) {
+      console.warn('Ошибка догрузки похожих постов:', err);
+      session.hasMore = false;
+    } finally {
+      if (session.loaderEl && session.loaderEl.parentNode) {
+        session.loaderEl.remove();
+        session.loaderEl = null;
+      }
+      session.isLoadingMore = false;
+      appendSimilarItems(targetPost, 12);
+      if (similarFilmstripCount) {
+        similarFilmstripCount.textContent = session.hasMore ? `${session.renderedCount}+` : `${session.renderedCount}`;
+      }
+    }
+  }
+
+  function renderSimilarFilmstrip(similarItems) {
+    if (!viewerSimilarFilmstrip || !similarFilmstripInner) return;
+    if (!similarItems || similarItems.length === 0) {
+      viewerSimilarFilmstrip.style.display = 'none';
+      if (viewerContent) viewerContent.classList.remove('has-similar');
+      return;
+    }
+    if (currentPost) {
+      currentPost._similarSession = {
+        plan: { queries: [] },
+        pool: Array.isArray(similarItems) ? similarItems : [],
+        seenIds: new Set(similarItems.map(i => i.post?.id).filter(Boolean)),
+        renderedCount: 0,
+        currentPage: 1,
+        queryIndex: 0,
+        hasMore: false,
+        isLoadingMore: false,
+        loaderEl: null
+      };
+      renderSimilarFilmstripSession(currentPost);
+    }
+  }
+
+  function displaySimilarPosts(similarItems, sourcePost) {
+    renderSimilarFilmstrip(similarItems);
   }
 
   // Download all album images
@@ -2738,6 +3103,25 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         }
       } catch (err) {
         console.error(err);
+      }
+    });
+  }
+
+  if (btnSimilarModal) {
+    btnSimilarModal.addEventListener('click', () => {
+      if (!currentPost) return;
+      haptic(15);
+      if (viewerSimilarFilmstrip) {
+        if (viewerSimilarFilmstrip.style.display === 'none') {
+          renderSidebarSimilarPosts(currentPost, true);
+        } else {
+          viewerSimilarFilmstrip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          viewerSimilarFilmstrip.animate([
+            { transform: 'translateY(0) scale(1)' },
+            { transform: 'translateY(-6px) scale(1.01)' },
+            { transform: 'translateY(0) scale(1)' }
+          ], { duration: 300, easing: 'ease-out' });
+        }
       }
     });
   }
@@ -2993,14 +3377,35 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   if (btnClose) btnClose.addEventListener('click', closeViewer);
+  const btnBackViewer = document.getElementById('btnBackViewer');
+  if (btnBackViewer) btnBackViewer.addEventListener('click', handleViewerBack);
   if (backdrop) backdrop.addEventListener('click', closeViewer);
 
-  // Check for touches on interactive elements (video banner, album filmstrip, sidebar, buttons)
+  // Wheel and scroll listeners on similar filmstrip for horizontal mouse navigation & infinite scroll
+  if (similarFilmstripInner) {
+    similarFilmstripInner.addEventListener('wheel', (e) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        similarFilmstripInner.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
+
+    similarFilmstripInner.addEventListener('scroll', () => {
+      if (!currentPost || !currentPost._similarSession) return;
+      const { scrollLeft, clientWidth, scrollWidth } = similarFilmstripInner;
+      if (scrollLeft + clientWidth >= scrollWidth - 250) {
+        loadMoreSimilarPosts(currentPost);
+      }
+    });
+  }
+
+  // Check for touches on interactive elements (video banner, album filmstrip, similar filmstrip, sidebar, buttons)
   function isInteractiveTouchTarget(target) {
     if (!target) return false;
     return Boolean(
       target.closest('.video-status-banner') ||
       target.closest('.viewer-album-filmstrip') ||
+      target.closest('.viewer-similar-filmstrip') ||
       target.closest('.btn-video-unmute') ||
       target.closest('.viewer-sidebar') ||
       target.closest('.viewer-header') ||
@@ -3071,6 +3476,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         const deltaX = e.touches[0].clientX - touchStartX;
         if (deltaY > 15 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
           isDraggingDown = true;
+          if (e.cancelable) {
+            e.preventDefault();
+          }
           if (viewerContent) {
             viewerContent.style.transition = 'none';
             viewerContent.style.transform = `translateY(${Math.max(0, deltaY)}px) scale(${Math.max(0.88, 1 - deltaY / 1200)})`;
@@ -3078,9 +3486,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
           if (backdrop) {
             backdrop.style.opacity = `${Math.max(0.2, 1 - deltaY / 400)}`;
           }
+        } else if (isDraggingDown) {
+          if (e.cancelable) {
+            e.preventDefault();
+          }
         }
       }
-    }, { passive: true });
+    }, { passive: false });
 
     mediaWrapper.addEventListener('touchend', (e) => {
       if (isInteractiveTouchTarget(e.target) && !isDraggingDown) {
@@ -3196,6 +3608,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       e.preventDefault();
       if (isArchiveInspectModalOpen()) {
         closeArchiveInspectModal();
+        return;
+      }
+      if (viewerSidebar && viewerSidebar.classList.contains('open')) {
+        viewerSidebar.classList.remove('open');
         return;
       }
       closeViewer();

@@ -610,6 +610,7 @@ export function isAuthorFavorite(name) {
 
 
 // 🛡️ Broad composition/generic tags that should NOT be wiped out by single dislikes
+// and should receive dampening (IDF penalty) so they don't overpower specific characters/artists
 const GENERIC_DISLIKE_PROTECTED_TAGS = new Set([
   'solo', '1girl', '1boy', '2girls', '2boys', 'multiple_girls', 'multiple_boys',
   'looking_at_viewer', 'smile', 'open_mouth', 'closed_eyes', 'blush', 'sitting', 'standing', 'lying',
@@ -678,6 +679,61 @@ export function clearSessionInterests() {
   sessionInterests.clear();
 }
 
+// 🚫 Extract top disliked tags to inject into seed queries as negative tokens (-tag)
+export function getUserNegativeSeedTokens(maxTokens = 4) {
+  if (!Array.isArray(state.dislikes) || state.dislikes.length === 0) return [];
+
+  const halfLife = state.settings?.recommendationDecayDays || 25;
+  const dislikeWeights = new Map();
+  const positiveCounts = new Map();
+
+  // Tally positive counts to prevent excluding tags that the user actually likes elsewhere
+  for (const post of (state.likes || [])) {
+    if (post.author) {
+      const a = cleanTagString(post.author);
+      if (a) positiveCounts.set(a, (positiveCounts.get(a) || 0) + 1);
+    }
+    const td = post.tagDetails || {};
+    for (const arr of [td.artist, td.character, td.copyright, td.general]) {
+      if (Array.isArray(arr)) {
+        for (const t of arr) {
+          const clean = cleanTagString(t);
+          if (clean) positiveCounts.set(clean, (positiveCounts.get(clean) || 0) + 1);
+        }
+      }
+    }
+  }
+
+  // Tally dislike penalties
+  for (const post of state.dislikes) {
+    const decay = getTemporalDecayFactor(post.dislikedAt, halfLife * 1.5);
+    const inspect = (rawTag, mult) => {
+      const clean = cleanTagString(rawTag);
+      if (!clean || GENERIC_DISLIKE_PROTECTED_TAGS.has(clean)) return;
+      dislikeWeights.set(clean, (dislikeWeights.get(clean) || 0) + mult * decay);
+    };
+
+    if (post.author) inspect(post.author, 4.0);
+    const td = post.tagDetails || {};
+    if (Array.isArray(td.artist)) td.artist.forEach(a => inspect(a, 4.0));
+    if (Array.isArray(td.character)) td.character.forEach(c => inspect(c, 3.0));
+    if (Array.isArray(td.copyright)) td.copyright.forEach(cp => inspect(cp, 2.5));
+    if (Array.isArray(td.general)) td.general.forEach(g => inspect(g, 1.2));
+  }
+
+  const negativeCandidates = [];
+  for (const [tag, dislikeScore] of dislikeWeights.entries()) {
+    const pos = positiveCounts.get(tag) || 0;
+    // Only exclude tags that have strong dislike signals and minimal/no positive history
+    if (dislikeScore >= 2.5 && pos <= 1) {
+      negativeCandidates.push({ tag, netPenalty: dislikeScore - pos * 2 });
+    }
+  }
+
+  negativeCandidates.sort((a, b) => b.netPenalty - a.netPenalty);
+  return negativeCandidates.slice(0, maxTokens).map(c => `-${c.tag}`);
+}
+
 // 🧠 Advanced algorithm for extracting the user's interest map with temporal decay and category balancing
 export function getUserInterestTags(limit = null, options = {}) {
   const counts = new Map(); // tag -> positive weight sum
@@ -724,6 +780,12 @@ export function getUserInterestTags(limit = null, options = {}) {
 
     let baseWeight = weights.get(tag) || 1.0;
     const category = catMap.get(tag) || 'general';
+
+    // IDF Damping: Penalize ubiquitous/generic descriptor tags (1girl, solo, etc.)
+    // so they do not dominate specific characters, franchises, or artistic elements
+    if (GENERIC_DISLIKE_PROTECTED_TAGS.has(tag)) {
+      baseWeight *= 0.45;
+    }
 
     // Focus mode multipliers
     if (focusMode === 'artists' && category === 'artist') {
@@ -1028,6 +1090,171 @@ export function calculatePostMatchPercent(post, userInterestMap) {
     valueOf() { return this.percent; },
     toString() { return String(this.percent); }
   };
+}
+
+// 🔍 Build multi-tier search queries for "More Like This" to avoid 0-result AND queries
+export function getSimilarPostPlan(post) {
+  if (!post) return { queries: [], label: '' };
+
+  const site = post.site || state.currentSite;
+  const isCreatorCentric = (site === 'pawchive' || site === 'kemono');
+
+  const td = post.tagDetails || {};
+  const artists = (td.artist || (post.author ? [post.author] : []))
+    .map(cleanTagString).filter(Boolean);
+  const characters = (td.character || [])
+    .map(cleanTagString).filter(Boolean);
+  const copyrights = (td.copyright || [])
+    .map(cleanTagString).filter(Boolean);
+  const generals = (td.general || (Array.isArray(post.tags) ? post.tags : []))
+    .map(cleanTagString).filter(t => t && !GENERIC_DISLIKE_PROTECTED_TAGS.has(t));
+
+  if (isCreatorCentric) {
+    const author = artists[0] || post.author || '';
+    if (author) {
+      return {
+        queries: [`artist:${author}`, author],
+        label: `@${author}`,
+        sourcePost: post
+      };
+    }
+    return {
+      queries: characters.slice(0, 2).concat(generals.slice(0, 2)),
+      label: characters[0] || generals[0] || '',
+      sourcePost: post
+    };
+  }
+
+  const queries = [];
+
+  // Tier 1: Character + Artist (ideal match)
+  if (characters.length > 0 && artists.length > 0) {
+    queries.push(`${characters[0]} ${artists[0]}`);
+  }
+  // Tier 2: Character + Copyright (franchise match)
+  if (characters.length > 0 && copyrights.length > 0) {
+    queries.push(`${characters[0]} ${copyrights[0]}`);
+  }
+  // Tier 3: Pure Character (broader content match)
+  if (characters.length > 0) {
+    queries.push(characters[0]);
+    if (characters.length > 1) {
+      queries.push(characters[1]);
+    }
+  }
+  // Tier 4: Pure Artist (artist style match)
+  if (artists.length > 0) {
+    queries.push(artists[0]);
+  }
+  // Tier 5: Copyright / Franchise
+  if (copyrights.length > 0 && queries.length < 4) {
+    queries.push(copyrights[0]);
+  }
+  // Tier 6: Specific characteristic general tags (visual aesthetic)
+  for (const g of generals) {
+    if (queries.length >= 8) break;
+    if (!queries.includes(g)) queries.push(g);
+  }
+
+  // Fallback: If queries are sparse, add raw post tags
+  const rawTags = (Array.isArray(post.tags) ? post.tags : []).map(cleanTagString).filter(Boolean);
+  if (queries.length < 2 && rawTags.length > 0) {
+    if (rawTags.length >= 2) {
+      queries.push(`${rawTags[0]} ${rawTags[1]}`);
+    }
+    for (const rt of rawTags.slice(0, 6)) {
+      if (!queries.includes(rt)) queries.push(rt);
+    }
+  }
+
+  // Deduplicate queries
+  const uniqueQueries = Array.from(new Set(queries.map(q => q.trim()).filter(Boolean)));
+  const label = (characters[0] && artists[0])
+    ? `${characters[0]} (@${artists[0]})`
+    : (characters[0] || (artists[0] ? `@${artists[0]}` : (copyrights[0] || generals[0] || '')));
+
+  return {
+    queries: uniqueQueries,
+    label,
+    sourcePost: post
+  };
+}
+
+// 🎯 Compute visual and semantic similarity score (0..100) between candidate and source post
+export function calculatePostSimilarityScore(candidate, sourcePost) {
+  if (!candidate || !sourcePost || candidate.id === sourcePost.id) return 0;
+
+  const srcTd = sourcePost.tagDetails || {};
+  const candTd = candidate.tagDetails || {};
+
+  const srcArtists = new Set((srcTd.artist || (sourcePost.author ? [sourcePost.author] : [])).map(cleanTagString).filter(Boolean));
+  const candArtists = new Set((candTd.artist || (candidate.author ? [candidate.author] : [])).map(cleanTagString).filter(Boolean));
+
+  const srcChars = new Set((srcTd.character || []).map(cleanTagString).filter(Boolean));
+  const candChars = new Set((candTd.character || []).map(cleanTagString).filter(Boolean));
+
+  const srcCopy = new Set((srcTd.copyright || []).map(cleanTagString).filter(Boolean));
+  const candCopy = new Set((candTd.copyright || []).map(cleanTagString).filter(Boolean));
+
+  const srcGeneral = new Set((srcTd.general || (Array.isArray(sourcePost.tags) ? sourcePost.tags : [])).map(cleanTagString).filter(t => t && !GENERIC_DISLIKE_PROTECTED_TAGS.has(t)));
+  const candGeneral = new Set((candTd.general || (Array.isArray(candidate.tags) ? candidate.tags : [])).map(cleanTagString).filter(t => t && !GENERIC_DISLIKE_PROTECTED_TAGS.has(t)));
+
+  let score = 0;
+
+  // 1. Author match (huge artistic style signal: +35 points)
+  let authorMatched = false;
+  for (const a of srcArtists) {
+    if (candArtists.has(a)) {
+      score += 35;
+      authorMatched = true;
+      break;
+    }
+  }
+
+  // 2. Character match (strong content signal: +30 points each, up to 45)
+  let charMatchCount = 0;
+  for (const c of srcChars) {
+    if (candChars.has(c)) {
+      charMatchCount++;
+      score += 30;
+      if (charMatchCount >= 2) break;
+    }
+  }
+
+  // 3. Franchise / Copyright match (+15 points)
+  for (const cp of srcCopy) {
+    if (candCopy.has(cp)) {
+      score += 15;
+      break;
+    }
+  }
+
+  // 4. Jaccard similarity of specific descriptive tags (up to +25 points)
+  if (srcGeneral.size > 0 && candGeneral.size > 0) {
+    let intersection = 0;
+    for (const g of candGeneral) {
+      if (srcGeneral.has(g)) intersection++;
+    }
+    const union = srcGeneral.size + candGeneral.size - intersection;
+    if (union > 0) {
+      const jaccard = intersection / union;
+      score += Math.round(jaccard * 25);
+    }
+  }
+
+  // 5. Media format consistency bonus (video with video, image with image: +5 points)
+  if (Boolean(candidate.isVideo) === Boolean(sourcePost.isVideo)) {
+    score += 5;
+  }
+
+  // Cap score between 0 and 99
+  return Math.min(99, Math.max(0, Math.round(score)));
+}
+
+// Backward compatibility alias
+export function getSimilarPostQuery(post) {
+  const plan = getSimilarPostPlan(post);
+  return plan.queries[0] || '';
 }
 
 

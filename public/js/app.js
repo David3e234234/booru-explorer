@@ -18,6 +18,9 @@ import {
   getUserInterestTags,
   getUserInterestSeedPairs,
   getRecommendationSeeds,
+  getUserNegativeSeedTokens,
+  getSimilarPostQuery,
+  recordSessionInteraction,
   calculatePostMatchPercent,
   isAuthorFavorite,
   SECRET_SETTING_FIELDS
@@ -200,7 +203,8 @@ async function init() {
       performSearch(true);
     },
     onAddAuthor: openAddAuthorModal,
-    onSelectSite: (siteId) => selectSite(siteId)
+    onSelectSite: (siteId) => selectSite(siteId),
+    onFindSimilar: (post) => handleFindSimilarPost(post)
   });
 
   viewerInstance = initViewer({
@@ -220,6 +224,7 @@ async function init() {
     onDislikeToggle: () => {
       galleryInstance.renderGallery(false, { preserveScroll: true });
     },
+    onFindSimilar: (post) => handleFindSimilarPost(post),
     showToast
   });
 
@@ -542,6 +547,35 @@ function selectCategory(category) {
   state.currentCategory = category;
   updateCategoryTabsUI();
   performSearch(true);
+}
+
+function handleFindSimilarPost(post) {
+  if (!post) return;
+  // Record session interaction
+  recordSessionInteraction(post, 'similar');
+
+  // Open viewer for this post so user immediately sees the media and its dedicated similar works grid
+  const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+  const postIdx = (list || []).findIndex(p => p && p.id === post.id);
+
+  if (postIdx !== -1 && viewerInstance) {
+    viewerInstance.openViewer(postIdx);
+  } else if (viewerInstance) {
+    viewerInstance.openViewer(-1, { directPost: post });
+  }
+
+  // If on mobile, open tags/info drawer so the similar section is immediately visible
+  if (window.innerWidth <= 800) {
+    const sidebar = document.getElementById('viewerSidebar');
+    if (sidebar) sidebar.classList.add('open');
+  }
+
+  const similarSection = document.getElementById('viewerSidebarSimilarSection');
+  if (similarSection) {
+    setTimeout(() => {
+      similarSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  }
 }
 
 async function loadUserSettings() {
@@ -1201,13 +1235,17 @@ async function performSearch(reset = false, options = {}) {
             focusMode
           });
 
+          // Extract top user negative tokens from dislikes to filter out at Booru API level
+          const negativeSeedTokens = getUserNegativeSeedTokens(3);
+          const negativeSuffix = negativeSeedTokens.length > 0 ? ` ${negativeSeedTokens.join(' ')}` : '';
+
           for (const rawSeed of selectedSeeds) {
             const cleanSeedTag = rawSeed.replace(/[()]/g, '').trim();
             if (!cleanSeedTag) continue;
             fetchTasks.push(
               fetchPosts({
                 site: state.currentSite,
-                tags: cleanSeedTag,
+                tags: `${cleanSeedTag}${negativeSuffix}`.trim(),
                 page: 1 + Math.floor((state.page - 1) / Math.max(1, selectedSeeds.length)),
                 limit: 28,
                 category: 'new',

@@ -3,7 +3,7 @@ import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } f
 import { showToast, showActionToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
 import { t } from './i18n.js';
 
-export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite }) {
+export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite, onFindSimilar }) {
   const galleryGrid = document.getElementById('galleryGrid');
   const loadingSpinner = document.getElementById('loadingSpinner');
   const emptyState = document.getElementById('emptyState');
@@ -900,6 +900,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
               <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="${t('viewer.dislike.title', 'Не интересно (скрыть и меньше рекомендовать)')}">
                 <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-dislike"/></svg>
               </button>
+              <button class="btn-card-action btn-card-similar" data-post-id="${post.id}" title="${t('gal.similar.title', 'Найти похожие работы')}">
+                <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
+              </button>
               <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? t('gal.unlike.title', 'Убрать лайк') : t('gal.like.title', 'Нравится')}">
                 <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isLiked ? '#ic-heart-filled' : '#ic-heart'}"/></svg>
               </button>
@@ -1027,6 +1030,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       if (!isDriftedTouch(e)) {
         haptic(20);
         handleDislikeClick(post, card);
+      }
+      return;
+    }
+    const similarBtn = e.target.closest('.btn-card-similar');
+    if (similarBtn) {
+      e.stopPropagation();
+      if (!isDriftedTouch(e)) {
+        haptic(15);
+        if (typeof onFindSimilar === 'function') {
+          onFindSimilar(post);
+        }
       }
       return;
     }
