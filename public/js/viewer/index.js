@@ -144,11 +144,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
       const img = document.createElement('img');
       img.className = 'viewer-image';
-      const isBooruMedia = (item.site === 'allgirl' || (directMedia && directMedia.includes('booru.org')));
-      const needsImgProxy = (item.site === 'danbooru' || directMedia.includes('donmai.us'))
+      const isBooruMedia = (item.site === 'allgirl' || (typeof directMedia === 'string' && directMedia.includes('booru.org')));
+      const needsImgProxy = (item.site === 'danbooru' || (typeof directMedia === 'string' && directMedia.includes('donmai.us')))
         ? true
         : (isBooruMedia ? hasCustomAllgirlProxy : (state.settings?.proxyFullImages !== false));
-      const proxyMedia = (needsImgProxy || !isBooruMedia) ? getProxiedUrl(directMedia) : directMedia;
+      const targetSrc = (directMedia.startsWith('/api/') || !needsImgProxy) ? directMedia : getProxiedUrl(directMedia);
       img.referrerPolicy = 'no-referrer';
       img.alt = 'Full View';
 
@@ -166,15 +166,17 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       };
 
       img.addEventListener('load', onImageReady);
+      let errorAttempt = 0;
       img.addEventListener('error', function () {
+        errorAttempt++;
         const canUseServerProxy = !isBooruMedia || hasCustomAllgirlProxy;
-        if (this.src !== proxyMedia && canUseServerProxy) {
+        if (errorAttempt === 1 && !this.src.startsWith('/api/proxy') && canUseServerProxy && directMedia) {
           console.warn('[Viewer Image Fallback] Переключение на прокси');
-          this.src = proxyMedia;
-        } else if (item.fileUrl && item.sampleUrl && (this.src.includes(item.sampleUrl) || this.src.includes(encodeURIComponent(item.sampleUrl)))) {
+          this.src = getProxiedUrl(directMedia);
+        } else if (errorAttempt <= 2 && item.fileUrl && this.src !== item.fileUrl && (!canUseServerProxy || this.src !== getProxiedUrl(item.fileUrl))) {
           console.warn('[Viewer Image Fallback] Переключение на fileUrl');
           this.src = canUseServerProxy ? getProxiedUrl(item.fileUrl) : item.fileUrl;
-        } else if (item.previewUrl && !this.src.includes(item.previewUrl) && !this.src.includes(encodeURIComponent(item.previewUrl))) {
+        } else if (errorAttempt <= 3 && item.previewUrl && this.src !== item.previewUrl && (!canUseServerProxy || this.src !== getProxiedUrl(item.previewUrl))) {
           console.warn('[Viewer Image Fallback] Переключение на previewUrl');
           this.src = canUseServerProxy ? getProxiedUrl(item.previewUrl) : item.previewUrl;
         } else {
@@ -183,7 +185,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         }
       });
 
-      img.src = needsImgProxy ? proxyMedia : directMedia;
+      img.src = targetSrc;
       if (img.complete && img.naturalWidth > 0) onImageReady();
 
       container.appendChild(img);
