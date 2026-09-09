@@ -41,7 +41,6 @@ import {
 import { initAutocomplete } from './autocomplete.js';
 import { initGallery } from './gallery.js';
 import { initViewer } from './viewer.js';
-import { findSimilarPosts, calculateUserTasteVector, scoreCandidatesByVisualTaste, showAiStatus, hideAiStatus } from './modules/aiVision.js';
 import { isMyLiveDemoHost, isVercelHost, showToast, haptic } from './modules/uiUtils.js';
 import { openDrawer, closeAllDrawers, setDrawerCallbacks } from './modules/drawers.js';
 import { 
@@ -178,82 +177,6 @@ async function init() {
     onSearch: () => performSearch(true)
   });
 
-  let lastLoadMoreTime = 0;
-
-  async function handleFindVisuallySimilar(targetPost) {
-    if (!targetPost) return;
-
-    if (state.settings.aiVisualEngine === 'off') {
-      showToast(t('ai.disabledInSettings', 'Нейросетевой анализ выключен в Настройках -> ИИ'));
-      return;
-    }
-
-    showToast(t('ai.scanningSimilar', '✨ Сканирование нейросетью и поиск похожих артов...'));
-    try {
-      state.isLoading = true;
-      galleryInstance.showScrollLoading();
-
-      // Gather candidates from current posts + fetch additional candidates if pool is small
-      const poolLimit = state.settings?.aiCandidatePool || 40;
-      let candidates = [...(state.posts || [])];
-      if (candidates.length < poolLimit) {
-        try {
-          const res = await fetchPosts({
-            site: targetPost.site || state.currentSite,
-            category: 'new',
-            page: 1,
-            limit: Math.max(80, poolLimit + 20),
-            aiFilter: state.aiFilter,
-            ratingFilter: state.ratingFilter,
-            typeFilter: state.typeFilter
-          });
-          if (res.success && Array.isArray(res.posts)) {
-            const existing = new Set(candidates.map(p => p.id));
-            for (const p of res.posts) {
-              if (!existing.has(p.id)) candidates.push(p);
-            }
-          }
-        } catch {}
-      }
-
-      const similarResults = await findSimilarPosts(targetPost, candidates, {
-        modelType: state.settings.aiVisualModel || 'dinov2',
-        engine: state.settings.aiVisualEngine || 'browser',
-        candidateLimit: poolLimit,
-        minSimilarity: 0.30
-      });
-
-      state.isLoading = false;
-      galleryInstance.hideScrollLoading();
-
-      if (similarResults.length === 0) {
-        showToast(t('ai.noSimilarFound', 'Похожих артов среди загруженных постов не найдено'));
-        return;
-      }
-
-      // Add target post at the top followed by similar matches
-      const targetWithBadge = { ...targetPost, similarityPercent: 100 };
-      const rankedPosts = [
-        targetWithBadge,
-        ...similarResults.map(r => ({ ...r.post, similarityPercent: r.matchPercent, similarityScore: r.similarity }))
-      ];
-
-      state.posts = rankedPosts;
-      state.displayedPosts = rankedPosts;
-      state.hasMore = false;
-      galleryInstance.renderGallery(false);
-      const mainContent = document.getElementById('mainContent');
-      if (mainContent) mainContent.scrollTop = 0;
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      showToast(t('ai.similarFoundCount', 'Найдено {n} визуально похожих артов!').replace('{n}', similarResults.length));
-    } catch (err) {
-      state.isLoading = false;
-      galleryInstance.hideScrollLoading();
-      console.error('[AIVision] Find similar failed:', err);
-      showToast(err.message || t('ai.findSimilarError', 'Не удалось выполнить поиск похожих'));
-    }
-  }
-
   galleryInstance = initGallery({
     onOpenViewer: (index) => viewerInstance.openViewer(index),
     onFavoriteToggle: updateFavoritesBadge,
@@ -276,7 +199,6 @@ async function init() {
     onRefresh: () => {
       performSearch(true);
     },
-    onFindSimilar: handleFindVisuallySimilar,
     onAddAuthor: openAddAuthorModal,
     onSelectSite: (siteId) => selectSite(siteId)
   });
@@ -298,7 +220,6 @@ async function init() {
     onDislikeToggle: () => {
       galleryInstance.renderGallery(false, { preserveScroll: true });
     },
-    onFindSimilar: handleFindVisuallySimilar,
     showToast
   });
 
@@ -1396,20 +1317,11 @@ async function performSearch(reset = false, options = {}) {
         filteredCandidates.push(p);
       });
 
-      const recMode = state.settings?.recommendationMode || 'hybrid';
-      const useTags = recMode === 'hybrid' || recMode === 'tags-only';
-      const useAi = (recMode === 'hybrid' || recMode === 'ai-only') && state.settings?.aiVisualEngine !== 'off';
-
       const scoredCandidates = filteredCandidates.map(p => {
-        let basePercent = 0;
-        let matchedTags = [];
-        let matchExplanation = '';
-        if (useTags) {
-          const matchResult = calculatePostMatchPercent(p, interestMap);
-          basePercent = typeof matchResult === 'object' ? matchResult.percent : matchResult;
-          matchedTags = typeof matchResult === 'object' ? matchResult.matchedTags : [];
-          matchExplanation = typeof matchResult === 'object' ? matchResult.matchExplanation : '';
-        }
+        const matchResult = calculatePostMatchPercent(p, interestMap);
+        let basePercent = typeof matchResult === 'object' ? matchResult.percent : matchResult;
+        const matchedTags = typeof matchResult === 'object' ? matchResult.matchedTags : [];
+        const matchExplanation = typeof matchResult === 'object' ? matchResult.matchExplanation : '';
         const isViewed = state.viewedIds.has(p.id);
         if (isViewed && basePercent > 0) {
           basePercent = Math.round(basePercent * 0.55);
@@ -1422,47 +1334,6 @@ async function performSearch(reset = false, options = {}) {
           isViewed
         };
       });
-
-      // Neural Visual Taste Personalization (Hybrid / AI-Only)
-      if (useAi) {
-        const likedPool = (state.likes && state.likes.length > 0) ? state.likes : state.favorites;
-        if (Array.isArray(likedPool) && likedPool.length > 0) {
-          try {
-            const tasteVector = await calculateUserTasteVector(likedPool, {
-              modelType: state.settings?.aiVisualModel || 'dinov2',
-              engine: state.settings?.aiVisualEngine || 'browser'
-            });
-            if (tasteVector) {
-              const poolLimit = state.settings?.aiCandidatePool || 40;
-              const visualScored = await scoreCandidatesByVisualTaste(scoredCandidates, tasteVector, {
-                modelType: state.settings?.aiVisualModel || 'dinov2',
-                engine: state.settings?.aiVisualEngine || 'browser',
-                candidateLimit: poolLimit
-              });
-              for (let i = 0; i < scoredCandidates.length; i++) {
-                const vis = visualScored[i]?.visualMatchPercent || 0;
-                if (vis > 0) {
-                  scoredCandidates[i].visualMatchPercent = vis;
-                  if (recMode === 'ai-only') {
-                    const isViewed = scoredCandidates[i].isViewed;
-                    scoredCandidates[i].matchPercent = isViewed ? Math.round(vis * 0.6) : vis;
-                  } else {
-                    const aiWeight = state.settings?.aiHybridWeight !== undefined ? Number(state.settings.aiHybridWeight) : 0.4;
-                    const tagWeight = Math.max(0, 1 - aiWeight);
-                    if (scoredCandidates[i].matchPercent > 0) {
-                      scoredCandidates[i].matchPercent = Math.round(scoredCandidates[i].matchPercent * tagWeight + vis * aiWeight);
-                    } else {
-                      scoredCandidates[i].matchPercent = Math.round(vis * Math.max(0.7, aiWeight + 0.3));
-                    }
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            console.warn('[AIVision] Feed personalization error:', e);
-          }
-        }
-      }
 
       // 🎯 Multi-Attribute MMR Diversification (Authors, Characters, Franchises)
       const finalRecommended = [];
@@ -2237,15 +2108,6 @@ function setupEventListeners() {
       }
     }
   });
-
-  // AI Status Widget close button
-  const btnAiStatusClose = document.getElementById('btnAiStatusClose');
-  if (btnAiStatusClose) {
-    btnAiStatusClose.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hideAiStatus(true);
-    });
-  }
 }
 
 init();

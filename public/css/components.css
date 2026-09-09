@@ -458,12 +458,6 @@
   outline-offset: 2px;
 }
 
-.btn-card-similar:hover {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.95), rgba(59, 130, 246, 0.95));
-  color: #ffffff;
-  transform: scale(1.08);
-}
-
 .btn-card-dislike:hover {
   background-color: rgba(220, 60, 80, 0.9);
   color: #ffffff;
@@ -745,7 +739,8 @@
 /* Settings category tabs */
 .settings-nav-tabs {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 6px;
   padding: 12px 18px;
   background-color: var(--bg-surface);
@@ -1248,177 +1243,6 @@
     right: 16px;
     left: 16px;
     align-items: center;
-  }
-}
-
-/* ── Native AI Activity Status Dock (Bottom-Right) ── */
-.ai-status-widget {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  left: auto;
-  z-index: 1050;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  min-width: 260px;
-  max-width: 380px;
-  background: var(--bg-surface-elevated, #262019);
-  border: 1px solid var(--border-medium, rgba(229, 169, 104, 0.2));
-  border-radius: var(--radius-lg, 8px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
-  color: var(--text-primary, #f7efe2);
-  transform: translateY(0);
-  opacity: 1;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  pointer-events: auto;
-}
-
-.ai-status-widget.ai-status-hidden {
-  opacity: 0;
-  transform: translateY(8px);
-  pointer-events: none;
-}
-
-.ai-status-widget.is-compact {
-  min-width: 0;
-  max-width: fit-content;
-  padding: 6px 10px;
-}
-
-.ai-status-widget.is-compact .ai-status-text,
-.ai-status-widget.is-compact .ai-status-progress-track {
-  display: none !important;
-}
-
-.ai-status-widget.is-compact .ai-status-counter {
-  margin-left: 6px;
-}
-
-.ai-status-icon-wrap {
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-md, 6px);
-  background: var(--accent-primary-subtle, rgba(229, 169, 104, 0.14));
-  border: 1px solid var(--border-subtle, rgba(229, 169, 104, 0.1));
-  color: var(--accent-primary, #e5a968);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.ai-status-icon {
-  fill: currentColor;
-  color: currentColor;
-}
-
-.ai-status-widget.is-done .ai-status-icon-wrap {
-  background: var(--accent-success-subtle, rgba(52, 211, 153, 0.14));
-  color: var(--accent-success, #34d399);
-}
-
-.ai-status-widget.is-error .ai-status-icon-wrap {
-  background: var(--accent-danger-subtle, rgba(251, 113, 133, 0.14));
-  color: var(--accent-danger, #fb7185);
-}
-
-.ai-status-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.ai-status-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  line-height: 1;
-}
-
-.ai-status-title {
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  color: var(--accent-primary, #e5a968);
-  text-transform: uppercase;
-}
-
-.ai-status-model {
-  font-family: var(--font-mono, monospace);
-  font-size: 9px;
-  font-weight: 600;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: var(--bg-surface, #1c1813);
-  border: 1px solid var(--border-subtle, rgba(229, 169, 104, 0.1));
-  color: var(--text-secondary, #d8c9b4);
-  letter-spacing: 0.3px;
-}
-
-.ai-status-counter {
-  font-family: var(--font-mono, monospace);
-  font-size: 10px;
-  color: var(--text-muted, #99897a);
-  margin-left: auto;
-}
-
-.ai-status-text {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary, #f7efe2);
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 250px;
-  margin-top: 3px;
-}
-
-.ai-status-progress-track {
-  width: 100%;
-  height: 2px;
-  background: var(--border-subtle, rgba(229, 169, 104, 0.1));
-  border-radius: 1px;
-  margin-top: 5px;
-  overflow: hidden;
-}
-
-.ai-status-progress-bar {
-  height: 100%;
-  background: var(--accent-primary, #e5a968);
-  border-radius: 1px;
-  transition: width 0.12s ease-out;
-}
-
-.ai-status-close {
-  background: transparent;
-  border: none;
-  color: var(--text-muted, #99897a);
-  cursor: pointer;
-  padding: 3px;
-  border-radius: var(--radius-sm, 4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s, background 0.15s;
-  flex-shrink: 0;
-}
-
-.ai-status-close:hover {
-  color: var(--text-primary, #f7efe2);
-  background: var(--bg-surface-hover, #332a20);
-}
-
-@media (max-width: 800px) {
-  .ai-status-widget {
-    bottom: calc(var(--mobile-nav-height) + 10px);
-    right: 10px;
-    left: auto;
-    max-width: calc(100vw - 20px);
   }
 }
 

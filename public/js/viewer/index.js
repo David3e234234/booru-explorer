@@ -15,7 +15,7 @@ function isVideoUrl(url) {
   return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.mkv') || clean.endsWith('.avi');
 }
 
-export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle, onFindSimilar }) {
+export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle }) {
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
   const btnClose = document.getElementById('btnCloseViewer');
@@ -32,8 +32,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const btnDislikeModal = document.getElementById('btnDislikeModal');
   const btnLikeModal = document.getElementById('btnLikeModal');
   const btnFavModal = document.getElementById('btnFavModal');
-  const btnFindSimilarVision = document.getElementById('btnFindSimilarVision');
-  const btnFindSimilarSidebar = document.getElementById('btnFindSimilarSidebar');
   const btnDownload = document.getElementById('btnDownload');
   const btnDownloadAlbum = document.getElementById('btnDownloadAlbum');
   const btnCopyLink = document.getElementById('btnCopyLink');
@@ -2992,24 +2990,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       e.stopPropagation();
       handleAuthorFavToggle();
     });
-  }
-
-  const handleSimilarClick = (e) => {
-    if (e) e.stopPropagation();
-    if (!currentPost) return;
-    haptic([20, 30]);
-    const target = currentPost;
-    closeViewer();
-    if (onFindSimilar) {
-      onFindSimilar(target);
-    }
-  };
-
-  if (btnFindSimilarVision) {
-    btnFindSimilarVision.addEventListener('click', handleSimilarClick);
-  }
-  if (btnFindSimilarSidebar) {
-    btnFindSimilarSidebar.addEventListener('click', handleSimilarClick);
   }
 
   if (btnClose) btnClose.addEventListener('click', closeViewer);

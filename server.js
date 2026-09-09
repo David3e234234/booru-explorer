@@ -21,7 +21,6 @@ import mediaRoutes from './src/routes/media.routes.js';
 import userRoutes from './src/routes/user.routes.js';
 import authRoutes from './src/routes/auth.routes.js';
 import archiveRoutes from './src/routes/archive.routes.js';
-import aiRoutes from './src/routes/ai.routes.js';
 import { initBackupScheduler } from './src/services/backupService.js';
 import { flushPendingWrites } from './src/services/storageService.js';
 
@@ -102,7 +101,6 @@ app.use(express.static(publicDir, {
 // Mount modular API routers
 app.use('/api/auth', authRoutes);
 app.use('/api/archive', archiveRoutes);
-app.use('/api/ai', aiRoutes);
 app.use('/api', postsRoutes);
 app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);

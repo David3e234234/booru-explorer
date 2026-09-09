@@ -29,7 +29,6 @@ export const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json'
 export const LIKES_FILE = path.join(DATA_DIR, 'likes.json');
 export const DISLIKES_FILE = path.join(DATA_DIR, 'dislikes.json');
 export const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
-export const AI_EMBEDDINGS_FILE = path.join(DATA_DIR, 'ai_embeddings.json');
 
 // Favorite-author check state (key site:name -> knownIds/newIds)
 export const AUTHOR_FEED_STATE_FILE = path.join(DATA_DIR, 'author_feed_state.json');
@@ -272,22 +271,8 @@ export const DEFAULT_SETTINGS = {
   telegramChatId: '',
   telegramBackupInterval: 'daily', // 'daily', 'every_3_days', 'weekly'
   telegramLastBackupAt: null,
-  recommendationMode: 'hybrid', // 'hybrid', 'ai-only', 'tags-only', 'off'
-  enableRecommendations: true,
-  aiVisualEngine: 'browser',
-  aiVisualModel: 'dinov2',
-  aiCandidatePool: 40,
-  aiHybridWeight: 0.4,
-  aiVisualThreshold: 0.30,
-  aiTasteHistorySize: 10,
-  aiUseNegativeTaste: true,
-  aiBrowserBackend: 'webgpu',
-  aiConcurrency: 2,
-  aiInputQuality: '360',
-  aiMaxCacheVectors: 2000,
-  showAiMatchBadge: true,
-  aiStatusWidgetMode: 'full',
-  aiSimilarSort: 'similarity'
+  recommendationMode: 'tags-only', // 'tags-only', 'off'
+  enableRecommendations: true
 };
 
 // Credentials and session tokens. These are never returned to an unauthenticated

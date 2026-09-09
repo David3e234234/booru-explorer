@@ -55,7 +55,6 @@ const STATIC_ASSETS = [
   '/js/modules/favoriteAuthorsUI.js',
   '/js/modules/downloadManager.js',
   '/js/modules/wikiModal.js',
-  '/js/modules/aiVision.js',
   '/js/viewer/imageZoom.js',
   '/js/viewer/videoPlayer.js',
   '/js/viewer/viewerSidebar.js',

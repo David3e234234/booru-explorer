@@ -110,24 +110,10 @@ export const DEFAULT_CLIENT_SETTINGS = {
   enableJsDemuxing: true,
   customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
   maxServerCacheMb: 1500,
-  recommendationMode: 'hybrid', // 'hybrid' | 'ai-only' | 'tags-only' | 'off'
+  recommendationMode: 'tags-only', // 'tags-only' | 'off'
   recommendationFocus: 'all', // 'all' | 'artists' | 'characters' | 'discovery'
   recommendationDecayDays: 25, // half-life for temporal interest decay
   enableRecommendations: true,
-  aiVisualEngine: 'browser',
-  aiVisualModel: 'dinov2',
-  aiCandidatePool: 40,
-  aiHybridWeight: 0.4,
-  aiVisualThreshold: 0.30,
-  aiTasteHistorySize: 10,
-  aiUseNegativeTaste: true,
-  aiBrowserBackend: 'webgpu',
-  aiConcurrency: 2,
-  aiInputQuality: '360',
-  aiMaxCacheVectors: 2000,
-  showAiMatchBadge: true,
-  aiStatusWidgetMode: 'full',
-  aiSimilarSort: 'similarity',
   postSort: 'new',
   siteSortTags: {}
 };
