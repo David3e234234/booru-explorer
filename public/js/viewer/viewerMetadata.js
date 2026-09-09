@@ -1,5 +1,5 @@
 import { state, isAuthorFavorite, setFavoriteAuthors } from '../state.js';
-import { toggleFavoriteAuthor, updateFavoriteAuthorPreview, syncFavoriteAuthors } from '../api.js';
+import { toggleFavoriteAuthor, updateFavoriteAuthorPreview, syncFavoriteAuthors, getAuthHeaders } from '../api.js';
 import { showToast, haptic } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 
@@ -169,25 +169,36 @@ export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
         return data;
       })
       .catch(() => null);
-  } else if ((currentPost.site === 'rule34' || currentPost.site === 'xbooru') && (currentPost.originalId || currentPost.id)) {
+  } else if ((currentPost.site === 'rule34' || currentPost.site === 'xbooru' || currentPost.site === 'allgirl') && (currentPost.originalId || currentPost.id)) {
     const targetPostId = currentPost.id;
-    const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(rule34|xbooru)_/, '').split('_')[0];
-    const needsResolve = !currentPost.author ||
+    const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(rule34|xbooru|allgirl)_/, '').split('_')[0];
+    const needsResolve = !currentPost.width ||
+      !currentPost.author ||
       !(currentPost.tagDetails?.artist?.length) ||
       !currentPost.source ||
       currentPost.source.includes('rule34.xxx/index.php') ||
-      currentPost.source.includes('xbooru.com/index.php');
+      currentPost.source.includes('xbooru.com/index.php') ||
+      currentPost.source.includes('allgirl.booru.org/index.php');
 
     if (needsResolve && cleanOrigId) {
       const tagsParam = Array.isArray(currentPost.tags) ? currentPost.tags.join(',') : '';
       const reqUrl = `/api/resolve-post?site=${encodeURIComponent(currentPost.site)}&id=${encodeURIComponent(cleanOrigId)}${tagsParam ? `&tags=${encodeURIComponent(tagsParam)}` : ''}`;
 
-      return fetch(reqUrl)
+      return fetch(reqUrl, { headers: getAuthHeaders() })
         .then(r => r.json())
         .then(data => {
           if (!data || !data.success || !data.post || currentPost?.id !== targetPostId) return null;
           const resolved = data.post;
           let changed = false;
+
+          if (resolved.fileUrl && resolved.fileUrl !== currentPost.fileUrl) {
+            currentPost.fileUrl = resolved.fileUrl;
+            currentPost.sampleUrl = resolved.sampleUrl || resolved.fileUrl;
+            currentPost.thumbSample = resolved.thumbSample || resolved.fileUrl;
+            currentPost.thumbOriginal = resolved.thumbOriginal || resolved.fileUrl;
+            currentPost.fileExt = resolved.fileExt || currentPost.fileExt;
+            changed = true;
+          }
 
           if (resolved.author && resolved.author !== currentPost.author) {
             currentPost.author = resolved.author;
@@ -216,7 +227,7 @@ export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
             changed = true;
           }
 
-          if (resolved.width && !currentPost.width) {
+          if (resolved.width && (!currentPost.width || currentPost.width !== resolved.width)) {
             currentPost.width = resolved.width;
             currentPost.height = resolved.height;
             changed = true;

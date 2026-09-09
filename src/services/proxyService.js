@@ -181,6 +181,12 @@ function build404FallbackCandidates(targetUrl) {
         pushCandidate(`${node}${dataPath}`);
       }
     }
+  } else if (targetUrl.includes('booru.org')) {
+    const cleanNoQuery = targetUrl.split('?')[0];
+    const pathNoExt = cleanNoQuery.replace(/\.[a-zA-Z0-9]+$/, '');
+    for (const ext of imageExts) {
+      pushCandidate(`${pathNoExt}${ext}`);
+    }
   }
 
   return candidates;
