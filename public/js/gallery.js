@@ -757,11 +757,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    const isBooruOrgThumb = (post.site === 'allgirl' || (directThumb && directThumb.includes('booru.org')));
-    const hasCustomAllgirlProxy = Boolean(state.settings?.allgirlProxy || state.settings?.globalProxy);
     const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us')))
       ? true
-      : (isBooruOrgThumb ? hasCustomAllgirlProxy : (state.settings?.proxyThumbnails !== false));
+      : (state.settings?.proxyThumbnails !== false);
     let mainThumbSrc = directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '';
 
     // Archive-only posts have no source preview - show a generated ZIP placeholder
@@ -920,9 +918,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (imgEl) {
       imgEl.addEventListener('error', function () {
         const fallback = this.dataset.fallback;
-        const isBooru = post.site === 'allgirl' || (fallback && fallback.includes('booru.org')) || this.src.includes('booru.org');
-        const hasCustomProxy = Boolean(state.settings?.allgirlProxy || state.settings?.globalProxy);
-        const shouldProxy = !isBooru || hasCustomProxy;
+        const shouldProxy = state.settings?.proxyThumbnails !== false;
         const proxyFallback = fallback ? (fallback.startsWith('/api/') ? fallback : (shouldProxy ? getProxiedUrl(fallback) : fallback)) : '';
 
         if (fallback && this.src !== fallback && !this.src.includes(fallback) && !this.src.includes(encodeURIComponent(fallback))) {

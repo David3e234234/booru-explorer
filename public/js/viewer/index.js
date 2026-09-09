@@ -121,11 +121,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       container.className = 'viewer-image-container';
 
       const thumbMedia = item.previewUrl || item.thumb360 || item.thumb180 || item.sampleUrl || '';
-      const isBooruThumb = (item.site === 'allgirl' || (thumbMedia && thumbMedia.includes('booru.org')));
-      const hasCustomAllgirlProxy = Boolean(state.settings?.allgirlProxy || state.settings?.globalProxy);
       const needsThumbProxy = (item.site === 'danbooru' || thumbMedia.includes('donmai.us'))
         ? true
-        : (isBooruThumb ? hasCustomAllgirlProxy : (state.settings?.proxyThumbnails !== false));
+        : (state.settings?.proxyThumbnails !== false);
       const placeholderSrc = thumbMedia ? (thumbMedia.startsWith('/api/') ? thumbMedia : (needsThumbProxy ? getProxiedUrl(thumbMedia) : thumbMedia)) : '';
 
       let placeholderImg = null;
@@ -144,10 +142,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
       const img = document.createElement('img');
       img.className = 'viewer-image';
-      const isBooruMedia = (item.site === 'allgirl' || (typeof directMedia === 'string' && directMedia.includes('booru.org')));
       const needsImgProxy = (item.site === 'danbooru' || (typeof directMedia === 'string' && directMedia.includes('donmai.us')))
         ? true
-        : (isBooruMedia ? hasCustomAllgirlProxy : (state.settings?.proxyFullImages !== false));
+        : (state.settings?.proxyFullImages !== false);
       const targetSrc = (directMedia.startsWith('/api/') || !needsImgProxy) ? directMedia : getProxiedUrl(directMedia);
       img.referrerPolicy = 'no-referrer';
       img.alt = 'Full View';
@@ -169,16 +166,15 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       let errorAttempt = 0;
       img.addEventListener('error', function () {
         errorAttempt++;
-        const canUseServerProxy = !isBooruMedia || hasCustomAllgirlProxy;
-        if (errorAttempt === 1 && !this.src.startsWith('/api/proxy') && canUseServerProxy && directMedia) {
+        if (errorAttempt === 1 && !this.src.startsWith('/api/proxy') && directMedia) {
           console.warn('[Viewer Image Fallback] Переключение на прокси');
           this.src = getProxiedUrl(directMedia);
-        } else if (errorAttempt <= 2 && item.fileUrl && this.src !== item.fileUrl && (!canUseServerProxy || this.src !== getProxiedUrl(item.fileUrl))) {
+        } else if (errorAttempt <= 2 && item.fileUrl && this.src !== item.fileUrl && this.src !== getProxiedUrl(item.fileUrl)) {
           console.warn('[Viewer Image Fallback] Переключение на fileUrl');
-          this.src = canUseServerProxy ? getProxiedUrl(item.fileUrl) : item.fileUrl;
-        } else if (errorAttempt <= 3 && item.previewUrl && this.src !== item.previewUrl && (!canUseServerProxy || this.src !== getProxiedUrl(item.previewUrl))) {
+          this.src = getProxiedUrl(item.fileUrl);
+        } else if (errorAttempt <= 3 && item.previewUrl && this.src !== item.previewUrl && this.src !== getProxiedUrl(item.previewUrl)) {
           console.warn('[Viewer Image Fallback] Переключение на previewUrl');
-          this.src = canUseServerProxy ? getProxiedUrl(item.previewUrl) : item.previewUrl;
+          this.src = getProxiedUrl(item.previewUrl);
         } else {
           if (spinner && spinner.parentElement) spinner.remove();
           showToast(t('vw.fullImgFailed', 'Не удалось загрузить полноразмерное фото'));

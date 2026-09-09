@@ -47,11 +47,9 @@ export function getCurrentMediaItem(post, albumIndex) {
 export function getMediaItemUrl(item) {
   if (!item) return '';
   const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
-  const isBooru = item.site === 'allgirl' || directMedia.includes('booru.org');
-  const hasCustomAllgirlProxy = Boolean(state.settings?.allgirlProxy || state.settings?.globalProxy);
   const needsImgProxy = (item.site === 'danbooru' || directMedia.includes('donmai.us'))
     ? true
-    : (isBooru ? hasCustomAllgirlProxy : (state.settings?.proxyFullImages !== false));
+    : (state.settings?.proxyFullImages !== false);
   return needsImgProxy ? getProxiedUrl(directMedia) : directMedia;
 }
 
@@ -169,12 +167,10 @@ export function renderAlbumFilmstrip(post, albumIndex, options = {}) {
       if (item.isVideo && thumbUrl.startsWith('/api/archive/file')) {
         thumbUrl = `/api/video-thumbnail?url=${encodeURIComponent(thumbUrl)}&quality=low`;
       }
-      const isBooruThumb = item.site === 'allgirl' || thumbUrl.includes('booru.org');
-      const hasCustomAllgirlProxy = Boolean(state.settings?.allgirlProxy || state.settings?.globalProxy);
-      const needsThumbProxy = (item.site === 'danbooru' || thumbUrl.includes('donmai.us'))
+      const needsThumbProxy = (item.site === 'danbooru' || (typeof thumbUrl === 'string' && thumbUrl.includes('donmai.us')))
         ? true
-        : (isBooruThumb ? hasCustomAllgirlProxy : (state.settings?.proxyThumbnails !== false));
-      const thumbSrc = thumbUrl ? (thumbUrl.startsWith('/api/') ? thumbUrl : (needsThumbProxy ? getProxiedUrl(thumbUrl) : thumbUrl)) : '';
+        : (state.settings?.proxyThumbnails !== false);
+      const thumbSrc = thumbUrl ? (thumbUrl.startsWith('/api/') || !needsThumbProxy ? thumbUrl : getProxiedUrl(thumbUrl)) : '';
 
       itemDiv.innerHTML = `
         <img class="album-filmstrip-img" src="${thumbSrc}" alt="${t('vw.slideAlt', 'Слайд {n}').replace('{n}', idx + 1)}" loading="lazy" referrerpolicy="no-referrer">
