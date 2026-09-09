@@ -339,6 +339,8 @@ Object.assign(en, {
   'settings.autoplayViewer.title': 'Start playback automatically when a video opens fullscreen',
   'settings.showStatusBanner': 'Show video status banner (cache, proxy, transcoder)',
   'settings.showStatusBanner.title': 'Show the info panel with cache, FFmpeg and proxy buttons in the viewer',
+  'settings.enableSimilarPosts': 'Similar works in viewer',
+  'settings.enableSimilarPosts.title': 'Show similar works button and bottom filmstrip in the viewer',
 
   'settings.pwaLabel': 'Mobile PWA app:',
   'settings.pwaHint': 'Install Booru Explorer as a standalone fast app on your phone or desktop home screen.',

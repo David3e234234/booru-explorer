@@ -227,6 +227,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (btnDislikeSidebarText) {
       btnDislikeSidebarText.textContent = isDisliked ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
     }
+
+    if (btnSimilarModal) {
+      btnSimilarModal.style.display = (state.settings?.enableSimilarPosts === false) ? 'none' : '';
+    }
   }
 
   function renderViewerPost(skipMediaLoad = false) {
@@ -571,8 +575,21 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
   });
 
+  function refreshSimilarState() {
+    if (btnSimilarModal) {
+      btnSimilarModal.style.display = (state.settings?.enableSimilarPosts === false) ? 'none' : '';
+    }
+    if (state.settings?.enableSimilarPosts === false) {
+      if (viewerSimilarFilmstrip) viewerSimilarFilmstrip.style.display = 'none';
+      if (viewerContent) viewerContent.classList.remove('has-similar');
+    } else if (currentPost) {
+      renderSidebarSimilarPosts(currentPost);
+    }
+  }
+
   return {
     openViewer,
-    closeViewer
+    closeViewer,
+    refreshSimilarState
   };
 }

@@ -91,6 +91,7 @@ export const DEFAULT_CLIENT_SETTINGS = {
   videoAutoplayHover: true,
   videoAutoplayMobile: true,
   videoAutoplayViewer: true,
+  enableSimilarPosts: true,
   previewQuality: 'medium',
   rule34ApiKey: '',
   rule34UserId: '',

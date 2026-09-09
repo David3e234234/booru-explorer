@@ -13,6 +13,7 @@
   "videoAutoplayHover": true,
   "videoAutoplayMobile": true,
   "videoAutoplayViewer": true,
+  "enableSimilarPosts": true,
   "proxyThumbnails": true,
   "proxyFullImages": true,
   "proxyVideos": true,

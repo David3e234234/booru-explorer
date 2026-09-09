@@ -265,6 +265,7 @@ async function init() {
     onSettingsChanged: () => {
       updateSiteCapabilitiesUI();
       updateCategoryTabsUI();
+      viewerInstance?.refreshSimilarState?.();
       if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
           (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
         renderFavoriteAuthors();

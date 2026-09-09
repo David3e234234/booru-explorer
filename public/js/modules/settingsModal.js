@@ -236,6 +236,7 @@ export function applySettingsToUIAndState(s) {
   const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
   const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
   const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
+  const checkEnableSimilarPosts = document.getElementById('checkEnableSimilarPosts');
 
   if (inputRule34ApiKey && s.rule34ApiKey !== undefined) inputRule34ApiKey.value = s.rule34ApiKey || '';
   if (inputRule34UserId && s.rule34UserId !== undefined) inputRule34UserId.value = s.rule34UserId || '';
@@ -302,6 +303,9 @@ export function applySettingsToUIAndState(s) {
   }
   if (typeof s.videoAutoplayViewer === 'boolean' && checkVideoAutoplayViewer) {
     checkVideoAutoplayViewer.checked = s.videoAutoplayViewer;
+  }
+  if (typeof s.enableSimilarPosts === 'boolean' && checkEnableSimilarPosts) {
+    checkEnableSimilarPosts.checked = s.enableSimilarPosts;
   }
   const checkHideZipPostsApply = document.getElementById('checkHideZipPosts');
   if (checkHideZipPostsApply && typeof s.hideZipPosts === 'boolean') {
@@ -657,6 +661,7 @@ export function openSettingsModal() {
   const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
   const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
   const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
+  const checkEnableSimilarPosts = document.getElementById('checkEnableSimilarPosts');
   const checkShowVideoStatusBanner = document.getElementById('checkShowVideoStatusBanner');
   const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
   const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
@@ -742,6 +747,7 @@ export function openSettingsModal() {
   if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = state.settings.videoAutoplayHover !== false;
   if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = state.settings.videoAutoplayMobile !== false;
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = state.settings.videoAutoplayViewer !== false;
+  if (checkEnableSimilarPosts) checkEnableSimilarPosts.checked = state.settings.enableSimilarPosts !== false;
   if (checkPrioritizeUserTags) checkPrioritizeUserTags.checked = state.settings.prioritizeUserTags === true;
   if (checkEnablePaheal) checkEnablePaheal.checked = state.settings.enablePaheal !== false;
   const checkHideZipPostsModal = document.getElementById('checkHideZipPosts');
@@ -1455,6 +1461,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
       const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
       const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
+      const checkEnableSimilarPosts = document.getElementById('checkEnableSimilarPosts');
       const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
       const checkProxyFullImages = document.getElementById('checkProxyFullImages');
       const checkProxyVideos = document.getElementById('checkProxyVideos');
@@ -1467,6 +1474,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const videoAutoplayHoverVal = checkVideoAutoplayHover ? checkVideoAutoplayHover.checked : true;
       const videoAutoplayMobileVal = checkVideoAutoplayMobile ? checkVideoAutoplayMobile.checked : true;
       const videoAutoplayViewerVal = checkVideoAutoplayViewer ? checkVideoAutoplayViewer.checked : true;
+      const enableSimilarPostsVal = checkEnableSimilarPosts ? checkEnableSimilarPosts.checked : true;
       
       const proxyThumbnailsVal = checkProxyThumbnails ? checkProxyThumbnails.checked : true;
       const proxyFullImagesVal = checkProxyFullImages ? checkProxyFullImages.checked : true;
@@ -1526,6 +1534,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         videoAutoplayHover: videoAutoplayHoverVal,
         videoAutoplayMobile: videoAutoplayMobileVal,
         videoAutoplayViewer: videoAutoplayViewerVal,
+        enableSimilarPosts: enableSimilarPostsVal,
         proxyThumbnails: proxyThumbnailsVal,
         proxyFullImages: proxyFullImagesVal,
         proxyVideos: proxyVideosVal,
@@ -1630,6 +1639,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
       const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
       const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
+      const checkEnableSimilarPosts = document.getElementById('checkEnableSimilarPosts');
       const checkEnablePaheal = document.getElementById('checkEnablePaheal');
       const checkEnableJsDemuxing = document.getElementById('checkEnableJsDemuxing');
       const selectMaxServerCache = document.getElementById('selectMaxServerCache');
@@ -1669,6 +1679,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = true;
       if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = true;
       if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = true;
+      if (checkEnableSimilarPosts) checkEnableSimilarPosts.checked = true;
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
       if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       if (selectMaxServerCache) selectMaxServerCache.value = '1500';

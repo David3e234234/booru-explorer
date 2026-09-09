@@ -24,6 +24,13 @@ export function configureSimilar(ctx) {
  */
 export async function renderSidebarSimilarPosts(targetPost, forceRefresh = false, options = {}) {
   if (!targetPost) return;
+  if (state.settings?.enableSimilarPosts === false) {
+    const viewerSimilarFilmstrip = document.getElementById('viewerSimilarFilmstrip');
+    const viewerContent = document.querySelector('.viewer-content');
+    if (viewerSimilarFilmstrip) viewerSimilarFilmstrip.style.display = 'none';
+    if (viewerContent) viewerContent.classList.remove('has-similar');
+    return;
+  }
   const seq = ++similarFetchSeq;
 
   if (targetPost._similarSession && !forceRefresh) {
@@ -328,7 +335,7 @@ export function renderSimilarFilmstrip(similarItems, options = {}) {
   const viewerContent = document.querySelector('.viewer-content');
   if (!viewerSimilarFilmstrip) return;
 
-  if (!similarItems || similarItems.length === 0) {
+  if (state.settings?.enableSimilarPosts === false || !similarItems || similarItems.length === 0) {
     viewerSimilarFilmstrip.style.display = 'none';
     if (viewerContent) viewerContent.classList.remove('has-similar');
     return;

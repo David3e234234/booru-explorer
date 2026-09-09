@@ -229,6 +229,7 @@ export const DEFAULT_SETTINGS = {
   videoAutoplayHover: true,
   videoAutoplayMobile: true,
   videoAutoplayViewer: true,
+  enableSimilarPosts: true,
   previewQuality: 'medium', // 'low', 'medium', 'high', 'original'
   videoMutedDefault: true,
   itemsPerPage: 100,
