@@ -22,6 +22,27 @@ function buildCookieHeader(settings) {
   return cookie ? { Cookie: cookie } : {};
 }
 
+function cleanBooruOrgUrl(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  try {
+    const u = new URL(raw);
+    u.pathname = u.pathname.replace(/\/+/g, '/');
+    return u.toString();
+  } catch {
+    return raw;
+  }
+}
+
+function deriveBooruOrgThumb(fileUrl) {
+  if (!fileUrl) return '';
+  const clean = cleanBooruOrgUrl(fileUrl);
+  const lastSlash = clean.lastIndexOf('/');
+  if (lastSlash === -1) return clean;
+  const dir = clean.slice(0, lastSlash).replace('img.booru.org', 'thumbs.booru.org').replace('/images', '/thumbnails');
+  const filename = clean.slice(lastSlash + 1);
+  return `${dir}/thumbnail_${filename}`;
+}
+
 async function fetchAllgirlWithRetry(url, options, maxRetries = 2) {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     await waitAllgirlPacing(attempt > 0 ? 1200 : 500);
@@ -145,18 +166,22 @@ export async function fetchAllgirl(params, aiTagsList, settings = {}) {
       }
 
       const uploader = postData?.user || '';
-      const fileUrl = thumbUrl
-        .replace('thumbs.booru.org', 'img.booru.org')
-        .replace('/thumbnails//', '/images/')
-        .replace('thumbnail_', '');
+      const rawThumb = cleanBooruOrgUrl(thumbUrl);
+      const fileUrl = cleanBooruOrgUrl(
+        rawThumb
+          .replace('thumbs.booru.org', 'img.booru.org')
+          .replace('/thumbnails/', '/images/')
+          .replace('thumbnail_', '')
+      );
+      const cleanThumb = deriveBooruOrgThumb(fileUrl) || rawThumb;
       const sampleUrl = fileUrl;
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
-      const previewUrl = resolvePreviewUrl(thumbUrl, fileUrl, sampleUrl, false);
+      const previewUrl = resolvePreviewUrl(cleanThumb, fileUrl, sampleUrl, false);
 
       parsedItems.push({
         id,
-        thumbUrl,
+        thumbUrl: cleanThumb,
         fileUrl,
         sampleUrl,
         previewUrl,
@@ -256,7 +281,8 @@ export async function fetchAllgirlPostById(id, aiTagsList = [], settings = {}, f
 
     const html = await res.text();
     const imgMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i) || html.match(/<img[^>]+src="([^"]+images[^"]+)"[^>]*id="image"/i);
-    const fileUrl = imgMatch ? imgMatch[1] : '';
+    const rawFileUrl = imgMatch ? imgMatch[1] : '';
+    const fileUrl = cleanBooruOrgUrl(rawFileUrl);
 
     let width = 0;
     let height = 0;
@@ -312,10 +338,7 @@ export async function fetchAllgirlPostById(id, aiTagsList = [], settings = {}, f
     const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, uploader, settings, true);
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', allTags);
-    const thumbUrl = fileUrl
-      .replace('img.booru.org', 'thumbs.booru.org')
-      .replace('/images/', '/thumbnails//')
-      .replace(/(\/[^/]+)$/, '/thumbnail_$1'.replace('//', '/'));
+    const thumbUrl = deriveBooruOrgThumb(fileUrl);
 
     const seriesKey = extractSeriesKey({
       source,
@@ -331,6 +354,11 @@ export async function fetchAllgirlPostById(id, aiTagsList = [], settings = {}, f
       site: 'allgirl',
       siteName: 'AllGirl',
       previewUrl: thumbUrl || fileUrl,
+      thumb180: thumbUrl,
+      thumb360: thumbUrl,
+      thumb720: thumbUrl,
+      thumbSample: fileUrl,
+      thumbOriginal: fileUrl,
       sampleUrl: fileUrl,
       fileUrl,
       fileExt,

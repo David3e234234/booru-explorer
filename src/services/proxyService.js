@@ -405,7 +405,15 @@ export async function handleProxyRequest(req, res) {
     const cleanPath = targetUrl.split('?')[0].toLowerCase();
     const isImage = cleanPath.endsWith('.jpg') || cleanPath.endsWith('.jpeg') || cleanPath.endsWith('.png') || cleanPath.endsWith('.webp') || cleanPath.endsWith('.gif');
     const isRangeReq = Boolean(req.headers.range);
-    const currentSettings = getSettings();
+    let clientAuth = {};
+    if (req.headers['x-booru-auth']) {
+      try {
+        clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
+      } catch {
+        try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
+      }
+    }
+    const currentSettings = { ...getSettings(), ...clientAuth };
 
     // Disk cache for images (non-blocking)
     if (isImage && !isRangeReq) {

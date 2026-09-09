@@ -193,7 +193,12 @@ export function appendSimilarItems(targetPost, count = 18, options = {}) {
     const itemDiv = document.createElement('div');
     itemDiv.className = 'similar-filmstrip-item';
     const rawThumb = item.thumb360 || item.previewUrl || item.sampleUrl || item.thumb180 || item.fileUrl || '';
-    const thumbSrc = rawThumb ? (rawThumb.startsWith('/api/') ? rawThumb : getProxiedUrl(rawThumb)) : '';
+    const isBooruThumb = (item.site === 'allgirl') || (typeof rawThumb === 'string' && rawThumb.includes('booru.org'));
+    const hasCustomBooruProxy = Boolean(state.settings?.allgirlProxy || state.settings?.globalProxy);
+    const shouldProxyThumb = (item.site === 'danbooru' || (typeof rawThumb === 'string' && rawThumb.includes('donmai.us')))
+      ? true
+      : (isBooruThumb ? hasCustomBooruProxy : (state.settings?.proxyThumbnails !== false));
+    const thumbSrc = rawThumb ? (rawThumb.startsWith('/api/') ? rawThumb : (shouldProxyThumb ? getProxiedUrl(rawThumb) : rawThumb)) : '';
     const isHighMatch = score >= 65;
 
     itemDiv.title = `${t('vw.similarity', 'Сходство:')} ${score}%${item.author ? `\n@${item.author}` : ''}`;

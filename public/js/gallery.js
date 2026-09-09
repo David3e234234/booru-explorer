@@ -757,7 +757,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us'))) ? true : (state.settings?.proxyThumbnails !== false);
+    const isBooruOrgThumb = (post.site === 'allgirl' || (directThumb && directThumb.includes('booru.org')));
+    const hasCustomAllgirlProxy = Boolean(state.settings?.allgirlProxy || state.settings?.globalProxy);
+    const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us')))
+      ? true
+      : (isBooruOrgThumb ? hasCustomAllgirlProxy : (state.settings?.proxyThumbnails !== false));
     let mainThumbSrc = directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '';
 
     // Archive-only posts have no source preview - show a generated ZIP placeholder
@@ -916,13 +920,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (imgEl) {
       imgEl.addEventListener('error', function () {
         const fallback = this.dataset.fallback;
-        const proxyFallback = fallback ? (fallback.startsWith('/api/') ? fallback : getProxiedUrl(fallback)) : '';
-        if (proxyFallback && this.src !== proxyFallback && !this.src.includes('/api/proxy')) {
+        const isBooru = post.site === 'allgirl' || (fallback && fallback.includes('booru.org')) || this.src.includes('booru.org');
+        const hasCustomProxy = Boolean(state.settings?.allgirlProxy || state.settings?.globalProxy);
+        const shouldProxy = !isBooru || hasCustomProxy;
+        const proxyFallback = fallback ? (fallback.startsWith('/api/') ? fallback : (shouldProxy ? getProxiedUrl(fallback) : fallback)) : '';
+
+        if (fallback && this.src !== fallback && !this.src.includes(fallback) && !this.src.includes(encodeURIComponent(fallback))) {
+          this.src = fallback;
+        } else if (proxyFallback && this.src !== proxyFallback && !this.src.includes('/api/proxy') && shouldProxy) {
           this.src = proxyFallback;
-        } else if (post.previewUrl && !isVideoExt(post.previewUrl) && !this.src.includes(encodeURIComponent(post.previewUrl))) {
-          this.src = getProxiedUrl(post.previewUrl);
-        } else if (fallback && this.src !== fallback && !this.src.includes(encodeURIComponent(fallback))) {
-          this.src = fallback.startsWith('/api/') ? fallback : getProxiedUrl(fallback);
+        } else if (post.previewUrl && !isVideoExt(post.previewUrl) && !this.src.includes(post.previewUrl) && !this.src.includes(encodeURIComponent(post.previewUrl))) {
+          this.src = shouldProxy ? getProxiedUrl(post.previewUrl) : post.previewUrl;
         } else if (post.isVideo && !this.src.includes('/api/video-thumbnail')) {
           this.src = `/api/video-thumbnail?url=${encodeURIComponent(post.sampleUrl || post.fileUrl)}&quality=low`;
         } else {
