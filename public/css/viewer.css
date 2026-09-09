@@ -337,10 +337,7 @@
   animation: viewer-spin 0.7s linear infinite;
 }
 
-.viewer-btn.viewer-back-btn:hover {
-  color: var(--accent-primary);
-  border-color: var(--accent-primary);
-}
+
 
 .viewer-author-badge {
   display: inline-flex;
@@ -1285,7 +1282,7 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 10;
+  z-index: 35;
   width: 44px;
   height: 44px;
   display: flex;
@@ -1300,7 +1297,7 @@
   transition: all var(--transition-fast);
 }
 
-.viewer-nav-btn:hover {
+.viewer-nav-btn:hover:not(:disabled) {
   background-color: var(--accent-primary);
   border-color: var(--accent-primary);
   color: var(--text-inverse);
@@ -1312,12 +1309,19 @@
   outline-offset: 2px;
 }
 
+.viewer-nav-btn:disabled,
+.viewer-nav-btn.is-disabled {
+  opacity: 0.28;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .nav-prev {
   left: 16px;
 }
 
 .nav-next {
-  right: 356px; /* spacing before the sidebar */
+  right: calc(340px + 16px);
 }
 
 /* ── Tags and info sidebar ── */

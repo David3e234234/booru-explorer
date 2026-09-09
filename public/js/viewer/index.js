@@ -87,53 +87,34 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   // metadata refresh here and createVideoPlayer consume the same request
   let activeResolvePromise = null;
 
-  // Stack of previously opened posts inside the viewer for back-navigation
-  const viewerHistory = [];
 
-  function updateViewerBackButton() {
-    const btnBack = document.getElementById('btnBackViewer');
-    if (btnBack) {
-      btnBack.style.display = viewerHistory.length > 0 ? 'inline-flex' : 'none';
+
+  function updateNavButtons() {
+    if (!btnPrev || !btnNext) return;
+
+    if (directPostRef) {
+      // Standalone post (direct link or external lookup)
+      const hasAlbumPrev = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0);
+      const hasAlbumNext = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1);
+
+      btnPrev.disabled = !hasAlbumPrev;
+      btnPrev.classList.toggle('is-disabled', !hasAlbumPrev);
+      btnNext.disabled = !hasAlbumNext;
+      btnNext.classList.toggle('is-disabled', !hasAlbumNext);
+      return;
     }
+
+    const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+    const canPrev = (currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0) || (state.currentViewerIndex > 0);
+    const canNext = (currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1) || (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length - 1);
+
+    btnPrev.disabled = !canPrev;
+    btnPrev.classList.toggle('is-disabled', !canPrev);
+    btnNext.disabled = !canNext;
+    btnNext.classList.toggle('is-disabled', !canNext);
   }
 
-  function handleViewerBack() {
-    if (isArchiveInspectModalOpen && isArchiveInspectModalOpen()) {
-      closeArchiveInspectModal();
-      return;
-    }
-    if (viewerSidebar && viewerSidebar.classList.contains('open')) {
-      viewerSidebar.classList.remove('open');
-      return;
-    }
-    if (viewerHistory.length > 0) {
-      haptic(15);
-      const prev = viewerHistory.pop();
-      updateViewerBackButton();
-      if (prev.directPostRef) {
-        openViewer(-1, {
-          directPost: prev.directPostRef,
-          initialAlbumIndex: prev.albumIndex || 0,
-          skipHistoryPush: true
-        });
-      } else if (prev.viewerIndex >= 0) {
-        openViewer(prev.viewerIndex, {
-          initialAlbumIndex: prev.albumIndex || 0,
-          skipHistoryPush: true
-        });
-      } else if (prev.post) {
-        openViewer(-1, {
-          directPost: prev.post,
-          initialAlbumIndex: prev.albumIndex || 0,
-          skipHistoryPush: true
-        });
-      } else {
-        closeViewer();
-      }
-      return;
-    }
-    closeViewer();
-  }
+
 
   // Touch state variables for gestures
   let touchStartX = 0;
@@ -148,16 +129,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   function openViewer(index, opts = {}) {
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
 
-    // Track navigation history if transitioning to another post from within the viewer
-    if (opts.pushHistory && currentPost) {
-      viewerHistory.push({
-        post: currentPost,
-        albumIndex: currentAlbumIndex,
-        viewerIndex: state.currentViewerIndex,
-        directPostRef: directPostRef
-      });
-    }
-    updateViewerBackButton();
+
 
     if (opts.directPost) {
       // Standalone post opened by deep link or similar post click: no neighbors, not part of the grid
@@ -456,8 +428,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     if (mediaWrapper) mediaWrapper.innerHTML = '';
-    viewerHistory.length = 0;
-    updateViewerBackButton();
+
     if (viewerSimilarFilmstrip) viewerSimilarFilmstrip.style.display = 'none';
     if (similarFilmstripInner) similarFilmstripInner.innerHTML = '';
     currentPost = null;
@@ -575,6 +546,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       if (extBadge) extBadge.textContent = (activeItem.fileExt || 'JPG').toUpperCase();
 
       renderSidebarContent(activeItem || currentPost);
+      updateNavButtons();
       loadMediaItem(activeItem);
     }
 
@@ -2504,6 +2476,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     renderSidebarContent(currentPost, (cloudLinks || []).map(l => l.url));
     renderSidebarSimilarPosts(currentPost);
     renderAlbumFilmstrip();
+    updateNavButtons();
 
     if (!skipMediaLoad) {
       const hasVisibleMedia = (Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) ||
@@ -2806,7 +2779,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       itemDiv.addEventListener('click', (e) => {
         e.stopPropagation();
         haptic(15);
-        openViewer(-1, { directPost: item, pushHistory: true });
+        openViewer(-1, { directPost: item, move: true });
       });
 
       frag.appendChild(itemDiv);
@@ -3377,8 +3350,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   if (btnClose) btnClose.addEventListener('click', closeViewer);
-  const btnBackViewer = document.getElementById('btnBackViewer');
-  if (btnBackViewer) btnBackViewer.addEventListener('click', handleViewerBack);
   if (backdrop) backdrop.addEventListener('click', closeViewer);
 
   // Wheel and scroll listeners on similar filmstrip for horizontal mouse navigation & infinite scroll
