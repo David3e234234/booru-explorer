@@ -66,6 +66,7 @@ export async function fetchAllgirl(params, aiTagsList, settings = {}) {
     });
 
     if (!res.ok) {
+      logError('AllGirl', `Сайт вернул статус HTTP ${res.status} для ${url}`);
       await discardResponse(res);
       return [];
     }
@@ -147,6 +148,7 @@ export async function fetchAllgirl(params, aiTagsList, settings = {}) {
     }
 
     if (parsedItems.length === 0) {
+      logError('AllGirl', `HTML получен (${html.length} байт), но посты не найдены регулярным выражением на странице: ${url}`);
       return [];
     }
 
@@ -202,7 +204,7 @@ export async function fetchAllgirl(params, aiTagsList, settings = {}) {
 
     return shaped.slice(0, limit);
   } catch (err) {
-    logError('AllGirl', 'Ошибка загрузки постов', err);
+    logError('AllGirl', `Ошибка загрузки постов (${url})`, err);
     return [];
   }
 }
