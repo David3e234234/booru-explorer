@@ -98,6 +98,7 @@ let authModalInstance = null;
 let profileUIInstance = null;
 let deferredInstallPrompt = null;
 let pendingPostId = null;
+let lastLoadMoreTime = 0;
 
 // Monotonic token: responses from superseded searches are discarded on arrival
 let searchSeq = 0;

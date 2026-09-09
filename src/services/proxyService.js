@@ -74,7 +74,7 @@ async function writeCacheFileAtomic(cacheFilePath, buf) {
 const inflightImages = new Map();
 
 function buildUpstreamHeaders(targetUrl, isImage, currentSettings) {
-  const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net') || targetUrl.includes('tbib.org') || targetUrl.includes('pawchive.pw') || targetUrl.includes('pawchive.st') || targetUrl.includes('kemono.cr') || targetUrl.includes('kemono.su');
+  const isBrowserTarget = targetUrl.includes('rule34video.com') || targetUrl.includes('boomio-cdn.com') || targetUrl.includes('rule34.xxx') || targetUrl.includes('paheal') || targetUrl.includes('gelbooru.com') || targetUrl.includes('xbooru.com') || targetUrl.includes('hypnohub.net') || targetUrl.includes('tbib.org') || targetUrl.includes('pawchive.pw') || targetUrl.includes('pawchive.st') || targetUrl.includes('kemono.cr') || targetUrl.includes('kemono.su') || targetUrl.includes('booru.org');
   const headers = {
     'User-Agent': isBrowserTarget ? BROWSER_USER_AGENT : BOORU_USER_AGENT,
     'Accept': '*/*',
