@@ -7,9 +7,33 @@ import { logError } from '../utils/logger.js';
 const BOORU_ORG_BASE = 'https://allgirl.booru.org';
 const POSTS_PER_PAGE = 20;
 
+let lastAllgirlRequestTime = 0;
+async function waitAllgirlPacing(minIntervalMs = 600) {
+  const now = Date.now();
+  const elapsed = now - lastAllgirlRequestTime;
+  if (elapsed < minIntervalMs) {
+    await new Promise(r => setTimeout(r, minIntervalMs - elapsed));
+  }
+  lastAllgirlRequestTime = Date.now();
+}
+
 function buildCookieHeader(settings) {
   const cookie = settings?.allgirlCookie || settings?.allgirlSession;
   return cookie ? { Cookie: cookie } : {};
+}
+
+async function fetchAllgirlWithRetry(url, options, maxRetries = 2) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    await waitAllgirlPacing(attempt > 0 ? 1200 : 500);
+    const res = await fetchSafe(url, options);
+    if (res.status === 429 && attempt < maxRetries) {
+      await discardResponse(res);
+      const delay = (attempt + 1) * 1500;
+      await new Promise(r => setTimeout(r, delay));
+      continue;
+    }
+    return res;
+  }
 }
 
 export async function fetchAllgirl(params, aiTagsList, settings = {}) {
@@ -55,12 +79,12 @@ export async function fetchAllgirl(params, aiTagsList, settings = {}) {
     : `${BOORU_ORG_BASE}/index.php?page=post&s=list&pid=${pid}`;
 
   try {
-    const res = await fetchSafe(url, {
+    const res = await fetchAllgirlWithRetry(url, {
       headers: {
         Referer: `${BOORU_ORG_BASE}/index.php?page=post&s=list`,
         ...buildCookieHeader(settings)
       },
-      timeout: 8000,
+      timeout: 9000,
       settings,
       site: 'allgirl'
     });
@@ -215,12 +239,12 @@ export async function fetchAllgirlPostById(id, aiTagsList = [], settings = {}, f
 
   try {
     const postUrl = `${BOORU_ORG_BASE}/index.php?page=post&s=view&id=${cleanId}`;
-    const res = await fetchSafe(postUrl, {
+    const res = await fetchAllgirlWithRetry(postUrl, {
       headers: {
         Referer: `${BOORU_ORG_BASE}/index.php?page=post&s=list`,
         ...buildCookieHeader(settings)
       },
-      timeout: 8000,
+      timeout: 9000,
       settings,
       site: 'allgirl'
     });
