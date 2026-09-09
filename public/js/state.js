@@ -12,7 +12,8 @@ export const DEFAULT_SITES = [
   { id: 'hypnohub', name: 'Hypnohub', accentColor: '#8b5cf6', rating: 'all', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportsSort: true, supportedCategories: ['feed', 'following', 'recommended'] },
   { id: 'tbib', name: 'TBIB', accentColor: '#f59e0b', rating: 'all', supportsVideo: false, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportsSort: true, supportedCategories: ['feed', 'following', 'recommended'] },
   { id: 'pawchive', name: 'Pawchive', accentColor: '#f97316', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsArchives: true, supportsTags: false, supportsAiFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportsSort: false, supportedCategories: ['feed', 'following', 'recommended'] },
-  { id: 'kemono', name: 'Kemono', accentColor: '#3b82f6', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsArchives: true, supportsTags: false, supportsAiFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportsSort: false, supportedCategories: ['feed', 'following', 'recommended'] }
+  { id: 'kemono', name: 'Kemono', accentColor: '#3b82f6', rating: 'nsfw', supportsVideo: true, supportsImages: true, supportsArchives: true, supportsTags: false, supportsAiFilter: false, supportsShapesFilter: false, supportsContentHiding: false, supportsSort: false, supportedCategories: ['feed', 'following', 'recommended'] },
+  { id: 'allgirl', name: 'AllGirl', accentColor: '#ec4899', rating: 'all', supportsVideo: false, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportsSort: true, supportedCategories: ['feed', 'following', 'recommended'] }
 ];
 
 export function getSiteCapabilities(siteId) {
@@ -106,6 +107,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   pawchiveSession: '',
   kemonoSession: '',
   kemonoProxy: '',
+  allgirlCookie: '',
+  allgirlProxy: '',
   deepFetchPages: 2,
   prioritizeUserTags: false,
   enableJsDemuxing: true,
@@ -126,6 +129,7 @@ export const SECRET_SETTING_FIELDS = [
   'konachanLogin', 'konachanPassword',
   'yandereLogin', 'yanderePassword',
   'pawchiveSession', 'kemonoSession',
+  'allgirlCookie',
   'telegramBotToken', 'telegramChatId'
 ];
 

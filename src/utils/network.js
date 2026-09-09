@@ -108,6 +108,7 @@ export function resolveSiteFromUrl(targetUrl) {
     if (h.includes('tbib.org')) return 'tbib';
     if (h.includes('pawchive.pw') || h.includes('pawchive.st')) return 'pawchive';
     if (h.includes('kemono.cr') || h.includes('kemono.su') || h.includes('kemono.party')) return 'kemono';
+    if (h.includes('booru.org')) return 'allgirl';
     return null;
   } catch {
     return null;
@@ -413,6 +414,7 @@ export function resolveSiteReferer(targetUrl) {
     if (h.includes('hypnohub.net')) return 'https://hypnohub.net/';
     if (h.includes('pawchive.pw') || h.includes('pawchive.st')) return 'https://pawchive.pw/';
     if (h.includes('kemono.cr') || h.includes('kemono.su') || h.includes('kemono.party')) return 'https://kemono.cr/';
+    if (h.includes('booru.org')) return 'https://allgirl.booru.org/';
     return `${parsed.protocol}//${parsed.host}/`;
   } catch {
     return 'https://danbooru.donmai.us/';

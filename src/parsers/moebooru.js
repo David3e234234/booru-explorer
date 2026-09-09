@@ -171,3 +171,115 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     };
   }));
 }
+
+export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTagsList = [], settings = {}, fallbackTags = []) {
+  const cleanId = String(id || '').replace(new RegExp(`^${siteId}_`), '').split('_')[0].trim();
+  if (!cleanId || !/^\d+$/.test(cleanId)) return null;
+
+  let effectiveSiteUrl = siteUrl;
+  if (siteId === 'konachan' && preferredKonachanHost === 'konachan.net' && (Date.now() - lastKonachanFailureTime < KONACHAN_FAILOVER_TTL_MS)) {
+    effectiveSiteUrl = 'https://konachan.net';
+  }
+
+  let postItem = null;
+  const authQuery = buildAuthQuery(siteId, settings);
+  const dapiUrl = `${effectiveSiteUrl}/post.json?tags=id:${cleanId}${authQuery}`;
+
+  try {
+    const res = await fetchSafe(dapiUrl, { timeout: 6000, settings, site: siteId });
+    if (res.ok) {
+      const text = await res.text();
+      const data = safeJsonParse(text, []);
+      if (Array.isArray(data) && data.length > 0) {
+        postItem = data.find(p => String(p.id) === cleanId) || data[0];
+      }
+    } else {
+      await discardResponse(res);
+    }
+  } catch (err) {}
+
+  let htmlTags = [];
+  let htmlSource = '';
+  let htmlAuthor = '';
+  let htmlDate = '';
+
+  if (!postItem) {
+    try {
+      const showUrl = `${effectiveSiteUrl}/post/show/${cleanId}`;
+      const res = await fetchSafe(showUrl, { timeout: 7000, settings, site: siteId });
+      if (res.ok) {
+        const html = await res.text();
+        const tagMatches = [...html.matchAll(/class="[^"]*tag-type-([a-z0-9_-]+)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)];
+        for (const m of tagMatches) {
+          const tagName = decodeURIComponent(m[2]).trim();
+          if (tagName && !htmlTags.includes(tagName)) htmlTags.push(tagName);
+        }
+        const srcMatch = html.match(/Source:?\s*<a[^>]*href="([^"]+)"/i) || html.match(/Source:?\s*([^\s<"'>]+)/i);
+        if (srcMatch && srcMatch[1]) htmlSource = srcMatch[1].trim();
+        const authorMatch = html.match(/Posted by:?\s*<a[^>]*>([^<]+)<\/a>/i);
+        if (authorMatch) htmlAuthor = authorMatch[1].trim();
+        const dateMatch = html.match(/([0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9:]+)/i);
+        if (dateMatch) htmlDate = normalizeDate(dateMatch[1]);
+      } else {
+        await discardResponse(res);
+      }
+    } catch (err) {}
+  }
+
+  if (!postItem && htmlTags.length === 0 && fallbackTags.length === 0) return null;
+
+  const rawTags = postItem?.tags
+    ? (postItem.tags || '').split(' ').filter(Boolean)
+    : (htmlTags.length > 0 ? htmlTags : fallbackTags);
+
+  const fileUrl = postItem?.file_url || postItem?.jpeg_url || postItem?.sample_url || postItem?.preview_url || '';
+  const sampleUrl = postItem?.sample_url || postItem?.jpeg_url || fileUrl;
+  const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+  const previewUrl = resolvePreviewUrl(postItem?.preview_url, fileUrl, sampleUrl, isVideo);
+  const isAi = checkIsAi(rawTags, aiTagsList);
+
+  const finalSource = htmlSource || postItem?.source || '';
+  const initialAuthor = htmlAuthor || postItem?.author || '';
+  const { tagDetails, author, assistants } = await classifyPostTags(rawTags, finalSource, initialAuthor, settings, true);
+
+  const createdAt = htmlDate || normalizeDate(postItem?.created_at);
+  const parentId = postItem?.parent_id && String(postItem.parent_id) !== '0' ? String(postItem.parent_id) : null;
+  const hasChildren = Boolean(postItem?.has_children);
+  const seriesKey = extractSeriesKey({
+    source: finalSource,
+    parentId,
+    hasChildren,
+    originalId: cleanId,
+    tags: rawTags
+  }, siteId);
+
+  return {
+    id: `${siteId}_${cleanId}`,
+    originalId: cleanId,
+    site: siteId,
+    siteName,
+    previewUrl,
+    sampleUrl,
+    fileUrl,
+    fileExt,
+    isVideo,
+    isGif,
+    hasSound: isVideo && hasSound,
+    author: author || initialAuthor,
+    assistants: assistants || [],
+    tags: rawTags,
+    tagDetails,
+    score: postItem?.score || 0,
+    rating: postItem?.rating || 's',
+    width: parseInt(postItem?.width, 10) || 0,
+    height: parseInt(postItem?.height, 10) || 0,
+    source: finalSource,
+    postUrl: `${siteUrl}/post/show/${cleanId}`,
+    parentId,
+    hasChildren,
+    seriesKey,
+    createdAt,
+    isAi
+  };
+}
+

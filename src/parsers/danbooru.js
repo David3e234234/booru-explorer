@@ -430,3 +430,127 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
 
   return shaped.slice(0, targetLimit);
 }
+
+export async function fetchDanbooruPostById(id, aiTagsList = [], settings = {}, fallbackTags = []) {
+  const cleanId = String(id || '').replace(/^danbooru_/, '').split('_')[0].trim();
+  if (!cleanId) return null;
+
+  try {
+    const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)
+      ? `?login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
+      : '';
+    const url = `https://danbooru.donmai.us/posts/${cleanId}.json${authParam}`;
+    const res = await fetchSafe(url, { settings, site: 'danbooru' });
+    if (!res.ok) {
+      await discardResponse(res);
+      return null;
+    }
+
+    const text = await res.text();
+    const item = safeJsonParse(text, null);
+    if (!item || item.is_banned) return null;
+
+    const rawTags = (item.tag_string || '').split(' ').filter(Boolean);
+    const variants = item.media_asset?.variants || [];
+    const mp4_720p = variants.find(v => (v.type === '720p' || v.type === 'sample') && (v.file_ext === 'mp4' || v.url?.includes('.mp4')));
+    const mp4_orig = variants.find(v => v.type === 'original' && (v.file_ext === 'mp4' || v.url?.includes('.mp4')));
+    const webm_var = variants.find(v => (v.type === 'sample' || v.file_ext === 'webm') && (v.file_ext === 'webm' || v.url?.includes('.webm')));
+    const any_video = mp4_720p || mp4_orig || webm_var || variants.find(v => v.file_ext === 'mp4' || v.file_ext === 'webm');
+
+    let fileUrl = item.file_url || item.large_file_url || item.preview_file_url || '';
+    let sampleUrl = item.large_file_url || item.file_url || '';
+
+    if (any_video && any_video.url) {
+      sampleUrl = mp4_720p?.url || webm_var?.url || any_video.url;
+      fileUrl = mp4_orig?.url || any_video.url || fileUrl;
+    }
+
+    const { isVideo: checkVideo, isGif, hasSound: checkSound, fileExt: detectedExt } = checkMediaTypes(fileUrl, item.file_ext, rawTags);
+    const hasPlayableVideo = (fileUrl.endsWith('.mp4') || fileUrl.endsWith('.webm') || sampleUrl.endsWith('.mp4') || sampleUrl.endsWith('.webm') || !!any_video);
+    const isVideo = (checkVideo || hasPlayableVideo) && (!fileUrl.endsWith('.zip') || !!any_video);
+    const hasSound = isVideo && (checkSound || rawTags.includes('sound') || rawTags.includes('audio') || variants.some(v => v.has_sound || v.audio));
+
+    const findImgVariant = (types) => variants.find(v => types.includes(v.type) && (v.file_ext === 'jpg' || v.file_ext === 'webp' || v.file_ext === 'png'));
+    const thumb180 = findImgVariant(['180x180'])?.url || item.preview_file_url || '';
+    const thumb360 = findImgVariant(['360x360'])?.url || '';
+    const thumb720 = findImgVariant(['720x720'])?.url || '';
+    const thumbSample = findImgVariant(['sample'])?.url || item.large_file_url || sampleUrl || '';
+    const thumbOriginal = (!isVideo && (findImgVariant(['original'])?.url || item.file_url || fileUrl)) || '';
+    const previewUrl = resolvePreviewUrl(thumb180 || item.preview_file_url, fileUrl, sampleUrl, isVideo);
+
+    const isAi = checkIsAi(rawTags, aiTagsList) || (item.tag_string_meta && item.tag_string_meta.includes('ai_generated'));
+    const artistTags = (item.tag_string_artist || '').split(' ').filter(Boolean);
+    const { author, assistants } = separateAuthorAndAssistants('', artistTags);
+    const ASSISTANT_ROLE_REGEX = /_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$/i;
+    const visualArtistTags = artistTags.filter(t => !ASSISTANT_ROLE_REGEX.test(t));
+    const assistantArtistTags = artistTags.filter(t => ASSISTANT_ROLE_REGEX.test(t));
+
+    const duration = item.media_asset?.duration || any_video?.duration || 0;
+    let durationText = '';
+    if (duration > 0) {
+      const mins = Math.floor(duration / 60);
+      const secs = Math.floor(duration % 60);
+      durationText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    const seriesKey = extractSeriesKey({
+      source: item.source || '',
+      parentId: item.parent_id,
+      hasChildren: Boolean(item.has_children || item.has_active_children),
+      originalId: String(item.id),
+      pixiv_id: item.pixiv_id,
+      pool_id: item.pool_id,
+      pools: item.pools,
+      tags: rawTags
+    }, 'danbooru');
+
+    return {
+      id: `danbooru_${item.id}`,
+      originalId: String(item.id),
+      site: 'danbooru',
+      siteName: 'Danbooru',
+      previewUrl,
+      thumb180,
+      thumb360,
+      thumb720,
+      thumbSample,
+      thumbOriginal,
+      sampleUrl,
+      fileUrl,
+      fileExt: isVideo ? (any_video?.file_ext || 'mp4') : detectedExt,
+      isVideo,
+      isGif,
+      hasSound,
+      duration,
+      durationText,
+      author,
+      assistants: assistants || [],
+      tags: rawTags,
+      tagDetails: {
+        artist: visualArtistTags,
+        assistant: assistantArtistTags,
+        character: (item.tag_string_character || '').split(' ').filter(Boolean),
+        copyright: (item.tag_string_copyright || '').split(' ').filter(Boolean),
+        general: (item.tag_string_general || '').split(' ').filter(Boolean),
+        meta: (item.tag_string_meta || '').split(' ').filter(Boolean)
+      },
+      score: item.score || 0,
+      favCount: item.fav_count || 0,
+      rating: item.rating || 'g',
+      width: item.image_width || 0,
+      height: item.image_height || 0,
+      source: item.source || '',
+      postUrl: `https://danbooru.donmai.us/posts/${item.id}`,
+      parentId: item.parent_id || null,
+      hasChildren: Boolean(item.has_children || item.has_active_children),
+      poolId: item.pool_id || null,
+      seriesKey,
+      createdAt: item.created_at || '',
+      isAi
+    };
+  } catch (err) {
+    logError('Danbooru Resolve', `Ошибка разрешения поста danbooru id:${cleanId}`, err);
+    return null;
+  }
+}
+

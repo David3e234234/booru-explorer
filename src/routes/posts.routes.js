@@ -17,7 +17,13 @@ import { fetchPosts } from '../parsers/index.js';
 import { getCreatorsDirectory, fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
 import { getCreatorsDirectory as getKemonoCreatorsDirectory, fetchKemonoPostById, getKemonoServices } from '../parsers/kemono.js';
 import { fetchRule34PostById } from '../parsers/rule34.js';
-import { fetchXbooruPostById } from '../parsers/dapi.js';
+import { fetchXbooruPostById, fetchHypnohubPostById, fetchTbibPostById } from '../parsers/dapi.js';
+import { fetchDanbooruPostById } from '../parsers/danbooru.js';
+import { fetchGelbooruPostById } from '../parsers/gelbooru.js';
+import { fetchSafebooruPostById } from '../parsers/safebooru.js';
+import { fetchMoebooruPostById } from '../parsers/moebooru.js';
+import { fetchAllgirlPostById } from '../parsers/allgirl.js';
+import { loadGlobalTagSummary, getTagCategory, META_KEYWORDS } from '../utils/tagClassifier.js';
 import { groupPostsIntoAlbums, sortAlbumItems } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
@@ -38,8 +44,9 @@ const AUTH_CACHE_FIELDS = [
   'enablePaheal',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
   'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession', 'kemonoSession',
+  'allgirlCookie',
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
-  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy',
+  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy', 'allgirlProxy',
   'siteSortTags', 'kemonoService', 'pawchiveService'
 ];
 
@@ -379,6 +386,70 @@ router.get('/resolve-post', async (req, res) => {
       if (resolvedPost) {
         return res.json({ success: true, post: resolvedPost });
       }
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'danbooru') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) targetPostId = String(targetPostId).replace(/^danbooru_/, '').split('_')[0];
+      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
+      const resolvedPost = await fetchDanbooruPostById(targetPostId, settings.aiTags || [], settings, rawTags);
+      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'gelbooru') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) targetPostId = String(targetPostId).replace(/^gelbooru_/, '').split('_')[0];
+      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
+      const resolvedPost = await fetchGelbooruPostById(targetPostId, settings.aiTags || [], settings, rawTags);
+      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'safebooru') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) targetPostId = String(targetPostId).replace(/^safebooru_/, '').split('_')[0];
+      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
+      const resolvedPost = await fetchSafebooruPostById(targetPostId, settings.aiTags || [], settings, rawTags);
+      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'hypnohub') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) targetPostId = String(targetPostId).replace(/^hypnohub_/, '').split('_')[0];
+      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
+      const resolvedPost = await fetchHypnohubPostById(targetPostId, settings.aiTags || [], settings, rawTags);
+      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'tbib') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) targetPostId = String(targetPostId).replace(/^tbib_/, '').split('_')[0];
+      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
+      const resolvedPost = await fetchTbibPostById(targetPostId, settings.aiTags || [], settings, rawTags);
+      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'yandere') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) targetPostId = String(targetPostId).replace(/^yandere_/, '').split('_')[0];
+      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
+      const resolvedPost = await fetchMoebooruPostById('yandere', 'https://yande.re', 'Yande.re', targetPostId, settings.aiTags || [], settings, rawTags);
+      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'konachan') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) targetPostId = String(targetPostId).replace(/^konachan_/, '').split('_')[0];
+      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
+      const resolvedPost = await fetchMoebooruPostById('konachan', 'https://konachan.com', 'Konachan', targetPostId, settings.aiTags || [], settings, rawTags);
+      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
+      return res.status(404).json({ success: false, message: 'Пост не найден' });
+    } else if (targetSite === 'allgirl') {
+      let targetPostId = postId || id || '';
+      if (targetPostId) targetPostId = String(targetPostId).replace(/^allgirl_/, '').split('_')[0];
+      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
+      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
+      const resolvedPost = await fetchAllgirlPostById(targetPostId, settings.aiTags || [], settings, rawTags);
+      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
       return res.status(404).json({ success: false, message: 'Пост не найден' });
     }
 
@@ -1024,6 +1095,7 @@ router.get('/tags/autocomplete', async (req, res) => {
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data) && data.length > 0) {
+            const tagMap = await loadGlobalTagSummary(settings);
             tagsResult = data.map(item => {
               const matchCount = String(item.label || '').match(/\((\d+)\)$/);
               const count = matchCount ? parseInt(matchCount[1], 10) : (parseInt(item.total || item.count, 10) || 0);
@@ -1032,7 +1104,7 @@ router.get('/tags/autocomplete', async (req, res) => {
                 value: val,
                 label: val.replace(/_/g, ' '),
                 count,
-                category: 'general'
+                category: getTagCategory(val, tagMap)
               };
             });
           }
@@ -1050,7 +1122,7 @@ router.get('/tags/autocomplete', async (req, res) => {
               value: item.name,
               label: item.name.replace(/_/g, ' '),
               count: item.count || 0,
-              category: item.type === 1 ? 'artist' : item.type === 3 ? 'copyright' : item.type === 4 ? 'character' : item.type === 6 ? 'meta' : 'general'
+              category: item.type === 1 ? 'artist' : (item.type === 3 || item.type === 6) ? 'copyright' : item.type === 4 ? 'character' : (item.type === 5 || META_KEYWORDS.has(item.name.toLowerCase())) ? 'meta' : 'general'
             }));
           }
         }
@@ -1100,12 +1172,16 @@ router.get('/tags/autocomplete', async (req, res) => {
         if (resp.ok) {
           const data = await resp.json();
           if (Array.isArray(data) && data.length > 0) {
-            tagsResult = data.map(item => ({
-              value: item.value || item.label,
-              label: (item.label || item.value || '').replace(/_/g, ' '),
-              count: parseInt(item.total || item.count, 10) || 0,
-              category: 'general'
-            }));
+            const tagMap = await loadGlobalTagSummary(settings);
+            tagsResult = data.map(item => {
+              const val = item.value || item.label || '';
+              return {
+                value: val,
+                label: (item.label || item.value || '').replace(/_/g, ' '),
+                count: parseInt(item.total || item.count, 10) || 0,
+                category: getTagCategory(val, tagMap)
+              };
+            });
           }
         }
       } catch {}
@@ -1113,6 +1189,8 @@ router.get('/tags/autocomplete', async (req, res) => {
       if (tagsResult.length === 0) {
         tagsResult = await fetchDanbooruTags(query);
       }
+    } else if (site === 'allgirl') {
+      tagsResult = await fetchDanbooruTags(query);
     } else if (site === 'pawchive') {
       try {
         const { list } = await getCreatorsDirectory(settings);

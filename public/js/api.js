@@ -37,6 +37,8 @@ export function getAuthHeaders(includeJson = false) {
       tbibProxy: state.settings.tbibProxy || '',
       pawchiveProxy: state.settings.pawchiveProxy || '',
       kemonoProxy: state.settings.kemonoProxy || '',
+      allgirlCookie: state.settings.allgirlCookie || '',
+      allgirlProxy: state.settings.allgirlProxy || '',
       curvyTags: state.settings.curvyTags || [],
       petiteTags: state.settings.petiteTags || [],
       furryTags: state.settings.furryTags || [],

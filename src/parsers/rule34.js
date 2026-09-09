@@ -687,17 +687,27 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
       const artistMatches = [...html.matchAll(/class="[^"]*tag-type-artist[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
       const copyrightMatches = [...html.matchAll(/class="[^"]*tag-type-copyright[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
       const characterMatches = [...html.matchAll(/class="[^"]*tag-type-character[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+      const metadataMatches = [...html.matchAll(/class="[^"]*tag-type-(?:metadata|meta)[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
       const generalMatches = [...html.matchAll(/class="[^"]*tag-type-general[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
 
       const sourceMatch = html.match(/Source:\s*<a[^>]+href="([^"]+)"/i) || html.match(/Source:\s*([^\s<]+)/i);
       const source = sourceMatch ? sourceMatch[1].trim().replace(/&amp;/g, '&') : '';
 
-      const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...generalMatches, ...fallbackTags])];
+      const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...metadataMatches, ...generalMatches, ...fallbackTags])];
       const initialAuthor = artistMatches.join(', ');
       const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true);
 
       if (artistMatches.length > 0) {
         tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
+      }
+      if (copyrightMatches.length > 0) {
+        tagDetails.copyright = [...new Set([...copyrightMatches, ...(tagDetails.copyright || [])])];
+      }
+      if (characterMatches.length > 0) {
+        tagDetails.character = [...new Set([...characterMatches, ...(tagDetails.character || [])])];
+      }
+      if (metadataMatches.length > 0) {
+        tagDetails.meta = [...new Set([...metadataMatches, ...(tagDetails.meta || [])])];
       }
 
       const dateMatch = html.match(/Posted on\s+([0-9-]+\s+[0-9:]+)/i) || html.match(/Posted:\s*([0-9-]+\s+[0-9:]+)/i) || html.match(/Posted:\s*([0-9-]+)/i);

@@ -496,6 +496,7 @@ Object.assign(en, {
   'settings.recModeHint': 'Personalized feed based on your liked tags and favorites history.',
   'settings.recModeOn': 'Enabled (Tags & Interests)',
   'settings.recModeOff': 'Disable "For you" feed',
+  'settings.allgirlCookie.placeholder': 'Session cookie (user_id=...; pass_hash=...)',
 
   'settings.resetAll': 'Reset to defaults',
   'settings.save': 'Save',

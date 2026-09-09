@@ -281,5 +281,16 @@ export const SITE_SORT_METADATA = {
     topBadge: 'авто',
     newBadge: 'пусто',
     presets: []
+  },
+  allgirl: {
+    hotPlaceholder: 'По умолчанию глубокая выборка',
+    viewsPlaceholder: 'По умолчанию сортировка по score',
+    topPlaceholder: 'По умолчанию сортировка по score',
+    newPlaceholder: 'По умолчанию хронология',
+    hotBadge: 'авто',
+    viewsBadge: 'по score',
+    topBadge: 'по score',
+    newBadge: 'хронология',
+    presets: ['score:>10', 'score:>50']
   }
 };

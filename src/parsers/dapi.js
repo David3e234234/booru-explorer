@@ -452,7 +452,7 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
         pageSource = srcMatch[1].trim();
       }
 
-      const tagMatches = [...html.matchAll(/class="tag-type-([^"]+)"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[\s\S]*?<\/li>/gi)];
+      const tagMatches = [...html.matchAll(/class="[^"]*tag-type-([a-z0-9_-]+)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[\s\S]*?<\/li>/gi)];
       for (const m of tagMatches) {
         const rawType = m[1].replace(/\s+tag/, '').trim().toLowerCase();
         const tagName = decodeURIComponent(m[2]).trim();
@@ -487,6 +487,15 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
       if (classified.assistants?.length > 0) assistants = classified.assistants;
       if (tagDetails.artist.length === 0 && classified.tagDetails?.artist?.length > 0) {
         tagDetails.artist = classified.tagDetails.artist;
+      }
+      if (tagDetails.copyright.length === 0 && classified.tagDetails?.copyright?.length > 0) {
+        tagDetails.copyright = classified.tagDetails.copyright;
+      }
+      if (tagDetails.character.length === 0 && classified.tagDetails?.character?.length > 0) {
+        tagDetails.character = classified.tagDetails.character;
+      }
+      if (tagDetails.meta.length === 0 && classified.tagDetails?.meta?.length > 0) {
+        tagDetails.meta = classified.tagDetails.meta;
       }
     }
 
@@ -550,4 +559,269 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
     return null;
   }
 }
+
+export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, fallbackTags = []) {
+  const cleanId = String(id || '').replace(/^hypnohub_/, '').split('_')[0].trim();
+  if (!cleanId) return null;
+
+  try {
+    let postItem = null;
+    try {
+      const dapiUrl = `https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&id=${cleanId}`;
+      const res = await fetchSafe(dapiUrl, { timeout: 6000, settings, site: 'hypnohub' });
+      if (res.ok) {
+        const text = await res.text();
+        const data = safeJsonParse(text, []);
+        postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+      } else {
+        await discardResponse(res);
+      }
+    } catch (err) {}
+
+    const viewUrl = `https://hypnohub.net/index.php?page=post&s=view&id=${cleanId}`;
+    const pageRes = await fetchSafe(viewUrl, { timeout: 7000, settings, site: 'hypnohub' });
+
+    const tagDetails = { artist: [], copyright: [], character: [], general: [], meta: [] };
+    const allTags = [];
+    let pageSource = '';
+
+    if (pageRes.ok) {
+      const html = await pageRes.text();
+      const srcMatch = html.match(/Source:?\s*<a[^>]*href="([^"]+)"/i) || html.match(/Source:?\s*([^\s<"'>]+)/i);
+      if (srcMatch && srcMatch[1] && !srcMatch[1].startsWith('"')) {
+        pageSource = srcMatch[1].trim();
+      }
+
+      const tagMatches = [...html.matchAll(/class="[^"]*tag-type-([a-z0-9_-]+)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[\s\S]*?<\/li>/gi)];
+      for (const m of tagMatches) {
+        const rawType = m[1].replace(/\s+tag/, '').trim().toLowerCase();
+        const tagName = decodeURIComponent(m[2]).trim();
+        if (!tagName) continue;
+        if (!allTags.includes(tagName)) allTags.push(tagName);
+
+        if (rawType === 'artist') {
+          if (!tagDetails.artist.includes(tagName)) tagDetails.artist.push(tagName);
+        } else if (rawType === 'copyright') {
+          if (!tagDetails.copyright.includes(tagName)) tagDetails.copyright.push(tagName);
+        } else if (rawType === 'character') {
+          if (!tagDetails.character.includes(tagName)) tagDetails.character.push(tagName);
+        } else if (rawType === 'metadata' || rawType === 'meta') {
+          if (!tagDetails.meta.includes(tagName)) tagDetails.meta.push(tagName);
+        } else {
+          if (!tagDetails.general.includes(tagName)) tagDetails.general.push(tagName);
+        }
+      }
+    } else {
+      await discardResponse(pageRes);
+    }
+
+    if (!postItem && allTags.length === 0) return null;
+
+    const rawTags = allTags.length > 0 ? allTags : (decodeHtmlEntities(postItem?.tags || '').split(' ').filter(Boolean));
+    const finalSource = pageSource || postItem?.source || '';
+    let author = tagDetails.artist[0] || '';
+    let assistants = [];
+    if (rawTags.length > 0) {
+      const classified = await classifyPostTags(rawTags, finalSource, author, settings, false);
+      if (classified.author) author = classified.author;
+      if (classified.assistants?.length > 0) assistants = classified.assistants;
+      if (tagDetails.artist.length === 0 && classified.tagDetails?.artist?.length > 0) tagDetails.artist = classified.tagDetails.artist;
+      if (tagDetails.copyright.length === 0 && classified.tagDetails?.copyright?.length > 0) tagDetails.copyright = classified.tagDetails.copyright;
+      if (tagDetails.character.length === 0 && classified.tagDetails?.character?.length > 0) tagDetails.character = classified.tagDetails.character;
+      if (tagDetails.meta.length === 0 && classified.tagDetails?.meta?.length > 0) tagDetails.meta = classified.tagDetails.meta;
+    }
+
+    let fileUrl = postItem?.file_url || '';
+    if (!fileUrl && postItem?.directory && postItem?.image) {
+      fileUrl = `https://hypnohub.net/images/${postItem.directory}/${postItem.image}`;
+    } else if (fileUrl.startsWith('//')) {
+      fileUrl = 'https:' + fileUrl;
+    }
+
+    let sampleUrl = postItem?.sample_url || fileUrl;
+    if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+
+    let previewUrlRaw = postItem?.preview_url || (postItem?.directory && postItem?.image ? `https://hypnohub.net/thumbnails/${postItem.directory}/thumbnail_${postItem.image}` : fileUrl);
+    if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
+
+    const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+    const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+    const createdAt = normalizeDate(postItem?.created_at || postItem?.change);
+
+    const parentId = postItem?.parent_id && String(postItem.parent_id) !== '0' ? String(postItem.parent_id) : null;
+    const hasChildren = Boolean(postItem?.has_children);
+    const seriesKey = extractSeriesKey({
+      source: finalSource,
+      parentId,
+      hasChildren,
+      originalId: cleanId,
+      tags: rawTags
+    }, 'hypnohub');
+
+    return {
+      id: `hypnohub_${cleanId}`,
+      originalId: cleanId,
+      site: 'hypnohub',
+      siteName: 'Hypnohub',
+      previewUrl,
+      sampleUrl,
+      fileUrl,
+      fileExt,
+      isVideo,
+      isGif,
+      hasSound: isVideo && hasSound,
+      author,
+      assistants: assistants || [],
+      tags: rawTags,
+      tagDetails,
+      score: parseInt(postItem?.score, 10) || 0,
+      rating: postItem?.rating || 'e',
+      width: parseInt(postItem?.width, 10) || 0,
+      height: parseInt(postItem?.height, 10) || 0,
+      source: finalSource,
+      postUrl: `https://hypnohub.net/index.php?page=post&s=view&id=${cleanId}`,
+      parentId,
+      hasChildren,
+      seriesKey,
+      createdAt,
+      isAi: checkIsAi(rawTags, aiTagsList)
+    };
+  } catch (err) {
+    logError('Hypnohub Resolve', `Ошибка разрешения поста hypnohub id:${cleanId}`, err);
+    return null;
+  }
+}
+
+export async function fetchTbibPostById(id, aiTagsList = [], settings = {}, fallbackTags = []) {
+  const cleanId = String(id || '').replace(/^tbib_/, '').split('_')[0].trim();
+  if (!cleanId) return null;
+
+  try {
+    let postItem = null;
+    try {
+      const dapiUrl = `https://tbib.org/index.php?page=dapi&s=post&q=index&json=1&id=${cleanId}`;
+      const res = await fetchSafe(dapiUrl, { timeout: 6000, settings, site: 'tbib' });
+      if (res.ok) {
+        const text = await res.text();
+        const data = safeJsonParse(text, []);
+        postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+      } else {
+        await discardResponse(res);
+      }
+    } catch (err) {}
+
+    const viewUrl = `https://tbib.org/index.php?page=post&s=view&id=${cleanId}`;
+    const pageRes = await fetchSafe(viewUrl, { timeout: 7000, settings, site: 'tbib' });
+
+    const tagDetails = { artist: [], copyright: [], character: [], general: [], meta: [] };
+    const allTags = [];
+    let pageSource = '';
+
+    if (pageRes.ok) {
+      const html = await pageRes.text();
+      const srcMatch = html.match(/Source:?\s*<a[^>]*href="([^"]+)"/i) || html.match(/Source:?\s*([^\s<"'>]+)/i);
+      if (srcMatch && srcMatch[1] && !srcMatch[1].startsWith('"')) {
+        pageSource = srcMatch[1].trim();
+      }
+
+      const tagMatches = [...html.matchAll(/class="[^"]*tag-type-([a-z0-9_-]+)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[\s\S]*?<\/li>/gi)];
+      for (const m of tagMatches) {
+        const rawType = m[1].replace(/\s+tag/, '').trim().toLowerCase();
+        const tagName = decodeURIComponent(m[2]).trim();
+        if (!tagName) continue;
+        if (!allTags.includes(tagName)) allTags.push(tagName);
+
+        if (rawType === 'artist') {
+          if (!tagDetails.artist.includes(tagName)) tagDetails.artist.push(tagName);
+        } else if (rawType === 'copyright') {
+          if (!tagDetails.copyright.includes(tagName)) tagDetails.copyright.push(tagName);
+        } else if (rawType === 'character') {
+          if (!tagDetails.character.includes(tagName)) tagDetails.character.push(tagName);
+        } else if (rawType === 'metadata' || rawType === 'meta') {
+          if (!tagDetails.meta.includes(tagName)) tagDetails.meta.push(tagName);
+        } else {
+          if (!tagDetails.general.includes(tagName)) tagDetails.general.push(tagName);
+        }
+      }
+    } else {
+      await discardResponse(pageRes);
+    }
+
+    if (!postItem && allTags.length === 0) return null;
+
+    const rawTags = allTags.length > 0 ? allTags : (decodeHtmlEntities(postItem?.tags || '').split(' ').filter(Boolean));
+    const finalSource = pageSource || postItem?.source || '';
+    let author = tagDetails.artist[0] || '';
+    let assistants = [];
+    if (rawTags.length > 0) {
+      const classified = await classifyPostTags(rawTags, finalSource, author, settings, false);
+      if (classified.author) author = classified.author;
+      if (classified.assistants?.length > 0) assistants = classified.assistants;
+      if (tagDetails.artist.length === 0 && classified.tagDetails?.artist?.length > 0) tagDetails.artist = classified.tagDetails.artist;
+      if (tagDetails.copyright.length === 0 && classified.tagDetails?.copyright?.length > 0) tagDetails.copyright = classified.tagDetails.copyright;
+      if (tagDetails.character.length === 0 && classified.tagDetails?.character?.length > 0) tagDetails.character = classified.tagDetails.character;
+      if (tagDetails.meta.length === 0 && classified.tagDetails?.meta?.length > 0) tagDetails.meta = classified.tagDetails.meta;
+    }
+
+    let fileUrl = postItem?.file_url || '';
+    if (!fileUrl && postItem?.directory && postItem?.image) {
+      fileUrl = `https://tbib.org/images/${postItem.directory}/${postItem.image}`;
+    } else if (fileUrl.startsWith('//')) {
+      fileUrl = 'https:' + fileUrl;
+    }
+
+    let sampleUrl = postItem?.sample_url || fileUrl;
+    if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+
+    let previewUrlRaw = postItem?.preview_url || (postItem?.directory && postItem?.image ? `https://tbib.org/thumbnails/${postItem.directory}/thumbnail_${postItem.image}` : fileUrl);
+    if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
+
+    const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+    const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+    const createdAt = normalizeDate(postItem?.created_at || postItem?.change);
+
+    const parentId = postItem?.parent_id && String(postItem.parent_id) !== '0' ? String(postItem.parent_id) : null;
+    const hasChildren = Boolean(postItem?.has_children);
+    const seriesKey = extractSeriesKey({
+      source: finalSource,
+      parentId,
+      hasChildren,
+      originalId: cleanId,
+      tags: rawTags
+    }, 'tbib');
+
+    return {
+      id: `tbib_${cleanId}`,
+      originalId: cleanId,
+      site: 'tbib',
+      siteName: 'TBIB',
+      previewUrl,
+      sampleUrl,
+      fileUrl,
+      fileExt,
+      isVideo: false,
+      isGif,
+      hasSound: false,
+      author,
+      assistants: assistants || [],
+      tags: rawTags,
+      tagDetails,
+      score: parseInt(postItem?.score, 10) || 0,
+      rating: normalizeTbibRating(postItem?.rating),
+      width: parseInt(postItem?.width, 10) || 0,
+      height: parseInt(postItem?.height, 10) || 0,
+      source: finalSource,
+      postUrl: `https://tbib.org/index.php?page=post&s=view&id=${cleanId}`,
+      parentId,
+      hasChildren,
+      seriesKey,
+      createdAt,
+      isAi: checkIsAi(rawTags, aiTagsList)
+    };
+  } catch (err) {
+    logError('TBIB Resolve', `Ошибка разрешения поста tbib id:${cleanId}`, err);
+    return null;
+  }
+}
+
 

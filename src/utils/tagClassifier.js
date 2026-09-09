@@ -278,6 +278,9 @@ export const META_KEYWORDS = new Set([
   // Resolution and quality
   'highres', 'high_res', 'absurdres', 'superabsurdres', 'incredibly_absurdres', 'lowres', 'low_res', 'downscaled', 'lossless', '4k', '8k', 'hd', '60fps', 
   'ultra_high_res', 'bad_quality', 'poor_quality', 'huge_filesize', 'large_filesize', 'webp_artifacts', 'jpeg_artifacts', 'bad_aspect_ratio', 'dated',
+  'alpha_channel', 'transparent_background', 'transparent', 'vector', 'vector_trace', 'monochrome', 'monochromatic', 'greyscale',
+  'silhouette', 'photomosaic', 'zoom_layer', '3d', 'figure', 'photo', 'calendar', 'sketch', 'lineart', 'traditional_media', 'digital_media',
+  'official_style', 'anthology', 'magazine_cover', 'text_focus', 'bad_anatomy', 'cropped',
   
   // Media types and formats
   'sound', 'audio', 'video', 'animated', 'animation', 'ugoira', 'web_audio', 'has_sound', 'with_sound', 
@@ -290,7 +293,7 @@ export const META_KEYWORDS = new Set([
   'timestamp', 'twitter_username', 'pixiv_id', 'bad_pixiv_id', 'bad_id', 'bad_link', 'bad_source', 
   'source_request', 'source request', 'source_needed', 'tagme', 'duplicate', 'third-party_edit', 'edit', 'official_art', 
   'scan', 'magazine_scan', 'wallpaper', 'artbook', 'cover', 'doujinshi_cover', 'comic', 'manga', 'multi-panel', 
-  'column_layout', 'page_number', 'omake', 'monochrome', 'greyscale', 'sketch', 'lineart', 'traditional_media', 'digital_media',
+  'column_layout', 'page_number', 'omake', 'logo', 'signed', 'censored', 'uncensored', 'mosaic_censoring', 'bar_censor',
 
   // Platforms and monetization
   'patreon', 'patreon_reward', 'patreon_logo', 'patreon_username', 'fanbox', 'fanbox_reward', 
@@ -302,6 +305,18 @@ export const META_KEYWORDS = new Set([
 
   // Tag requests
   'artist_request', 'artist request', 'character_request', 'character request', 'copyright_request', 'copyright request', 'meta_request', 'source_needed'
+]);
+
+export const CHARACTER_VARIANT_WORDS = new Set([
+  'bride', 'maid', 'swimsuit', 'bikini', 'bunny', 'bunny_girl', 'catgirl', 'nurse', 'police',
+  'school', 'casual', 'costume', 'outfit', 'dress', 'uniform', 'armor', 'alter', 'append',
+  'form', 'mode', 'style', 'summer', 'winter', 'spring', 'fall', 'autumn', 'halloween',
+  'christmas', 'xmas', 'new_year', 'santa', 'young', 'adult', 'child', 'older', 'glasses',
+  'portrait', 'concept', 'idol', 'race_queen', 'cheerleader', 'gym_uniform', 'miko', 'nun',
+  'waitress', 'teacher', 'office_lady', 'valkyrie', 'knight', 'magical_girl', 'monster_girl',
+  'demon', 'angel', 'vampire', 'succubus', 'witch', 'cyborg', 'robot', 'android', 'chibi',
+  'goth', 'punk', 'steampunk', 'yukata', 'kimono', 'apron', 'lingerie', 'underwear', 'pajamas',
+  'sleepwear', 'barefoot', 'hoodie', 'jacket', 'coat', 'sweater', 'shirt', 'skirt', 'shorts'
 ]);
 
 const ARTIST_SUFFIXES = [
@@ -318,7 +333,8 @@ const RESERVED_PAREN_WORDS = new Set([
   'series', 'game', 'anime', 'manga', 'vtuber', 'novel', 'comic', 'franchise', 'project', 'visual_novel', 'light_novel', 'web_novel', 'mobile_game', 'company', 'label', 'universe',
   'medium', 'style', 'artwork',
   'character', 'cosplay', 'person', 'actor', 'actress',
-  'fruit', 'food', 'animal', 'vehicle', 'object', 'clothing', 'instrument', 'weapon', 'anatomy', 'pose', 'hair', 'eyes', 'color', 'background', 'furniture', 'disambiguation'
+  'fruit', 'food', 'animal', 'vehicle', 'object', 'clothing', 'instrument', 'weapon', 'anatomy', 'pose', 'hair', 'eyes', 'color', 'background', 'furniture', 'disambiguation',
+  ...CHARACTER_VARIANT_WORDS
 ]);
 
 export const COMMON_DESCRIPTOR_WORDS = new Set([
@@ -774,19 +790,28 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       continue;
     }
 
-    // 3. Tag type dictionary lookup (PRIORITY OVER HEURISTICS)
+    // 3. Common descriptor priority: words like 'smile', 'flat', 'silver', 'jewelry'
+    // should remain general tags unless explicitly marked as meta keywords (e.g. censored)
+    if (COMMON_DESCRIPTOR_WORDS.has(lower) && !META_KEYWORDS.has(lower)) {
+      general.push(originalTag);
+      continue;
+    }
+
+    // 3.1. Tag type dictionary lookup (PRIORITY OVER HEURISTICS)
+    // In Moebooru / Danbooru 1.x / Gelbooru summary dictionaries:
+    // 0 = general, 1 = artist, 3 = copyright, 4 = character, 5 = style/meta, 6 = circle/copyright
     const type = tagMap ? (tagMap.get(lower) ?? tagMap.get(lower.replace(/^by_/i, ''))) : undefined;
 
     if (type === 1 && !GENERIC_NON_ARTIST_TAGS.has(lower)) {
       addUnique(artist, originalTag);
       continue;
-    } else if (type === 3) {
+    } else if (type === 3 || type === 6) {
       addUnique(copyright, originalTag);
       continue;
     } else if (type === 4) {
       addUnique(character, originalTag);
       continue;
-    } else if (type === 6 || META_KEYWORDS.has(lower)) {
+    } else if (type === 5 || META_KEYWORDS.has(lower)) {
       addUnique(meta, originalTag);
       continue;
     }
@@ -814,23 +839,27 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       }
     }
 
-    // 5. Universal Booru parenthesized character heuristic: name_(series)
+    // 5. Universal Booru parenthesized character heuristic: name_(series) or name_(variant)
     const parenMatch = lower.match(/^(.+?)_\(([^)]+)\)$/);
     if (parenMatch) {
       const suffix = parenMatch[2].trim();
       const isReserved = RESERVED_PAREN_WORDS.has(suffix);
-      if (!isReserved) {
-        const isKnownFranchise = KNOWN_EXTRA_TAGS[suffix] === 3 || copyright.some(c => c.toLowerCase() === suffix);
-        const matchesPostTag = tags.some(t => {
-          const tLow = t.toLowerCase();
-          return tLow !== lower && (tLow === suffix || tLow.includes(suffix));
-        });
+      const isVariant = CHARACTER_VARIANT_WORDS.has(suffix) || COMMON_DESCRIPTOR_WORDS.has(suffix);
+      const isKnownFranchise = KNOWN_EXTRA_TAGS[suffix] === 3 || 
+                               copyright.some(c => c.toLowerCase() === suffix) || 
+                               (tagMap && (tagMap.get(suffix) === 3 || tagMap.get(suffix) === 6));
+      const matchesPostTag = tags.some(t => {
+        const tLow = t.toLowerCase();
+        return tLow !== lower && (tLow === suffix || tLow.includes(suffix));
+      });
 
-        if (isKnownFranchise || matchesPostTag || suffix.length > 3) {
-          addUnique(character, originalTag);
+      if (isKnownFranchise || isVariant || (!isReserved && (matchesPostTag || suffix.length > 3))) {
+        addUnique(character, originalTag);
+        // Only propagate suffix to copyright series if it represents a verified franchise, never a costume or descriptor
+        if (!isVariant && !COMMON_DESCRIPTOR_WORDS.has(suffix) && (isKnownFranchise || COPYRIGHT_SUFFIXES.some(s => suffix.endsWith(s.replace(/^_/, ''))) || (tagMap && tagMap.get(suffix) === 3))) {
           detectedSeriesSet.add(suffix);
-          continue;
         }
+        continue;
       }
     }
 
@@ -874,13 +903,13 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
               if (rType === 1 && !GENERIC_NON_ARTIST_TAGS.has(gLow)) {
                 addUnique(artist, originalTag);
                 general.splice(i, 1);
-              } else if (rType === 3) {
+              } else if (rType === 3 || rType === 6) {
                 addUnique(copyright, originalTag);
                 general.splice(i, 1);
               } else if (rType === 4) {
                 addUnique(character, originalTag);
                 general.splice(i, 1);
-              } else if (rType === 6 || rType === 5 || META_KEYWORDS.has(gLow)) {
+              } else if (rType === 5 || META_KEYWORDS.has(gLow)) {
                 addUnique(meta, originalTag);
                 general.splice(i, 1);
               }
@@ -1026,3 +1055,47 @@ export function separateAuthorAndAssistants(rawAuthor = '', artistTags = []) {
 
   return { author: mainAuthor, assistants };
 }
+
+/**
+ * Returns the tag category ('artist', 'copyright', 'character', 'meta', 'general') for a single tag
+ * @param {string} tag
+ * @param {Map<string, number>|null} tagMap
+ * @returns {string}
+ */
+export function getTagCategory(tag, tagMap) {
+  if (!tag) return 'general';
+  const rawLower = String(tag).toLowerCase().trim();
+  const underscore = rawLower.replace(/[\s_.-]+/g, '_');
+  const hyphen = rawLower.replace(/[\s_.-]+/g, '-');
+
+  if ((COMMON_DESCRIPTOR_WORDS.has(rawLower) || COMMON_DESCRIPTOR_WORDS.has(underscore)) && !META_KEYWORDS.has(rawLower) && !META_KEYWORDS.has(underscore)) {
+    return 'general';
+  }
+
+  const type = tagMap ? (
+    tagMap.get(rawLower) ??
+    tagMap.get(underscore) ??
+    tagMap.get(hyphen) ??
+    tagMap.get(rawLower.replace(/^by_/i, '')) ??
+    tagMap.get(underscore.replace(/^by_/i, ''))
+  ) : undefined;
+
+  if (type === 1 && !GENERIC_NON_ARTIST_TAGS.has(rawLower) && !GENERIC_NON_ARTIST_TAGS.has(underscore)) return 'artist';
+  if (type === 3 || type === 6) return 'copyright';
+  if (type === 4) return 'character';
+  if (type === 5 || META_KEYWORDS.has(rawLower) || META_KEYWORDS.has(underscore)) return 'meta';
+
+  if (CHARACTER_VARIANT_WORDS.has(rawLower) || CHARACTER_VARIANT_WORDS.has(underscore)) return 'general';
+  if (COPYRIGHT_SUFFIXES.some(s => underscore.endsWith(s.replace(/^_/, '')))) return 'copyright';
+
+  const parenMatch = rawLower.match(/^(.+?)_\(([^)]+)\)$/) || rawLower.match(/^(.+?)\s*\(([^)]+)\)$/);
+  if (parenMatch) {
+    const suffix = parenMatch[2].trim();
+    const suffixUnder = suffix.replace(/[\s_.-]+/g, '_');
+    if (CHARACTER_VARIANT_WORDS.has(suffix) || CHARACTER_VARIANT_WORDS.has(suffixUnder) || COMMON_DESCRIPTOR_WORDS.has(suffix) || COMMON_DESCRIPTOR_WORDS.has(suffixUnder)) return 'character';
+    if (tagMap && (tagMap.get(suffix) === 3 || tagMap.get(suffix) === 6 || tagMap.get(suffixUnder) === 3 || tagMap.get(suffixUnder) === 6)) return 'character';
+    return 'character';
+  }
+  return 'general';
+}
+

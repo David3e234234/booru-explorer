@@ -1257,6 +1257,19 @@
                   <input type="text" id="inputKemonoSession" class="input-setting" placeholder="Kemono Session Token (cookie: session=...)" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.kemonoSession.placeholder">
                 </div>
               </div>
+
+              <!-- 8. AllGirl -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-allgirl">AllGirl.booru.org</span>
+                  <span class="api-key-card-actions">
+                    <a href="https://allgirl.booru.org/index.php?page=account&s=login" target="_blank" rel="noopener" class="api-key-link" title="Открыть AllGirl" data-i18n="settings.whereGet">Где взять? ↗</a>
+                  </span>
+                </div>
+                <div class="api-keys-grid">
+                  <input type="text" id="inputAllgirlCookie" class="input-setting" placeholder="Cookie сессии (user_id=...; pass_hash=...)" autocomplete="off" spellcheck="false" data-i18n-placeholder="settings.allgirlCookie.placeholder">
+                </div>
+              </div>
             </div>
 
             <!-- External Sync Action Block -->
@@ -1493,6 +1506,22 @@
                 </div>
                 <div>
                   <input type="text" id="inputTbibProxy" class="input-setting" placeholder="Прокси для TBIB (http://... или socks5://...)" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+
+              <!-- 12. AllGirl -->
+              <div class="api-key-card">
+                <div class="api-key-card-header">
+                  <span class="api-key-site-badge site-allgirl">AllGirl.booru.org</span>
+                  <span class="api-key-card-actions">
+                    <button type="button" class="api-key-test-btn" id="btnTestAllgirlProxy" title="Проверить прокси AllGirl">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                      <span data-i18n="settings.authTest">Тест</span>
+                    </button>
+                  </span>
+                </div>
+                <div>
+                  <input type="text" id="inputAllgirlProxy" class="input-setting" placeholder="Прокси для AllGirl (http://... или socks5://...)" autocomplete="off" spellcheck="false">
                 </div>
               </div>
             </div>
@@ -2473,6 +2502,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=19.3"></script>
+  <script type="module" src="js/app.js?v=19.4"></script>
 </body>
 </html>
