@@ -1,21 +1,21 @@
-import { state, isPostFavorite, isAuthorFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, setFavoriteAuthors, recordSessionInteraction, getSimilarPostPlan, calculatePostSimilarityScore } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleFavoriteAuthor, toggleLikePost, toggleDislikeApi, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchAlbumPosts, fetchArchiveList, fetchArchiveStatus, fetchArchiveInspect, fetchPosts } from '../api.js';
+import { state, isPostFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, recordSessionInteraction } from '../state.js';
+import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
-import { renderSidebarTags, formatRating } from './viewerSidebar.js';
+import { renderSidebarTags, renderSidebarInfo } from './viewerSidebar.js';
 import { notifyViewerOpened, notifyViewerMoved, notifyViewerClosed } from '../router.js';
-import { downloadManager } from '../modules/downloadManager.js';
-import { openSettingsModal, switchSettingsTab } from '../modules/settingsModal.js';
 import { t } from '../i18n.js';
 
-function isVideoUrl(url) {
-  if (!url) return false;
-  const clean = url.split('?')[0].toLowerCase();
-  return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mov') || clean.endsWith('.mkv') || clean.endsWith('.avi');
-}
+import { resolvePostMetadata, renderAuthorInfo, handleAuthorFavToggle } from './viewerMetadata.js';
+import { renderSidebarArchives, renderArchivePostCard, cancelAllArchiveDownloads } from './viewerArchives.js';
+import { isArchiveInspectModalOpen, closeArchiveInspectModal, setArchiveInspectContext } from './viewerArchiveInspect.js';
+import { renderSidebarCloudLinks, renderSidebarContent } from './viewerCloudLinks.js';
+import { renderSidebarSimilarPosts, configureSimilar, initSimilarEvents } from './viewerSimilar.js';
+import { getCurrentMediaItem, renderAlbumFilmstrip, switchAlbumSlide, preloadAdjacentMedia, loadFullAlbumForPost, downloadFullAlbum, downloadSingleMedia, configureAlbum } from './viewerAlbum.js';
+import { setupViewerGestures } from './viewerGestures.js';
 
-export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle, onFindSimilar }) {
+export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle, onFindSimilar } = {}) {
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
   const btnClose = document.getElementById('btnCloseViewer');
@@ -25,8 +25,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const viewerContent = document.querySelector('.viewer-content');
   const mediaWrapper = document.getElementById('viewerMediaWrapper');
   const siteBadge = document.getElementById('viewerSiteBadge');
-  const viewerAlbumBadge = document.getElementById('viewerAlbumBadge');
-  const viewerAlbumPageText = document.getElementById('viewerAlbumPageText');
   const resBadge = document.getElementById('viewerResolution');
   const extBadge = document.getElementById('viewerExtBadge');
   const btnDislikeModal = document.getElementById('btnDislikeModal');
@@ -39,42 +37,19 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const btnViewerTagsToggle = document.getElementById('btnViewerTagsToggle');
   const btnCloseViewerTags = document.getElementById('btnCloseViewerTags');
   const viewerSidebar = document.getElementById('viewerSidebar');
-  const viewerAuthorBadge = document.getElementById('viewerAuthorBadge');
-  const viewerAuthorText = document.getElementById('viewerAuthorText');
-  const viewerFavAuthorBtn = document.getElementById('viewerFavAuthorBtn');
-  const infoAuthorRow = document.getElementById('infoAuthorRow');
-  const infoAuthor = document.getElementById('infoAuthor');
-  const infoAssistantsRow = document.getElementById('infoAssistantsRow');
-  const infoAssistantsList = document.getElementById('infoAssistantsList');
-  const btnFavAuthorSidebar = document.getElementById('btnFavAuthorSidebar');
-  const btnFavAuthorSidebarText = document.getElementById('btnFavAuthorSidebarText');
-  const btnSetAuthorCoverSidebar = document.getElementById('btnSetAuthorCoverSidebar');
 
-  const infoSite = document.getElementById('infoSite');
-  const infoDateRow = document.getElementById('infoDateRow');
-  const infoDate = document.getElementById('infoDate');
-  const infoAlbumRow = document.getElementById('infoAlbumRow');
+  const viewerFavAuthorBtn = document.getElementById('viewerFavAuthorBtn');
+  const btnFavAuthorSidebar = document.getElementById('btnFavAuthorSidebar');
   const btnFetchFullAlbum = document.getElementById('btnFetchFullAlbum');
-  const btnFetchFullAlbumText = document.getElementById('btnFetchFullAlbumText');
   const btnDownloadAlbumSidebar = document.getElementById('btnDownloadAlbumSidebar');
   const btnDislikeSidebar = document.getElementById('btnDislikeSidebar');
   const btnDislikeSidebarText = document.getElementById('btnDislikeSidebarText');
-  const viewerSimilarSection = document.getElementById('viewerSidebarSimilarSection');
-  const viewerSimilarContainer = document.getElementById('viewerSimilarContainer');
-  const viewerSimilarGrid = document.getElementById('viewerSimilarGrid');
-  const viewerSimilarLoading = document.getElementById('viewerSimilarLoading');
-  const viewerSimilarCount = document.getElementById('viewerSimilarCount');
-  const btnRefreshSimilar = document.getElementById('btnRefreshSimilar');
-  const infoRating = document.getElementById('infoRating');
-  const infoScore = document.getElementById('infoScore');
-  const infoAi = document.getElementById('infoAi');
   const btnCopyAllTags = document.getElementById('btnCopyAllTags');
+  const btnCloseArchiveInspectModal = document.getElementById('btnCloseArchiveInspectModal');
+  const archiveInspectBackdrop = document.getElementById('archiveInspectBackdrop');
 
-  const viewerAlbumFilmstrip = document.getElementById('viewerAlbumFilmstrip');
-  const albumFilmstripInner = document.getElementById('albumFilmstripInner');
   const viewerSimilarFilmstrip = document.getElementById('viewerSimilarFilmstrip');
   const similarFilmstripInner = document.getElementById('similarFilmstripInner');
-  const similarFilmstripCount = document.getElementById('similarFilmstripCount');
 
   let currentPost = null;
   let currentAlbumIndex = 0;
@@ -83,20 +58,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let activeBlobUrl = null;
   let currentZoomInstance = null;
   let currentVideoInstance = null;
-  // Shared /api/resolve-video result for the currently opened post - both the
-  // metadata refresh here and createVideoPlayer consume the same request
   let activeResolvePromise = null;
-
-
 
   function updateNavButtons() {
     if (!btnPrev || !btnNext) return;
 
     if (directPostRef) {
-      // Standalone post (direct link or external lookup)
       const hasAlbumPrev = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0);
       const hasAlbumNext = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1);
-
       btnPrev.disabled = !hasAlbumPrev;
       btnPrev.classList.toggle('is-disabled', !hasAlbumPrev);
       btnNext.disabled = !hasAlbumNext;
@@ -114,25 +83,209 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     btnNext.classList.toggle('is-disabled', !canNext);
   }
 
+  function loadMediaItem(item) {
+    if (activeAbortController) { activeAbortController.abort(); activeAbortController = null; }
+    if (activeBlobUrl) { URL.revokeObjectURL(activeBlobUrl); activeBlobUrl = null; }
+    if (currentZoomInstance) { currentZoomInstance.destroy(); currentZoomInstance = null; }
+    if (currentVideoInstance) { currentVideoInstance.destroy(); currentVideoInstance = null; }
 
+    const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
+    if (!directMedia) {
+      showToast(t('vw.mediaUnavailable', 'Ссылка на медиа недоступна'));
+      return;
+    }
 
-  // Touch state variables for gestures
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchStartTime = 0;
-  let isDraggingDown = false;
-  let initialPinchDist = 0;
-  let initialZoom = 1;
-  let isPinching = false;
-  let lastTapTime = 0;
+    if (!mediaWrapper) return;
+    mediaWrapper.innerHTML = '';
+    const abortRef = {
+      get current() { return activeAbortController; },
+      set current(val) { activeAbortController = val; }
+    };
+    const blobRef = {
+      get current() { return activeBlobUrl; },
+      set current(val) { activeBlobUrl = val; }
+    };
+
+    if (item.isVideo) {
+      currentVideoInstance = createVideoPlayer(item, {
+        state,
+        getProxiedUrl,
+        abortRef,
+        blobRef,
+        resolvedVideoPromise: activeResolvePromise
+      });
+      mediaWrapper.appendChild(currentVideoInstance.videoContainer);
+      mediaWrapper.appendChild(currentVideoInstance.statusBanner);
+    } else {
+      const container = document.createElement('div');
+      container.className = 'viewer-image-container';
+
+      const thumbMedia = item.previewUrl || item.thumb360 || item.thumb180 || item.sampleUrl || '';
+      const needsThumbProxy = item.site === 'danbooru' || thumbMedia.includes('donmai.us') || state.settings?.proxyThumbnails !== false;
+      const placeholderSrc = thumbMedia ? (thumbMedia.startsWith('/api/') ? thumbMedia : (needsThumbProxy ? getProxiedUrl(thumbMedia) : thumbMedia)) : '';
+
+      let placeholderImg = null;
+      if (placeholderSrc) {
+        placeholderImg = document.createElement('img');
+        placeholderImg.className = 'viewer-image-placeholder';
+        placeholderImg.src = placeholderSrc;
+        placeholderImg.referrerPolicy = 'no-referrer';
+        placeholderImg.alt = '';
+        container.appendChild(placeholderImg);
+      }
+
+      const spinner = document.createElement('div');
+      spinner.className = 'viewer-media-spinner';
+      container.appendChild(spinner);
+
+      const img = document.createElement('img');
+      img.className = 'viewer-image';
+      const needsImgProxy = item.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
+      const proxyMedia = getProxiedUrl(directMedia);
+      img.referrerPolicy = 'no-referrer';
+      img.alt = 'Full View';
+
+      const onImageReady = () => {
+        img.classList.add('is-loaded');
+        if (placeholderImg) {
+          placeholderImg.classList.add('is-hidden');
+          setTimeout(() => {
+            if (placeholderImg && placeholderImg.parentElement) placeholderImg.remove();
+          }, 300);
+        }
+        if (spinner && spinner.parentElement) {
+          spinner.remove();
+        }
+      };
+
+      img.addEventListener('load', onImageReady);
+      img.addEventListener('error', function () {
+        if (this.src !== proxyMedia) {
+          console.warn('[Viewer Image Fallback] Переключение на прокси');
+          this.src = proxyMedia;
+        } else if (item.fileUrl && item.sampleUrl && this.src.includes(encodeURIComponent(item.sampleUrl))) {
+          console.warn('[Viewer Image Fallback] Переключение на fileUrl');
+          this.src = getProxiedUrl(item.fileUrl);
+        } else if (item.previewUrl && !this.src.includes(encodeURIComponent(item.previewUrl))) {
+          console.warn('[Viewer Image Fallback] Переключение на previewUrl');
+          this.src = getProxiedUrl(item.previewUrl);
+        } else {
+          if (spinner && spinner.parentElement) spinner.remove();
+          showToast(t('vw.fullImgFailed', 'Не удалось загрузить полноразмерное фото'));
+        }
+      });
+
+      img.src = needsImgProxy ? proxyMedia : directMedia;
+      if (img.complete && img.naturalWidth > 0) onImageReady();
+
+      container.appendChild(img);
+      currentZoomInstance = setupImageZoom(img, { showToast });
+      mediaWrapper.appendChild(container);
+
+      preloadAdjacentMedia(currentPost, currentAlbumIndex);
+    }
+  }
+
+  // Wire dependencies to submodules
+  setArchiveInspectContext({
+    getCurrentPost: () => currentPost,
+    onUnpacked: () => {
+      currentAlbumIndex = 0;
+      renderViewerPost(false);
+    }
+  });
+
+  configureSimilar({
+    openViewer: (idx, opts) => openViewer(idx, opts)
+  });
+
+  initSimilarEvents({
+    getCurrentPost: () => currentPost
+  });
+
+  configureAlbum({
+    getCurrentPost: () => currentPost,
+    getAlbumIndex: () => currentAlbumIndex,
+    setAlbumIndex: (idx) => { currentAlbumIndex = idx; },
+    loadMediaItem,
+    renderSidebarContent: (post) => renderSidebarContent(post),
+    updateNavButtons
+  });
+
+  function updateInteractionStates(post) {
+    const isFav = isPostFavorite(post.id);
+    btnFavModal?.classList.toggle('active', isFav);
+    btnFavModal?.querySelector('svg')?.setAttribute('fill', isFav ? 'currentColor' : 'none');
+
+    const isLiked = isPostLiked(post.id);
+    btnLikeModal?.classList.toggle('active', isLiked);
+    btnLikeModal?.querySelector('svg')?.setAttribute('fill', isLiked ? 'currentColor' : 'none');
+
+    const isDisliked = isPostDisliked(post.id);
+    btnDislikeModal?.classList.toggle('active', isDisliked);
+    btnDislikeSidebar?.classList.toggle('active', isDisliked);
+    if (btnDislikeSidebarText) {
+      btnDislikeSidebarText.textContent = isDisliked ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
+    }
+  }
+
+  function renderViewerPost(skipMediaLoad = false) {
+    if (!currentPost) return;
+
+    if (currentPost.id) {
+      markPostViewed(currentPost.id);
+      recordSessionInteraction(currentPost, 'view');
+    }
+
+    if (siteBadge) siteBadge.textContent = currentPost.siteName || currentPost.site;
+    if (resBadge) resBadge.textContent = (currentPost.width && currentPost.height) ? `${currentPost.width} × ${currentPost.height}` : t('vw.original', 'Оригинал');
+    if (extBadge) extBadge.textContent = (currentPost.fileExt || 'JPG').toUpperCase();
+
+    renderAuthorInfo(currentPost, {
+      closeViewer,
+      onTagSelect: (tag) => onTagSelect?.(tag),
+      onFavoriteAuthorToggle
+    });
+
+    updateInteractionStates(currentPost);
+    renderSidebarInfo(currentPost);
+
+    renderSidebarTags(currentPost, {
+      onTagSelect: (tag) => onTagSelect?.(tag),
+      closeViewer
+    });
+
+    renderSidebarArchives(currentPost);
+    const cloudLinks = renderSidebarCloudLinks(currentPost);
+    renderSidebarContent(currentPost, (cloudLinks || []).map(l => l.url));
+    renderSidebarSimilarPosts(currentPost);
+    renderAlbumFilmstrip(currentPost, currentAlbumIndex);
+    updateNavButtons();
+
+    if (!skipMediaLoad) {
+      const hasVisibleMedia = (Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) ||
+        Boolean(currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl);
+
+      if (hasVisibleMedia) {
+        const activeMediaItem = getCurrentMediaItem(currentPost, currentAlbumIndex);
+        loadMediaItem(activeMediaItem);
+      } else if (currentPost.isArchive) {
+        renderArchivePostCard(currentPost, mediaWrapper);
+      } else {
+        const activeMediaItem = getCurrentMediaItem(currentPost, currentAlbumIndex);
+        loadMediaItem(activeMediaItem);
+      }
+    }
+
+    if (!currentPost._albumFullyFetched && currentPost.site !== 'pawchive' && currentPost.site !== 'kemono' && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:') && !currentPost.seriesKey.startsWith('kemono:')) || currentPost.pixiv_id)) {
+      loadFullAlbumForPost(currentPost, false);
+    }
+  }
 
   function openViewer(index, opts = {}) {
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
 
-
-
     if (opts.directPost) {
-      // Standalone post opened by deep link or similar post click: no neighbors, not part of the grid
       directPostRef = opts.directPost;
       state.currentViewerIndex = -1;
       currentPost = opts.directPost;
@@ -146,236 +299,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) viewerContent.classList.remove('ui-hidden');
 
-    // For Rule34Video videos, refresh full metadata (author, tags, HD stream).
-    // Initialized BEFORE renderViewerPost() so createVideoPlayer receives the promise!
-    if (currentPost?.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
-      const targetPostId = currentPost.id;
-      activeResolvePromise = fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
-        .then(r => r.json())
-        .then(data => {
-          if (!data || currentPost?.id !== targetPostId) return null;
-          let changed = false;
-          if (data.author && data.author !== currentPost.author) {
-            currentPost.author = data.author;
-            changed = true;
-          }
-          if (data.tags && Array.isArray(data.tags) && data.tags.length > (currentPost.tags?.length || 0)) {
-            currentPost.tags = data.tags;
-            currentPost.tagDetails = data.tagDetails || currentPost.tagDetails;
-            changed = true;
-          }
-          if (data.fullVideoUrl) {
-            currentPost.fileUrl = data.fullVideoUrl;
-            currentPost.hasSound = true;
-            if (data.quality) currentPost.quality = data.quality;
-          }
-          if (data.duration && (!currentPost.duration || currentPost.duration === 20)) {
-            currentPost.duration = data.duration;
-            currentPost.durationText = data.durationText || currentPost.durationText;
-            changed = true;
-          }
-          if (changed) {
-            renderViewerPost(true);
-          }
-          const cardEl = document.querySelector(`.media-card[data-post-id="${targetPostId}"]`);
-          if (cardEl) {
-            if (data.author) {
-              if (cardEl._post) cardEl._post.author = data.author;
-              let authorBadge = cardEl.querySelector('.badge-format.author');
-              const parts = data.author.split(',').map(s => s.trim()).filter(Boolean);
-              const mainAuthor = parts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || parts[0] || '';
-              const cleanA = mainAuthor.replace(/^@/, '').replace(/^pixiv:/, '').replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').trim();
-              if (cleanA && cleanA.length >= 2) {
-                if (authorBadge) {
-                  authorBadge.textContent = cleanA;
-                  authorBadge.setAttribute('data-author', cleanA);
-                  authorBadge.setAttribute('title', `Автор: ${cleanA} (нажмите для поиска)`);
-                } else {
-                  const bottomGroup = cardEl.querySelector('.badge-group-bottom');
-                  if (bottomGroup) {
-                    const span = document.createElement('span');
-                    span.className = 'badge-format author';
-                    span.setAttribute('data-author', cleanA);
-                    span.setAttribute('title', `Автор: ${cleanA} (нажмите для поиска)`);
-                    span.textContent = cleanA;
-                    bottomGroup.appendChild(span);
-                  }
-                }
-              }
-            }
-            if (data.duration) {
-              if (cardEl._post) {
-                cardEl._post.duration = data.duration;
-                cardEl._post.durationText = data.durationText;
-              }
-              let durBadge = cardEl.querySelector('.badge-duration');
-              if (!durBadge) {
-                const topGroup = cardEl.querySelector('.badge-group-top > div');
-                if (topGroup) {
-                  durBadge = document.createElement('span');
-                  durBadge.className = 'badge-format badge-duration';
-                  durBadge.style.cssText = 'background-color: rgba(12, 9, 6, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
-                  topGroup.appendChild(durBadge);
-                }
-              }
-              if (durBadge) {
-                durBadge.textContent = data.durationText;
-                durBadge.setAttribute('title', `Длительность: ${data.durationText}`);
-              }
-            }
-          }
-          return data;
-        })
-        .catch(() => null);
-    } else if ((currentPost?.site === 'pawchive' || currentPost?.site === 'kemono') && (currentPost.originalId || currentPost.id)) {
-      // For Pawchive / Kemono posts, resolve full metadata (content, complete attachments, clean tags)
-      const targetSite = currentPost.site;
-      const targetPostId = currentPost.id;
-      const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(pawchive|kemono)_/, '').split('_')[0];
-      const targetService = currentPost.service || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[1] : '') || '';
-      const targetUser = currentPost.user || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[2] : '') || '';
-      const reqUrl = `/api/resolve-post?site=${encodeURIComponent(targetSite)}&postId=${encodeURIComponent(cleanOrigId)}&service=${encodeURIComponent(targetService)}&user=${encodeURIComponent(targetUser)}&seriesKey=${encodeURIComponent(currentPost.seriesKey || '')}&postUrl=${encodeURIComponent(currentPost.postUrl || currentPost.source || '')}`;
-      
-      activeResolvePromise = fetch(reqUrl)
-        .then(r => r.json())
-        .then(data => {
-          if (!data || !data.success || !data.post || currentPost?.id !== targetPostId) return null;
-          const resolved = data.post;
-          let changed = false;
-
-          if (resolved.content && resolved.content !== currentPost.content) {
-            currentPost.content = resolved.content;
-            if (Array.isArray(currentPost.albumItems)) {
-              currentPost.albumItems.forEach(item => {
-                if (item) item.content = resolved.content;
-              });
-            }
-            renderSidebarContent(currentPost);
-            changed = true;
-          }
-
-          if (resolved.title && !currentPost.title) {
-            currentPost.title = resolved.title;
-            changed = true;
-          }
-
-          if (resolved.author && resolved.author !== currentPost.author && (!currentPost.author || currentPost.author.startsWith('user_'))) {
-            currentPost.author = resolved.author;
-            changed = true;
-          }
-
-          if (resolved.tagDetails && Object.keys(resolved.tagDetails).length > 0) {
-            currentPost.tagDetails = resolved.tagDetails;
-            changed = true;
-          }
-
-          if (Array.isArray(resolved.albumItems) && resolved.albumItems.length > (currentPost.albumItems?.length || 1)) {
-            currentPost.albumItems = resolved.albumItems;
-            currentPost.albumCount = resolved.albumItems.length;
-            currentPost.isAlbum = true;
-            currentPost.hasChildren = true;
-            changed = true;
-          }
-
-          if (Array.isArray(resolved.archiveUrls) && resolved.archiveUrls.length > (currentPost.archiveUrls?.length || 0)) {
-            currentPost.isArchive = true;
-            currentPost.archiveUrls = resolved.archiveUrls;
-            currentPost.archiveNames = resolved.archiveNames;
-            currentPost.archiveSizes = resolved.archiveSizes;
-            changed = true;
-          }
-
-          if (changed) {
-            renderViewerPost(true);
-          }
-          return data;
-        })
-        .catch(() => null);
-    } else if ((currentPost?.site === 'rule34' || currentPost?.site === 'xbooru') && (currentPost.originalId || currentPost.id)) {
-      const targetPostId = currentPost.id;
-      const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(rule34|xbooru)_/, '').split('_')[0];
-      const needsResolve = !currentPost.author ||
-        !(currentPost.tagDetails?.artist?.length) ||
-        !currentPost.source ||
-        currentPost.source.includes('rule34.xxx/index.php') ||
-        currentPost.source.includes('xbooru.com/index.php');
-
-      if (needsResolve && cleanOrigId) {
-        const tagsParam = Array.isArray(currentPost.tags) ? currentPost.tags.join(',') : '';
-        const reqUrl = `/api/resolve-post?site=${encodeURIComponent(currentPost.site)}&id=${encodeURIComponent(cleanOrigId)}${tagsParam ? `&tags=${encodeURIComponent(tagsParam)}` : ''}`;
-
-        activeResolvePromise = fetch(reqUrl)
-          .then(r => r.json())
-          .then(data => {
-            if (!data || !data.success || !data.post || currentPost?.id !== targetPostId) return null;
-            const resolved = data.post;
-            let changed = false;
-
-            if (resolved.author && resolved.author !== currentPost.author) {
-              currentPost.author = resolved.author;
-              changed = true;
-            }
-
-            if (resolved.source && resolved.source !== currentPost.source && !resolved.source.includes('rule34.xxx/index.php') && !resolved.source.includes('xbooru.com/index.php')) {
-              currentPost.source = resolved.source;
-              changed = true;
-            }
-
-            if (resolved.tagDetails && Object.keys(resolved.tagDetails).length > 0) {
-              if (resolved.tagDetails.artist?.length || resolved.tagDetails.copyright?.length || resolved.tagDetails.character?.length) {
-                currentPost.tagDetails = resolved.tagDetails;
-                changed = true;
-              }
-            }
-
-            if (Array.isArray(resolved.tags) && resolved.tags.length > (currentPost.tags?.length || 0)) {
-              currentPost.tags = resolved.tags;
-              changed = true;
-            }
-
-            if (resolved.createdAt && !currentPost.createdAt) {
-              currentPost.createdAt = resolved.createdAt;
-              changed = true;
-            }
-
-            if (resolved.width && !currentPost.width) {
-              currentPost.width = resolved.width;
-              currentPost.height = resolved.height;
-              changed = true;
-            }
-
-            if (changed) {
-              renderViewerPost(true);
-
-              const card = document.querySelector(`.media-card[data-post-id="${currentPost.id}"]`);
-              if (card) {
-                card._post = currentPost;
-                const bottomGroup = card.querySelector('.badge-group-bottom');
-                if (bottomGroup && currentPost.author) {
-                  let authorBadge = bottomGroup.querySelector('.badge-format.author');
-                  const cleanA = currentPost.author.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').trim();
-                  if (cleanA && cleanA.length >= 2) {
-                    if (!authorBadge) {
-                      authorBadge = document.createElement('span');
-                      authorBadge.className = 'badge-format author';
-                      bottomGroup.appendChild(authorBadge);
-                    }
-                    authorBadge.setAttribute('data-author', cleanA);
-                    authorBadge.setAttribute('title', t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanA));
-                    authorBadge.textContent = cleanA;
-                  }
-                }
-              }
-            }
-            return data;
-          })
-          .catch(() => null);
-      } else {
-        activeResolvePromise = null;
+    activeResolvePromise = resolvePostMetadata(currentPost, {
+      onPostUpdated: () => {
+        renderViewerPost(true);
       }
-    } else {
-      activeResolvePromise = null;
-    }
+    });
 
     renderViewerPost();
     if (modal) modal.style.display = 'flex';
@@ -401,36 +329,19 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       viewerContent.classList.remove('has-album');
       viewerContent.classList.remove('has-similar');
     }
-    
-    if (activeAbortController) {
-      activeAbortController.abort();
-      activeAbortController = null;
-    }
-    if (activeBlobUrl) {
-      URL.revokeObjectURL(activeBlobUrl);
-      activeBlobUrl = null;
-    }
-    activeResolvePromise = null;
-    if (currentZoomInstance) {
-      currentZoomInstance.destroy();
-      currentZoomInstance = null;
-    }
-    if (currentVideoInstance) {
-      currentVideoInstance.destroy();
-      currentVideoInstance = null;
-    }
 
-    if (activeArchiveDownloads && activeArchiveDownloads.size > 0) {
-      activeArchiveDownloads.forEach((ctrl) => {
-        try { ctrl.abort(); } catch {}
-      });
-      activeArchiveDownloads.clear();
-    }
+    if (activeAbortController) { activeAbortController.abort(); activeAbortController = null; }
+    if (activeBlobUrl) { URL.revokeObjectURL(activeBlobUrl); activeBlobUrl = null; }
+    activeResolvePromise = null;
+    if (currentZoomInstance) { currentZoomInstance.destroy(); currentZoomInstance = null; }
+    if (currentVideoInstance) { currentVideoInstance.destroy(); currentVideoInstance = null; }
+
+    cancelAllArchiveDownloads();
 
     if (mediaWrapper) mediaWrapper.innerHTML = '';
-
     if (viewerSimilarFilmstrip) viewerSimilarFilmstrip.style.display = 'none';
     if (similarFilmstripInner) similarFilmstripInner.innerHTML = '';
+
     currentPost = null;
     currentAlbumIndex = 0;
     directPostRef = null;
@@ -438,2586 +349,18 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     notifyViewerClosed();
   }
 
-    function getCurrentMediaItem() {
-      if (currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) {
-        return currentPost.albumItems[currentAlbumIndex] || currentPost;
-      }
-      return currentPost;
-    }
-
-    function renderAlbumFilmstrip() {
-      if (!viewerAlbumFilmstrip || !albumFilmstripInner) return;
-
-      const isAlbum = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 1);
-
-      if (isAlbum) {
-        if (viewerContent) {
-          viewerContent.classList.add('has-album');
-        }
-        viewerAlbumFilmstrip.style.display = 'block';
-        if (viewerAlbumBadge && viewerAlbumPageText) {
-          viewerAlbumBadge.style.display = 'inline-flex';
-          viewerAlbumPageText.textContent = `${currentAlbumIndex + 1} / ${currentPost.albumItems.length}`;
-        }
-        if (btnDownloadAlbum) {
-          btnDownloadAlbum.style.display = 'inline-flex';
-        }
-        if (btnDownloadAlbumSidebar) {
-          btnDownloadAlbumSidebar.style.display = 'inline-flex';
-        }
-
-        albumFilmstripInner.innerHTML = '';
-        currentPost.albumItems.forEach((item, idx) => {
-          const itemDiv = document.createElement('div');
-          itemDiv.className = `album-filmstrip-item ${idx === currentAlbumIndex ? 'active' : ''}`;
-          itemDiv.title = t('vw.albumImageTitle', 'Изображение {n} из {total}').replace('{n}', idx + 1).replace('{total}', currentPost.albumItems.length);
-
-          let thumbUrl = item.thumb180 || item.thumb360 || item.previewUrl || item.sampleUrl || item.fileUrl || '';
-          // Extracted archive videos serve the raw mp4 as thumb: swap it for an FFmpeg frame
-          if (item.isVideo && thumbUrl.startsWith('/api/archive/file')) {
-            thumbUrl = `/api/video-thumbnail?url=${encodeURIComponent(thumbUrl)}&quality=low`;
-          }
-          const needsThumbProxy = (item.site === 'danbooru' || thumbUrl.includes('donmai.us')) ? true : (state.settings?.proxyThumbnails !== false);
-          const thumbSrc = thumbUrl ? (thumbUrl.startsWith('/api/') ? thumbUrl : (needsThumbProxy ? getProxiedUrl(thumbUrl) : thumbUrl)) : '';
-
-          itemDiv.innerHTML = `
-            <img class="album-filmstrip-img" src="${thumbSrc}" alt="${t('vw.slideAlt', 'Слайд {n}').replace('{n}', idx + 1)}" loading="lazy" referrerpolicy="no-referrer">
-            <span class="album-filmstrip-page">${idx + 1}</span>
-          `;
-
-          itemDiv.addEventListener('click', (e) => {
-            e.stopPropagation();
-            haptic(10);
-            switchAlbumSlide(idx);
-          });
-
-          albumFilmstripInner.appendChild(itemDiv);
-        });
-
-        // Scroll the active item into view
-        const activeThumb = albumFilmstripInner.children[currentAlbumIndex];
-        if (activeThumb) {
-          activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-      } else {
-        if (viewerContent) viewerContent.classList.remove('has-album');
-        viewerAlbumFilmstrip.style.display = 'none';
-        if (viewerAlbumBadge) viewerAlbumBadge.style.display = 'none';
-        if (btnDownloadAlbum) btnDownloadAlbum.style.display = 'none';
-        if (btnDownloadAlbumSidebar) btnDownloadAlbumSidebar.style.display = 'none';
-      }
-
-      // Whether a series exists for lazy loading in the sidebar
-      if (infoAlbumRow) {
-        const canFetch = Boolean(currentPost?.canFetchAlbum || currentPost?.hasChildren || currentPost?.parentId || currentPost?.seriesKey);
-        infoAlbumRow.style.display = canFetch ? 'flex' : 'none';
-        if (btnFetchFullAlbumText) {
-          if (isAlbum) {
-            btnFetchFullAlbumText.textContent = t('vw.refreshSet', 'Обновить сет ({n} фото)').replace('{n}', currentPost.albumItems.length);
-          } else {
-            btnFetchFullAlbumText.textContent = t('viewer.findFullSet', 'Найти все части сета');
-          }
-        }
-      }
-    }
-
-    function switchAlbumSlide(idx) {
-      if (!currentPost?.albumItems || idx < 0 || idx >= currentPost.albumItems.length) return;
-      currentAlbumIndex = idx;
-
-      // Update the page badge
-      if (viewerAlbumPageText) {
-        viewerAlbumPageText.textContent = `${currentAlbumIndex + 1} / ${currentPost.albumItems.length}`;
-      }
-
-      // Update the active class in the thumbnail filmstrip
-      if (albumFilmstripInner) {
-        Array.from(albumFilmstripInner.children).forEach((child, i) => {
-          child.classList.toggle('active', i === currentAlbumIndex);
-        });
-        const activeThumb = albumFilmstripInner.children[currentAlbumIndex];
-        if (activeThumb) {
-          activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-      }
-
-      const activeItem = currentPost.albumItems[currentAlbumIndex];
-      if (resBadge) resBadge.textContent = (activeItem.width && activeItem.height) ? `${activeItem.width} × ${activeItem.height}` : t('vw.original', 'Оригинал');
-      if (extBadge) extBadge.textContent = (activeItem.fileExt || 'JPG').toUpperCase();
-
-      renderSidebarContent(activeItem || currentPost);
-      updateNavButtons();
-      loadMediaItem(activeItem);
-    }
-
-    const preloadedUrls = new Set();
-
-    function getMediaItemUrl(item) {
-      if (!item) return '';
-      const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
-      if (!directMedia) return '';
-      const needsImgProxy = item.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
-      return needsImgProxy ? getProxiedUrl(directMedia) : directMedia;
-    }
-
-    function preloadSingleUrl(url) {
-      if (!url || preloadedUrls.has(url)) return;
-      preloadedUrls.add(url);
-      if (preloadedUrls.size > 60) {
-        const first = preloadedUrls.values().next().value;
-        preloadedUrls.delete(first);
-      }
-      const img = new Image();
-      img.referrerPolicy = 'no-referrer';
-      img.src = url;
-      if ('decode' in img) {
-        img.decode().catch(() => {});
-      }
-    }
-
-    function preloadAdjacentMedia() {
-      if (!currentPost) return;
-
-      // 1. If currently in an album, preload neighboring album slides
-      if (currentPost.isAlbum && Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 1) {
-        const items = currentPost.albumItems;
-        if (currentAlbumIndex + 1 < items.length) {
-          preloadSingleUrl(getMediaItemUrl(items[currentAlbumIndex + 1]));
-        }
-        if (currentAlbumIndex + 2 < items.length) {
-          preloadSingleUrl(getMediaItemUrl(items[currentAlbumIndex + 2]));
-        }
-        if (currentAlbumIndex - 1 >= 0) {
-          preloadSingleUrl(getMediaItemUrl(items[currentAlbumIndex - 1]));
-        }
-      }
-
-      // 2. Preload neighboring posts in the gallery
-      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-      if (!Array.isArray(list) || list.length === 0 || state.currentViewerIndex < 0) return;
-
-      const curIdx = state.currentViewerIndex;
-      for (let offset = 1; offset <= 2; offset++) {
-        const nextPost = list[curIdx + offset];
-        if (nextPost && !nextPost.isVideo) {
-          const activeItem = (nextPost.isAlbum && nextPost.albumItems?.[0]) ? nextPost.albumItems[0] : nextPost;
-          preloadSingleUrl(getMediaItemUrl(activeItem));
-        }
-      }
-      if (curIdx - 1 >= 0) {
-        const prevPost = list[curIdx - 1];
-        if (prevPost && !prevPost.isVideo) {
-          const activeItem = (prevPost.isAlbum && prevPost.albumItems?.[0]) ? prevPost.albumItems[0] : prevPost;
-          preloadSingleUrl(getMediaItemUrl(activeItem));
-        }
-      }
-    }
-
-    function loadMediaItem(item) {
-      if (activeAbortController) {
-        activeAbortController.abort();
-        activeAbortController = null;
-      }
-      if (activeBlobUrl) {
-        URL.revokeObjectURL(activeBlobUrl);
-        activeBlobUrl = null;
-      }
-      if (currentZoomInstance) {
-        currentZoomInstance.destroy();
-        currentZoomInstance = null;
-      }
-      if (currentVideoInstance) {
-        currentVideoInstance.destroy();
-        currentVideoInstance = null;
-      }
-
-      const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
-      if (!directMedia) {
-        showToast(t('vw.mediaUnavailable', 'Ссылка на медиа недоступна'));
-        return;
-      }
-
-      mediaWrapper.innerHTML = '';
-      const abortRef = {
-        get current() { return activeAbortController; },
-        set current(val) { activeAbortController = val; }
-      };
-      const blobRef = {
-        get current() { return activeBlobUrl; },
-        set current(val) { activeBlobUrl = val; }
-      };
-
-      if (item.isVideo) {
-        currentVideoInstance = createVideoPlayer(item, {
-          state,
-          getProxiedUrl,
-          abortRef,
-          blobRef,
-          resolvedVideoPromise: activeResolvePromise
-        });
-        mediaWrapper.appendChild(currentVideoInstance.videoContainer);
-        mediaWrapper.appendChild(currentVideoInstance.statusBanner);
-      } else {
-        const container = document.createElement('div');
-        container.className = 'viewer-image-container';
-
-        // 1. Instant thumbnail placeholder (0ms, already in memory from gallery)
-        const thumbMedia = item.previewUrl || item.thumb360 || item.thumb180 || item.sampleUrl || '';
-        const needsThumbProxy = item.site === 'danbooru' || thumbMedia.includes('donmai.us') || state.settings?.proxyThumbnails !== false;
-        const placeholderSrc = thumbMedia ? (thumbMedia.startsWith('/api/') ? thumbMedia : (needsThumbProxy ? getProxiedUrl(thumbMedia) : thumbMedia)) : '';
-
-        let placeholderImg = null;
-        if (placeholderSrc) {
-          placeholderImg = document.createElement('img');
-          placeholderImg.className = 'viewer-image-placeholder';
-          placeholderImg.src = placeholderSrc;
-          placeholderImg.referrerPolicy = 'no-referrer';
-          placeholderImg.alt = '';
-          container.appendChild(placeholderImg);
-        }
-
-        // 2. Delayed loading spinner for slow connections
-        const spinner = document.createElement('div');
-        spinner.className = 'viewer-media-spinner';
-        container.appendChild(spinner);
-
-        // 3. Full-resolution target image
-        const img = document.createElement('img');
-        img.className = 'viewer-image';
-        const needsImgProxy = item.site === 'danbooru' || directMedia.includes('donmai.us') || state.settings?.proxyFullImages !== false;
-        const proxyMedia = getProxiedUrl(directMedia);
-        img.referrerPolicy = 'no-referrer';
-        img.alt = 'Full View';
-
-        const onImageReady = () => {
-          img.classList.add('is-loaded');
-          if (placeholderImg) {
-            placeholderImg.classList.add('is-hidden');
-            setTimeout(() => {
-              if (placeholderImg && placeholderImg.parentElement) placeholderImg.remove();
-            }, 300);
-          }
-          if (spinner && spinner.parentElement) {
-            spinner.remove();
-          }
-        };
-
-        img.addEventListener('load', onImageReady);
-
-        img.addEventListener('error', function () {
-          if (this.src !== proxyMedia) {
-            console.warn('[Viewer Image Fallback] Переключение на прокси');
-            this.src = proxyMedia;
-          } else if (item.fileUrl && item.sampleUrl && this.src.includes(encodeURIComponent(item.sampleUrl))) {
-            console.warn('[Viewer Image Fallback] Переключение на fileUrl');
-            this.src = getProxiedUrl(item.fileUrl);
-          } else if (item.previewUrl && !this.src.includes(encodeURIComponent(item.previewUrl))) {
-            console.warn('[Viewer Image Fallback] Переключение на previewUrl');
-            this.src = getProxiedUrl(item.previewUrl);
-          } else {
-            if (spinner && spinner.parentElement) spinner.remove();
-            showToast(t('vw.fullImgFailed', 'Не удалось загрузить полноразмерное фото'));
-          }
-        });
-
-        img.src = needsImgProxy ? proxyMedia : directMedia;
-
-        // If already cached in memory
-        if (img.complete && img.naturalWidth > 0) {
-          onImageReady();
-        }
-
-        container.appendChild(img);
-        currentZoomInstance = setupImageZoom(img, { showToast });
-        mediaWrapper.appendChild(container);
-
-        // Trigger background preloading for adjacent media
-        preloadAdjacentMedia();
-      }
-    }
-
-
-    const activeArchiveDownloads = new Map();
-
-    // Reactive tracker for archive server jobs (downloading / extracting / inspecting)
-    const activeArchiveJobs = new Map(); // url -> { active, phase, percent, received, total, error, completed }
-    const archiveJobListeners = new Map(); // url -> Set of callbacks
-    const activeArchivePollers = new Map(); // url -> intervalId
-
-    const ARCHIVE_PLAY_ICON_SVG = `<svg class="btn-archive-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
-    const ARCHIVE_SEARCH_ICON_SVG = `<svg class="btn-archive-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
-    const ARCHIVE_SPINNER_ICON_SVG = `<svg class="btn-archive-icon btn-archive-spinner" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="38" stroke-dashoffset="12"/></svg>`;
-    const ARCHIVE_CHECK_ICON_SVG = `<svg class="btn-archive-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>`;
-
-    function subscribeArchiveJob(url, callback) {
-      if (!url || typeof callback !== 'function') return () => {};
-      if (!archiveJobListeners.has(url)) {
-        archiveJobListeners.set(url, new Set());
-      }
-      const set = archiveJobListeners.get(url);
-      set.add(callback);
-
-      const cur = activeArchiveJobs.get(url);
-      if (cur) {
-        try { callback(cur); } catch {}
-      }
-
-      return () => {
-        set.delete(callback);
-        if (set.size === 0) archiveJobListeners.delete(url);
-      };
-    }
-
-    function notifyArchiveJob(url, state) {
-      if (!url) return;
-      const prev = activeArchiveJobs.get(url) || {};
-      const action = state.action || prev.action || 'view';
-      const next = { ...prev, ...state, action };
-      if (state.active === false && !state.completed && !state.error) {
-        activeArchiveJobs.delete(url);
-      } else {
-        activeArchiveJobs.set(url, next);
-      }
-      const listeners = archiveJobListeners.get(url);
-      if (listeners) {
-        for (const cb of listeners) {
-          try { cb(next); } catch (e) { console.warn(e); }
-        }
-      }
-    }
-
-    function startArchivePolling(url) {
-      if (!url || activeArchivePollers.has(url)) return;
-
-      const poll = async () => {
-        try {
-          const status = await fetchArchiveStatus(url);
-          if (status) {
-            if (status.active) {
-              const pct = status.percent !== undefined
-                ? status.percent
-                : (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0);
-              notifyArchiveJob(url, {
-                active: true,
-                phase: status.phase,
-                received: status.received || 0,
-                total: status.total || 0,
-                percent: pct,
-                extractedFiles: status.extractedFiles || 0,
-                scannedFiles: status.scannedFiles || 0,
-                totalFiles: status.totalFiles || 0,
-                currentFile: status.currentFile || ''
-              });
-            } else if (status.completed) {
-              notifyArchiveJob(url, {
-                active: false,
-                completed: true,
-                phase: status.phase || 'completed',
-                percent: 100,
-                extractedFiles: status.extractedFiles || 0,
-                totalFiles: status.totalFiles || 0
-              });
-              stopArchivePolling(url);
-            }
-          }
-        } catch {}
-      };
-
-      poll();
-      const id = setInterval(poll, 300);
-      activeArchivePollers.set(url, id);
-    }
-
-    function stopArchivePolling(url) {
-      if (!url) return;
-      const id = activeArchivePollers.get(url);
-      if (id) {
-        clearInterval(id);
-        activeArchivePollers.delete(url);
-      }
-    }
-
-    function formatBytes(bytes) {
-      if (!bytes || isNaN(bytes) || bytes <= 0) return '';
-      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-      return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-    }
-
-    /**
-     * Creates a reactive archive card component with live progress bars,
-     * download speeds, unpacking counter, and inspection states.
-     */
-    function createArchiveCardComponent({ url, name, size = 0, isSidebar = false }) {
-      const card = document.createElement('div');
-      card.className = 'sidebar-archive-card';
-      card.dataset.url = url;
-
-      const cleanName = name || (url.split('?')[0].split('/').pop()) || 'archive.zip';
-      const displaySize = size > 0 ? formatBytes(size) : '';
-
-      card.innerHTML = `
-        <div class="sidebar-archive-card-header">
-          <div class="sidebar-archive-file-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 8v13H3V8"/>
-              <path d="M1 3h22v5H1z"/>
-              <path d="M10 12h4"/>
-            </svg>
-          </div>
-          <div class="sidebar-archive-file-info">
-            <div class="sidebar-archive-filename" title="${cleanName}">${cleanName}</div>
-            <div class="sidebar-archive-filesize">${displaySize || t('vw.archiveZip', 'ZIP-архив')}</div>
-          </div>
-        </div>
-
-        <div class="sidebar-archive-actions">
-          <button type="button" class="btn-archive-pill btn-archive-pill-download" title="${t('viewer.downloadArchiveTitle', 'Скачать архив на устройство')}">
-            <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-            <span class="btn-archive-pill-content">
-              <svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span class="btn-archive-pill-text">${t('viewer.downloadArchive', 'Скачать')}</span>
-            </span>
-          </button>
-          <button type="button" class="btn-archive-pill btn-archive-pill-view" title="${t('viewer.viewArchiveTitle', 'Распаковать и просмотреть в галерее')}">
-            <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-            <span class="btn-archive-pill-content">
-              <svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              <span class="btn-archive-pill-text">${t('viewer.viewArchive', 'Просмотр')}</span>
-            </span>
-          </button>
-          <button type="button" class="btn-archive-pill btn-archive-pill-inspect" title="${t('viewer.inspectArchiveTitle', 'Проверить содержимое архива (файлы, ссылки, пароли)')}">
-            <div class="btn-archive-progress-fill" style="width: 0%;"></div>
-            <span class="btn-archive-pill-content">
-              <svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <span class="btn-archive-pill-text">${t('viewer.inspectArchive', 'Проверить архив')}</span>
-            </span>
-          </button>
-        </div>
-
-        <div class="sidebar-archive-live-status" style="display: none;">
-          <div class="sidebar-archive-live-bar-track">
-            <div class="sidebar-archive-live-bar-fill" style="width: 0%;"></div>
-          </div>
-          <div class="sidebar-archive-live-info">
-            <span class="sidebar-archive-live-phase"></span>
-            <span class="sidebar-archive-live-pct">0%</span>
-          </div>
-        </div>
-
-        <div class="sidebar-archive-summary" style="display: none;"></div>
-      `;
-
-      const btnDownload = card.querySelector('.btn-archive-pill-download');
-      const btnView = card.querySelector('.btn-archive-pill-view');
-      const btnInspect = card.querySelector('.btn-archive-pill-inspect');
-
-      const liveStatus = card.querySelector('.sidebar-archive-live-status');
-      const liveBarFill = card.querySelector('.sidebar-archive-live-bar-fill');
-      const livePhase = card.querySelector('.sidebar-archive-live-phase');
-      const livePct = card.querySelector('.sidebar-archive-live-pct');
-      const summaryEl = card.querySelector('.sidebar-archive-summary');
-
-      const dlFill = btnDownload.querySelector('.btn-archive-progress-fill');
-      const dlText = btnDownload.querySelector('.btn-archive-pill-text');
-      const dlIcon = btnDownload.querySelector('.btn-archive-icon');
-
-      const viewFill = btnView.querySelector('.btn-archive-progress-fill');
-      const viewText = btnView.querySelector('.btn-archive-pill-text');
-      const viewIcon = btnView.querySelector('.btn-archive-icon');
-
-      const inspFill = btnInspect.querySelector('.btn-archive-progress-fill');
-      const inspText = btnInspect.querySelector('.btn-archive-pill-text');
-      const inspIcon = btnInspect.querySelector('.btn-archive-icon');
-
-      let serverUnpackAbortController = null;
-      let isServerUnpacking = false;
-      let resetTimer = null;
-
-      const renderSummary = (data) => {
-        if (!summaryEl || !data) return;
-        const totalFiles = data.totalFiles || (data.fileTree ? data.fileTree.length : 0);
-        const links = data.scannedLinks || [];
-        const fileTree = data.fileTree || [];
-        const videos = fileTree.filter(f => /\.(mp4|webm|mov|mkv|avi|flv)$/i.test(f.name || ''));
-        const images = fileTree.filter(f => /\.(jpe?g|png|gif|webp|avif)$/i.test(f.name || ''));
-        const sizeMb = (data.archiveSize || data.totalBytes)
-          ? (Number(data.archiveSize || data.totalBytes) / (1024 * 1024)).toFixed(1) + ' MB'
-          : '';
-
-        let descText = '';
-        let iconHtml = '📁';
-        if (links.length > 0) {
-          iconHtml = '🔗';
-          const services = [...new Set(links.map(l => l.service || l.name || 'Облако'))].slice(0, 2).join(', ');
-          descText = `${t('vw.linksFoundSummary', 'Найдено ссылок')}: ${links.length} (${services})`;
-          summaryEl.className = 'sidebar-archive-summary has-links';
-        } else if (videos.length > 0 && images.length === 0) {
-          descText = `${t('vw.inArchive', 'В архиве')}: ${videos.length} ${t('vw.videosShort', 'видео')}${sizeMb ? ` (${sizeMb})` : ''}. ${t('vw.noExternalLinks', 'Внешних ссылок нет.')}`;
-          summaryEl.className = 'sidebar-archive-summary';
-        } else if (images.length > 0 && videos.length === 0) {
-          descText = `${t('vw.inArchive', 'В архиве')}: ${images.length} ${t('vw.imagesShort', 'изображений')}${sizeMb ? ` (${sizeMb})` : ''}. ${t('vw.noExternalLinks', 'Внешних ссылок нет.')}`;
-          summaryEl.className = 'sidebar-archive-summary';
-        } else if (totalFiles > 0) {
-          descText = `${t('vw.inArchive', 'В архиве')}: ${totalFiles} ${t('vw.filesCountShort', 'файлов')}${sizeMb ? ` (${sizeMb})` : ''}. ${t('vw.noExternalLinks', 'Внешних ссылок нет.')}`;
-          summaryEl.className = 'sidebar-archive-summary';
-        } else {
-          descText = t('vw.archiveEmptySummary', 'В архиве нет файлов или ссылок.');
-          summaryEl.className = 'sidebar-archive-summary';
-        }
-
-        const canOpen = Boolean(data.hasMedia || videos.length > 0 || images.length > 0);
-
-        summaryEl.innerHTML = `
-          <div class="sidebar-archive-summary-header">
-            <span class="sidebar-archive-summary-icon">${iconHtml}</span>
-            <span class="sidebar-archive-summary-text">${descText}</span>
-          </div>
-          <div class="sidebar-archive-summary-actions">
-            ${canOpen ? `<button type="button" class="btn-archive-summary-action btn-summary-open">${t('viewer.viewArchive', 'Просмотр')}</button>` : ''}
-            <button type="button" class="btn-archive-summary-action btn-summary-details">${t('vw.details', 'Детали')}</button>
-          </div>
-        `;
-        summaryEl.style.display = 'flex';
-
-        const openBtn = summaryEl.querySelector('.btn-summary-open');
-        if (openBtn) {
-          openBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            unpackAndViewArchive(url, cleanName);
-          });
-        }
-        const detailsBtn = summaryEl.querySelector('.btn-summary-details');
-        if (detailsBtn) {
-          detailsBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            openArchiveInspectModal(url, cleanName);
-          });
-        }
-      };
-
-      const resetToDefault = () => {
-        btnDownload.className = 'btn-archive-pill btn-archive-pill-download';
-        btnView.className = 'btn-archive-pill btn-archive-pill-view';
-        btnInspect.className = 'btn-archive-pill btn-archive-pill-inspect';
-
-        if (dlFill) dlFill.style.width = '0%';
-        if (viewFill) viewFill.style.width = '0%';
-        if (inspFill) inspFill.style.width = '0%';
-
-        if (dlText) dlText.textContent = t('viewer.downloadArchive', 'Скачать');
-        if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотр');
-        if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить архив');
-
-        if (dlIcon) dlIcon.outerHTML = `<svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-        if (viewIcon) viewIcon.outerHTML = `<svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
-        if (inspIcon) inspIcon.outerHTML = `<svg class="btn-archive-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
-
-        if (liveStatus) {
-          liveStatus.style.display = 'none';
-          liveStatus.className = 'sidebar-archive-live-status';
-        }
-        if (liveBarFill) liveBarFill.style.width = '0%';
-
-        isServerUnpacking = false;
-        serverUnpackAbortController = null;
-      };
-
-      // 1. Subscribe to downloadManager for direct browser streaming downloads
-      downloadManager.subscribeToUrl(url, (task) => {
-        if (!task || isServerUnpacking) return;
-        clearTimeout(resetTimer);
-
-        if (task.status === 'downloading' || task.status === 'saving') {
-          btnDownload.classList.remove('is-completed', 'is-error');
-          btnDownload.classList.add('is-downloading');
-
-          const curIcon = btnDownload.querySelector('.btn-archive-icon');
-          if (curIcon && !curIcon.classList.contains('btn-archive-spinner')) {
-            curIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
-          }
-
-          const pct = Math.round(task.percent || 0);
-          if (dlFill) dlFill.style.width = `${pct}%`;
-
-          if (liveStatus) {
-            liveStatus.style.display = 'flex';
-            liveStatus.className = 'sidebar-archive-live-status';
-          }
-          if (liveBarFill) liveBarFill.style.width = `${pct}%`;
-          if (livePct) livePct.textContent = `${pct}%`;
-
-          const loadedMb = (task.loaded / (1024 * 1024)).toFixed(1);
-          const totalMb = task.total > 0 ? (task.total / (1024 * 1024)).toFixed(1) + ' MB' : '';
-
-          if (task.status === 'saving') {
-            if (dlText) dlText.textContent = t('dl.saving', 'Сохранение...');
-            if (livePhase) livePhase.textContent = t('dl.saving', 'Сохранение файла на устройство...');
-          } else {
-            const speedText = task.speed > 0 ? ` · ${formatBytes(task.speed)}/s` : '';
-            if (dlText) dlText.textContent = `${pct}%`;
-            if (livePhase) {
-              livePhase.textContent = totalMb
-                ? `${t('vw.downloading', 'Загрузка')}: ${loadedMb} / ${totalMb}${speedText}`
-                : `${t('vw.downloading', 'Загрузка')}: ${loadedMb} MB${speedText}`;
-            }
-          }
-        } else if (task.status === 'completed') {
-          btnDownload.classList.remove('is-downloading', 'is-error');
-          btnDownload.classList.add('is-completed');
-          if (dlFill) dlFill.style.width = '100%';
-          if (dlText) dlText.textContent = t('vw.archiveDownloadedShort', 'Скачано ✓');
-          const curIcon = btnDownload.querySelector('.btn-archive-icon');
-          if (curIcon) curIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
-
-          if (liveStatus) {
-            liveStatus.style.display = 'flex';
-            liveStatus.className = 'sidebar-archive-live-status is-completed';
-          }
-          if (liveBarFill) liveBarFill.style.width = '100%';
-          if (livePct) livePct.textContent = '100%';
-          if (livePhase) livePhase.textContent = t('dl.toastSaved', 'Архив сохранён на устройство ✓');
-
-          resetTimer = setTimeout(resetToDefault, 4000);
-        } else if (task.status === 'error') {
-          btnDownload.classList.remove('is-downloading');
-          btnDownload.classList.add('is-error');
-          if (dlFill) dlFill.style.width = '0%';
-          if (dlText) dlText.textContent = t('vw.error', 'Ошибка');
-
-          if (liveStatus) {
-            liveStatus.style.display = 'flex';
-            liveStatus.className = 'sidebar-archive-live-status is-error';
-          }
-          if (livePhase) livePhase.textContent = task.errorMessage || t('dl.error', 'Ошибка скачивания');
-          resetTimer = setTimeout(resetToDefault, 4000);
-        } else if (task.status === 'cancelled') {
-          resetToDefault();
-        }
-      });
-
-      // 2. Subscribe to centralized archive job tracker (server unpacking / inspection)
-      subscribeArchiveJob(url, (state) => {
-        if (!state) return;
-        clearTimeout(resetTimer);
-
-        if (state.summary) {
-          renderSummary(state.summary);
-        }
-
-        if (state.active) {
-          if (liveStatus) {
-            liveStatus.style.display = 'flex';
-            liveStatus.className = 'sidebar-archive-live-status';
-          }
-
-          const pct = Math.max(5, state.percent || 0);
-          if (liveBarFill) liveBarFill.style.width = `${pct}%`;
-          if (livePct) livePct.textContent = `${pct}%`;
-
-          if (state.phase === 'download') {
-            const isInspectDownload = state.action === 'inspect';
-            if (isInspectDownload) {
-              btnInspect.classList.remove('is-completed', 'is-error');
-              btnInspect.classList.add('is-inspecting');
-              const iIcon = btnInspect.querySelector('.btn-archive-icon');
-              if (iIcon && !iIcon.classList.contains('btn-archive-spinner')) {
-                iIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
-              }
-              if (inspFill) inspFill.style.width = `${pct}%`;
-              if (inspText) inspText.textContent = `${pct}%`;
-
-              // Keep btnView clean in its idle state
-              btnView.classList.remove('is-downloading', 'is-extracting', 'is-completed', 'is-error');
-              if (viewFill) viewFill.style.width = '0%';
-              if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотр');
-              const vIcon = btnView.querySelector('.btn-archive-icon');
-              if (vIcon && vIcon.classList.contains('btn-archive-spinner')) {
-                vIcon.outerHTML = ARCHIVE_PLAY_ICON_SVG;
-              }
-            } else {
-              btnView.classList.remove('is-completed', 'is-error', 'is-extracting');
-              btnView.classList.add('is-downloading');
-              const vIcon = btnView.querySelector('.btn-archive-icon');
-              if (vIcon && !vIcon.classList.contains('btn-archive-spinner')) {
-                vIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
-              }
-              if (viewFill) viewFill.style.width = `${pct}%`;
-              if (viewText) viewText.textContent = `${pct}%`;
-
-              // Keep btnInspect clean
-              btnInspect.classList.remove('is-inspecting');
-              if (inspFill) inspFill.style.width = '0%';
-              if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить архив');
-              const iIcon = btnInspect.querySelector('.btn-archive-icon');
-              if (iIcon && iIcon.classList.contains('btn-archive-spinner')) {
-                iIcon.outerHTML = ARCHIVE_SEARCH_ICON_SVG;
-              }
-            }
-
-            const recMb = (state.received / (1024 * 1024)).toFixed(1);
-            const totMb = state.total > 0 ? (state.total / (1024 * 1024)).toFixed(1) + ' MB' : '';
-            if (livePhase) {
-              const label = isInspectDownload
-                ? t('vw.archiveDownloadingInspect', 'Скачивание для проверки')
-                : t('vw.archiveDownloading', 'Загрузка на сервер');
-              livePhase.textContent = totMb
-                ? `${label}: ${recMb} / ${totMb} (${pct}%)`
-                : `${label}: ${recMb} MB`;
-            }
-          } else if (state.phase === 'extract') {
-            btnView.classList.remove('is-completed', 'is-error', 'is-downloading');
-            btnView.classList.add('is-extracting');
-            const vIcon = btnView.querySelector('.btn-archive-icon');
-            if (vIcon && !vIcon.classList.contains('btn-archive-spinner')) {
-              vIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
-            }
-            if (viewFill) viewFill.style.width = `${pct}%`;
-            if (viewText) viewText.textContent = `${pct}%`;
-
-            btnInspect.classList.remove('is-inspecting');
-            if (inspFill) inspFill.style.width = '0%';
-            if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить архив');
-            const iIcon = btnInspect.querySelector('.btn-archive-icon');
-            if (iIcon && iIcon.classList.contains('btn-archive-spinner')) {
-              iIcon.outerHTML = ARCHIVE_SEARCH_ICON_SVG;
-            }
-
-            if (livePhase) {
-              if (state.totalFiles > 0) {
-                const fileHint = state.currentFile ? ` · ${state.currentFile}` : '';
-                livePhase.textContent = `${t('vw.archiveExtracting', 'Распаковка')}: ${state.extractedFiles || 0} / ${state.totalFiles} файлов (${pct}%)${fileHint}`;
-              } else {
-                livePhase.textContent = t('vw.archiveExtracting', 'Распаковка архива на сервере...');
-              }
-            }
-          } else if (state.phase === 'inspect') {
-            btnInspect.classList.remove('is-completed', 'is-error');
-            btnInspect.classList.add('is-inspecting');
-            const iIcon = btnInspect.querySelector('.btn-archive-icon');
-            if (iIcon && !iIcon.classList.contains('btn-archive-spinner')) {
-              iIcon.outerHTML = ARCHIVE_SPINNER_ICON_SVG;
-            }
-            if (inspFill) inspFill.style.width = `${pct}%`;
-            if (inspText) inspText.textContent = `${pct}%`;
-
-            // Keep btnView clean
-            btnView.classList.remove('is-downloading', 'is-extracting', 'is-completed', 'is-error');
-            if (viewFill) viewFill.style.width = '0%';
-            if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотр');
-            const vIcon = btnView.querySelector('.btn-archive-icon');
-            if (vIcon && vIcon.classList.contains('btn-archive-spinner')) {
-              vIcon.outerHTML = ARCHIVE_PLAY_ICON_SVG;
-            }
-
-            if (livePhase) {
-              const fileHint = state.currentFile ? ` · ${state.currentFile}` : '';
-              if (state.totalFiles > 0) {
-                livePhase.textContent = `${t('vw.inspectScanning', 'Анализ')}: ${state.scannedFiles || 0} / ${state.totalFiles} файлов (${pct}%)${fileHint}`;
-              } else {
-                livePhase.textContent = `${t('vw.archiveAnalyzing', 'Анализ архива: поиск ссылок и файлов...')}${fileHint}`;
-              }
-            }
-          }
-        } else if (state.completed) {
-          if (state.phase === 'unpack' || state.phase === 'extract' || state.phase === 'completed') {
-            btnView.classList.remove('is-downloading', 'is-extracting');
-            btnView.classList.add('is-completed');
-            if (viewFill) viewFill.style.width = '100%';
-            if (viewText) viewText.textContent = t('vw.openedInViewer', 'Открыто ✓');
-            const vIcon = btnView.querySelector('.btn-archive-icon');
-            if (vIcon) vIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
-
-            btnInspect.classList.remove('is-inspecting');
-            if (inspFill) inspFill.style.width = '0%';
-            if (inspText) inspText.textContent = t('viewer.inspectArchive', 'Проверить архив');
-            const iIcon = btnInspect.querySelector('.btn-archive-icon');
-            if (iIcon && iIcon.classList.contains('btn-archive-spinner')) {
-              iIcon.outerHTML = ARCHIVE_SEARCH_ICON_SVG;
-            }
-
-            if (liveStatus) {
-              liveStatus.style.display = 'flex';
-              liveStatus.className = 'sidebar-archive-live-status is-completed';
-            }
-            if (liveBarFill) liveBarFill.style.width = '100%';
-            if (livePct) livePct.textContent = '100%';
-            if (livePhase) livePhase.textContent = t('vw.archiveOpenedInViewer', 'Архив распакован и открыт в галерее ✓');
-            resetTimer = setTimeout(resetToDefault, 4000);
-          } else if (state.phase === 'inspected') {
-            btnInspect.classList.remove('is-inspecting');
-            btnInspect.classList.add('is-completed');
-            if (inspFill) inspFill.style.width = '100%';
-            if (inspText) inspText.textContent = t('vw.inspectedDone', 'Проверено ✓');
-            const iIcon = btnInspect.querySelector('.btn-archive-icon');
-            if (iIcon) iIcon.outerHTML = ARCHIVE_CHECK_ICON_SVG;
-
-            // Reset btnView to ensure no leftover spinner or download classes
-            btnView.classList.remove('is-downloading', 'is-extracting', 'is-completed', 'is-error');
-            if (viewFill) viewFill.style.width = '0%';
-            if (viewText) viewText.textContent = t('viewer.viewArchive', 'Просмотр');
-            const vIcon = btnView.querySelector('.btn-archive-icon');
-            if (vIcon && vIcon.classList.contains('btn-archive-spinner')) {
-              vIcon.outerHTML = ARCHIVE_PLAY_ICON_SVG;
-            }
-
-            if (liveStatus) {
-              liveStatus.style.display = 'flex';
-              liveStatus.className = 'sidebar-archive-live-status is-completed';
-            }
-            if (liveBarFill) liveBarFill.style.width = '100%';
-            if (livePct) livePct.textContent = '100%';
-            if (livePhase) livePhase.textContent = t('vw.inspectedDone', 'Проверено ✓');
-            resetTimer = setTimeout(resetToDefault, 3500);
-          }
-        } else if (state.error) {
-          if (liveStatus) {
-            liveStatus.style.display = 'flex';
-            liveStatus.className = 'sidebar-archive-live-status is-error';
-          }
-          if (livePhase) livePhase.textContent = state.error || t('vw.archiveFailed', 'Ошибка при обработке архива');
-          resetTimer = setTimeout(resetToDefault, 4000);
-        }
-      });
-
-      // Button event listeners
-      btnDownload.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-
-        const activeTask = downloadManager.getTaskByUrl(url);
-        if (activeTask && (activeTask.status === 'downloading' || activeTask.status === 'saving')) {
-          downloadManager.cancelDownload(activeTask.id);
-          resetToDefault();
-          return;
-        }
-
-        if (isServerUnpacking) {
-          if (serverUnpackAbortController) {
-            serverUnpackAbortController.abort();
-          }
-          resetToDefault();
-          showToast(t('vw.downloadCancelled', 'Скачивание отменено'));
-          return;
-        }
-
-        const isUnpackEnabled = state.settings?.unpackArchivesOnDownload === true;
-        const isExtractable = /\.(zip|rar|7z)$/i.test(cleanName) || url.toLowerCase().includes('.zip');
-
-        if (isUnpackEnabled && isExtractable) {
-          isServerUnpacking = true;
-          serverUnpackAbortController = new AbortController();
-          activeArchiveDownloads.set(url, serverUnpackAbortController);
-
-          notifyArchiveJob(url, { active: true, phase: 'download', percent: 5, received: 0, total: 0 });
-          startArchivePolling(url);
-
-          try {
-            const res = await fetchArchiveList(url);
-            stopArchivePolling(url);
-
-            if (serverUnpackAbortController.signal.aborted) {
-              resetToDefault();
-              return;
-            }
-
-            if (res && res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
-              notifyArchiveJob(url, { active: false, completed: true, phase: 'unpack', percent: 100 });
-              if (livePhase) livePhase.textContent = t('vw.savingFiles', 'Сохранение файлов ({n})...').replace('{n}', String(res.albumItems.length));
-
-              for (let i = 0; i < res.albumItems.length; i++) {
-                if (serverUnpackAbortController.signal.aborted) break;
-                const item = res.albumItems[i];
-                const downloadUrl = `${item.fileUrl}&download=1`;
-                const a = document.createElement('a');
-                a.href = downloadUrl;
-                a.download = item.title || `file_${i + 1}.${item.fileExt || 'jpg'}`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                if (res.albumItems.length > 1) {
-                  await new Promise(r => setTimeout(r, 200));
-                }
-              }
-
-              showToast(t('vw.archiveExtractedAndSaved', 'Архив распакован, файлы ({n} шт.) сохранены на устройство').replace('{n}', String(res.albumItems.length)));
-              return;
-            }
-          } catch (err) {
-            stopArchivePolling(url);
-            if (err.name === 'AbortError') {
-              resetToDefault();
-              return;
-            }
-          } finally {
-            activeArchiveDownloads.delete(url);
-          }
-        }
-
-        // Direct in-page streaming download
-        downloadManager.startDownload({
-          url,
-          filename: cleanName,
-          size: Number(size) || 0,
-          isZip: true
-        });
-      });
-
-      btnView.addEventListener('click', (e) => {
-        e.stopPropagation();
-        unpackAndViewArchive(url, cleanName);
-      });
-
-      btnInspect.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openArchiveInspectModal(url, cleanName);
-      });
-
-      return card;
-    }
-
-    function renderArchivePostCard(targetPost) {
-      if (!mediaWrapper) return;
-      mediaWrapper.innerHTML = '';
-
-      const card = document.createElement('div');
-      card.className = 'archive-post-card';
-
-      const archiveCount = Array.isArray(targetPost.archiveUrls) ? targetPost.archiveUrls.length : 1;
-      const descText = t('vw.archiveCardDesc', 'Пост содержит архив с материалами ({n} шт.). Нажмите кнопку ниже для сохранения на устройство.').replace('{n}', String(archiveCount));
-      const titleText = targetPost.title || t('vw.archiveCardTitle', 'Архив файлов');
-
-      card.innerHTML = `
-        <div class="archive-card-icon-wrap">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 8v13H3V8"/>
-            <path d="M1 3h22v5H1z"/>
-            <path d="M10 12h4"/>
-          </svg>
-        </div>
-        <div class="archive-card-header">
-          <div class="archive-card-title">${titleText}</div>
-          <div class="archive-card-desc">${descText}</div>
-        </div>
-        <div class="archive-card-buttons"></div>
-      `;
-
-      const buttonsContainer = card.querySelector('.archive-card-buttons');
-      if (Array.isArray(targetPost.archiveUrls) && targetPost.archiveUrls.length > 0) {
-        targetPost.archiveUrls.forEach((url, idx) => {
-          const name = (Array.isArray(targetPost.archiveNames) && targetPost.archiveNames[idx]) || `archive_${idx + 1}.zip`;
-          const size = (Array.isArray(targetPost.archiveSizes) && targetPost.archiveSizes[idx]) || 0;
-          const archiveBlock = createArchiveCardComponent({ url, name, size, isSidebar: false });
-          buttonsContainer.appendChild(archiveBlock);
-        });
-      }
-
-      mediaWrapper.appendChild(card);
-    }
-
-    function renderSidebarArchives(targetPost) {
-      const section = document.getElementById('viewerSidebarArchivesSection');
-      const countEl = document.getElementById('viewerSidebarArchivesCount');
-      const listEl = document.getElementById('viewerSidebarArchivesList');
-      if (!section || !listEl) return;
-
-      if (!targetPost || !targetPost.isArchive || !Array.isArray(targetPost.archiveUrls) || targetPost.archiveUrls.length === 0) {
-        section.style.display = 'none';
-        listEl.innerHTML = '';
-        return;
-      }
-
-      section.style.display = 'block';
-      if (countEl) countEl.textContent = String(targetPost.archiveUrls.length);
-      listEl.innerHTML = '';
-
-      targetPost.archiveUrls.forEach((url, idx) => {
-        const name = (Array.isArray(targetPost.archiveNames) && targetPost.archiveNames[idx]) || `archive_${idx + 1}.zip`;
-        const size = (Array.isArray(targetPost.archiveSizes) && targetPost.archiveSizes[idx]) || 0;
-        const archiveBlock = createArchiveCardComponent({ url, name, size, isSidebar: true });
-        listEl.appendChild(archiveBlock);
-      });
-    }
-
-    /* ── Cloud storage detection and link extraction ── */
-    const CLOUD_PROVIDERS = [
-      { id: 'gdrive', name: 'Google Drive', match: /drive\.google\.com/i },
-      { id: 'mega', name: 'MEGA', match: /mega\.(?:nz|co\.nz)/i },
-      { id: 'yandex', name: 'Яндекс Диск', match: /(?:disk\.yandex\.|yadi\.sk)/i },
-      { id: 'dropbox', name: 'Dropbox', match: /dropbox\.com/i },
-      { id: 'mediafire', name: 'MediaFire', match: /mediafire\.com/i },
-      { id: 'terabox', name: 'TeraBox', match: /terabox(?:app)?\.com/i },
-      { id: 'onedrive', name: 'OneDrive', match: /(?:onedrive\.live\.com|1drv\.ms)/i },
-      { id: 'box', name: 'Box', match: /box\.com/i },
-      { id: 'cloud', name: 'Облако', match: /(?:anonfiles\.com|gofile\.io|pixeldrain\.com|qiwi\.gg|catbox\.moe|workupload\.com|fastupload\.io)/i },
-    ];
-
-    function classifyCloudUrl(url) {
-      if (!url || typeof url !== 'string') return null;
-      for (const p of CLOUD_PROVIDERS) {
-        if (p.match.test(url)) return p;
-      }
-      return null;
-    }
-
-    function extractPasswordFromText(text) {
-      if (!text || typeof text !== 'string') return null;
-      const m = text.match(/(?:pass(?:word)?|пароль|pwd|code|код)\s*[:=–—\-]\s*([^\s<>"'\n]+)/i);
-      return m ? m[1].replace(/^[\[({"'`]+|[\])}"':;.,`]+$/g, '') : null;
-    }
-
-    function extractCloudLinks(post) {
-      const links = [];
-      const seen = new Set();
-      const rawText = String(post?.content || post?.description || currentPost?.content || currentPost?.description || '');
-      const globalPassword = extractPasswordFromText(rawText);
-
-      // Inspected links from downloaded/analyzed archive
-      if (Array.isArray(post?.inspectedLinks)) {
-        for (const l of post.inspectedLinks) {
-          if (l && l.url && !seen.has(l.url)) {
-            seen.add(l.url);
-            links.push({
-              url: l.url,
-              name: l.service || 'Облако',
-              id: l.serviceId || 'cloud',
-              password: l.password || globalPassword || null,
-              sourceFile: l.sourceFile || null
-            });
-          }
-        }
-      }
-
-      // Pre-parsed cloud links
-      if (Array.isArray(post?.cloudLinks)) {
-        for (const l of post.cloudLinks) {
-          if (l && l.url && !seen.has(l.url)) {
-            seen.add(l.url);
-            links.push({
-              url: l.url,
-              name: l.name || 'Облако',
-              id: l.id || 'cloud',
-              password: l.password || globalPassword || null,
-              sourceFile: null
-            });
-          }
-        }
-      }
-
-      // Extract from raw description/content
-      if (rawText) {
-        const urlMatches = rawText.match(/https?:\/\/[^\s<>"']+/gi) || [];
-        for (const url of urlMatches) {
-          const cleanUrl = url.replace(/[,;.)>]+$/, '');
-          const svc = classifyCloudUrl(cleanUrl);
-          if (svc && !seen.has(cleanUrl)) {
-            seen.add(cleanUrl);
-            links.push({
-              url: cleanUrl,
-              name: svc.name,
-              id: svc.id,
-              password: globalPassword,
-              sourceFile: null
-            });
-          }
-        }
-      }
-
-      return links;
-    }
-
-    function renderSidebarCloudLinks(targetPost) {
-      const section = document.getElementById('viewerSidebarCloudLinksSection');
-      const countEl = document.getElementById('viewerSidebarCloudLinksCount');
-      const listEl = document.getElementById('viewerSidebarCloudLinksList');
-      if (!section || !listEl) return [];
-
-      const links = extractCloudLinks(targetPost);
-      if (!links || links.length === 0) {
-        section.style.display = 'none';
-        listEl.innerHTML = '';
-        return [];
-      }
-
-      section.style.display = 'block';
-      if (countEl) countEl.textContent = String(links.length);
-      listEl.innerHTML = '';
-
-      links.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'sidebar-cloud-card';
-
-        let displayUrl = item.url;
-        try {
-          const parsed = new URL(item.url);
-          displayUrl = parsed.hostname + (parsed.pathname.length > 24 ? parsed.pathname.slice(0, 24) + '…' : parsed.pathname);
-        } catch {}
-
-        card.innerHTML = `
-          <div class="cloud-card-header">
-            <span class="cloud-card-service-badge" data-service="${item.id}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-              ${item.name}
-            </span>
-            ${item.sourceFile ? `<span class="cloud-card-source-tag" title="${t('vw.foundIn', 'Найдено в:')} ${item.sourceFile}">${item.sourceFile}</span>` : ''}
-          </div>
-          <div class="cloud-card-url" title="${item.url}">${displayUrl}</div>
-          ${item.password ? `
-            <div class="cloud-card-pass-row">
-              <span class="cloud-card-pass-label">${t('vw.password', 'Пароль:')}</span>
-              <code class="cloud-card-pass-code">${item.password}</code>
-              <button type="button" class="btn-copy-pass" title="${t('viewer.copyPassword', 'Скопировать пароль')}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-            </div>
-          ` : ''}
-          <div class="cloud-card-actions">
-            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="cloud-card-btn cloud-card-btn-open">
-              <span>${t('vw.openLink', 'Открыть')}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            </a>
-            <button type="button" class="cloud-card-btn cloud-card-btn-copy" title="${t('viewer.copyLink', 'Копировать ссылку')}">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              <span>${t('viewer.copyLink', 'Копировать')}</span>
-            </button>
-          </div>
-        `;
-
-        const copyBtn = card.querySelector('.cloud-card-btn-copy');
-        if (copyBtn) {
-          copyBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            haptic(10);
-            copyToClipboard(item.url);
-            const span = copyBtn.querySelector('span');
-            if (span) {
-              const original = span.textContent;
-              span.textContent = t('viewer.copied', 'Скопировано!');
-              setTimeout(() => { span.textContent = original; }, 1800);
-            }
-          });
-        }
-
-        const copyPassBtn = card.querySelector('.btn-copy-pass');
-        if (copyPassBtn && item.password) {
-          copyPassBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            haptic(10);
-            copyToClipboard(item.password);
-            showToast(t('vw.passCopied', 'Пароль скопирован: ') + item.password);
-          });
-        }
-
-        listEl.appendChild(card);
-      });
-
-      return links;
-    }
-
-  function formatSafePostContent(rawText, excludedCloudUrls = []) {
-    if (!rawText || typeof rawText !== 'string') return '';
-    const trimmed = rawText.trim();
-    if (!trimmed) return '';
-
-    const isHtml = /<[a-z][\s\S]*>/i.test(trimmed);
-
-    if (isHtml) {
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(trimmed, 'text/html');
-        const forbidden = doc.querySelectorAll('script, iframe, object, embed, style, form, input, button, svg, meta, link');
-        forbidden.forEach(el => el.remove());
-
-        const allElements = doc.body.querySelectorAll('*');
-        allElements.forEach(el => {
-          Array.from(el.attributes).forEach(attr => {
-            if (attr.name.startsWith('on') || attr.name.toLowerCase() === 'style') {
-              el.removeAttribute(attr.name);
-            }
-          });
-          if (el.tagName === 'A') {
-            const href = el.getAttribute('href') || '';
-            if (/^(javascript:|data:|vbscript:)/i.test(href)) {
-              el.removeAttribute('href');
-            } else {
-              el.setAttribute('target', '_blank');
-              el.setAttribute('rel', 'noopener noreferrer');
-            }
-          }
-        });
-
-        // Strip cloud storage links and empty container blocks
-        if (excludedCloudUrls.length > 0) {
-          const excludedSet = new Set(excludedCloudUrls.map(u => u.toLowerCase()));
-          const aTags = doc.body.querySelectorAll('a[href]');
-          aTags.forEach(a => {
-            const href = (a.getAttribute('href') || '').toLowerCase().replace(/[,;.)>]+$/, '');
-            if (excludedSet.has(href) || classifyCloudUrl(href)) {
-              const p = a.parentElement;
-              if (p && (p.tagName === 'P' || p.tagName === 'DIV' || p.tagName === 'LI')) {
-                const textRest = p.textContent.replace(a.textContent, '').trim();
-                if (!textRest || textRest.length < 25) {
-                  p.remove();
-                  return;
-                }
-              }
-              a.remove();
-            }
-          });
-
-          // Strip standalone password blocks
-          const pTags = doc.body.querySelectorAll('p, div');
-          pTags.forEach(p => {
-            const t = p.textContent.trim();
-            if (/^(?:pass(?:word)?|пароль|pwd|code|код)\s*[:=–—\-]\s*[^\s<>"'\n]+$/i.test(t)) {
-              p.remove();
-            }
-          });
-        }
-
-        // Clean up empty or redundant container blocks (<p><br></p>, <p>&nbsp;</p>, etc.)
-        const blockTags = doc.body.querySelectorAll('p, div');
-        blockTags.forEach(block => {
-          const text = block.textContent.replace(/[\s\u00a0\u200B\u200C\u200D\uFEFF]+/g, '');
-          const hasMedia = Boolean(block.querySelector('img, video, audio, a[href]'));
-          if (!text && !hasMedia) {
-            block.remove();
-          }
-        });
-
-        // Verify that the parsed body contains visible text or links/media
-        const textContent = doc.body.textContent.replace(/[\s\u00a0\u200B\u200C\u200D\uFEFF]+/g, '');
-        const hasMediaOrLinks = Boolean(doc.body.querySelector('a[href], img, video, audio'));
-        if (!textContent && !hasMediaOrLinks) {
-          return '';
-        }
-
-        // Clean redundant consecutive <br> tags
-        let inner = doc.body.innerHTML;
-        inner = inner.replace(/(?:<br\s*\/?>\s*){3,}/gi, '<br><br>');
-        return inner.trim();
-      } catch {}
-    }
-
-    const escapeHtml = (str) => str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-
-    // Normalize unicode whitespace
-    let cleanText = trimmed.replace(/[\u00a0\u200B\u200C\u200D\uFEFF]/g, ' ');
-
-    if (excludedCloudUrls.length > 0) {
-      for (const u of excludedCloudUrls) {
-        const escapedUrl = u.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const lineRegex = new RegExp(`(?:^|\\n)[^\\n]*?${escapedUrl}[^\\n]*(?:\\n|$)`, 'gi');
-        cleanText = cleanText.replace(lineRegex, '\n');
-      }
-      cleanText = cleanText.replace(/(?:^|\n)(?:pass(?:word)?|пароль|pwd|code|код)\s*[:=–—\-]\s*[^\s<>"'\n]+(?:\n|$)/gi, '\n');
-    }
-
-    if (!cleanText.trim()) return '';
-
-    const escaped = escapeHtml(cleanText);
-    const urlPattern = /(https?:\/\/[^\s<>"']+)/g;
-    const withLinks = escaped.replace(urlPattern, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
-    const normalizedNewlines = withLinks.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n{3,}/g, '\n\n');
-    return normalizedNewlines.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
-  }
-
-  function renderSidebarContent(post, excludedUrls = []) {
-    const section = document.getElementById('viewerSidebarContentSection');
-    const contentEl = document.getElementById('viewerPostContent');
-    if (!section || !contentEl) return;
-
-    const rawContent = post?.content || post?.description || currentPost?.content || currentPost?.description || '';
-    if (!rawContent || !String(rawContent).trim()) {
-      section.style.display = 'none';
-      contentEl.innerHTML = '';
-      return;
-    }
-
-    const safeHtml = formatSafePostContent(String(rawContent), excludedUrls);
-    if (!safeHtml || !safeHtml.trim()) {
-      section.style.display = 'none';
-      contentEl.innerHTML = '';
-      return;
-    }
-
-    contentEl.innerHTML = safeHtml;
-    section.style.display = 'block';
-  }
-
-  async function unpackAndViewArchive(url, name) {
-    if (!currentPost) return;
-    const cleanName = name || (url.split('?')[0].split('/').pop()) || 'archive.zip';
-    haptic(10);
-
-    const modal = document.getElementById('archiveInspectModal');
-    if (modal) modal.style.display = 'none';
-
-    notifyArchiveJob(url, { active: true, action: 'view', phase: 'download', percent: 0, received: 0, total: 0 });
-    startArchivePolling(url);
-
-    try {
-      const res = await fetchArchiveList(url);
-      stopArchivePolling(url);
-      if (res && res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
-        notifyArchiveJob(url, { active: false, action: 'view', completed: true, phase: 'unpack', percent: 100 });
-        currentPost.albumItems = res.albumItems;
-        currentPost.albumCount = res.albumItems.length;
-        currentPost.isAlbum = true;
-        currentAlbumIndex = 0;
-        currentPost.fileUrl = res.albumItems[0].fileUrl;
-        currentPost.sampleUrl = res.albumItems[0].sampleUrl;
-        currentPost.previewUrl = res.albumItems[0].previewUrl;
-        currentPost.isVideo = Boolean(res.albumItems[0].isVideo);
-        renderViewerPost(false);
-        renderSidebar(currentPost);
-        showToast(t('vw.archiveOpenedInViewer', 'Архив распакован: открыто {n} файлов').replace('{n}', String(res.albumItems.length)));
-      } else {
-        notifyArchiveJob(url, { active: false, action: 'view', error: res?.error || 'No media', phase: 'unpack' });
-        showToast(res?.error || t('vw.archiveNoMedia', 'В архиве не найдено поддерживаемых медиафайлов'), 3500);
-      }
-    } catch (err) {
-      stopArchivePolling(url);
-      notifyArchiveJob(url, { active: false, action: 'view', error: err.message, phase: 'unpack' });
-      showToast(err.message || t('vw.archiveUnpackFailed', 'Ошибка при распаковке архива'), 3500);
-    }
-  }
-
-  /* ── Archive Inspection Modal ── */
-  function isArchiveInspectModalOpen() {
-    const modal = document.getElementById('archiveInspectModal');
-    return modal && modal.style.display !== 'none';
-  }
-
-  function closeArchiveInspectModal() {
-    const modal = document.getElementById('archiveInspectModal');
-    if (modal) modal.style.display = 'none';
-  }
-
-  async function openArchiveInspectModal(url, name) {
-    const modal = document.getElementById('archiveInspectModal');
-    const bodyEl = document.getElementById('archiveInspectBody');
-    if (!modal || !bodyEl) return;
-
-    const cleanName = name || (url.split('?')[0].split('/').pop()) || 'archive.zip';
-    modal.style.display = 'flex';
-    haptic(10);
-
-    bodyEl.innerHTML = `
-      <div class="archive-inspect-loading">
-        <div class="loading-spinner"></div>
-        <div class="archive-inspect-loading-text" id="archiveInspectStatusText">${t('vw.inspectScanning', 'Подготовка архива...')}</div>
-        <div class="archive-inspect-progress-wrap" id="archiveInspectProgressWrap">
-          <div class="archive-inspect-progress-bar-track">
-            <div class="archive-inspect-progress-bar-fill" id="archiveInspectProgressBar" style="width: 5%;"></div>
-          </div>
-          <div class="archive-inspect-progress-details">
-            <span id="archiveInspectProgressPct">0%</span>
-            <span id="archiveInspectProgressBytes">${t('vw.inspectingPhase', 'Инициализация...')}</span>
-          </div>
-        </div>
-        <div class="archive-inspect-loading-sub">${cleanName}</div>
-      </div>
-    `;
-
-    notifyArchiveJob(url, { active: true, action: 'inspect', phase: 'inspect', percent: 5 });
-    startArchivePolling(url);
-
-    const unsubscribe = subscribeArchiveJob(url, (status) => {
-      if (!status) return;
-      const wrap = document.getElementById('archiveInspectProgressWrap');
-      const bar = document.getElementById('archiveInspectProgressBar');
-      const statusText = document.getElementById('archiveInspectStatusText');
-      const pctEl = document.getElementById('archiveInspectProgressPct');
-      const bytesEl = document.getElementById('archiveInspectProgressBytes');
-      if (wrap) wrap.style.display = 'block';
-
-      if (status.active) {
-        if (status.phase === 'download') {
-          if (statusText) statusText.textContent = t('vw.archiveDownloading', 'Загрузка архива на сервер...');
-          const pct = Math.max(5, status.percent || (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 5));
-          if (bar) bar.style.width = `${pct}%`;
-          if (pctEl) pctEl.textContent = `${pct}%`;
-          if (bytesEl && status.received) {
-            const recMb = (status.received / (1024 * 1024)).toFixed(1);
-            const totMb = status.total > 0 ? (status.total / (1024 * 1024)).toFixed(1) + ' MB' : '';
-            bytesEl.textContent = totMb ? `${recMb} / ${totMb}` : `${recMb} MB`;
-          }
-        } else if (status.phase === 'inspect' || status.phase === 'extract') {
-          const pct = Math.max(10, status.percent || 15);
-          if (bar) bar.style.width = `${pct}%`;
-          if (pctEl) pctEl.textContent = `${pct}%`;
-          if (status.totalFiles > 0) {
-            if (statusText) statusText.textContent = `${t('vw.inspectScanning', 'Анализ файлов')}: ${status.scannedFiles || 0} / ${status.totalFiles} (${pct}%)`;
-            if (bytesEl) bytesEl.textContent = status.currentFile ? status.currentFile.split('/').pop() : t('vw.inspectingPhase', 'Сканирование...');
-          } else {
-            if (statusText) statusText.textContent = t('vw.archiveAnalyzing', 'Анализ файлов, поиск ссылок и PDF...');
-            if (bytesEl) bytesEl.textContent = t('vw.inspectingPhase', 'Сканирование...');
-          }
-        }
-      } else if (status.completed) {
-        if (bar) bar.style.width = '100%';
-        if (pctEl) pctEl.textContent = '100%';
-        if (bytesEl) bytesEl.textContent = t('vw.inspectedDone', 'Завершено ✓');
-        if (statusText) statusText.textContent = t('vw.archiveAnalyzingDone', 'Анализ завершен');
-      }
-    });
-
-    try {
-      const result = await fetchArchiveInspect(url);
-      stopArchivePolling(url);
-      unsubscribe();
-      notifyArchiveJob(url, { active: false, action: 'inspect', completed: true, phase: 'inspected', summary: result });
-
-      function renderInspectError(errMsg) {
-        const isKemonoBlocked = (url.includes('kemono.cr') || url.includes('kemono.su')) &&
-          (errMsg.includes('Сервер архивов недоступен') || errMsg.includes('прокси') || errMsg.includes('fetch failed'));
-
-        bodyEl.innerHTML = `
-          <div class="archive-inspect-error" style="text-align: center; padding: 20px 14px;">
-            <div class="archive-inspect-error-msg" style="margin-bottom: 16px; line-height: 1.5;">${errMsg}</div>
-            <div class="archive-inspect-error-actions" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
-              <button type="button" class="btn-secondary btn-sm" id="btnRetryArchiveInspect">${t('vw.retry', 'Повторить попытку')}</button>
-              <a href="${url}" download="${cleanName}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-sm" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                ${t('vw.downloadDirectly', 'Скачать напрямую')}
-              </a>
-              ${isKemonoBlocked ? `
-                <button type="button" class="btn-secondary btn-sm" id="btnOpenProxySettings" style="display: inline-flex; align-items: center; gap: 6px;">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                  ${t('vw.setupProxy', 'Настроить прокси')}
-                </button>
-              ` : ''}
-            </div>
-          </div>
-        `;
-
-        const retryBtn = bodyEl.querySelector('#btnRetryArchiveInspect');
-        if (retryBtn) {
-          retryBtn.addEventListener('click', () => openArchiveInspectModal(url, name));
-        }
-
-        const proxyBtn = bodyEl.querySelector('#btnOpenProxySettings');
-        if (proxyBtn) {
-          proxyBtn.addEventListener('click', () => {
-            closeArchiveInspectModal();
-            openSettingsModal();
-            switchSettingsTab('proxy');
-            setTimeout(() => {
-              document.getElementById('inputKemonoProxy')?.focus();
-            }, 250);
-          });
-        }
-      }
-
-      if (!result || !result.success) {
-        const errMsg = result?.error || t('vw.inspectFailed', 'Не удалось проанализировать архив');
-        renderInspectError(errMsg);
-        return;
-      }
-
-      renderInspectResults(result, cleanName, bodyEl, url);
-
-      // Feedback toast with clear details
-      const totalFiles = result.totalFiles || (result.fileTree ? result.fileTree.length : 0);
-      const mediaCount = (result.fileTree || []).filter(f => f.isMedia).length;
-      if (Array.isArray(result.scannedLinks) && result.scannedLinks.length > 0) {
-        showToast(`${t('vw.inspectFoundLinksToast', 'В архиве найдено ссылок')}: ${result.scannedLinks.length}`);
-      } else if (mediaCount > 0) {
-        showToast(`${t('vw.inArchive', 'В архиве')}: ${mediaCount} ${t('vw.mediaFilesCount', 'медиафайлов')}, ${t('vw.noExternalLinks', 'внешних ссылок нет')}`);
-      } else {
-        showToast(`${t('vw.inspectDoneToast', 'Архив проверен')}: ${totalFiles} ${t('vw.filesCountShort', 'файлов')}, ${t('vw.noExternalLinks', 'внешних ссылок нет')}`);
-      }
-
-      // If cloud links were found in the archive, update post & sidebar
-      if (Array.isArray(result.scannedLinks) && result.scannedLinks.length > 0 && currentPost) {
-        if (!currentPost.inspectedLinks) currentPost.inspectedLinks = [];
-        for (const sl of result.scannedLinks) {
-          if (!currentPost.inspectedLinks.some(x => x.url === sl.url)) {
-            currentPost.inspectedLinks.push(sl);
-          }
-        }
-        const updatedCloud = renderSidebarCloudLinks(currentPost);
-        renderSidebarContent(currentPost, (updatedCloud || []).map(l => l.url));
-      }
-    } catch (err) {
-      stopArchivePolling(url);
-      unsubscribe();
-      notifyArchiveJob(url, { active: false, action: 'inspect', error: err.message, phase: 'inspected' });
-      renderInspectError(err.message || t('vw.inspectFailed', 'Не удалось проанализировать архив'));
-    }
-  }
-
-  function renderInspectResults(data, archiveName, container, archiveUrl) {
-    const totalFiles = data.totalFiles || (data.fileTree ? data.fileTree.length : 0);
-    const totalSize = data.archiveSize || data.totalBytes || 0;
-    const links = data.scannedLinks || [];
-    const fileTree = data.fileTree || [];
-    const hasMedia = Boolean(data.hasMedia || fileTree.some(f => /\.(jpe?g|png|gif|webp|mp4|webm|mov|mkv)$/i.test(f.name || '')));
-    const effectiveUrl = archiveUrl || data.zipUrl || '';
-
-    container.innerHTML = `
-      <div class="archive-inspect-meta">
-        <div class="archive-inspect-meta-item">
-          <span class="archive-inspect-meta-label">${t('vw.archive', 'Архив')}</span>
-          <span class="archive-inspect-meta-value" style="font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${archiveName}">${archiveName}</span>
-        </div>
-        <div class="archive-inspect-meta-item">
-          <span class="archive-inspect-meta-label">${t('vw.filesCount', 'Файлов')}</span>
-          <span class="archive-inspect-meta-value">${totalFiles}</span>
-        </div>
-        <div class="archive-inspect-meta-item">
-          <span class="archive-inspect-meta-label">${t('vw.archiveSize', 'Размер')}</span>
-          <span class="archive-inspect-meta-value">${totalSize > 0 ? formatBytes(totalSize) : '--'}</span>
-        </div>
-      </div>
-
-      ${hasMedia ? `
-        <div class="archive-inspect-actions">
-          <button type="button" class="btn-primary btn-archive-inspect-open-player" id="btnInspectOpenInPlayer">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            <span>${t('viewer.openArchiveInViewer', 'Открыть файлы в плеере / галерее')}</span>
-          </button>
-        </div>
-      ` : ''}
-
-      <div class="archive-inspect-links-section">
-        <div class="archive-inspect-section-title">${t('viewer.archiveInspectLinksFound', 'Найденные ссылки и пароли')} (${links.length})</div>
-        ${links.length > 0 ? `
-          <div class="sidebar-cloud-links-list" id="inspectLinksList"></div>
-        ` : `
-          <div class="archive-inspect-no-links">${t('viewer.archiveInspectNoLinks', 'В файлах архива внешних ссылок не обнаружено')}</div>
-        `}
-      </div>
-
-      <div class="archive-inspect-files-section">
-        <div class="archive-inspect-section-title">${t('viewer.archiveInspectFiles', 'Файлы в архиве')} (${fileTree.length})</div>
-        <input type="text" class="archive-inspect-search" id="archiveInspectSearchInput" placeholder="${t('viewer.archiveInspectSearchPlaceholder', 'Поиск по файлам в архиве...')}">
-        <div class="archive-inspect-file-list" id="archiveInspectFileList"></div>
-      </div>
-    `;
-
-    const openInPlayerBtn = container.querySelector('#btnInspectOpenInPlayer');
-    if (openInPlayerBtn && effectiveUrl) {
-      subscribeArchiveJob(effectiveUrl, (state) => {
-        if (state.active) {
-          openInPlayerBtn.disabled = true;
-          const statusText = state.phase === 'extract'
-            ? t('vw.archiveExtracting', 'Распаковка архива...')
-            : `${t('vw.downloading', 'Загрузка')} ${state.percent || 0}%`;
-          openInPlayerBtn.innerHTML = `
-            <div class="loading-spinner" style="width: 14px; height: 14px; border-width: 2px;"></div>
-            <span>${statusText}</span>
-          `;
-        }
-      });
-      openInPlayerBtn.addEventListener('click', () => {
-        unpackAndViewArchive(effectiveUrl, archiveName);
-      });
-    }
-
-    const linksContainer = container.querySelector('#inspectLinksList');
-    if (linksContainer && links.length > 0) {
-      links.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'sidebar-cloud-card';
-        let displayUrl = item.url;
-        try {
-          const parsed = new URL(item.url);
-          displayUrl = parsed.hostname + (parsed.pathname.length > 28 ? parsed.pathname.slice(0, 28) + '…' : parsed.pathname);
-        } catch {}
-
-        card.innerHTML = `
-          <div class="cloud-card-header">
-            <span class="cloud-card-service-badge" data-service="${item.serviceId}">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-              ${item.service || 'Облако'}
-            </span>
-            ${item.sourceFile ? `<span class="cloud-card-source-tag" title="${t('vw.foundIn', 'Найдено в:')} ${item.sourceFile}">${item.sourceFile}</span>` : ''}
-          </div>
-          <div class="cloud-card-url" title="${item.url}">${displayUrl}</div>
-          ${item.password ? `
-            <div class="cloud-card-pass-row">
-              <span class="cloud-card-pass-label">${t('vw.password', 'Пароль:')}</span>
-              <code class="cloud-card-pass-code">${item.password}</code>
-              <button type="button" class="btn-copy-pass" title="${t('viewer.copyPassword', 'Скопировать пароль')}">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-            </div>
-          ` : ''}
-          <div class="cloud-card-actions">
-            <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="cloud-card-btn cloud-card-btn-open">
-              <span>${t('vw.openLink', 'Открыть')}</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            </a>
-            <button type="button" class="cloud-card-btn cloud-card-btn-copy" title="${t('viewer.copyLink', 'Копировать ссылку')}">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              <span>${t('viewer.copyLink', 'Копировать')}</span>
-            </button>
-          </div>
-        `;
-
-        const copyBtn = card.querySelector('.cloud-card-btn-copy');
-        if (copyBtn) {
-          copyBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            haptic(10);
-            copyToClipboard(item.url);
-            const span = copyBtn.querySelector('span');
-            if (span) {
-              const orig = span.textContent;
-              span.textContent = t('viewer.copied', 'Скопировано!');
-              setTimeout(() => { span.textContent = orig; }, 1800);
-            }
-          });
-        }
-
-        const copyPass = card.querySelector('.btn-copy-pass');
-        if (copyPass && item.password) {
-          copyPass.addEventListener('click', (e) => {
-            e.stopPropagation();
-            haptic(10);
-            copyToClipboard(item.password);
-            showToast(t('vw.passCopied', 'Пароль скопирован: ') + item.password);
-          });
-        }
-
-        linksContainer.appendChild(card);
-      });
-    }
-
-    const fileListContainer = container.querySelector('#archiveInspectFileList');
-    const searchInput = container.querySelector('#archiveInspectSearchInput');
-
-    let fileListUnsubscribers = [];
-
-    function renderFileList(filterText = '') {
-      if (!fileListContainer) return;
-
-      fileListUnsubscribers.forEach(u => {
-        try { u(); } catch {}
-      });
-      fileListUnsubscribers = [];
-
-      fileListContainer.innerHTML = '';
-      const q = filterText.toLowerCase().trim();
-      const filtered = q ? fileTree.filter(f => (f.name || '').toLowerCase().includes(q) || (f.path || '').toLowerCase().includes(q)) : fileTree;
-
-      if (filtered.length === 0) {
-        fileListContainer.innerHTML = `<div style="padding: 12px; font-size: 12px; color: var(--text-muted); text-align: center;">${t('vw.noMatchingFiles', 'Файлы не найдены')}</div>`;
-        return;
-      }
-
-      const defaultIconHtml = `<svg class="btn-archive-file-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
-      const spinnerIconHtml = `<svg class="btn-archive-file-icon btn-archive-spinner" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="38" stroke-dashoffset="12"/></svg>`;
-      const checkIconHtml = `<svg class="btn-archive-file-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="20 6 9 17 4 12"/></svg>`;
-
-      filtered.forEach(f => {
-        const row = document.createElement('div');
-        row.className = 'archive-inspect-file-row';
-        const sizeStr = f.size > 0 ? formatBytes(f.size) : '';
-        const threads = state.settings?.archiveDownloadThreads || 4;
-        const downloadUrl = effectiveUrl
-          ? `/api/archive/download-file?url=${encodeURIComponent(effectiveUrl)}&name=${encodeURIComponent(f.path || f.name)}&threads=${threads}`
-          : '';
-
-        row.innerHTML = `
-          <div class="archive-inspect-file-info">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted); flex-shrink: 0;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-            <span class="archive-inspect-file-name" title="${f.path || f.name}">${f.name}</span>
-            ${f.hasLinks ? `<span class="archive-badge-links">🔗 ${t('vw.links', 'Ссылки')}</span>` : ''}
-          </div>
-          <div class="archive-inspect-file-meta">
-            ${sizeStr ? `<span class="archive-inspect-file-size">${sizeStr}</span>` : ''}
-            ${downloadUrl ? `
-              <button type="button" class="btn-archive-file-download" title="${t('viewer.downloadThisFile', 'Скачать этот файл')}">
-                <div class="btn-archive-file-progress" style="width: 0%;"></div>
-                <span class="btn-archive-file-content">
-                  <svg class="btn-archive-file-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  <span class="btn-archive-file-download-text">${t('viewer.downloadFileBtn', 'Скачать')}</span>
-                </span>
-              </button>
-            ` : ''}
-          </div>
-        `;
-
-        const dlBtn = row.querySelector('.btn-archive-file-download');
-        const sizeEl = row.querySelector('.archive-inspect-file-size');
-        if (dlBtn && downloadUrl) {
-          const progressFill = dlBtn.querySelector('.btn-archive-file-progress');
-          const dlText = dlBtn.querySelector('.btn-archive-file-download-text');
-          let resetTimer = null;
-
-          const updateBtnState = (task) => {
-            if (!task) return;
-            clearTimeout(resetTimer);
-
-            if (task.status === 'downloading' || task.status === 'saving') {
-              dlBtn.classList.remove('is-completed', 'is-error');
-              dlBtn.classList.add('is-downloading');
-              const curIcon = dlBtn.querySelector('.btn-archive-file-icon');
-              if (curIcon && !curIcon.classList.contains('btn-archive-spinner')) {
-                curIcon.outerHTML = spinnerIconHtml;
-              }
-              const pct = Math.round(task.percent || 0);
-              if (progressFill) progressFill.style.width = `${pct}%`;
-              if (task.status === 'saving') {
-                if (dlText) dlText.textContent = t('dl.saving', 'Сохранение...');
-              } else {
-                if (dlText) dlText.textContent = pct > 0 ? `${pct}%` : t('vw.downloading', 'Загрузка');
-              }
-              if (sizeEl) {
-                const totalBytes = task.total || f.size || 0;
-                if (task.loaded > 0 && totalBytes > 0) {
-                  sizeEl.textContent = `${formatBytes(task.loaded)} / ${formatBytes(totalBytes)}`;
-                }
-              }
-            } else if (task.status === 'completed') {
-              dlBtn.classList.remove('is-downloading', 'is-error');
-              dlBtn.classList.add('is-completed');
-              if (progressFill) progressFill.style.width = '100%';
-              const curIcon = dlBtn.querySelector('.btn-archive-file-icon');
-              if (curIcon) curIcon.outerHTML = checkIconHtml;
-              if (dlText) dlText.textContent = t('vw.archiveDownloadedShort', 'Скачано ✓');
-              if (sizeEl) sizeEl.textContent = sizeStr;
-              resetTimer = setTimeout(() => {
-                dlBtn.classList.remove('is-completed', 'is-downloading', 'is-error');
-                if (progressFill) progressFill.style.width = '0%';
-                const resetIcon = dlBtn.querySelector('.btn-archive-file-icon');
-                if (resetIcon) resetIcon.outerHTML = defaultIconHtml;
-                if (dlText) dlText.textContent = t('viewer.downloadFileBtn', 'Скачать');
-              }, 4000);
-            } else if (task.status === 'error') {
-              dlBtn.classList.remove('is-downloading');
-              dlBtn.classList.add('is-error');
-              if (progressFill) progressFill.style.width = '0%';
-              if (dlText) dlText.textContent = t('vw.error', 'Ошибка');
-              if (sizeEl) sizeEl.textContent = sizeStr;
-              resetTimer = setTimeout(() => {
-                dlBtn.classList.remove('is-error', 'is-downloading', 'is-completed');
-                const resetIcon = dlBtn.querySelector('.btn-archive-file-icon');
-                if (resetIcon) resetIcon.outerHTML = defaultIconHtml;
-                if (dlText) dlText.textContent = t('viewer.downloadFileBtn', 'Скачать');
-              }, 3000);
-            } else if (task.status === 'cancelled') {
-              dlBtn.classList.remove('is-downloading', 'is-completed', 'is-error');
-              if (progressFill) progressFill.style.width = '0%';
-              const resetIcon = dlBtn.querySelector('.btn-archive-file-icon');
-              if (resetIcon) resetIcon.outerHTML = defaultIconHtml;
-              if (dlText) dlText.textContent = t('viewer.downloadFileBtn', 'Скачать');
-              if (sizeEl) sizeEl.textContent = sizeStr;
-            }
-          };
-
-          const unsub = downloadManager.subscribeToUrl(downloadUrl, updateBtnState);
-          fileListUnsubscribers.push(unsub);
-
-          dlBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            haptic(10);
-            downloadManager.startDownload({
-              url: downloadUrl,
-              filename: f.name,
-              size: Number(f.size) || 0,
-              showDock: false
-            });
-          });
-        }
-
-        fileListContainer.appendChild(row);
-      });
-    }
-
-    renderFileList();
-
-    if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        renderFileList(searchInput.value);
-      });
-    }
-  }
-
-  function renderViewerPost(skipMediaLoad = false) {
-    if (!currentPost) return;
-
-    if (currentPost.id) {
-      markPostViewed(currentPost.id);
-      recordSessionInteraction(currentPost, 'view');
-    }
-
-    if (siteBadge) siteBadge.textContent = currentPost.siteName || currentPost.site;
-    if (resBadge) resBadge.textContent = (currentPost.width && currentPost.height) ? `${currentPost.width} × ${currentPost.height}` : t('vw.original', 'Оригинал');
-    if (extBadge) extBadge.textContent = (currentPost.fileExt || 'JPG').toUpperCase();
-
-    // Author display: prioritize visual creator over secondary audio/sound credits
-    let primaryVisualArtist = '';
-    if (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0) {
-      const visualTag = currentPost.tagDetails.artist.find(a => !/_?\((audio|sfx|sound|voice|va|music)\)$/i.test(a));
-      primaryVisualArtist = visualTag || currentPost.tagDetails.artist[0];
-    }
-
-    let rawAuthor = currentPost.author || primaryVisualArtist || '';
-    let authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
-
-    // Split authors to identify the primary animator / creator
-    const authorParts = authorName.split(',').map(s => s.trim()).filter(Boolean);
-    const mainAuthorName = authorParts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || authorParts[0] || authorName;
-
-    if (authorName && authorName.trim()) {
-      const cleanAuthorTag = (primaryVisualArtist || mainAuthorName).trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
-      const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
-
-      if (viewerAuthorBadge && viewerAuthorText) {
-        viewerAuthorText.textContent = mainAuthorName;
-        viewerAuthorBadge.style.display = 'inline-flex';
-        viewerAuthorBadge.onclick = (e) => {
-          e.stopPropagation();
-          const targetSite = currentPost?.site;
-          closeViewer();
-          const tagToSearch = (targetSite === 'rule34video' && !cleanAuthorTag.includes(':'))
-            ? `artist:${cleanAuthorTag}`
-            : cleanAuthorTag;
-          if (onTagSelect) onTagSelect(tagToSearch);
-        };
-      }
-      if (viewerFavAuthorBtn) {
-        viewerFavAuthorBtn.style.display = 'inline-flex';
-        viewerFavAuthorBtn.classList.toggle('active', isFavAuthor);
-        viewerFavAuthorBtn.title = isFavAuthor
-          ? t('vw.authorRemoveTitle', 'Удалить автора "{name}" из любимых').replace('{name}', cleanAuthorTag)
-          : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
-      }
-      if (infoAuthorRow && infoAuthor) {
-        infoAuthor.textContent = mainAuthorName;
-        infoAuthorRow.style.display = 'flex';
-        infoAuthor.onclick = () => {
-          const targetSite = currentPost?.site;
-          closeViewer();
-          const tagToSearch = (targetSite === 'rule34video' && !cleanAuthorTag.includes(':'))
-            ? `artist:${cleanAuthorTag}`
-            : cleanAuthorTag;
-          if (onTagSelect) onTagSelect(tagToSearch);
-        };
-      }
-
-      // Render assistants if present
-      const assistants = Array.isArray(currentPost.assistants) ? currentPost.assistants : [];
-      if (infoAssistantsRow && infoAssistantsList) {
-        if (assistants.length > 0) {
-          infoAssistantsList.innerHTML = '';
-          assistants.forEach(asst => {
-            const asstChip = document.createElement('span');
-            asstChip.className = 'info-assistant-chip';
-            asstChip.textContent = asst;
-            asstChip.title = t('viewer.author.title', 'Автор / Создатель (нажмите для поиска всех работ)');
-            asstChip.onclick = () => {
-              const targetSite = currentPost?.site;
-              closeViewer();
-              const cleanAsstTag = asst.replace(/\s*\([^)]*\)/g, '').trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
-              const tagToSearch = (targetSite === 'rule34video' && !cleanAsstTag.includes(':'))
-                ? `artist:${cleanAsstTag}`
-                : cleanAsstTag;
-              if (onTagSelect) onTagSelect(tagToSearch);
-            };
-            infoAssistantsList.appendChild(asstChip);
-          });
-          infoAssistantsRow.style.display = 'flex';
-        } else {
-          infoAssistantsRow.style.display = 'none';
-        }
-      }
-      if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
-        btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
-        btnFavAuthorSidebarText.textContent = isFavAuthor ? t('vw.authorFavOn', 'В избранном') : t('viewer.favAuthorInline', 'В избранное');
-        btnFavAuthorSidebar.title = isFavAuthor
-          ? t('vw.authorRemoveTitle', 'Удалить автора "{name}" из любимых').replace('{name}', cleanAuthorTag)
-          : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
-      }
-      if (btnSetAuthorCoverSidebar) {
-        btnSetAuthorCoverSidebar.style.display = isFavAuthor ? 'inline-flex' : 'none';
-        btnSetAuthorCoverSidebar.onclick = async (e) => {
-          e.stopPropagation();
-          haptic(15);
-          const isVideo = currentPost.isVideo || isVideoUrl(currentPost.fileUrl) || isVideoUrl(currentPost.sampleUrl) || isVideoUrl(currentPost.previewUrl);
-          const rawUrl = currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl;
-          const chosenUrl = isVideo ? (currentPost.previewUrl || rawUrl) : (currentPost.sampleUrl || currentPost.fileUrl || currentPost.previewUrl);
-          if (!chosenUrl) return;
-
-          const sampleUrl = isVideo ? '' : (currentPost.sampleUrl || '');
-          const fileUrl = isVideo ? '' : (currentPost.fileUrl || '');
-          const thumb180 = currentPost.previewUrl || '';
-          const thumb360 = currentPost.sampleUrl || '';
-          const thumb720 = currentPost.fileUrl || '';
-
-          const target = state.favoriteAuthors.find(a => (a.name || '').toLowerCase() === cleanAuthorTag.toLowerCase());
-          if (target) {
-            target.previewUrl = chosenUrl;
-            target.sampleUrl = sampleUrl;
-            target.fileUrl = fileUrl;
-            target.thumb180 = thumb180;
-            target.thumb360 = thumb360;
-            target.thumb720 = thumb720;
-            target.site = currentPost.site || target.site || 'danbooru';
-          }
-          setFavoriteAuthors([...state.favoriteAuthors]);
-          showToast(t('vw.coverSetForAuthor', 'Этот арт установлен обложкой автора {name}!').replace('{name}', mainAuthorName));
-          if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
-
-          try {
-            await updateFavoriteAuthorPreview(cleanAuthorTag, chosenUrl, currentPost.site || 'danbooru', { sampleUrl, fileUrl, thumb180, thumb360, thumb720 });
-            await syncFavoriteAuthors(state.favoriteAuthors);
-          } catch (err) {
-            console.error('Ошибка сохранения обложки автора:', err);
-          }
-        };
-      }
-    } else {
-      if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
-      if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
-      if (infoAuthorRow) infoAuthorRow.style.display = 'none';
-      if (infoAssistantsRow) infoAssistantsRow.style.display = 'none';
-      if (btnSetAuthorCoverSidebar) btnSetAuthorCoverSidebar.style.display = 'none';
-    }
-
-    const isFav = isPostFavorite(currentPost.id);
-    if (btnFavModal) {
-      btnFavModal.classList.toggle('active', isFav);
-      btnFavModal.querySelector('svg')?.setAttribute('fill', isFav ? 'currentColor' : 'none');
-    }
-
-    const isLiked = isPostLiked(currentPost.id);
-    if (btnLikeModal) {
-      btnLikeModal.classList.toggle('active', isLiked);
-      btnLikeModal.querySelector('svg')?.setAttribute('fill', isLiked ? 'currentColor' : 'none');
-    }
-
-    const isDisliked = isPostDisliked(currentPost.id);
-    if (btnDislikeModal) {
-      btnDislikeModal.classList.toggle('active', isDisliked);
-    }
-    if (btnDislikeSidebar) {
-      btnDislikeSidebar.classList.toggle('active', isDisliked);
-      if (btnDislikeSidebarText) {
-        btnDislikeSidebarText.textContent = isDisliked ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
-      }
-    }
-
-    const infoDurationRow = document.getElementById('infoDurationRow');
-    const infoDuration = document.getElementById('infoDuration');
-    if (currentPost.isVideo && (currentPost.durationText || currentPost.duration > 0)) {
-      const durText = currentPost.durationText || `${Math.floor(currentPost.duration / 60)}:${Math.floor(currentPost.duration % 60) < 10 ? '0' : ''}${Math.floor(currentPost.duration % 60)}`;
-      if (infoDuration) infoDuration.textContent = durText;
-      if (infoDurationRow) infoDurationRow.style.display = 'flex';
-    } else {
-      if (infoDurationRow) infoDurationRow.style.display = 'none';
-    }
-
-    if (infoDateRow && infoDate) {
-      if (currentPost.createdAt) {
-        try {
-          const d = new Date(currentPost.createdAt);
-          if (!isNaN(d.getTime())) {
-            infoDate.textContent = d.toLocaleString(document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            });
-            infoDateRow.style.display = 'flex';
-          } else {
-            infoDateRow.style.display = 'none';
-          }
-        } catch {
-          infoDateRow.style.display = 'none';
-        }
-      } else {
-        infoDateRow.style.display = 'none';
-      }
-    }
-
-    if (infoSite) {
-      const siteName = currentPost.siteName || currentPost.site;
-      const postPageUrl = getPostSiteUrl(currentPost);
-      if (postPageUrl) {
-        infoSite.innerHTML = `<a href="${postPageUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="${t('vw.openOnSite', 'Открыть страницу на сайте {name}').replace('{name}', siteName)}">${siteName} <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
-      } else {
-        infoSite.textContent = siteName;
-      }
-    }
-    if (infoRating) infoRating.textContent = formatRating(currentPost.rating);
-    let scoreText = `★ ${currentPost.score || 0}`;
-    if (currentPost.views > 0 || currentPost.viewsText) {
-      scoreText += ` · ${t('vw.viewsShort', '{n} просм.').replace('{n}', currentPost.viewsText || currentPost.views)}`;
-    } else if (currentPost.favCount > 0) {
-      scoreText += ` · ${t('vw.favsShort', '{n} в избранном').replace('{n}', currentPost.favCount)}`;
-    }
-    if (infoScore) infoScore.textContent = scoreText;
-    if (infoAi) {
-      infoAi.textContent = currentPost.isAi ? t('vw.aiYes', 'Да (ИИ-арт)') : t('vw.aiNo', 'Нет (Авторский)');
-      infoAi.style.color = currentPost.isAi ? 'var(--accent-warning)' : 'var(--text-primary)';
-    }
-
-    // Render tags into the sidebar
-    renderSidebarTags(currentPost, {
-      onTagSelect: (t) => {
-        if (onTagSelect) onTagSelect(t);
-      },
-      closeViewer
-    });
-
-    renderSidebarArchives(currentPost);
-    const cloudLinks = renderSidebarCloudLinks(currentPost);
-    renderSidebarContent(currentPost, (cloudLinks || []).map(l => l.url));
-    renderSidebarSimilarPosts(currentPost);
-    renderAlbumFilmstrip();
-    updateNavButtons();
-
-    if (!skipMediaLoad) {
-      const hasVisibleMedia = (Array.isArray(currentPost.albumItems) && currentPost.albumItems.length > 0) ||
-        Boolean(currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl);
-
-      if (hasVisibleMedia) {
-        const activeMediaItem = getCurrentMediaItem();
-        loadMediaItem(activeMediaItem);
-      } else if (currentPost.isArchive) {
-        renderArchivePostCard(currentPost);
-      } else {
-        const activeMediaItem = getCurrentMediaItem();
-        loadMediaItem(activeMediaItem);
-      }
-    }
-
-    // Automatically trigger full album/set load in background if not already fully fetched
-    if (!currentPost._albumFullyFetched && currentPost.site !== 'pawchive' && currentPost.site !== 'kemono' && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:') && !currentPost.seriesKey.startsWith('kemono:')) || currentPost.pixiv_id)) {
-      loadFullAlbumForPost(currentPost, false);
-    }
-  }
-
-  let albumFetchSeq = 0;
-
-  async function loadFullAlbumForPost(targetPost, isUserExplicit = false) {
-    if (!targetPost || targetPost.site === 'pawchive' || targetPost.site === 'kemono') return;
-    const canFetch = Boolean(targetPost.canFetchAlbum || targetPost.hasChildren || targetPost.parentId || (targetPost.seriesKey && !targetPost.seriesKey.startsWith('pawchive:') && !targetPost.seriesKey.startsWith('kemono:')) || targetPost.pixiv_id);
-    if (!canFetch) return;
-    if (targetPost._albumFetchInProgress) return;
-
-    targetPost._albumFetchInProgress = true;
-    const currentSeq = ++albumFetchSeq;
-
-    if (btnFetchFullAlbum) btnFetchFullAlbum.disabled = true;
-    if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = t('vw.searchingSeries', 'Поиск серии...');
-
-    try {
-      const res = await fetchAlbumPosts({
-        site: targetPost.site,
-        seriesKey: targetPost.seriesKey || '',
-        parentId: targetPost.parentId || '',
-        originalId: targetPost.originalId || '',
-        postUrl: targetPost.postUrl || ''
-      });
-
-      if (currentSeq !== albumFetchSeq && currentPost?.id !== targetPost.id) {
-        return;
-      }
-
-      targetPost._albumFullyFetched = true;
-
-      if (res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
-        const prevAlbumCount = targetPost.albumItems?.length || 1;
-        targetPost.isAlbum = true;
-        targetPost.albumItems = res.albumItems;
-        targetPost.albumCount = res.albumItems.length;
-        if (!targetPost.content && res.albumItems[0]?.content) {
-          targetPost.content = res.albumItems[0].content;
-        }
-
-        // Always start album from the very first photo (slide 0 / index 0)
-        const firstItem = res.albumItems[0];
-        if (firstItem) {
-          if (firstItem.previewUrl) targetPost.previewUrl = firstItem.previewUrl;
-          if (firstItem.thumb180) targetPost.thumb180 = firstItem.thumb180;
-          if (firstItem.thumb360) targetPost.thumb360 = firstItem.thumb360;
-          if (firstItem.thumb720) targetPost.thumb720 = firstItem.thumb720;
-          if (firstItem.sampleUrl) targetPost.sampleUrl = firstItem.sampleUrl;
-          if (firstItem.fileUrl) targetPost.fileUrl = firstItem.fileUrl;
-        }
-        currentAlbumIndex = 0;
-
-        // Sync the updated album back into global gallery state
-        const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-        if (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length && list[state.currentViewerIndex]?.id === targetPost.id) {
-          list[state.currentViewerIndex] = targetPost;
-        }
-        if (Array.isArray(state.posts)) {
-          const origIdx = state.posts.findIndex(p => p.id === targetPost.id);
-          if (origIdx !== -1) {
-            state.posts[origIdx] = targetPost;
-          }
-        }
-
-        // Update the card badge and preview in the gallery DOM
-        const cardEl = document.querySelector(`.media-card[data-post-id="${targetPost.id}"]`);
-        if (cardEl) {
-          cardEl.classList.add('is-album-card');
-          if (firstItem) {
-            const imgEl = cardEl.querySelector('.media-thumb');
-            const newThumb = firstItem.thumb360 || firstItem.previewUrl || firstItem.fileUrl;
-            if (imgEl && newThumb) {
-              imgEl.src = getProxiedUrl(newThumb);
-            }
-          }
-          const topGroup = cardEl.querySelector('.badge-group-top > div');
-          let badgeAlbum = topGroup ? topGroup.querySelector('.badge-album') : null;
-          if (!badgeAlbum && topGroup) {
-            badgeAlbum = document.createElement('span');
-            badgeAlbum.className = 'badge-format badge-album';
-            const siteBadgeEl = topGroup.querySelector('.badge-site');
-            if (siteBadgeEl) {
-              topGroup.insertBefore(badgeAlbum, siteBadgeEl.nextSibling);
-            } else {
-              topGroup.prepend(badgeAlbum);
-            }
-          }
-          if (badgeAlbum) {
-            badgeAlbum.title = t('gal.albumBadge.title', 'Альбом: {n} изображений').replace('{n}', res.albumItems.length);
-            badgeAlbum.innerHTML = `<svg width="10" height="10" viewBox="0 0 24 24"><use href="#ic-album"/></svg> <span>${res.albumItems.length}</span>`;
-          }
-        }
-
-        // Re-render viewer UI if the user is currently viewing this post
-        if (currentPost?.id === targetPost.id) {
-          renderAlbumFilmstrip();
-          switchAlbumSlide(0);
-          if (btnFetchFullAlbumText) {
-            btnFetchFullAlbumText.textContent = t('vw.refreshSet', 'Обновить сет ({n} фото)').replace('{n}', targetPost.albumItems.length);
-          }
-          if (isUserExplicit && res.albumItems.length > prevAlbumCount) {
-            showToast(t('vw.seriesFound', 'Найдено {n} изображений серии!').replace('{n}', res.albumItems.length));
-          }
-        }
-      } else {
-        if (isUserExplicit) {
-          showToast(t('vw.seriesNone', 'Дополнительные части серии не найдены'));
-        }
-        if (btnFetchFullAlbumText) btnFetchFullAlbumText.textContent = t('vw.seriesPartsNone', 'Части серии не найдены');
-      }
-    } catch (err) {
-      console.error('Ошибка поиска альбома:', err);
-      if (isUserExplicit) {
-        showToast(t('vw.seriesSearchFailed', 'Не удалось выполнить поиск частей серии'));
-      }
-    } finally {
-      targetPost._albumFetchInProgress = false;
-      if (btnFetchFullAlbum) btnFetchFullAlbum.disabled = false;
-    }
-  }
-
-  // Load all series parts via the sidebar button
-  if (btnFetchFullAlbum) {
-    btnFetchFullAlbum.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (!currentPost) return;
-      haptic(15);
-      loadFullAlbumForPost(currentPost, true);
-    });
-  }
-
-  // Multi-tier similar posts retrieval and bottom filmstrip rendering
-  let similarFetchSeq = 0;
-
-  async function renderSidebarSimilarPosts(targetPost, forceRefresh = false) {
-    if (!targetPost) return;
-    const seq = ++similarFetchSeq;
-
-    if (targetPost._similarSession && !forceRefresh) {
-      resumeSimilarSession(targetPost);
-      return;
-    }
-
-    try {
-      const plan = getSimilarPostPlan(targetPost);
-      if (!plan.queries || plan.queries.length === 0) {
-        if (seq === similarFetchSeq) {
-          renderSimilarFilmstrip([]);
-        }
-        return;
-      }
-
-      const session = {
-        plan,
-        pool: [],
-        seenIds: new Set(),
-        renderedCount: 0,
-        currentPage: 1,
-        queryIndex: 0,
-        hasMore: true,
-        isLoadingMore: false,
-        loaderEl: null
-      };
-      targetPost._similarSession = session;
-
-      const postSite = targetPost.site || state.currentSite || 'danbooru';
-      const initialQueries = plan.queries.slice(0, 4);
-      session.queryIndex = initialQueries.length;
-
-      const tasks = initialQueries.map(query => {
-        return fetchPosts({
-          site: postSite,
-          tags: query,
-          page: 1,
-          limit: 30,
-          category: 'new',
-          aiFilter: state.aiFilter || 'all',
-          ratingFilter: state.ratingFilter || 'all',
-          typeFilter: state.typeFilter || 'all',
-          ageFilter: state.ageFilter || 'all',
-          hideFurry: state.hideFurry,
-          hidePregnant: state.hidePregnant,
-          hideLgbt: state.hideLgbt
-        }).catch(() => null);
-      });
-
-      const results = await Promise.allSettled(tasks);
-      if (seq !== similarFetchSeq) return;
-
-      const candidateMap = new Map();
-      for (const res of results) {
-        if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts)) {
-          for (const p of res.value.posts) {
-            if (!p || !p.id || p.id === targetPost.id) continue;
-            if (state.dislikedIds?.has(p.id)) continue;
-            if (!candidateMap.has(p.id)) {
-              candidateMap.set(p.id, p);
-            }
-          }
-        }
-      }
-
-      for (const p of candidateMap.values()) {
-        const score = calculatePostSimilarityScore(p, targetPost);
-        session.pool.push({ post: p, score });
-        session.seenIds.add(p.id);
-      }
-
-      session.pool.sort((a, b) => b.score - a.score);
-      targetPost._similarPosts = session.pool;
-
-      renderSimilarFilmstripSession(targetPost);
-    } catch (err) {
-      console.warn('Ошибка загрузки похожих постов:', err);
-      if (seq === similarFetchSeq) {
-        renderSimilarFilmstrip([]);
-      }
-    }
-  }
-
-  function renderSimilarFilmstripSession(targetPost) {
-    if (!viewerSimilarFilmstrip || !similarFilmstripInner) return;
-    const session = targetPost._similarSession;
-    if (!session || session.pool.length === 0) {
-      viewerSimilarFilmstrip.style.display = 'none';
-      if (viewerContent) viewerContent.classList.remove('has-similar');
-      return;
-    }
-
-    if (viewerContent) viewerContent.classList.add('has-similar');
-    viewerSimilarFilmstrip.style.display = 'flex';
-
-    similarFilmstripInner.innerHTML = '';
-    session.renderedCount = 0;
-    appendSimilarItems(targetPost, 18);
-  }
-
-  function resumeSimilarSession(targetPost) {
-    if (!viewerSimilarFilmstrip || !similarFilmstripInner) return;
-    const session = targetPost._similarSession;
-    if (!session || session.pool.length === 0) {
-      viewerSimilarFilmstrip.style.display = 'none';
-      if (viewerContent) viewerContent.classList.remove('has-similar');
-      return;
-    }
-
-    if (viewerContent) viewerContent.classList.add('has-similar');
-    viewerSimilarFilmstrip.style.display = 'flex';
-
-    if (similarFilmstripInner.children.length > 0 && session.renderedCount > 0) {
-      if (similarFilmstripCount) {
-        similarFilmstripCount.textContent = session.hasMore ? `${session.renderedCount}+` : `${session.renderedCount}`;
-      }
-      return;
-    }
-
-    renderSimilarFilmstripSession(targetPost);
-  }
-
-  function appendSimilarItems(targetPost, count = 18) {
-    if (!similarFilmstripInner || !targetPost?._similarSession) return;
-    const session = targetPost._similarSession;
-    const toRender = session.pool.slice(session.renderedCount, session.renderedCount + count);
-    if (toRender.length === 0) return;
-
-    const frag = document.createDocumentFragment();
-    toRender.forEach(({ post: item, score }) => {
-      const itemDiv = document.createElement('div');
-      itemDiv.className = 'similar-filmstrip-item';
-      const rawThumb = item.thumb360 || item.previewUrl || item.sampleUrl || item.thumb180 || item.fileUrl || '';
-      const thumbSrc = rawThumb ? (rawThumb.startsWith('/api/') ? rawThumb : getProxiedUrl(rawThumb)) : '';
-      const isHighMatch = score >= 65;
-
-      itemDiv.title = `${t('vw.similarity', 'Сходство:')} ${score}%${item.author ? `\n@${item.author}` : ''}`;
-      itemDiv.innerHTML = `
-        <img class="similar-filmstrip-img" src="${thumbSrc}" alt="Similar post" loading="lazy" referrerpolicy="no-referrer">
-        <span class="similar-filmstrip-score ${isHighMatch ? 'score-high' : ''}">${score}%</span>
-      `;
-
-      itemDiv.addEventListener('click', (e) => {
-        e.stopPropagation();
-        haptic(15);
-        openViewer(-1, { directPost: item, move: true });
-      });
-
-      frag.appendChild(itemDiv);
-    });
-
-    if (session.loaderEl && session.loaderEl.parentNode === similarFilmstripInner) {
-      similarFilmstripInner.insertBefore(frag, session.loaderEl);
-    } else {
-      similarFilmstripInner.appendChild(frag);
-    }
-
-    session.renderedCount += toRender.length;
-    if (similarFilmstripCount) {
-      similarFilmstripCount.textContent = session.hasMore ? `${session.renderedCount}+` : `${session.renderedCount}`;
-    }
-  }
-
-  async function loadMoreSimilarPosts(targetPost) {
-    if (!targetPost || !targetPost._similarSession) return;
-    const session = targetPost._similarSession;
-    if (session.isLoadingMore || !session.hasMore) return;
-
-    const unrenderedInPool = session.pool.length - session.renderedCount;
-    if (unrenderedInPool >= 8) {
-      appendSimilarItems(targetPost, 12);
-      return;
-    }
-
-    session.isLoadingMore = true;
-
-    if (!session.loaderEl) {
-      session.loaderEl = document.createElement('div');
-      session.loaderEl.className = 'similar-filmstrip-loader';
-      session.loaderEl.innerHTML = '<div class="similar-filmstrip-loader-spinner"></div>';
-      similarFilmstripInner.appendChild(session.loaderEl);
-      similarFilmstripInner.scrollLeft += 40;
-    }
-
-    try {
-      const postSite = targetPost.site || state.currentSite || 'danbooru';
-      let queriesToFetch = [];
-
-      if (session.queryIndex < session.plan.queries.length) {
-        queriesToFetch = session.plan.queries.slice(session.queryIndex, session.queryIndex + 3);
-        session.queryIndex += queriesToFetch.length;
-      } else {
-        session.currentPage++;
-        if (session.currentPage > 5) {
-          session.hasMore = false;
-        } else {
-          queriesToFetch = session.plan.queries.slice(0, 3);
-        }
-      }
-
-      if (queriesToFetch.length > 0 && session.hasMore) {
-        const tasks = queriesToFetch.map(query => {
-          return fetchPosts({
-            site: postSite,
-            tags: query,
-            page: session.currentPage,
-            limit: 30,
-            category: 'new',
-            aiFilter: state.aiFilter || 'all',
-            ratingFilter: state.ratingFilter || 'all',
-            typeFilter: state.typeFilter || 'all',
-            ageFilter: state.ageFilter || 'all',
-            hideFurry: state.hideFurry,
-            hidePregnant: state.hidePregnant,
-            hideLgbt: state.hideLgbt
-          }).catch(() => null);
-        });
-
-        const results = await Promise.allSettled(tasks);
-        let newItemsAdded = 0;
-
-        for (const res of results) {
-          if (res.status === 'fulfilled' && res.value && res.value.success && Array.isArray(res.value.posts)) {
-            for (const p of res.value.posts) {
-              if (!p || !p.id || p.id === targetPost.id) continue;
-              if (state.dislikedIds?.has(p.id) || session.seenIds.has(p.id)) continue;
-              session.seenIds.add(p.id);
-              const score = calculatePostSimilarityScore(p, targetPost);
-              session.pool.push({ post: p, score });
-              newItemsAdded++;
-            }
-          }
-        }
-
-        if (newItemsAdded === 0 && session.queryIndex >= session.plan.queries.length && session.currentPage >= 3) {
-          session.hasMore = false;
-        }
-      }
-    } catch (err) {
-      console.warn('Ошибка догрузки похожих постов:', err);
-      session.hasMore = false;
-    } finally {
-      if (session.loaderEl && session.loaderEl.parentNode) {
-        session.loaderEl.remove();
-        session.loaderEl = null;
-      }
-      session.isLoadingMore = false;
-      appendSimilarItems(targetPost, 12);
-      if (similarFilmstripCount) {
-        similarFilmstripCount.textContent = session.hasMore ? `${session.renderedCount}+` : `${session.renderedCount}`;
-      }
-    }
-  }
-
-  function renderSimilarFilmstrip(similarItems) {
-    if (!viewerSimilarFilmstrip || !similarFilmstripInner) return;
-    if (!similarItems || similarItems.length === 0) {
-      viewerSimilarFilmstrip.style.display = 'none';
-      if (viewerContent) viewerContent.classList.remove('has-similar');
-      return;
-    }
-    if (currentPost) {
-      currentPost._similarSession = {
-        plan: { queries: [] },
-        pool: Array.isArray(similarItems) ? similarItems : [],
-        seenIds: new Set(similarItems.map(i => i.post?.id).filter(Boolean)),
-        renderedCount: 0,
-        currentPage: 1,
-        queryIndex: 0,
-        hasMore: false,
-        isLoadingMore: false,
-        loaderEl: null
-      };
-      renderSimilarFilmstripSession(currentPost);
-    }
-  }
-
-  function displaySimilarPosts(similarItems, sourcePost) {
-    renderSimilarFilmstrip(similarItems);
-  }
-
-  // Download all album images
-  async function downloadFullAlbum(e) {
-    if (e) e.preventDefault();
-    if (!currentPost || !currentPost.isAlbum || !Array.isArray(currentPost.albumItems) || currentPost.albumItems.length === 0) return;
-    haptic(20);
-    showToast(t('vw.albumDownloadStart', 'Начато скачивание альбома ({n} файлов)...').replace('{n}', currentPost.albumItems.length));
-
-    for (let i = 0; i < currentPost.albumItems.length; i++) {
-      const item = currentPost.albumItems[i];
-      const downloadTarget = item.fileUrl || item.sampleUrl || item.previewUrl;
-      if (!downloadTarget) continue;
-
-      if (downloadTarget.startsWith('/api/archive/file')) {
-        const dlUrl = downloadTarget.includes('?') ? `${downloadTarget}&download=1` : `${downloadTarget}?download=1`;
-        const a = document.createElement('a');
-        const baseId = currentPost.id || currentPost.originalId || 'album';
-        a.href = dlUrl;
-        a.download = item.title || `album_${currentPost.site || 'post'}_${baseId}_p${i + 1}.${item.fileExt || (item.isVideo ? 'mp4' : 'jpg')}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        await new Promise(r => setTimeout(r, 250));
-        continue;
-      }
-
-      try {
-        const proxyUrl = getProxiedUrl(downloadTarget);
-        const res = await fetch(proxyUrl);
-        if (res.ok) {
-          const blob = await res.blob();
-          const ext = item.fileExt || (item.isVideo ? 'mp4' : 'jpg');
-          const baseId = currentPost.id || currentPost.originalId || 'album';
-          const filename = `album_${currentPost.site || 'post'}_${baseId}_p${i + 1}.${ext}`;
-          const blobUrl = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-        }
-      } catch (err) {
-        console.warn(`[Album download err on page ${i + 1}]`, err);
-      }
-      // Small delay between downloads
-      await new Promise(r => setTimeout(r, 350));
-    }
-    showToast(t('vw.albumDownloaded', 'Все изображения альбома загружены'));
-  }
-
-  if (btnDownloadAlbum) {
-    btnDownloadAlbum.addEventListener('click', downloadFullAlbum);
-  }
-  if (btnDownloadAlbumSidebar) {
-    btnDownloadAlbumSidebar.addEventListener('click', downloadFullAlbum);
-  }
-
-  // Toggle the tags drawer on mobile
-  if (btnViewerTagsToggle) {
-    btnViewerTagsToggle.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (viewerSidebar) viewerSidebar.classList.toggle('open');
-    });
-  }
-
-  if (btnCloseViewerTags) {
-    btnCloseViewerTags.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (viewerSidebar) viewerSidebar.classList.remove('open');
-    });
-  }
-
-  const inspectBackdrop = document.getElementById('archiveInspectBackdrop');
-  const btnCloseInspectModal = document.getElementById('btnCloseArchiveInspectModal');
-
-  if (btnCloseInspectModal) {
-    btnCloseInspectModal.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeArchiveInspectModal();
-    });
-  }
-  if (inspectBackdrop) {
-    inspectBackdrop.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeArchiveInspectModal();
-    });
-  }
-
   async function handleDislikeToggle() {
     if (!currentPost) return;
     haptic(20);
     const targetPost = currentPost;
     const isDislikedNow = toggleDislikeLocally(targetPost);
-    if (btnDislikeModal) btnDislikeModal.classList.toggle('active', isDislikedNow);
-    if (btnDislikeSidebar) {
-      btnDislikeSidebar.classList.toggle('active', isDislikedNow);
-      if (btnDislikeSidebarText) {
-        btnDislikeSidebarText.textContent = isDislikedNow ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
-      }
+    btnDislikeModal?.classList.toggle('active', isDislikedNow);
+    btnDislikeSidebar?.classList.toggle('active', isDislikedNow);
+    if (btnDislikeSidebarText) {
+      btnDislikeSidebarText.textContent = isDislikedNow ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
     }
     showToast(isDislikedNow ? t('vw.postHiddenToast', 'Пост скрыт (рекомендации обновлены)') : t('vw.unhiddenToast', 'Скрытие отменено'));
-    
+
     if (isDislikedNow) {
       state.posts = (state.posts || []).filter(p => p && p.id !== targetPost.id);
     }
@@ -3030,190 +373,43 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     } catch (e) {}
   }
 
-  if (btnDislikeModal) {
-    btnDislikeModal.addEventListener('click', handleDislikeToggle);
-  }
-  if (btnDislikeSidebar) {
-    btnDislikeSidebar.addEventListener('click', handleDislikeToggle);
-  }
-
-  if (btnLikeModal) {
-    btnLikeModal.addEventListener('click', async () => {
-      if (!currentPost) return;
-      haptic([15, 20]);
-      const isLikedNow = toggleLikeLocally(currentPost);
-      btnLikeModal.classList.toggle('active', isLikedNow);
-      btnLikeModal.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'currentColor' : 'none');
-      showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
-      try {
-        await toggleLikePost(currentPost);
-      } catch (e) {}
-      if (onFavoriteToggle) onFavoriteToggle();
-    });
+  async function handleLikeToggle() {
+    if (!currentPost) return;
+    haptic([15, 20]);
+    const isLikedNow = toggleLikeLocally(currentPost);
+    btnLikeModal?.classList.toggle('active', isLikedNow);
+    btnLikeModal?.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'currentColor' : 'none');
+    showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
+    try {
+      await toggleLikePost(currentPost);
+    } catch (e) {}
+    if (onFavoriteToggle) onFavoriteToggle();
   }
 
-  if (btnFavModal) {
-    btnFavModal.addEventListener('click', async () => {
-      if (!currentPost) return;
-      haptic([15, 25, 15]);
-      try {
-        const res = await toggleFavoritePost(currentPost);
-        if (res.success) {
-          if (res.isFavorite) {
-            state.favoriteIds.add(currentPost.id);
-            state.favorites.unshift({ ...currentPost, favoritedAt: new Date().toISOString() });
-            btnFavModal.classList.add('active');
-            btnFavModal.querySelector('svg')?.setAttribute('fill', 'currentColor');
-            showToast(t('vw.savedToFavs', 'Сохранено в закладки'));
-          } else {
-            state.favoriteIds.delete(currentPost.id);
-            state.favorites = state.favorites.filter(f => f.id !== currentPost.id);
-            btnFavModal.classList.remove('active');
-            btnFavModal.querySelector('svg')?.setAttribute('fill', 'none');
-            showToast(t('vw.removedFromFavs', 'Удалено из закладок'));
-          }
-          if (onFavoriteToggle) onFavoriteToggle();
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    });
-  }
-
-  if (btnSimilarModal) {
-    btnSimilarModal.addEventListener('click', () => {
-      if (!currentPost) return;
-      haptic(15);
-      if (viewerSimilarFilmstrip) {
-        if (viewerSimilarFilmstrip.style.display === 'none') {
-          renderSidebarSimilarPosts(currentPost, true);
+  async function handleFavToggle() {
+    if (!currentPost) return;
+    haptic([15, 25, 15]);
+    try {
+      const res = await toggleFavoritePost(currentPost);
+      if (res?.success) {
+        if (res.isFavorite) {
+          state.favoriteIds.add(currentPost.id);
+          state.favorites.unshift({ ...currentPost, favoritedAt: new Date().toISOString() });
+          btnFavModal?.classList.add('active');
+          btnFavModal?.querySelector('svg')?.setAttribute('fill', 'currentColor');
+          showToast(t('vw.savedToFavs', 'Сохранено в закладки'));
         } else {
-          viewerSimilarFilmstrip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          viewerSimilarFilmstrip.animate([
-            { transform: 'translateY(0) scale(1)' },
-            { transform: 'translateY(-6px) scale(1.01)' },
-            { transform: 'translateY(0) scale(1)' }
-          ], { duration: 300, easing: 'ease-out' });
+          state.favoriteIds.delete(currentPost.id);
+          state.favorites = state.favorites.filter(f => f.id !== currentPost.id);
+          btnFavModal?.classList.remove('active');
+          btnFavModal?.querySelector('svg')?.setAttribute('fill', 'none');
+          showToast(t('vw.removedFromFavs', 'Удалено из закладок'));
         }
+        if (onFavoriteToggle) onFavoriteToggle();
       }
-    });
-  }
-
-  if (btnCopyLink) {
-    btnCopyLink.addEventListener('click', async () => {
-      if (!currentPost) return;
-      const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
-      const siteUrl = getPostSiteUrl(activeItem) || getPostSiteUrl(currentPost);
-      const urlToCopy = siteUrl || activeItem.fileUrl || activeItem.sampleUrl || currentPost.fileUrl || currentPost.sampleUrl;
-      
-      if (!urlToCopy) {
-        showToast(t('vw.linkUnavailable', 'Ссылка недоступна'));
-        return;
-      }
-      
-      haptic(15);
-      const success = await copyToClipboard(urlToCopy);
-      if (success) {
-        showToast(t('vw.linkCopied', 'Ссылка на пост скопирована'));
-      } else {
-        showToast(t('vw.linkCopyFailed', 'Не удалось скопировать ссылку'));
-      }
-    });
-  }
-
-  if (btnDownload) {
-    btnDownload.addEventListener('click', async (e) => {
-      e.preventDefault();
-      if (!currentPost) return;
-      const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
-      const downloadTarget = activeItem.fileUrl || activeItem.sampleUrl || activeItem.previewUrl;
-      if (!downloadTarget) {
-        showToast(t('vw.fileLinkUnavailable', 'Ссылка на файл недоступна'));
-        return;
-      }
-
-      const isZipArchive = activeItem.fileExt === 'zip' || downloadTarget.toLowerCase().includes('.zip') || (Array.isArray(activeItem.archiveUrls) && activeItem.archiveUrls.length > 0);
-      if (isZipArchive) {
-        const targetArchiveUrl = (Array.isArray(activeItem.archiveUrls) && activeItem.archiveUrls[0]) || downloadTarget;
-        const filename = (Array.isArray(activeItem.archiveNames) && activeItem.archiveNames[0]) || `booru_${activeItem.site || 'archive'}_${activeItem.id || 'pack'}.zip`;
-        const size = (Array.isArray(activeItem.archiveSizes) && activeItem.archiveSizes[0]) || 0;
-        downloadManager.startDownload({ url: targetArchiveUrl, filename, size, isZip: true });
-        return;
-      }
-
-      showToast(t('vw.downloadStarted', 'Начата загрузка на устройство...'));
-
-      if (downloadTarget.startsWith('/api/archive/file')) {
-        const dlUrl = downloadTarget.includes('?') ? `${downloadTarget}&download=1` : `${downloadTarget}?download=1`;
-        const a = document.createElement('a');
-        a.href = dlUrl;
-        a.download = activeItem.title || `file_${activeItem.originalId || activeItem.id}.${activeItem.fileExt || (activeItem.isVideo ? 'mp4' : 'jpg')}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        showToast(t('vw.savedToDevice', 'Файл сохранён в память устройства'));
-        return;
-      }
-      
-      const getExtensionFromMime = (mimeType, fallbackExt) => {
-        if (!mimeType) return fallbackExt || 'jpg';
-        const low = mimeType.toLowerCase();
-        if (low.includes('png')) return 'png';
-        if (low.includes('jpeg') || low.includes('jpg')) return 'jpg';
-        if (low.includes('webp')) return 'webp';
-        if (low.includes('gif')) return 'gif';
-        if (low.includes('mp4')) return 'mp4';
-        if (low.includes('webm')) return 'webm';
-        return fallbackExt || 'jpg';
-      };
-
-      const shouldUseProxyDownload = activeItem.site === 'danbooru' || downloadTarget.includes('donmai.us') || state.settings?.proxyDownloads !== false;
-      
-      if (!shouldUseProxyDownload) {
-        try {
-          const directRes = await fetch(downloadTarget, { mode: 'cors' });
-          if (directRes.ok) {
-            const blob = await directRes.blob();
-            const ext = getExtensionFromMime(blob.type, activeItem.fileExt || (activeItem.isVideo ? 'mp4' : 'jpg'));
-            const filename = `booru_${activeItem.site || 'post'}_${activeItem.id}.${ext}`;
-            const blobUrl = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = blobUrl;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-            showToast(t('vw.savedFromCdn', 'Файл сохранён напрямую с CDN'));
-            return;
-          }
-        } catch (directErr) {
-          console.warn('[Direct download failed, switching to proxy]', directErr);
-        }
-      }
-
-      try {
-        const proxyUrl = getProxiedUrl(downloadTarget);
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const blob = await res.blob();
-        const ext = getExtensionFromMime(blob.type, activeItem.fileExt || (activeItem.isVideo ? 'mp4' : 'jpg'));
-        const filename = `booru_${activeItem.site || 'post'}_${activeItem.id}.${ext}`;
-        const blobUrl = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
-        showToast(t('vw.savedToDevice', 'Файл сохранён в память устройства'));
-      } catch (err) {
-        console.warn('[Download error]', err);
-        showToast(t('vw.downloadFailed', 'Не удалось загрузить файл для сохранения'));
-      }
-    });
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   function goToNext(skipAlbum = false) {
@@ -3246,329 +442,103 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
   }
 
-  if (btnPrev) {
-    btnPrev.addEventListener('click', () => goToPrev(false));
-  }
+  // Bind toolbar and modal events
+  btnDownloadAlbum?.addEventListener('click', (e) => { e.preventDefault(); downloadFullAlbum(currentPost); });
+  btnDownloadAlbumSidebar?.addEventListener('click', (e) => { e.preventDefault(); downloadFullAlbum(currentPost); });
+  btnViewerTagsToggle?.addEventListener('click', (e) => { e.stopPropagation(); viewerSidebar?.classList.toggle('open'); });
+  btnCloseViewerTags?.addEventListener('click', (e) => { e.stopPropagation(); viewerSidebar?.classList.remove('open'); });
+  btnCloseArchiveInspectModal?.addEventListener('click', (e) => { e.stopPropagation(); closeArchiveInspectModal(); });
+  archiveInspectBackdrop?.addEventListener('click', (e) => { e.stopPropagation(); closeArchiveInspectModal(); });
 
-  if (btnNext) {
-    btnNext.addEventListener('click', () => goToNext(false));
-  }
+  btnDislikeModal?.addEventListener('click', handleDislikeToggle);
+  btnDislikeSidebar?.addEventListener('click', handleDislikeToggle);
+  btnLikeModal?.addEventListener('click', handleLikeToggle);
+  btnFavModal?.addEventListener('click', handleFavToggle);
 
-  if (btnCopyAllTags) {
-    btnCopyAllTags.addEventListener('click', async () => {
-      if (!currentPost || !Array.isArray(currentPost.tags)) return;
-      haptic(15);
-      const success = await copyToClipboard(currentPost.tags.join(' '));
-      if (success) {
-        showToast(t('vw.tagsCopied', 'Все теги поста скопированы'));
-      } else {
-        showToast(t('vw.tagsCopyFailed', 'Не удалось скопировать теги'));
-      }
-    });
-  }
-
-  async function handleAuthorFavToggle() {
+  btnSimilarModal?.addEventListener('click', () => {
     if (!currentPost) return;
-    const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
-    const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
-    if (!authorName || !authorName.trim()) return;
-
-    const cleanAuthorTag = authorName.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
-    const authorSite = currentPost.site || 'danbooru';
-    const postService = currentPost.service || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[1] : '') || '';
-    const postUser = currentPost.user || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[2] : '') || '';
-    haptic([15, 25, 15]);
-
-    try {
-      const res = await toggleFavoriteAuthor({
-        name: cleanAuthorTag,
-        displayName: authorName,
-        previewUrl: currentPost.previewUrl || currentPost.sampleUrl || '',
-        site: authorSite,
-        service: postService,
-        user: postUser
-      });
-
-      if (res.success) {
-        if (res.isFavorite) {
-          state.favoriteAuthorNames.add(cleanAuthorTag.toLowerCase());
-          state.favoriteAuthors.unshift(res.author || {
-            id: cleanAuthorTag,
-            name: cleanAuthorTag,
-            displayName: authorName,
-            previewUrl: currentPost.previewUrl || currentPost.sampleUrl || '',
-            site: authorSite,
-            service: postService,
-            user: postUser,
-            createdAt: new Date().toISOString()
-          });
-          showToast(t('vw.authorAdded', 'Автор {name} добавлен в любимые').replace('{name}', authorName));
-        } else {
-          state.favoriteAuthorNames.delete(cleanAuthorTag.toLowerCase());
-          state.favoriteAuthors = state.favoriteAuthors.filter(a => (a.name || '').toLowerCase() !== cleanAuthorTag.toLowerCase());
-          showToast(t('vw.authorRemoved', 'Автор {name} удален из любимых').replace('{name}', authorName));
-        }
-
-        const isFavAuthor = res.isFavorite;
-        if (viewerFavAuthorBtn) {
-          viewerFavAuthorBtn.classList.toggle('active', isFavAuthor);
-          viewerFavAuthorBtn.title = isFavAuthor
-            ? t('vw.authorRemoveTitle', 'Удалить автора "{name}" из любимых').replace('{name}', cleanAuthorTag)
-            : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
-        }
-        if (btnFavAuthorSidebar && btnFavAuthorSidebarText) {
-          btnFavAuthorSidebar.classList.toggle('active', isFavAuthor);
-          btnFavAuthorSidebarText.textContent = isFavAuthor ? t('vw.authorFavOn', 'В избранном') : t('viewer.favAuthorInline', 'В избранное');
-          btnFavAuthorSidebar.title = isFavAuthor
-            ? t('vw.authorRemoveTitle', 'Удалить автора "{name}" из любимых').replace('{name}', cleanAuthorTag)
-            : t('vw.authorAddTitle', 'Добавить автора "{name}" в любимые').replace('{name}', cleanAuthorTag);
-        }
-        if (btnSetAuthorCoverSidebar) {
-          btnSetAuthorCoverSidebar.style.display = isFavAuthor ? 'inline-flex' : 'none';
-        }
-
-        if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
-      }
-    } catch (err) {
-      console.error('Ошибка добавления автора в любимые:', err);
-      showToast(t('vw.authorUpdateFailed', 'Не удалось обновить избранного автора'));
+    haptic(15);
+    if (typeof onFindSimilar === 'function') {
+      onFindSimilar(currentPost);
+      return;
     }
-  }
-
-  if (viewerFavAuthorBtn) {
-    viewerFavAuthorBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleAuthorFavToggle();
-    });
-  }
-
-  if (btnFavAuthorSidebar) {
-    btnFavAuthorSidebar.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleAuthorFavToggle();
-    });
-  }
-
-  if (btnClose) btnClose.addEventListener('click', closeViewer);
-  if (backdrop) backdrop.addEventListener('click', closeViewer);
-
-  // Wheel and scroll listeners on similar filmstrip for horizontal mouse navigation & infinite scroll
-  if (similarFilmstripInner) {
-    similarFilmstripInner.addEventListener('wheel', (e) => {
-      if (e.deltaY !== 0) {
-        e.preventDefault();
-        similarFilmstripInner.scrollLeft += e.deltaY;
+    if (viewerSimilarFilmstrip) {
+      if (viewerSimilarFilmstrip.style.display === 'none') {
+        renderSidebarSimilarPosts(currentPost, true);
+      } else {
+        viewerSimilarFilmstrip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        viewerSimilarFilmstrip.animate([
+          { transform: 'translateY(0) scale(1)' },
+          { transform: 'translateY(-6px) scale(1.01)' },
+          { transform: 'translateY(0) scale(1)' }
+        ], { duration: 300, easing: 'ease-out' });
       }
-    }, { passive: false });
+    }
+  });
 
-    similarFilmstripInner.addEventListener('scroll', () => {
-      if (!currentPost || !currentPost._similarSession) return;
-      const { scrollLeft, clientWidth, scrollWidth } = similarFilmstripInner;
-      if (scrollLeft + clientWidth >= scrollWidth - 250) {
-        loadMoreSimilarPosts(currentPost);
-      }
-    });
-  }
+  btnCopyLink?.addEventListener('click', async () => {
+    if (!currentPost) return;
+    const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
+    const siteUrl = getPostSiteUrl(activeItem) || getPostSiteUrl(currentPost);
+    const urlToCopy = siteUrl || activeItem.fileUrl || activeItem.sampleUrl || currentPost.fileUrl || currentPost.sampleUrl;
 
-  // Check for touches on interactive elements (video banner, album filmstrip, similar filmstrip, sidebar, buttons)
-  function isInteractiveTouchTarget(target) {
-    if (!target) return false;
-    return Boolean(
-      target.closest('.video-status-banner') ||
-      target.closest('.viewer-album-filmstrip') ||
-      target.closest('.viewer-similar-filmstrip') ||
-      target.closest('.btn-video-unmute') ||
-      target.closest('.viewer-sidebar') ||
-      target.closest('.viewer-header') ||
-      target.closest('button') ||
-      target.closest('input') ||
-      target.closest('a')
-    );
-  }
+    if (!urlToCopy) {
+      showToast(t('vw.linkUnavailable', 'Ссылка недоступна'));
+      return;
+    }
 
-  // Touch gestures
-  if (mediaWrapper) {
-    mediaWrapper.addEventListener('touchstart', (e) => {
-      if (isInteractiveTouchTarget(e.target)) {
-        isPinching = false;
-        isDraggingDown = false;
-        touchStartX = 0;
-        touchStartY = 0;
-        touchStartTime = 0;
-        return;
-      }
+    haptic(15);
+    const success = await copyToClipboard(urlToCopy);
+    showToast(success ? t('vw.linkCopied', 'Ссылка на пост скопирована') : t('vw.linkCopyFailed', 'Не удалось скопировать ссылку'));
+  });
 
-      if (currentZoomInstance && currentZoomInstance.getZoomLevel() > 1.05) {
-        isPinching = false;
-        isDraggingDown = false;
-        touchStartX = 0;
-        touchStartY = 0;
-        touchStartTime = 0;
-        return;
-      }
+  btnDownload?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!currentPost) return;
+    const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
+    downloadSingleMedia(activeItem, currentPost);
+  });
 
-      if (e.touches.length === 2) {
-        isPinching = true;
-        isDraggingDown = false;
-        initialPinchDist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY
-        );
-        initialZoom = currentZoomInstance ? currentZoomInstance.getZoomLevel() : 1;
-      } else if (e.touches.length === 1) {
-        isPinching = false;
-        isDraggingDown = false;
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        touchStartTime = Date.now();
-      }
-    }, { passive: true });
+  btnPrev?.addEventListener('click', () => goToPrev(false));
+  btnNext?.addEventListener('click', () => goToNext(false));
 
-    mediaWrapper.addEventListener('touchmove', (e) => {
-      if (isInteractiveTouchTarget(e.target) || !touchStartY) {
-        return;
-      }
+  btnCopyAllTags?.addEventListener('click', async () => {
+    if (!currentPost || !Array.isArray(currentPost.tags)) return;
+    haptic(15);
+    const success = await copyToClipboard(currentPost.tags.join(' '));
+    showToast(success ? t('vw.tagsCopied', 'Все теги поста скопированы') : t('vw.tagsCopyFailed', 'Не удалось скопировать теги'));
+  });
 
-      if (currentZoomInstance && currentZoomInstance.getZoomLevel() > 1.05) {
-        return;
-      }
+  viewerFavAuthorBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggle });
+  });
 
-      if (isPinching && e.touches.length === 2 && currentZoomInstance) {
-        const currentDist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY
-        );
-        if (initialPinchDist > 0) {
-          const factor = currentDist / initialPinchDist;
-          currentZoomInstance.setPinchZoom(factor, initialZoom);
-        }
-      } else if (e.touches.length === 1 && (!currentZoomInstance || currentZoomInstance.getZoomLevel() <= 1.05)) {
-        const deltaY = e.touches[0].clientY - touchStartY;
-        const deltaX = e.touches[0].clientX - touchStartX;
-        if (deltaY > 15 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
-          isDraggingDown = true;
-          if (e.cancelable) {
-            e.preventDefault();
-          }
-          if (viewerContent) {
-            viewerContent.style.transition = 'none';
-            viewerContent.style.transform = `translateY(${Math.max(0, deltaY)}px) scale(${Math.max(0.88, 1 - deltaY / 1200)})`;
-          }
-          if (backdrop) {
-            backdrop.style.opacity = `${Math.max(0.2, 1 - deltaY / 400)}`;
-          }
-        } else if (isDraggingDown) {
-          if (e.cancelable) {
-            e.preventDefault();
-          }
-        }
-      }
-    }, { passive: false });
+  btnFavAuthorSidebar?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggle });
+  });
 
-    mediaWrapper.addEventListener('touchend', (e) => {
-      if (isInteractiveTouchTarget(e.target) && !isDraggingDown) {
-        touchStartX = 0;
-        touchStartY = 0;
-        touchStartTime = 0;
-        return;
-      }
+  btnFetchFullAlbum?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!currentPost) return;
+    haptic(15);
+    loadFullAlbumForPost(currentPost, true);
+  });
 
-      if (currentZoomInstance && currentZoomInstance.getZoomLevel() > 1.05 && !isDraggingDown) {
-        touchStartX = 0;
-        touchStartY = 0;
-        touchStartTime = 0;
-        return;
-      }
+  btnClose?.addEventListener('click', closeViewer);
+  backdrop?.addEventListener('click', closeViewer);
 
-      if (isPinching) {
-        if (e.touches.length < 2) isPinching = false;
-        if (currentZoomInstance && currentZoomInstance.getZoomLevel() < 1) {
-          currentZoomInstance.resetZoom();
-        }
-        return;
-      }
-
-      if (isDraggingDown) {
-        isDraggingDown = false;
-        const deltaY = e.changedTouches[0].clientY - touchStartY;
-        if (deltaY > 90) {
-          haptic(25);
-          if (viewerContent) {
-            viewerContent.style.transition = 'transform 0.2s cubic-bezier(0.4, 0, 1, 1)';
-            viewerContent.style.transform = `translateY(100vh)`;
-          }
-          setTimeout(() => {
-            if (viewerContent) {
-              viewerContent.style.transition = '';
-              viewerContent.style.transform = '';
-            }
-            if (backdrop) backdrop.style.opacity = '';
-            closeViewer();
-          }, 180);
-          return;
-        } else {
-          if (viewerContent) {
-            viewerContent.style.transition = 'transform 0.2s ease-out';
-            viewerContent.style.transform = '';
-          }
-          if (backdrop) {
-            backdrop.style.transition = 'opacity 0.2s ease-out';
-            backdrop.style.opacity = '';
-          }
-          setTimeout(() => {
-            if (viewerContent) viewerContent.style.transition = '';
-            if (backdrop) backdrop.style.transition = '';
-          }, 220);
-        }
-      }
-
-      if (e.changedTouches.length === 1 && (!currentZoomInstance || currentZoomInstance.getZoomLevel() <= 1.05)) {
-        if (!touchStartY) return;
-        const deltaX = e.changedTouches[0].clientX - touchStartX;
-        const deltaY = e.changedTouches[0].clientY - touchStartY;
-        const deltaTime = Date.now() - touchStartTime;
-        const absX = Math.abs(deltaX);
-        const absY = Math.abs(deltaY);
-
-        if (absX > 50 && absX > absY * 1.5 && deltaTime < 450) {
-          if (deltaX < 0) {
-            goToNext(false);
-          } else {
-            goToPrev(false);
-          }
-          return;
-        }
-
-        if (deltaY > 80 && absY > absX * 1.5 && deltaTime < 450) {
-          haptic(25);
-          closeViewer();
-          return;
-        }
-
-        if (absX < 12 && absY < 12 && deltaTime < 250) {
-          const now = Date.now();
-          const tapX = e.changedTouches[0].clientX;
-          const tapY = e.changedTouches[0].clientY;
-          if (now - lastTapTime < 300) {
-            if (currentZoomInstance) {
-              currentZoomInstance.toggleDoubleTapZoom(tapX, tapY);
-            }
-          } else {
-            setTimeout(() => {
-              if (Date.now() - lastTapTime >= 280) {
-                if (viewerSidebar && viewerSidebar.classList.contains('open')) {
-                  viewerSidebar.classList.remove('open');
-                } else if (viewerContent) {
-                  viewerContent.classList.toggle('ui-hidden');
-                }
-              }
-            }, 280);
-          }
-          lastTapTime = now;
-        }
-      }
-    });
-  }
+  setupViewerGestures({
+    mediaWrapper,
+    viewerContent,
+    backdrop,
+    viewerSidebar,
+    getZoomInstance: () => currentZoomInstance,
+    goToNext,
+    goToPrev,
+    closeViewer
+  });
 
   window.addEventListener('keydown', (e) => {
     if (!modal || modal.style.display !== 'flex') return;

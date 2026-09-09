@@ -1,5 +1,5 @@
-const CACHE_NAME = 'booru-explorer-v8.15';
-const MEDIA_CACHE = 'booru-media-v8.15';
+const CACHE_NAME = 'booru-explorer-v8.18';
+const MEDIA_CACHE = 'booru-media-v8.18';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
 
@@ -33,7 +33,11 @@ const STATIC_ASSETS = [
   '/css/variables.css',
   '/css/main.css',
   '/css/components.css',
+  '/css/settings.css',
+  '/css/authors.css',
+  '/css/profile.css',
   '/css/viewer.css',
+  '/css/archive-inspect.css',
   '/js/state.js',
   '/js/api.js',
   '/js/router.js',
@@ -48,6 +52,7 @@ const STATIC_ASSETS = [
   '/js/modules/filtersUI.js',
   '/js/modules/navigationUI.js',
   '/js/modules/drawers.js',
+  '/js/modules/settingsConstants.js',
   '/js/modules/settingsModal.js',
   '/js/modules/sidebarTags.js',
   '/js/modules/authModal.js',
@@ -58,6 +63,13 @@ const STATIC_ASSETS = [
   '/js/viewer/imageZoom.js',
   '/js/viewer/videoPlayer.js',
   '/js/viewer/viewerSidebar.js',
+  '/js/viewer/viewerMetadata.js',
+  '/js/viewer/viewerArchives.js',
+  '/js/viewer/viewerArchiveInspect.js',
+  '/js/viewer/viewerCloudLinks.js',
+  '/js/viewer/viewerSimilar.js',
+  '/js/viewer/viewerAlbum.js',
+  '/js/viewer/viewerGestures.js',
   '/icons/favicon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

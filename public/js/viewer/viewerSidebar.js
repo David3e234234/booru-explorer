@@ -1,4 +1,4 @@
-import { showToast, copyToClipboard, haptic } from '../modules/uiUtils.js';
+import { showToast, copyToClipboard, haptic, getPostSiteUrl } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 
 export function formatRating(r) {
@@ -308,3 +308,80 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
 
   tagsCloud.appendChild(container);
 }
+
+/**
+ * Renders technical and metadata rows in the viewer sidebar:
+ * duration, creation date, source site link, rating, score/views, and AI classification.
+ * @param {Object} currentPost
+ */
+export function renderSidebarInfo(currentPost) {
+  if (!currentPost) return;
+
+  const infoDurationRow = document.getElementById('infoDurationRow');
+  const infoDuration = document.getElementById('infoDuration');
+  if (currentPost.isVideo && (currentPost.durationText || currentPost.duration > 0)) {
+    const durText = currentPost.durationText || `${Math.floor(currentPost.duration / 60)}:${Math.floor(currentPost.duration % 60) < 10 ? '0' : ''}${Math.floor(currentPost.duration % 60)}`;
+    if (infoDuration) infoDuration.textContent = durText;
+    if (infoDurationRow) infoDurationRow.style.display = 'flex';
+  } else {
+    if (infoDurationRow) infoDurationRow.style.display = 'none';
+  }
+
+  const infoDateRow = document.getElementById('infoDateRow');
+  const infoDate = document.getElementById('infoDate');
+  if (infoDateRow && infoDate) {
+    if (currentPost.createdAt) {
+      try {
+        const d = new Date(currentPost.createdAt);
+        if (!isNaN(d.getTime())) {
+          infoDate.textContent = d.toLocaleString(document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          infoDateRow.style.display = 'flex';
+        } else {
+          infoDateRow.style.display = 'none';
+        }
+      } catch {
+        infoDateRow.style.display = 'none';
+      }
+    } else {
+      infoDateRow.style.display = 'none';
+    }
+  }
+
+  const infoSite = document.getElementById('infoSite');
+  if (infoSite) {
+    const siteName = currentPost.siteName || currentPost.site;
+    const postPageUrl = getPostSiteUrl(currentPost);
+    if (postPageUrl) {
+      infoSite.innerHTML = `<a href="${postPageUrl}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-primary); text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" title="${t('vw.openOnSite', 'Открыть страницу на сайте {name}').replace('{name}', siteName)}">${siteName} <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
+    } else {
+      infoSite.textContent = siteName;
+    }
+  }
+
+  const infoRating = document.getElementById('infoRating');
+  if (infoRating) infoRating.textContent = formatRating(currentPost.rating);
+
+  const infoScore = document.getElementById('infoScore');
+  if (infoScore) {
+    let scoreText = `★ ${currentPost.score || 0}`;
+    if (currentPost.views > 0 || currentPost.viewsText) {
+      scoreText += ` · ${t('vw.viewsShort', '{n} просм.').replace('{n}', currentPost.viewsText || currentPost.views)}`;
+    } else if (currentPost.favCount > 0) {
+      scoreText += ` · ${t('vw.favsShort', '{n} в избранном').replace('{n}', currentPost.favCount)}`;
+    }
+    infoScore.textContent = scoreText;
+  }
+
+  const infoAi = document.getElementById('infoAi');
+  if (infoAi) {
+    infoAi.textContent = currentPost.isAi ? t('vw.aiYes', 'Да (ИИ-арт)') : t('vw.aiNo', 'Нет (Авторский)');
+    infoAi.style.color = currentPost.isAi ? 'var(--accent-warning)' : 'var(--text-primary)';
+  }
+}
+
