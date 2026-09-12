@@ -17,7 +17,7 @@
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.4">
   <link rel="stylesheet" href="css/main.css?v=9.2">
-  <link rel="stylesheet" href="css/components.css?v=10.6">
+  <link rel="stylesheet" href="css/components.css?v=10.7">
   <link rel="stylesheet" href="css/settings.css?v=1.1">
   <link rel="stylesheet" href="css/authors.css?v=1.0">
   <link rel="stylesheet" href="css/profile.css?v=1.0">
@@ -2563,6 +2563,8 @@
         <!-- Dynamic content: loading, links, files -->
       </div>
     </div>
+  </div>
+
   <!-- Search preset add/edit modal -->
   <div class="modal-backdrop" id="modalPresetBackdrop" style="display: none;">
     <div class="modal-dialog modal-dialog-sm">
@@ -2575,14 +2577,14 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </div>
-      <div class="modal-body modal-form">
+      <form id="formPreset" class="modal-body modal-form">
         <div class="form-group">
           <label for="presetInputName" class="form-label" data-i18n="presets.nameLabel">Название пресета:</label>
           <input type="text" id="presetInputName" class="form-input" placeholder="например: Genshin Impact, Cyberpunk..." data-i18n-placeholder="presets.namePlaceholder" autocomplete="off" spellcheck="false">
         </div>
         <div class="form-group">
           <label for="presetInputTags" class="form-label" data-i18n="presets.tagsLabel">Теги поиска:</label>
-          <input type="text" id="presetInputTags" class="form-input" placeholder="1girl, solo, genshin_impact..." data-i18n-placeholder="presets.tagsPlaceholder" autocomplete="off" spellcheck="false">
+          <input type="text" id="presetInputTags" class="form-input" placeholder="1girl, solo, genshin_impact..." data-i18n-placeholder="presets.tagsPlaceholder" required autocomplete="off" spellcheck="false">
           <span class="form-hint" data-i18n="presets.tagsHint">Разделяйте теги запятой или пробелом.</span>
         </div>
         <div class="form-group">
@@ -2594,14 +2596,14 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" id="btnCancelPreset" data-i18n="modal.cancel">Отмена</button>
-          <button type="button" class="btn-primary" id="btnSavePresetConfirm" data-i18n="modal.save">Сохранить</button>
+          <button type="submit" class="btn-primary" id="btnSavePresetConfirm" data-i18n="modal.save">Сохранить</button>
         </div>
-      </div>
+      </form>
     </div>
   </div>
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=20.4"></script>
+  <script type="module" src="js/app.js?v=20.5"></script>
 </body>
 </html>

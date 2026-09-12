@@ -42,10 +42,20 @@ export function initSearchPresets({ onApplyPreset, getCurrentTags, getCurrentSit
   const inputName = document.getElementById('presetInputName');
   const inputTags = document.getElementById('presetInputTags');
 
+  const formPreset = document.getElementById('formPreset');
+
   btnSavePreset?.addEventListener('click', () => {
-    const currentTags = typeof getCurrentTagsCallback === 'function'
-      ? getCurrentTagsCallback()
-      : (state.searchTags || []);
+    let currentTags = typeof getCurrentTagsCallback === 'function'
+      ? [...getCurrentTagsCallback()]
+      : [...(state.searchTags || [])];
+    const searchInput = document.getElementById('searchInput');
+    const inputVal = searchInput?.value?.trim();
+    if (inputVal) {
+      const clean = inputVal.toLowerCase().replace(/\s+/g, '_');
+      if (!currentTags.includes(clean)) {
+        currentTags.push(clean);
+      }
+    }
     openPresetModal(null, currentTags);
   });
 
@@ -58,24 +68,18 @@ export function initSearchPresets({ onApplyPreset, getCurrentTags, getCurrentSit
     }
   });
 
-  btnSaveConfirm?.addEventListener('click', () => {
+  formPreset?.addEventListener('submit', (e) => {
+    e.preventDefault();
     handleSavePresetSubmit();
   });
 
-  inputName?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      inputTags?.focus();
-    } else if (e.key === 'Escape') {
-      closePresetModal();
-    }
+  btnSaveConfirm?.addEventListener('click', (e) => {
+    e.preventDefault();
+    handleSavePresetSubmit();
   });
 
-  inputTags?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
-      e.preventDefault();
-      handleSavePresetSubmit();
-    } else if (e.key === 'Escape') {
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modalBackdrop && modalBackdrop.style.display !== 'none') {
       closePresetModal();
     }
   });
