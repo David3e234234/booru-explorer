@@ -3,7 +3,12 @@ import {
   saveLocalSettings, 
   saveLocalAuth,
   exportUserData, 
-  importUserData 
+  importUserData,
+  getUserInterestTags,
+  excludeInterestTag,
+  restoreInterestTag,
+  resetExcludedInterestTags,
+  clearSessionInterests
 } from '../state.js';
 import { 
   saveSettings, 
@@ -474,6 +479,75 @@ export function renderSettingsChips() {
   );
 }
 
+export function renderTasteProfileUI() {
+  const checkRecSkipPenalty = document.getElementById('checkRecSkipPenalty');
+  if (checkRecSkipPenalty) {
+    checkRecSkipPenalty.checked = state.settings?.recommendationEnableSkipPenalty !== false;
+  }
+
+  const container = document.getElementById('recInterestsContainer');
+  const countEl = document.getElementById('recInterestsCount');
+  if (container) {
+    const topInterests = getUserInterestTags(20);
+    if (countEl) countEl.textContent = String(topInterests.length);
+
+    if (topInterests.length === 0) {
+      container.innerHTML = `<span class="text-muted" style="font-size: 12px;">${t('settings.noInterests', 'Лайкайте арты, чтобы сформировать профиль вкусов.')}</span>`;
+    } else {
+      container.innerHTML = topInterests.map(item => {
+        const catClass = item.category === 'artist' ? 'chip-artist' : item.category === 'character' ? 'chip-char' : item.category === 'copyright' ? 'chip-cp' : 'chip-general';
+        const displayTag = item.category === 'artist' ? `@${item.tag}` : item.tag;
+        return `
+          <div class="rec-interest-chip ${catClass}" title="${t('settings.interestWeight', 'Вес интереса: {s}').replace('{s}', item.score.toFixed(1))}">
+            <span class="rec-chip-label">${displayTag}</span>
+            <span class="rec-chip-score">${item.score.toFixed(1)}</span>
+            <button type="button" class="btn-rec-chip-remove" data-tag="${item.tag}" title="${t('settings.excludeTagBtn', 'Исключить из рекомендаций')}">×</button>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.btn-rec-chip-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const tag = btn.dataset.tag;
+          if (!tag) return;
+          excludeInterestTag(tag);
+          renderTasteProfileUI();
+          showToast(t('gal.matchPopover.toastExcluded', 'Тег {t} исключен из рекомендаций').replace('{t}', tag));
+        });
+      });
+    }
+  }
+
+  const excludedContainer = document.getElementById('recExcludedContainer');
+  if (excludedContainer) {
+    const excludedTags = Array.isArray(state.settings?.excludedInterestTags) ? state.settings.excludedInterestTags : [];
+    if (excludedTags.length === 0) {
+      excludedContainer.innerHTML = `<span class="text-muted" style="font-size: 12px;">${t('settings.noExcludedTags', 'Нет исключенных тегов')}</span>`;
+    } else {
+      excludedContainer.innerHTML = excludedTags.map(tag => {
+        return `
+          <div class="rec-excluded-chip">
+            <span class="rec-chip-label">${tag}</span>
+            <button type="button" class="btn-rec-chip-restore" data-tag="${tag}" title="${t('settings.restoreTagBtn', 'Восстановить в рекомендациях')}">✕</button>
+          </div>
+        `;
+      }).join('');
+
+      excludedContainer.querySelectorAll('.btn-rec-chip-restore').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const tag = btn.dataset.tag;
+          if (!tag) return;
+          restoreInterestTag(tag);
+          renderTasteProfileUI();
+          showToast(t('gal.matchPopover.toastRestored', 'Тег {t} возвращен в рекомендации').replace('{t}', tag));
+        });
+      });
+    }
+  }
+}
+
 export async function updateStorageUsageInfo() {
   const storageUsageText = document.getElementById('storageUsageText');
   const storageQuotaText = document.getElementById('storageQuotaText');
@@ -639,6 +713,9 @@ export function switchSettingsTab(tabId) {
   document.querySelectorAll('.settings-tab-pane').forEach(pane => {
     pane.style.display = (pane.id === `tabPane-${tabId}`) ? 'flex' : 'none';
   });
+  if (tabId === 'filters') {
+    renderTasteProfileUI();
+  }
 }
 
 export function openSettingsModal() {
@@ -654,19 +731,20 @@ export function openSettingsModal() {
   const inputYandereLogin = document.getElementById('inputYandereLogin');
   const inputYanderePassword = document.getElementById('inputYanderePassword');
   const inputPawchiveSession = document.getElementById('inputPawchiveSession');
+  const inputKemonoSession = document.getElementById('inputKemonoSession');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
+  const selectPreviewQuality = document.getElementById('selectPreviewQuality');
+  const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
   const checkProxyVideos = document.getElementById('checkProxyVideos');
   const checkProxyDownloads = document.getElementById('checkProxyDownloads');
   const checkProxyVideoDefault = document.getElementById('checkProxyVideoDefault');
-  const selectPreviewQuality = document.getElementById('selectPreviewQuality');
+  const checkShowVideoStatusBanner = document.getElementById('checkShowVideoStatusBanner');
   const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
   const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
   const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
   const checkEnableSimilarPosts = document.getElementById('checkEnableSimilarPosts');
-  const checkShowVideoStatusBanner = document.getElementById('checkShowVideoStatusBanner');
-  const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
   const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
   const checkEnablePaheal = document.getElementById('checkEnablePaheal');
 
@@ -699,6 +777,7 @@ export function openSettingsModal() {
     : [...DEFAULT_LGBT_TAGS];
 
   renderSettingsChips();
+  renderTasteProfileUI();
   updateStorageUsageInfo();
 
   if (inputRule34ApiKey) inputRule34ApiKey.value = state.settings.rule34ApiKey || '';
@@ -988,6 +1067,33 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       tempLgbtTags = [...DEFAULT_LGBT_TAGS];
       renderSettingsChips();
       showToast(t('set.lgbtReset', 'Слова для «ЛГБТ» сброшены к стандартным'));
+    });
+  }
+
+  const btnResetExcludedRecTags = document.getElementById('btnResetExcludedRecTags');
+  if (btnResetExcludedRecTags) {
+    btnResetExcludedRecTags.addEventListener('click', () => {
+      resetExcludedInterestTags();
+      renderTasteProfileUI();
+      showToast(t('settings.excludedCleared', 'Список исключений очищен'));
+    });
+  }
+
+  const btnClearSessionInterests = document.getElementById('btnClearSessionInterests');
+  if (btnClearSessionInterests) {
+    btnClearSessionInterests.addEventListener('click', () => {
+      clearSessionInterests();
+      renderTasteProfileUI();
+      showToast(t('settings.sessionCleared', 'Сессионная память вкусов очищена'));
+    });
+  }
+
+  const checkRecSkipPenalty = document.getElementById('checkRecSkipPenalty');
+  if (checkRecSkipPenalty) {
+    checkRecSkipPenalty.addEventListener('change', () => {
+      if (!state.settings) state.settings = {};
+      state.settings.recommendationEnableSkipPenalty = checkRecSkipPenalty.checked;
+      saveLocalSettings({ recommendationEnableSkipPenalty: checkRecSkipPenalty.checked });
     });
   }
 
@@ -1595,6 +1701,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         groupAlbums: groupAlbumsVal,
         recommendationMode: document.getElementById('selectRecommendationMode')?.value || 'tags-only',
         enableRecommendations: document.getElementById('selectRecommendationMode')?.value !== 'off',
+        recommendationEnableSkipPenalty: document.getElementById('checkRecSkipPenalty')?.checked !== false,
         siteSortTags: tempSiteSortTags
       };
 

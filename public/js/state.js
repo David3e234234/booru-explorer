@@ -117,6 +117,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   recommendationMode: 'tags-only', // 'tags-only' | 'off'
   recommendationFocus: 'all', // 'all' | 'artists' | 'characters' | 'discovery'
   recommendationDecayDays: 25, // half-life for temporal interest decay
+  recommendationEnableSkipPenalty: true,
+  excludedInterestTags: [],
   enableRecommendations: true,
   postSort: 'new',
   siteSortTags: {}
@@ -682,6 +684,64 @@ export function getSessionInterests() {
 
 export function clearSessionInterests() {
   sessionInterests.clear();
+  sessionSkipPenalties.clear();
+}
+
+// ⏱️ Short-term in-session skip tracking for posts that lingered in viewport without clicks
+const sessionSkipPenalties = new Map(); // tag -> { penalty, category, lastSeen }
+
+export function recordPostImpressionSkip(post) {
+  if (!post || state.settings?.recommendationEnableSkipPenalty === false) return;
+  const now = Date.now();
+  const applySkip = (rawTag, cat, mult = 1.0) => {
+    const clean = cleanTagString(rawTag);
+    if (!clean || GENERIC_DISLIKE_PROTECTED_TAGS.has(clean)) return;
+    const prev = sessionSkipPenalties.get(clean) || { penalty: 0, category: cat, lastSeen: now };
+    prev.penalty = Math.min(1.8, prev.penalty + 0.20 * mult);
+    prev.lastSeen = now;
+    sessionSkipPenalties.set(clean, prev);
+  };
+  if (post.author) applySkip(post.author, 'artist', 1.5);
+  const td = post.tagDetails || {};
+  if (Array.isArray(td.artist)) td.artist.forEach(a => applySkip(a, 'artist', 1.5));
+  if (Array.isArray(td.character)) td.character.forEach(c => applySkip(c, 'character', 1.2));
+  if (Array.isArray(td.copyright)) td.copyright.forEach(cp => applySkip(cp, 'copyright', 1.0));
+  if (Array.isArray(td.general)) td.general.slice(0, 3).forEach(g => applySkip(g, 'general', 0.5));
+}
+
+export function getSessionSkipPenalties() {
+  const now = Date.now();
+  const ONE_HOUR = 3600 * 1000;
+  const valid = [];
+  for (const [tag, data] of sessionSkipPenalties.entries()) {
+    if (now - data.lastSeen < ONE_HOUR) {
+      valid.push({ tag, penalty: data.penalty, category: data.category });
+    } else {
+      sessionSkipPenalties.delete(tag);
+    }
+  }
+  return valid;
+}
+
+// 🎬 Calculate user format preferences (videos vs images, portrait vs landscape)
+export function getUserMediaPreferences() {
+  const postsPool = [...state.likes, ...state.favorites];
+  if (postsPool.length === 0) return { videoAffinity: 0, prefersPortrait: false };
+  let videoCount = 0;
+  let portraitCount = 0;
+  let validAspectCount = 0;
+
+  for (const p of postsPool) {
+    if (p.isVideo) videoCount++;
+    if (p.width && p.height) {
+      validAspectCount++;
+      if (p.height > p.width * 1.15) portraitCount++;
+    }
+  }
+
+  const videoAffinity = videoCount / postsPool.length;
+  const prefersPortrait = validAspectCount > 0 && (portraitCount / validAspectCount) > 0.65;
+  return { videoAffinity, prefersPortrait };
 }
 
 // 🚫 Extract top disliked tags to inject into seed queries as negative tokens (-tag)
@@ -773,6 +833,14 @@ export function getUserInterestTags(limit = null, options = {}) {
     counts.set(item.tag, (counts.get(item.tag) || 0) + item.score * 0.8);
     if (!catMap.has(item.tag)) catMap.set(item.tag, item.category);
     if (!weights.has(item.tag)) weights.set(item.tag, 1.2);
+  }
+
+  // 5. Inject short-term session skip penalties (if enabled)
+  if (state.settings?.recommendationEnableSkipPenalty !== false) {
+    const skipList = getSessionSkipPenalties();
+    for (const item of skipList) {
+      dislikeCounts.set(item.tag, (dislikeCounts.get(item.tag) || 0) + item.penalty);
+    }
   }
 
   const scores = new Map();
@@ -875,7 +943,90 @@ export function getUserInterestSeedPairs(limit = 12) {
   return sortedPairs.slice(0, limit);
 }
 
-// 🎲 Smart Multi-Tier Seed Generation with Page Rotation and Exploration
+// 🌐 Build taste clusters by finding co-occurrence communities among liked/favorited posts
+export function getUserTasteClusters(maxClusters = 4) {
+  const postsPool = [...state.likes, ...state.favorites];
+  if (postsPool.length < 3) return [];
+
+  const userInterests = getUserInterestTags();
+  if (userInterests.length === 0) return [];
+  const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
+  const excludedSet = new Set((state.settings?.excludedInterestTags || []).map(t => String(t).toLowerCase().trim()));
+
+  const coCounts = new Map();
+  const tagPostCounts = new Map();
+
+  for (const post of postsPool) {
+    if (!post) continue;
+    const td = post.tagDetails || {};
+    const artists = (td.artist || (post.author ? [post.author] : []))
+      .map(cleanTagString).filter(t => t && !excludedSet.has(t) && interestMap.has(t));
+    const characters = (td.character || [])
+      .map(cleanTagString).filter(t => t && !excludedSet.has(t) && interestMap.has(t));
+    const copyrights = (td.copyright || [])
+      .map(cleanTagString).filter(t => t && !excludedSet.has(t) && interestMap.has(t));
+    const generals = (td.general || (Array.isArray(post.tags) ? post.tags : []))
+      .map(cleanTagString).filter(t => t && !excludedSet.has(t) && !GENERIC_DISLIKE_PROTECTED_TAGS.has(t) && interestMap.has(t))
+      .slice(0, 4);
+
+    const postTags = Array.from(new Set([...artists, ...characters, ...copyrights, ...generals]));
+    for (const t of postTags) {
+      tagPostCounts.set(t, (tagPostCounts.get(t) || 0) + 1);
+    }
+
+    for (let i = 0; i < postTags.length; i++) {
+      for (let j = i + 1; j < postTags.length; j++) {
+        const pairKey = [postTags[i], postTags[j]].sort().join('|');
+        coCounts.set(pairKey, (coCounts.get(pairKey) || 0) + 1);
+      }
+    }
+  }
+
+  const candidateHubs = userInterests.filter(i =>
+    (i.category === 'character' || i.category === 'copyright' || i.category === 'artist') &&
+    (tagPostCounts.get(i.tag) || 0) >= 2
+  );
+
+  const assignedTags = new Set();
+  const clusters = [];
+
+  for (const hub of candidateHubs) {
+    if (clusters.length >= maxClusters) break;
+    if (assignedTags.has(hub.tag)) continue;
+
+    const clusterTags = [hub.tag];
+    assignedTags.add(hub.tag);
+
+    for (const [tag] of interestMap.entries()) {
+      if (assignedTags.has(tag)) continue;
+      const pairKey = [hub.tag, tag].sort().join('|');
+      const coVal = coCounts.get(pairKey) || 0;
+      if (coVal >= 2) {
+        clusterTags.push(tag);
+        assignedTags.add(tag);
+      }
+    }
+
+    if (clusterTags.length >= 2) {
+      let label = hub.tag.replace(/_/g, ' ');
+      if (hub.category === 'artist') label = `@${label}`;
+      else if (hub.category === 'character') label = label.split('(')[0].trim();
+
+      clusters.push({
+        id: `cluster_${clusters.length + 1}`,
+        label,
+        hubTag: hub.tag,
+        hubCategory: hub.category,
+        tags: clusterTags,
+        score: hub.score
+      });
+    }
+  }
+
+  return clusters;
+}
+
+// 🎲 Smart Multi-Tier Seed Generation with Page Rotation, Cluster Cohesion and Exploration
 export function getRecommendationSeeds({ limit = 5, page = 1, focusMode = 'all' } = {}) {
   const userInterests = getUserInterestTags(40, { focusMode });
   if (userInterests.length === 0) return [];
@@ -914,12 +1065,25 @@ export function getRecommendationSeeds({ limit = 5, page = 1, focusMode = 'all' 
       }
     }
   } else {
-    // Balanced "all" mode: Page-aware rotation of top pairs + single tags
-    if (seedPairs.length > 0) {
+    // Balanced "all" mode: Use taste clusters to keep seed pairs thematically coherent
+    const clusters = getUserTasteClusters(4);
+    if (clusters.length > 0) {
+      const activeCluster = clusters[(page - 1) % clusters.length];
+      if (activeCluster && activeCluster.tags.length >= 2) {
+        selectedSeeds.push(`${activeCluster.tags[0]} ${activeCluster.tags[1]}`);
+        if (activeCluster.tags.length >= 3) {
+          selectedSeeds.push(activeCluster.tags[2]);
+        }
+      }
+    }
+
+    if (selectedSeeds.length < limit && seedPairs.length > 0) {
       const pairOffset = ((page - 1) * 2) % seedPairs.length;
-      selectedSeeds.push(seedPairs[pairOffset]);
-      if (seedPairs.length > 1) {
-        selectedSeeds.push(seedPairs[(pairOffset + 1) % seedPairs.length]);
+      const p1 = seedPairs[pairOffset];
+      if (!selectedSeeds.includes(p1)) selectedSeeds.push(p1);
+      if (seedPairs.length > 1 && selectedSeeds.length < limit) {
+        const p2 = seedPairs[(pairOffset + 1) % seedPairs.length];
+        if (!selectedSeeds.includes(p2)) selectedSeeds.push(p2);
       }
     }
 
@@ -954,24 +1118,33 @@ function cleanTagString(str) {
 
 export function excludeInterestTag(tag) {
   if (!tag) return;
-  const clean = String(tag).toLowerCase().trim();
+  const clean = cleanTagString(tag);
   if (!clean) return;
+  if (!state.settings) state.settings = {};
   if (!Array.isArray(state.settings.excludedInterestTags)) {
     state.settings.excludedInterestTags = [];
   }
   if (!state.settings.excludedInterestTags.includes(clean)) {
     state.settings.excludedInterestTags.push(clean);
+    state.excludedInterestTags = [...state.settings.excludedInterestTags];
+    saveLocalSettings({ excludedInterestTags: state.settings.excludedInterestTags });
   }
 }
 
 export function restoreInterestTag(tag) {
-  if (!tag || !Array.isArray(state.settings.excludedInterestTags)) return;
-  const clean = String(tag).toLowerCase().trim();
+  if (!tag) return;
+  const clean = cleanTagString(tag);
+  if (!state.settings || !Array.isArray(state.settings.excludedInterestTags)) return;
   state.settings.excludedInterestTags = state.settings.excludedInterestTags.filter(t => t !== clean);
+  state.excludedInterestTags = [...state.settings.excludedInterestTags];
+  saveLocalSettings({ excludedInterestTags: state.settings.excludedInterestTags });
 }
 
 export function resetExcludedInterestTags() {
+  if (!state.settings) state.settings = {};
   state.settings.excludedInterestTags = [];
+  state.excludedInterestTags = [];
+  saveLocalSettings({ excludedInterestTags: [] });
 }
 
 function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0, isDislike = false) {
@@ -1020,11 +1193,12 @@ function extractTagsFromPost(post, counts, weights, catMap, multiplier = 1.0, is
 }
 
 // 🎯 Compute a post's relevance percentage and rich matched tags breakdown with explanation
-export function calculatePostMatchPercent(post, userInterestMap) {
+export function calculatePostMatchPercent(post, userInterestMap, options = {}) {
   if (!post || !userInterestMap || userInterestMap.size === 0) {
     return {
       percent: 0,
       matchedTags: [],
+      matchedDetails: [],
       matchExplanation: '',
       valueOf() { return 0; },
       toString() { return '0'; }
@@ -1068,6 +1242,7 @@ export function calculatePostMatchPercent(post, userInterestMap) {
     return {
       percent: 0,
       matchedTags: [],
+      matchedDetails: [],
       matchExplanation: '',
       valueOf() { return 0; },
       toString() { return '0'; }
@@ -1082,7 +1257,17 @@ export function calculatePostMatchPercent(post, userInterestMap) {
   const isKeyMatch = hasArtist || hasChar;
 
   const ratio = matchPoints / (matchPoints + (isKeyMatch ? 7 : 14));
-  const percent = Math.min(99, Math.max(55, Math.round((isKeyMatch ? 72 : 55) + ratio * (isKeyMatch ? 27 : 38))));
+  let percent = Math.min(99, Math.max(55, Math.round((isKeyMatch ? 72 : 55) + ratio * (isKeyMatch ? 27 : 38))));
+
+  // Format preference adjustment (video / aspect ratio)
+  if (options && options.mediaPrefs) {
+    if (post.isVideo && options.mediaPrefs.videoAffinity > 0.3) {
+      percent = Math.min(99, percent + Math.round(options.mediaPrefs.videoAffinity * 6));
+    }
+    if (options.mediaPrefs.prefersPortrait && post.width && post.height && post.height > post.width * 1.15) {
+      percent = Math.min(99, percent + 3);
+    }
+  }
 
   // Build human-friendly explanation
   const displayTags = matchedTags.map(m => m.display).slice(0, 4);
@@ -1091,6 +1276,7 @@ export function calculatePostMatchPercent(post, userInterestMap) {
   return {
     percent,
     matchedTags: displayTags,
+    matchedDetails: matchedTags,
     matchExplanation,
     valueOf() { return this.percent; },
     toString() { return String(this.percent); }

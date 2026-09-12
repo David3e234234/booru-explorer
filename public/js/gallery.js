@@ -1,4 +1,15 @@
-import { state, isPostFavorite, isAuthorFavorite, isPostLiked, toggleLikeLocally, toggleDislikeLocally, isPostDisliked } from './state.js';
+import { 
+  state, 
+  isPostFavorite, 
+  isAuthorFavorite, 
+  isPostLiked, 
+  toggleLikeLocally, 
+  toggleDislikeLocally, 
+  isPostDisliked,
+  recordPostImpressionSkip,
+  excludeInterestTag,
+  restoreInterestTag
+} from './state.js';
 import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
 import { showToast, showActionToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
 import { t } from './i18n.js';
@@ -17,6 +28,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   let observer = null;
   let mobileVideoObserver = null;
   let videoMetadataObserver = null;
+  let recDwellObserver = null;
+  const dwellingCards = new Map();
   let autoFillAttempts = 0;
 
   // Custom Pull-to-Refresh
@@ -442,6 +455,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       append = false;
     }
 
+    if (!append) {
+      resetRecDwellObserver();
+    }
+
     loadingSpinner.style.display = 'none';
     scrollLoader.style.display = 'none';
 
@@ -825,7 +842,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       const matchedInfo = (Array.isArray(post.matchedTags) && post.matchedTags.length > 0)
         ? `&#10;${t('gal.matchTagsInfo', 'Совпало: {tags}').replace('{tags}', post.matchedTags.join(', '))}`
         : '';
-      matchBadge = `<span class="badge-format match-percent" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%</span>`;
+      matchBadge = `<button type="button" class="badge-format match-percent btn-match-popover" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%. Нажмите для деталей').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%</button>`;
     }
 
     let albumBadge = '';
@@ -998,7 +1015,178 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       setTimeout(() => lazyResolveRule34VideoAuthor(card, post), 60);
     }
 
+    if (recDwellObserver && state.currentCategory === 'recommended') {
+      recDwellObserver.observe(card);
+    }
+
     return card;
+  }
+
+  // ── Recommendations Dwell / Skip Tracking ──
+  function resetRecDwellObserver() {
+    if (recDwellObserver) {
+      recDwellObserver.disconnect();
+    }
+    dwellingCards.forEach(timer => clearTimeout(timer));
+    dwellingCards.clear();
+
+    if (state.currentCategory !== 'recommended' || state.settings?.recommendationEnableSkipPenalty === false) {
+      return;
+    }
+
+    recDwellObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const card = entry.target;
+        const post = card._post;
+        if (!post) return;
+
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (!dwellingCards.has(card)) {
+            const timer = setTimeout(() => {
+              card._hasDwelt = true;
+            }, 2500);
+            dwellingCards.set(card, timer);
+          }
+        } else {
+          if (dwellingCards.has(card)) {
+            clearTimeout(dwellingCards.get(card));
+            dwellingCards.delete(card);
+          }
+          if (card._hasDwelt && !card._hasInteracted && !state.viewedIds?.has(post.id) && !isPostLiked(post.id) && !isPostFavorite(post.id) && !isPostDisliked(post.id)) {
+            recordPostImpressionSkip(post);
+            card._hasDwelt = false;
+          }
+        }
+      });
+    }, { threshold: [0.1, 0.5] });
+  }
+
+  // ── Interactive Recommendations Explanation Popover ──
+  let activeMatchPopover = null;
+
+  function closeMatchPopover() {
+    if (activeMatchPopover) {
+      activeMatchPopover.remove();
+      activeMatchPopover = null;
+      document.removeEventListener('click', handleOutsideMatchClick);
+      document.removeEventListener('keydown', handleMatchEscape);
+    }
+  }
+
+  function handleOutsideMatchClick(e) {
+    if (activeMatchPopover && !activeMatchPopover.contains(e.target) && !e.target.closest('.btn-match-popover')) {
+      closeMatchPopover();
+    }
+  }
+
+  function handleMatchEscape(e) {
+    if (e.key === 'Escape') {
+      closeMatchPopover();
+    }
+  }
+
+  function showMatchPopover(post, anchorEl) {
+    closeMatchPopover();
+    if (!post) return;
+
+    const popover = document.createElement('div');
+    popover.className = 'rec-match-popover';
+    popover.setAttribute('role', 'dialog');
+    popover.setAttribute('aria-label', t('gal.matchPopover.title', 'Почему в рекомендациях?'));
+
+    const matchedDetails = Array.isArray(post.matchedDetails) && post.matchedDetails.length > 0
+      ? post.matchedDetails
+      : (Array.isArray(post.matchedTags) ? post.matchedTags.map(t => ({ tag: t, display: t, category: 'general' })) : []);
+
+    let tagsListHtml = '';
+    if (matchedDetails.length > 0) {
+      tagsListHtml = matchedDetails.slice(0, 8).map(item => {
+        const catLabel = item.category === 'artist' 
+          ? t('gal.catArtist', 'Автор') 
+          : item.category === 'character' 
+            ? t('gal.catCharacter', 'Персонаж') 
+            : item.category === 'copyright' 
+              ? t('gal.catCopyright', 'Франшиза') 
+              : t('gal.catTag', 'Тег');
+        const isExcluded = Array.isArray(state.settings?.excludedInterestTags) && state.settings.excludedInterestTags.includes(item.tag);
+        return `
+          <div class="match-tag-row">
+            <div class="match-tag-info">
+              <span class="match-tag-cat match-cat-${item.category || 'general'}">${catLabel}</span>
+              <span class="match-tag-name">${item.display || item.tag}</span>
+            </div>
+            <button type="button" class="btn-rec-tag-action ${isExcluded ? 'is-excluded' : ''}" data-tag="${item.tag}">
+              ${isExcluded ? t('gal.matchPopover.excluded', 'Исключен') : t('gal.matchPopover.exclude', 'Скрыть тег')}
+            </button>
+          </div>
+        `;
+      }).join('');
+    } else {
+      tagsListHtml = `<div class="match-tag-empty">${t('gal.matchPopover.noTags', 'Общие тренды и популярное')}</div>`;
+    }
+
+    popover.innerHTML = `
+      <div class="rec-popover-header">
+        <div class="rec-popover-title-row">
+          <span class="rec-popover-badge">${post.matchPercent || 0}%</span>
+          <h4 class="rec-popover-title">${t('gal.matchPopover.title', 'Почему в рекомендациях?')}</h4>
+        </div>
+        <button type="button" class="btn-rec-popover-close" aria-label="${t('gal.close', 'Закрыть')}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <p class="rec-popover-subtitle">${t('gal.matchPopover.subtitle', 'Совпадения с вашими вкусами и избранным:')}</p>
+      <div class="rec-popover-tags-list">
+        ${tagsListHtml}
+      </div>
+    `;
+
+    document.body.appendChild(popover);
+    activeMatchPopover = popover;
+
+    const rect = anchorEl.getBoundingClientRect();
+    const isMobile = window.innerWidth <= 600;
+
+    if (isMobile) {
+      popover.classList.add('popover-mobile-sheet');
+    } else {
+      const top = Math.min(window.innerHeight - 340, Math.max(10, rect.bottom + 6));
+      const left = Math.min(window.innerWidth - 320, Math.max(10, rect.left - 20));
+      popover.style.top = `${top}px`;
+      popover.style.left = `${left}px`;
+    }
+
+    const closeBtn = popover.querySelector('.btn-rec-popover-close');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeMatchPopover();
+      });
+    }
+
+    popover.querySelectorAll('.btn-rec-tag-action').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tag = btn.dataset.tag;
+        if (!tag) return;
+        if (btn.classList.contains('is-excluded')) {
+          restoreInterestTag(tag);
+          btn.classList.remove('is-excluded');
+          btn.textContent = t('gal.matchPopover.exclude', 'Скрыть тег');
+          showToast(t('gal.matchPopover.toastRestored', 'Тег {t} возвращен в рекомендации').replace('{t}', tag));
+        } else {
+          excludeInterestTag(tag);
+          btn.classList.add('is-excluded');
+          btn.textContent = t('gal.matchPopover.excluded', 'Исключен');
+          showToast(t('gal.matchPopover.toastExcluded', 'Тег {t} исключен из рекомендаций').replace('{t}', tag));
+        }
+      });
+    });
+
+    setTimeout(() => {
+      document.addEventListener('click', handleOutsideMatchClick);
+      document.addEventListener('keydown', handleMatchEscape);
+    }, 10);
   }
 
   // ── Event delegation on the grid: one listener instead of thousands on cards ──
@@ -1011,28 +1199,23 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   const TOUCH_DRIFT_TOLERANCE_PX = 10;
 
   galleryGrid.addEventListener('touchstart', (e) => {
-    if (touchResetTimer) {
-      clearTimeout(touchResetTimer);
-      touchResetTimer = null;
+    if (e.touches.length === 1) {
+      touchStartPoint = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      didDrift = false;
     }
-    const firstTouch = e.touches[0];
-    touchStartPoint = firstTouch ? { x: firstTouch.clientX, y: firstTouch.clientY } : null;
-    didDrift = false;
   }, { passive: true });
 
   galleryGrid.addEventListener('touchmove', (e) => {
-    if (!touchStartPoint) return;
-    const firstTouch = e.touches[0];
-    if (firstTouch) {
-      const dx = firstTouch.clientX - touchStartPoint.x;
-      const dy = firstTouch.clientY - touchStartPoint.y;
-      if ((dx * dx + dy * dy) > TOUCH_DRIFT_TOLERANCE_PX * TOUCH_DRIFT_TOLERANCE_PX) {
-        didDrift = true;
-      }
+    if (!touchStartPoint || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - touchStartPoint.x;
+    const dy = e.touches[0].clientY - touchStartPoint.y;
+    if ((dx * dx + dy * dy) > TOUCH_DRIFT_TOLERANCE_PX * TOUCH_DRIFT_TOLERANCE_PX) {
+      didDrift = true;
     }
   }, { passive: true });
 
   galleryGrid.addEventListener('touchend', () => {
+    if (touchResetTimer) clearTimeout(touchResetTimer);
     touchResetTimer = setTimeout(() => {
       touchStartPoint = null;
       didDrift = false;
@@ -1062,6 +1245,15 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (!card || !galleryGrid.contains(card)) return;
     const post = card._post;
     if (!post) return;
+
+    card._hasInteracted = true;
+
+    const matchBadgeEl = e.target.closest('.match-percent, .btn-match-popover');
+    if (matchBadgeEl) {
+      e.stopPropagation();
+      showMatchPopover(post, matchBadgeEl);
+      return;
+    }
 
     const dislikeBtn = e.target.closest('.btn-card-dislike');
     if (dislikeBtn) {

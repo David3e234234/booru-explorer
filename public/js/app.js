@@ -22,6 +22,7 @@ import {
   getSimilarPostQuery,
   recordSessionInteraction,
   calculatePostMatchPercent,
+  getUserMediaPreferences,
   isAuthorFavorite,
   SECRET_SETTING_FIELDS
 } from './state.js';
@@ -1240,15 +1241,38 @@ async function performSearch(reset = false, options = {}) {
 
           // Extract top user negative tokens from dislikes to filter out at Booru API level
           const negativeSeedTokens = getUserNegativeSeedTokens(3);
-          const negativeSuffix = negativeSeedTokens.length > 0 ? ` ${negativeSeedTokens.join(' ')}` : '';
+          const isDanbooru = (state.currentSite === 'danbooru');
+          const maxAllowedTokens = isDanbooru ? 2 : 5;
 
           for (const rawSeed of selectedSeeds) {
             const cleanSeedTag = rawSeed.replace(/[()]/g, '').trim();
             if (!cleanSeedTag) continue;
+
+            const seedParts = cleanSeedTag.split(/\s+/).filter(Boolean);
+            let queryTokens = [...seedParts];
+
+            if (isDanbooru) {
+              if (queryTokens.length === 1 && negativeSeedTokens.length > 0) {
+                queryTokens.push(negativeSeedTokens[0]);
+              } else if (queryTokens.length > 2) {
+                queryTokens = queryTokens.slice(0, 2);
+              }
+            } else {
+              for (const neg of negativeSeedTokens) {
+                if (queryTokens.length >= maxAllowedTokens) break;
+                queryTokens.push(neg);
+              }
+              if (focusMode === 'discovery' && queryTokens.length <= 2) {
+                queryTokens.push('score:>10');
+              }
+            }
+
+            const finalSeedQuery = queryTokens.join(' ');
+
             fetchTasks.push(
               fetchPosts({
                 site: state.currentSite,
-                tags: `${cleanSeedTag}${negativeSuffix}`.trim(),
+                tags: finalSeedQuery,
                 page: 1 + Math.floor((state.page - 1) / Math.max(1, selectedSeeds.length)),
                 limit: 28,
                 category: 'new',
@@ -1358,10 +1382,12 @@ async function performSearch(reset = false, options = {}) {
         filteredCandidates.push(p);
       });
 
+      const mediaPrefs = getUserMediaPreferences();
       const scoredCandidates = filteredCandidates.map(p => {
-        const matchResult = calculatePostMatchPercent(p, interestMap);
+        const matchResult = calculatePostMatchPercent(p, interestMap, { mediaPrefs });
         let basePercent = typeof matchResult === 'object' ? matchResult.percent : matchResult;
         const matchedTags = typeof matchResult === 'object' ? matchResult.matchedTags : [];
+        const matchedDetails = typeof matchResult === 'object' ? (matchResult.matchedDetails || []) : [];
         const matchExplanation = typeof matchResult === 'object' ? matchResult.matchExplanation : '';
         const isViewed = state.viewedIds.has(p.id);
         if (isViewed && basePercent > 0) {
@@ -1371,6 +1397,7 @@ async function performSearch(reset = false, options = {}) {
           ...p,
           matchPercent: basePercent,
           matchedTags,
+          matchedDetails,
           matchExplanation,
           isViewed
         };

@@ -17,8 +17,8 @@
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.4">
   <link rel="stylesheet" href="css/main.css?v=9.2">
-  <link rel="stylesheet" href="css/components.css?v=10.4">
-  <link rel="stylesheet" href="css/settings.css?v=1.0">
+  <link rel="stylesheet" href="css/components.css?v=10.5">
+  <link rel="stylesheet" href="css/settings.css?v=1.1">
   <link rel="stylesheet" href="css/authors.css?v=1.0">
   <link rel="stylesheet" href="css/profile.css?v=1.0">
   <link rel="stylesheet" href="css/viewer.css?v=13.3">
@@ -1057,6 +1057,54 @@
             <p class="settings-hint" data-i18n="settings.lgbtHint">Теги, отсекаемые при включении переключателя «Скрыть ЛГБТ».</p>
             <div class="tags-input-box" id="lgbtTagsWrapper">
               <input type="text" id="lgbtTagsInput" placeholder="Добавить тег (например: yaoi, gay, futanari)..." data-i18n-placeholder="settings.lgbt.placeholder" spellcheck="false">
+            </div>
+          </div>
+
+          <!-- Divider: Recommendation and Taste Profile -->
+          <div class="settings-section-header" style="margin-top: 18px; margin-bottom: 6px; padding-top: 14px; border-top: 1px solid var(--border-subtle);">
+            <span class="settings-section-title" style="font-weight: 600; font-size: 13px; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.recTasteProfileTitle">Профиль вкусов и рекомендаций</span>
+          </div>
+
+          <!-- Recommendation toggles -->
+          <div class="settings-group">
+            <label class="toggle-row" title="Снижать приоритет тегов артов, мимо которых вы проскроллили без интереса" data-i18n-title="settings.recSkipPenalty.title">
+              <input type="checkbox" id="checkRecSkipPenalty" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name" data-i18n="settings.recSkipPenalty">Учитывать неявный пропуск (Skip penalty)</span>
+            </label>
+            <p class="settings-hint" style="margin-top: 4px;" data-i18n="settings.recSkipPenaltyHint">Мягко понижает вес тем, которые задержались на экране, но были пролистаны без открытия или реакций.</p>
+          </div>
+
+          <!-- Session Interests Controls -->
+          <div class="settings-group" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" data-i18n="settings.sessionInterestsLabel">Сессионная память вкусов:</label>
+              <button type="button" class="btn-text" id="btnClearSessionInterests" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.clearSessionBtn">Сбросить сессию</button>
+            </div>
+            <p class="settings-hint" data-i18n="settings.sessionInterestsHint">Кратковременные сигналы просмотров и зумов в текущей сессии.</p>
+          </div>
+
+          <!-- Active Top Interests Display -->
+          <div class="settings-group" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" data-i18n="settings.topInterestsLabel">Текущие ведущие интересы:</label>
+              <span id="recInterestsCount" style="font-size: 11px; color: var(--text-muted);">0</span>
+            </div>
+            <p class="settings-hint" data-i18n="settings.topInterestsHint">Теги с наивысшим весом на основе ваших лайков и избранного. Нажмите [×], чтобы скрыть тег из рекомендаций.</p>
+            <div class="rec-interests-chip-container" id="recInterestsContainer">
+              <span class="text-muted" style="font-size: 12px;" data-i18n="settings.noInterests">Лайкайте арты, чтобы сформировать профиль вкусов.</span>
+            </div>
+          </div>
+
+          <!-- Excluded recommendation tags -->
+          <div class="settings-group" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" data-i18n="settings.excludedRecTagsLabel">Исключено из рекомендаций:</label>
+              <button type="button" class="btn-text" id="btnResetExcludedRecTags" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.clearAllBtn">Очистить все</button>
+            </div>
+            <p class="settings-hint" data-i18n="settings.excludedRecTagsHint">Эти теги не используются для сидов и поиска рекомендаций.</p>
+            <div class="rec-excluded-chip-container" id="recExcludedContainer">
+              <span class="text-muted" style="font-size: 12px;" data-i18n="settings.noExcludedTags">Нет исключенных тегов</span>
             </div>
           </div>
 
@@ -2502,6 +2550,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=20.1"></script>
+  <script type="module" src="js/app.js?v=20.2"></script>
 </body>
 </html>
