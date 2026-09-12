@@ -242,6 +242,7 @@ export const DEFAULT_SETTINGS = {
   enablePaheal: true,
   defaultSite: 'danbooru',
   customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
+  searchPresets: [],
   maxServerCacheMb: 1500,
   rule34ApiKey: '',
   rule34UserId: '',

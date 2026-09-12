@@ -113,6 +113,7 @@ export const DEFAULT_CLIENT_SETTINGS = {
   prioritizeUserTags: false,
   enableJsDemuxing: true,
   customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
+  searchPresets: [],
   maxServerCacheMb: 1500,
   recommendationMode: 'tags-only', // 'tags-only' | 'off'
   recommendationFocus: 'all', // 'all' | 'artists' | 'characters' | 'discovery'
@@ -169,6 +170,7 @@ export const state = {
   archiveDownloadThreads: 4,
   excludedInterestTags: [],
   searchTags: [],
+  searchPresets: [],
   page: 1,
   limit: 100,
   posts: [],
@@ -212,6 +214,7 @@ export function removeSearchTag(tag) {
 
 const STORAGE_KEYS = {
   SETTINGS: 'booru_settings_v1',
+  PRESETS: 'booru_presets_v1',
   FAVORITES: 'booru_favorites_v1',
   FAVORITE_AUTHORS: 'booru_favorite_authors_v1',
   LIKES: 'booru_likes_v1',
@@ -380,6 +383,36 @@ export function saveLocalSettings(settings) {
   } catch (e) {}
 }
 
+export function loadLocalPresets() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PRESETS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  if (Array.isArray(state.settings?.searchPresets)) {
+    return state.settings.searchPresets;
+  }
+  return [];
+}
+
+export function saveLocalPresets(presetsList) {
+  try {
+    const cleanList = Array.isArray(presetsList) ? presetsList : [];
+    localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(cleanList));
+    if (state.settings) {
+      state.settings.searchPresets = cleanList;
+    }
+    saveLocalSettings({ searchPresets: cleanList });
+  } catch (e) {}
+}
+
+export function setPresets(presetsList) {
+  state.searchPresets = Array.isArray(presetsList) ? presetsList : [];
+  saveLocalPresets(state.searchPresets);
+}
+
 export function loadLocalFavorites() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.FAVORITES);
@@ -432,6 +465,7 @@ export function exportUserData(account = null) {
     version: 2,
     exportedAt: new Date().toISOString(),
     settings: loadLocalSettings() || state.settings || {},
+    presets: loadLocalPresets() || state.searchPresets || [],
     favorites: loadLocalFavorites() || state.favorites || [],
     favoriteAuthors: loadLocalFavoriteAuthors() || state.favoriteAuthors || [],
     likes: loadLocalLikes() || state.likes || [],
@@ -520,6 +554,20 @@ export function importUserData(data, { replace = false } = {}) {
     const mergedList = Array.from(mergedMap.values());
     setDislikes(mergedList);
     importedCounts.dislikes = mergedList.length;
+  }
+
+  // 6. Presets
+  const incomingPresets = Array.isArray(normalized.presets)
+    ? normalized.presets
+    : (Array.isArray(normalized.settings?.searchPresets) ? normalized.settings.searchPresets : null);
+  if (Array.isArray(incomingPresets)) {
+    const existing = replace ? [] : (loadLocalPresets() || []);
+    const mergedMap = new Map();
+    existing.forEach(p => mergedMap.set(p.id || p.name, p));
+    incomingPresets.forEach(p => { if (p && (p.id || p.name)) mergedMap.set(p.id || p.name, p); });
+    const mergedList = Array.from(mergedMap.values());
+    setPresets(mergedList);
+    importedCounts.presets = mergedList.length;
   }
 
   return importedCounts;

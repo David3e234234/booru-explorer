@@ -1,7 +1,7 @@
 import { fetchTagAutocomplete } from './api.js';
 import { state, addSearchTag, removeSearchTag } from './state.js';
 
-export function initAutocomplete({ onSearch }) {
+export function initAutocomplete({ onSearch, onTagsChanged }) {
   const searchInput = document.getElementById('searchInput');
   const tagsWrapper = document.getElementById('searchTagsWrapper');
   const dropdown = document.getElementById('autocompleteDropdown');
@@ -31,6 +31,9 @@ export function initAutocomplete({ onSearch }) {
     });
 
     btnClear.style.display = (state.searchTags.length > 0 || searchInput.value) ? 'flex' : 'none';
+    if (typeof onTagsChanged === 'function') {
+      onTagsChanged();
+    }
   }
 
   tagsWrapper.addEventListener('click', (e) => {

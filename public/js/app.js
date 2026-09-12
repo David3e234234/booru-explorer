@@ -84,6 +84,7 @@ import {
   closeSettingsModal 
 } from './modules/settingsModal.js';
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
+import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initWikiModal } from './modules/wikiModal.js';
 import { initProfileUI } from './modules/profileUI.js';
@@ -174,13 +175,35 @@ async function init() {
     onReloadState: async () => {
       updateHeaderAuthUI();
       await refreshAllUserData();
+      renderPresetsList();
       if (profileUIInstance) profileUIInstance.renderProfile();
       selectCategory('feed');
     }
   });
 
   autocompleteInstance = initAutocomplete({
-    onSearch: () => performSearch(true)
+    onSearch: () => performSearch(true),
+    onTagsChanged: () => updatePresetActiveState()
+  });
+
+  initSearchPresets({
+    onApplyPreset: (preset) => {
+      if (!preset || !Array.isArray(preset.tags)) return;
+      if (preset.site && preset.site !== state.currentSite && state.sites.some(s => s.id === preset.site)) {
+        state.currentSite = preset.site;
+        updateSiteCapabilitiesUI(state.currentSite);
+        updateCurrentSiteLabel();
+        renderSitesBar({ onSelectSite: selectSite });
+        renderMobileSourcesSheet({ onSelectSite: selectSite });
+        if (preset.site === 'pawchive') ensurePawchiveServiceOptions();
+        if (preset.site === 'kemono') ensureKemonoServiceOptions();
+      }
+      state.searchTags = [...preset.tags];
+      autocompleteInstance.renderTagsChips();
+      performSearch(true);
+    },
+    getCurrentTags: () => [...state.searchTags],
+    getCurrentSite: () => state.currentSite
   });
 
   galleryInstance = initGallery({
@@ -339,6 +362,7 @@ async function init() {
 // Re-render all UI bits that visualize the URL-restorable state fields
 function refreshSearchUiFromState() {
   if (autocompleteInstance) autocompleteInstance.renderTagsChips();
+  updatePresetActiveState();
   updateCurrentSiteLabel();
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
@@ -796,6 +820,7 @@ async function performSearch(reset = false, options = {}) {
   }
 
   syncSearchUrl(reset ? 'push' : 'replace');
+  updatePresetActiveState();
 
   // 👤 Profile section (TikTok style)
   if (state.currentCategory === 'profile') {
