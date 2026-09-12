@@ -64,6 +64,12 @@ export async function fetchAllgirl(params, aiTagsList, settings = {}) {
     return [];
   }
 
+  const idMatch = (tags || '').match(/\b(?:id|post):(?:allgirl_)?(\d+)\b/i);
+  if (idMatch) {
+    const singlePost = await fetchAllgirlPostById(idMatch[1], aiTagsList, settings);
+    return singlePost ? [singlePost] : [];
+  }
+
   // Gelbooru 0.1.11 rejects negative query tokens (-tag); exclude them from remote URL
   const searchTokens = (tags || '')
     .trim()

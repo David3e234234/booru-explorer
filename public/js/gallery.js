@@ -1006,13 +1006,51 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   // Touch intent tracking: a tap whose finger drifted between press and release
   // is likely a mis-tap during scrolling, so like/fav/hide actions skip it.
   let touchStartPoint = null;
+  let didDrift = false;
+  let touchResetTimer = null;
   const TOUCH_DRIFT_TOLERANCE_PX = 10;
+
   galleryGrid.addEventListener('touchstart', (e) => {
+    if (touchResetTimer) {
+      clearTimeout(touchResetTimer);
+      touchResetTimer = null;
+    }
     const firstTouch = e.touches[0];
     touchStartPoint = firstTouch ? { x: firstTouch.clientX, y: firstTouch.clientY } : null;
+    didDrift = false;
+  }, { passive: true });
+
+  galleryGrid.addEventListener('touchmove', (e) => {
+    if (!touchStartPoint) return;
+    const firstTouch = e.touches[0];
+    if (firstTouch) {
+      const dx = firstTouch.clientX - touchStartPoint.x;
+      const dy = firstTouch.clientY - touchStartPoint.y;
+      if ((dx * dx + dy * dy) > TOUCH_DRIFT_TOLERANCE_PX * TOUCH_DRIFT_TOLERANCE_PX) {
+        didDrift = true;
+      }
+    }
+  }, { passive: true });
+
+  galleryGrid.addEventListener('touchend', () => {
+    touchResetTimer = setTimeout(() => {
+      touchStartPoint = null;
+      didDrift = false;
+      touchResetTimer = null;
+    }, 400);
+  }, { passive: true });
+
+  galleryGrid.addEventListener('touchcancel', () => {
+    touchStartPoint = null;
+    didDrift = false;
+    if (touchResetTimer) {
+      clearTimeout(touchResetTimer);
+      touchResetTimer = null;
+    }
   }, { passive: true });
 
   function isDriftedTouch(e) {
+    if (didDrift) return true;
     if (!touchStartPoint) return false;
     const dx = e.clientX - touchStartPoint.x;
     const dy = e.clientY - touchStartPoint.y;

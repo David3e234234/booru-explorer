@@ -267,6 +267,7 @@ export const DEFAULT_SETTINGS = {
   hypnohubProxy: '',
   tbibProxy: '',
   pawchiveProxy: '',
+  kemonoProxy: '',
   allgirlProxy: '',
   allgirlCookie: '',
   telegramBackupEnabled: false,
@@ -375,7 +376,7 @@ export const SITES = {
   rule34: {
     id: 'rule34',
     name: 'Rule34',
-    baseUrl: 'https://rule34.paheal.net',
+    baseUrl: 'https://api.rule34.xxx',
     rating: 'nsfw',
     supportsVideo: true,
     supportsImages: true,

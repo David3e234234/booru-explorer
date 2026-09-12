@@ -613,7 +613,7 @@ router.get('/posts', async (req, res) => {
 
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
 
-    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, category=${category}, rating=${ratingFilter}, type=${typeFilter}, age=${ageFilter}`);
+    logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, category=${category}, rating=${ratingFilter}, type=${typeFilter}, ai=${aiFilter}, age=${ageFilter}`);
 
     // fetchPosts performs the full local filtering itself (isPostMatchingFilters)
     let posts = await fetchPosts(site, {
@@ -621,6 +621,7 @@ router.get('/posts', async (req, res) => {
       page, 
       limit, 
       category, 
+      aiFilter,
       ratingFilter, 
       typeFilter, 
       ageFilter, 
@@ -705,8 +706,8 @@ router.get('/posts/album', async (req, res) => {
 
     // Pawchive posts are self-contained archives; do not query Booru-style parent: or source: tags
     if (site === 'pawchive' || seriesKey.startsWith('pawchive:')) {
-      const pawchiveMatch = seriesKey.match(/^pawchive:([^:]+):([^:]+):(\d+)$/) ||
-        (postUrl).match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
+      const pawchiveMatch = seriesKey.match(/^pawchive:([^:]+):([^:]+):([^:]+)$/) ||
+        (postUrl).match(/pawchive\.pw\/([^/]+)\/user\/([^/]+)\/post\/([^/?#]+)/);
       const targetPostId = pawchiveMatch ? pawchiveMatch[3] : (originalId || parentId || '').replace(/^pawchive_/, '').split('_')[0];
       const targetService = pawchiveMatch ? pawchiveMatch[1] : null;
       const targetUser = pawchiveMatch ? pawchiveMatch[2] : null;
@@ -736,8 +737,8 @@ router.get('/posts/album', async (req, res) => {
 
     // Kemono posts are self-contained archives; do not query Booru-style parent: or source: tags
     if (site === 'kemono' || seriesKey.startsWith('kemono:')) {
-      const kemonoMatch = seriesKey.match(/^kemono:([^:]+):([^:]+):(\d+)$/) ||
-        (postUrl).match(/kemono\.(?:cr|su|party)\/([^/]+)\/user\/([^/]+)\/post\/(\d+)/);
+      const kemonoMatch = seriesKey.match(/^kemono:([^:]+):([^:]+):([^:]+)$/) ||
+        (postUrl).match(/kemono\.(?:cr|su|party)\/([^/]+)\/user\/([^/]+)\/post\/([^/?#]+)/);
       const targetPostId = kemonoMatch ? kemonoMatch[3] : (originalId || parentId || '').replace(/^kemono_/, '').split('_')[0];
       const targetService = kemonoMatch ? kemonoMatch[1] : null;
       const targetUser = kemonoMatch ? kemonoMatch[2] : null;

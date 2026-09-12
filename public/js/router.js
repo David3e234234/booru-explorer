@@ -6,7 +6,7 @@ const CATEGORIES = ['feed', 'following', 'recommended', 'favorites', 'profile'];
 
 const KNOWN_SITES = new Set([
   'danbooru', 'gelbooru', 'rule34', 'yandere', 'konachan',
-  'safebooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive', 'all', 'custom'
+  'safebooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive', 'kemono', 'allgirl', 'all', 'custom'
 ]);
 
 const ENUMS = {
@@ -18,7 +18,7 @@ const ENUMS = {
 };
 
 const MAX_URL_TAGS = 20;
-const POST_ID_RE = /^[A-Za-z0-9_-]{1,32}$/;
+const POST_ID_RE = /^[A-Za-z0-9_:-]{1,80}$/;
 
 let handlers = null;
 let activePostId = null;     // post currently reflected in the URL (viewer open)

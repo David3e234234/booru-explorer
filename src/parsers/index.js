@@ -133,7 +133,9 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     } else if (params.typeFilter === 'zip' || params.typeFilter === 'archive') {
       mainSites = mainSites.filter(s => s === 'pawchive' || s === 'kemono');
       if (mainSites.length === 0) mainSites = ['pawchive', 'kemono'];
-    } else if (params.ratingFilter === 'nsfw') {
+    }
+
+    if (params.ratingFilter === 'nsfw') {
       const nsfwAllowed = ['rule34video', 'danbooru', 'yandere', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'konachan', 'tbib', 'pawchive', 'kemono', 'allgirl'];
       mainSites = mainSites.filter(s => nsfwAllowed.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'rule34'];

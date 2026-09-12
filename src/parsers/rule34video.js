@@ -217,6 +217,48 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
     return [];
   }
 
+  const idMatch = (tags || '').match(/\b(?:id|post):(?:rule34video_)?(\d+)\b/i);
+  if (idMatch) {
+    const videoId = idMatch[1];
+    const resolved = await resolveRule34VideoFullMedia('', videoId, settings);
+    if (resolved && (resolved.fullVideoUrl || resolved.success)) {
+      const pageUrl = `https://rule34video.com/video/${videoId}/`;
+      const thumb = resolved.thumb || '';
+      const videoUrl = resolved.fullVideoUrl || '';
+      return [{
+        id: `rule34video_${videoId}`,
+        originalId: String(videoId),
+        site: 'rule34video',
+        siteName: 'Rule34Video',
+        title: resolved.title || 'Rule34 Video',
+        author: resolved.author || '',
+        assistants: resolved.assistants || [],
+        previewUrl: resolvePreviewUrl(thumb, videoUrl, videoUrl, true),
+        sampleUrl: videoUrl,
+        fileUrl: videoUrl,
+        fileExt: 'mp4',
+        isVideo: true,
+        isGif: false,
+        hasSound: resolved.hasSound !== false,
+        duration: resolved.duration || 0,
+        durationText: resolved.durationText || '',
+        views: 0,
+        viewsText: '',
+        tags: resolved.tags || [],
+        tagDetails: resolved.tagDetails || {},
+        score: 0,
+        rating: 'e',
+        width: 1280,
+        height: 720,
+        source: pageUrl,
+        postUrl: pageUrl,
+        createdAt: '',
+        isAi: checkIsAi(resolved.tags || [], aiTagsList)
+      }];
+    }
+    return [];
+  }
+
   let rawTags = (tags || '').trim();
   if (ageFilter === 'young' && !rawTags) {
     rawTags = 'small tits';
@@ -780,6 +822,16 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
       }
     }
 
+    const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i) || html.match(/<title>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].replace(/&#34;/g, '"').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim() : '';
+
+    const thumbMatch = html.match(/preview_url\s*[:=]\s*['"]([^'"]+)['"]/i) ||
+                       html.match(/poster=['"]([^'"]+)['"]/i) ||
+                       html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i);
+    let thumb = thumbMatch ? thumbMatch[1].trim() : '';
+    if (thumb.startsWith('//')) thumb = 'https:' + thumb;
+    else if (thumb.startsWith('/')) thumb = 'https://rule34video.com' + thumb;
+
     if (fullVideoUrl) {
       if (fullVideoUrl.startsWith('//')) {
         fullVideoUrl = 'https:' + fullVideoUrl;
@@ -794,6 +846,8 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
         hasSound: true,
         duration,
         durationText,
+        title,
+        thumb,
         author: classifiedAuthor || finalAuthor,
         assistants: assistants || [],
         artist,

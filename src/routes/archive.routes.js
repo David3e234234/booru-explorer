@@ -144,6 +144,9 @@ router.get('/download-file', async (req, res) => {
   const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
 
   if (!zipUrl) return res.status(400).send('URL не указан');
+  if (!isAllowedArchiveUrl(zipUrl)) {
+    return res.status(403).send('Недопустимый источник архива');
+  }
   if (!targetName) return res.status(400).send('Имя файла не указано');
 
   const settings = getRequestSettings(req);
