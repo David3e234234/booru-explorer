@@ -5,6 +5,7 @@ import { t } from '../i18n.js';
 let applyPresetCallback = null;
 let getCurrentTagsCallback = null;
 let getCurrentSiteCallback = null;
+let getCurrentFiltersCallback = null;
 let editingPresetId = null;
 
 function escapeHtml(str) {
@@ -29,10 +30,40 @@ function parseTagsString(str) {
   return cleanTags;
 }
 
-export function initSearchPresets({ onApplyPreset, getCurrentTags, getCurrentSite }) {
+export function formatFiltersSummary(filters) {
+  if (!filters || typeof filters !== 'object') return '';
+  const parts = [];
+  if (filters.ratingFilter && filters.ratingFilter !== 'all') {
+    const map = { nsfw: '18+', questionable: '16+', sfw: 'SFW' };
+    parts.push(map[filters.ratingFilter] || filters.ratingFilter);
+  }
+  if (filters.aiFilter && filters.aiFilter !== 'all') {
+    const map = { 'no-ai': t('sidebar.aiNoAi', 'Без ИИ'), 'only-ai': t('sidebar.aiOnly', 'ИИ') };
+    parts.push(map[filters.aiFilter] || filters.aiFilter);
+  }
+  if (filters.typeFilter && filters.typeFilter !== 'all') {
+    const map = { video: t('sidebar.typeVideo', 'Видео'), audio: t('sidebar.typeAudio', 'Со звуком'), image: t('sidebar.typeImage', 'Изображения'), zip: 'ZIP' };
+    parts.push(map[filters.typeFilter] || filters.typeFilter);
+  }
+  if (filters.ageFilter && filters.ageFilter !== 'all') {
+    const map = { adult: t('sidebar.shapesAdult', 'Пышные'), young: t('sidebar.shapesYoung', 'Миниатюрные') };
+    parts.push(map[filters.ageFilter] || filters.ageFilter);
+  }
+  if (filters.hideFurry) parts.push(t('presets.filterHideFurry', 'Без фурри'));
+  if (filters.hidePregnant) parts.push(t('presets.filterHidePregnant', 'Без беременности'));
+  if (filters.hideLgbt) parts.push(t('presets.filterHideLgbt', 'Без ЛГБТ'));
+  if (filters.postSort && filters.postSort !== 'new') {
+    const map = { hot: t('nav.hot', 'Горячее'), views: t('nav.views', 'Просмотры'), top: t('nav.top', 'По рейтингу') };
+    parts.push(map[filters.postSort] || filters.postSort);
+  }
+  return parts.length > 0 ? parts.join(', ') : t('presets.defaultFilters', 'Стандартные фильтры');
+}
+
+export function initSearchPresets({ onApplyPreset, getCurrentTags, getCurrentSite, getCurrentFilters }) {
   applyPresetCallback = onApplyPreset;
   getCurrentTagsCallback = getCurrentTags;
   getCurrentSiteCallback = getCurrentSite;
+  getCurrentFiltersCallback = getCurrentFilters;
 
   const btnSavePreset = document.getElementById('btnSavePreset');
   const modalBackdrop = document.getElementById('modalPresetBackdrop');
@@ -107,21 +138,39 @@ export function renderPresetsList() {
 
   container.innerHTML = presets.map(preset => {
     const tags = Array.isArray(preset.tags) ? preset.tags : [];
-    const isMatching = tags.length > 0 &&
+    let isMatching = tags.length > 0 &&
       tags.length === currentTagsSet.size &&
       tags.every(t => currentTagsSet.has(t.toLowerCase()));
+
+    if (isMatching && preset.filters && typeof getCurrentFiltersCallback === 'function') {
+      const currentFilters = getCurrentFiltersCallback();
+      if (currentFilters) {
+        for (const [k, v] of Object.entries(preset.filters)) {
+          if (currentFilters[k] !== undefined && currentFilters[k] !== v) {
+            isMatching = false;
+            break;
+          }
+        }
+      }
+    }
 
     const tagsPreview = tags.join(', ');
     const siteBadge = preset.site
       ? `<span class="preset-site-badge" title="${escapeHtml(t('presets.siteBound', 'Привязан к источнику:'))} ${escapeHtml(preset.site)}">${escapeHtml(preset.site)}</span>`
       : '';
 
+    const filtersSummary = preset.filters ? formatFiltersSummary(preset.filters) : '';
+    const filtersBadge = preset.filters
+      ? `<span class="preset-filters-badge" title="${escapeHtml(t('presets.saveFilters', 'Фильтры и ползунки:'))} ${escapeHtml(filtersSummary)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>`
+      : '';
+
     return `
       <div class="preset-item${isMatching ? ' active' : ''}" data-id="${escapeHtml(preset.id)}">
-        <button type="button" class="preset-main-btn" title="${escapeHtml(tagsPreview)}">
+        <button type="button" class="preset-main-btn" title="${escapeHtml(tagsPreview)}${filtersSummary ? `\n${filtersSummary}` : ''}">
           <svg class="preset-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
           <span class="preset-name">${escapeHtml(preset.name || tags[0] || t('presets.unnamed', 'Пресет'))}</span>
           ${siteBadge}
+          ${filtersBadge}
           <span class="preset-count" title="${escapeHtml(tagsPreview)}">${tags.length}</span>
         </button>
         <div class="preset-actions">
@@ -172,15 +221,25 @@ export function updatePresetActiveState() {
 
   const presets = state.searchPresets || loadLocalPresets();
   const currentTagsSet = new Set((state.searchTags || []).map(t => t.toLowerCase()));
+  const currentFilters = typeof getCurrentFiltersCallback === 'function' ? getCurrentFiltersCallback() : null;
 
   container.querySelectorAll('.preset-item').forEach(item => {
     const id = item.dataset.id;
     const p = presets.find(x => x.id === id);
     if (!p) return;
     const tags = Array.isArray(p.tags) ? p.tags : [];
-    const isMatching = tags.length > 0 &&
+    let isMatching = tags.length > 0 &&
       tags.length === currentTagsSet.size &&
       tags.every(t => currentTagsSet.has(t.toLowerCase()));
+
+    if (isMatching && p.filters && currentFilters) {
+      for (const [k, v] of Object.entries(p.filters)) {
+        if (currentFilters[k] !== undefined && currentFilters[k] !== v) {
+          isMatching = false;
+          break;
+        }
+      }
+    }
     item.classList.toggle('active', isMatching);
   });
 }
@@ -206,12 +265,19 @@ export function openPresetModal(presetToEdit = null, prefillTags = []) {
   const inputTags = document.getElementById('presetInputTags');
   const checkBindSite = document.getElementById('presetCheckBindSite');
   const siteLabel = document.getElementById('presetBoundSiteName');
+  const checkSaveFilters = document.getElementById('presetCheckSaveFilters');
+  const hintFilters = document.getElementById('presetFiltersPreviewHint');
 
   if (!modalBackdrop || !inputName || !inputTags) return;
 
   const currentSite = typeof getCurrentSiteCallback === 'function'
     ? getCurrentSiteCallback()
     : (state.currentSite || 'danbooru');
+  const currentFilters = typeof getCurrentFiltersCallback === 'function'
+    ? getCurrentFiltersCallback()
+    : null;
+
+  let activeFiltersForModal = currentFilters;
 
   if (presetToEdit) {
     editingPresetId = presetToEdit.id;
@@ -223,6 +289,12 @@ export function openPresetModal(presetToEdit = null, prefillTags = []) {
     }
     if (siteLabel) {
       siteLabel.textContent = presetToEdit.site || currentSite;
+    }
+    if (checkSaveFilters) {
+      checkSaveFilters.checked = Boolean(presetToEdit.filters);
+    }
+    if (presetToEdit.filters) {
+      activeFiltersForModal = presetToEdit.filters;
     }
   } else {
     editingPresetId = null;
@@ -244,7 +316,23 @@ export function openPresetModal(presetToEdit = null, prefillTags = []) {
 
     if (checkBindSite) checkBindSite.checked = false;
     if (siteLabel) siteLabel.textContent = currentSite;
+    if (checkSaveFilters) checkSaveFilters.checked = true;
   }
+
+  function updateHint() {
+    if (!hintFilters) return;
+    if (checkSaveFilters && checkSaveFilters.checked) {
+      const summary = formatFiltersSummary(activeFiltersForModal);
+      hintFilters.textContent = '⚡ ' + summary;
+      hintFilters.style.color = '';
+    } else {
+      hintFilters.textContent = t('presets.noFiltersSaved', 'Фильтры не сохраняются (только теги)');
+      hintFilters.style.color = 'var(--text-muted)';
+    }
+  }
+
+  updateHint();
+  checkSaveFilters?.onchange = updateHint;
 
   modalBackdrop.style.display = 'flex';
   setTimeout(() => {
@@ -263,6 +351,7 @@ function handleSavePresetSubmit() {
   const inputName = document.getElementById('presetInputName');
   const inputTags = document.getElementById('presetInputTags');
   const checkBindSite = document.getElementById('presetCheckBindSite');
+  const checkSaveFilters = document.getElementById('presetCheckSaveFilters');
 
   if (!inputName || !inputTags) return;
 
@@ -281,6 +370,11 @@ function handleSavePresetSubmit() {
     : (state.currentSite || 'danbooru');
   const site = checkBindSite?.checked ? currentSite : null;
 
+  const currentFilters = typeof getCurrentFiltersCallback === 'function'
+    ? getCurrentFiltersCallback()
+    : null;
+  const filters = (checkSaveFilters && checkSaveFilters.checked) ? currentFilters : null;
+
   const presets = loadLocalPresets();
 
   if (editingPresetId) {
@@ -291,6 +385,7 @@ function handleSavePresetSubmit() {
         name,
         tags,
         site,
+        filters,
         updatedAt: new Date().toISOString()
       };
       showToast(t('presets.updated', 'Пресет обновлен'));
@@ -301,6 +396,7 @@ function handleSavePresetSubmit() {
       name,
       tags,
       site,
+      filters,
       createdAt: new Date().toISOString()
     };
     presets.unshift(newPreset);

@@ -17,7 +17,7 @@
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.4">
   <link rel="stylesheet" href="css/main.css?v=9.2">
-  <link rel="stylesheet" href="css/components.css?v=10.7">
+  <link rel="stylesheet" href="css/components.css?v=10.8">
   <link rel="stylesheet" href="css/settings.css?v=1.1">
   <link rel="stylesheet" href="css/authors.css?v=1.0">
   <link rel="stylesheet" href="css/profile.css?v=1.0">
@@ -2594,6 +2594,14 @@
             <span class="toggle-name"><span data-i18n="presets.bindSite">Привязать к текущему источнику</span> (<span id="presetBoundSiteName">Danbooru</span>)</span>
           </label>
         </div>
+        <div class="form-group">
+          <label class="toggle-row preset-bind-toggle" title="Сохранить текущие фильтры и ползунки (скрытие контента, 18+, ИИ, сортировка)" data-i18n-title="presets.saveFilters.title">
+            <input type="checkbox" id="presetCheckSaveFilters" checked>
+            <span class="toggle-slider"></span>
+            <span class="toggle-name" data-i18n="presets.saveFilters">Сохранить фильтры и ползунки</span>
+          </label>
+          <div class="form-hint" id="presetFiltersPreviewHint" style="margin-top: 4px; padding-left: 2px;"></div>
+        </div>
         <div class="modal-footer">
           <button type="button" class="btn-secondary" id="btnCancelPreset" data-i18n="modal.cancel">Отмена</button>
           <button type="submit" class="btn-primary" id="btnSavePresetConfirm" data-i18n="modal.save">Сохранить</button>
@@ -2604,6 +2612,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=20.5"></script>
+  <script type="module" src="js/app.js?v=20.6"></script>
 </body>
 </html>

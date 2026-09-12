@@ -198,12 +198,55 @@ async function init() {
         if (preset.site === 'pawchive') ensurePawchiveServiceOptions();
         if (preset.site === 'kemono') ensureKemonoServiceOptions();
       }
+      if (preset.filters && typeof preset.filters === 'object') {
+        if (typeof preset.filters.hideFurry === 'boolean') state.hideFurry = preset.filters.hideFurry;
+        if (typeof preset.filters.hidePregnant === 'boolean') state.hidePregnant = preset.filters.hidePregnant;
+        if (typeof preset.filters.hideLgbt === 'boolean') state.hideLgbt = preset.filters.hideLgbt;
+        if (preset.filters.aiFilter) state.aiFilter = preset.filters.aiFilter;
+        if (preset.filters.ratingFilter) state.ratingFilter = preset.filters.ratingFilter;
+        if (preset.filters.typeFilter) state.typeFilter = preset.filters.typeFilter;
+        if (preset.filters.ageFilter) state.ageFilter = preset.filters.ageFilter;
+        if (preset.filters.postSort) state.postSort = preset.filters.postSort;
+        if (preset.filters.videoDurationSort) state.videoDurationSort = preset.filters.videoDurationSort;
+
+        const checkHideFurry = document.getElementById('checkHideFurry');
+        if (checkHideFurry) checkHideFurry.checked = state.hideFurry;
+        const checkHidePregnant = document.getElementById('checkHidePregnant');
+        if (checkHidePregnant) checkHidePregnant.checked = state.hidePregnant;
+        const checkHideLgbt = document.getElementById('checkHideLgbt');
+        if (checkHideLgbt) checkHideLgbt.checked = state.hideLgbt;
+
+        updatePostSortUI();
+        updateAiFilterUI();
+        updateRatingFilterUI();
+        updateTypeFilterUI();
+        updateAgeFilterUI();
+        updateVideoSortUI();
+        updateFilterActiveDot();
+
+        persistSettings({
+          hideFurry: state.hideFurry,
+          hidePregnant: state.hidePregnant,
+          hideLgbt: state.hideLgbt
+        });
+      }
       state.searchTags = [...preset.tags];
       autocompleteInstance.renderTagsChips();
       performSearch(true);
     },
     getCurrentTags: () => [...state.searchTags],
-    getCurrentSite: () => state.currentSite
+    getCurrentSite: () => state.currentSite,
+    getCurrentFilters: () => ({
+      hideFurry: Boolean(state.hideFurry),
+      hidePregnant: Boolean(state.hidePregnant),
+      hideLgbt: Boolean(state.hideLgbt),
+      aiFilter: state.aiFilter || 'all',
+      ratingFilter: state.ratingFilter || 'all',
+      typeFilter: state.typeFilter || 'all',
+      ageFilter: state.ageFilter || 'all',
+      postSort: state.postSort || 'new',
+      videoDurationSort: state.videoDurationSort || 'none'
+    })
   });
 
   galleryInstance = initGallery({
