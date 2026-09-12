@@ -162,12 +162,14 @@ export function initAutocomplete({ onSearch }) {
     currentSuggestions = [];
   }
 
-  btnClear.addEventListener('click', () => {
+  function clear() {
     state.searchTags = [];
     searchInput.value = '';
     renderTagsChips();
     hideDropdown();
-  });
+  }
+
+  btnClear.addEventListener('click', clear);
 
   document.addEventListener('click', (e) => {
     if (!tagsWrapper.contains(e.target) && !dropdown.contains(e.target)) {
@@ -177,7 +179,8 @@ export function initAutocomplete({ onSearch }) {
 
   return {
     renderTagsChips,
-    selectTag
+    selectTag,
+    clear
   };
 }
 

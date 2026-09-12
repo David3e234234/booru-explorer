@@ -58,7 +58,8 @@ import {
   updateKemonoServiceUI,
   getKemonoServiceLabel,
   updateCategoryTabsUI,
-  updateFilterActiveDot
+  updateFilterActiveDot,
+  updateVideoSortUI
 } from './modules/filtersUI.js';
 import { 
   loadBooruSites, 
@@ -1816,16 +1817,80 @@ function setupEventListeners() {
     });
   }
 
-  // Logo
+  // Logo - click resets search tags and all sliders/filters to defaults
   const btnLogo = document.getElementById('btnLogo');
   if (btnLogo) {
     btnLogo.addEventListener('click', () => {
-      state.searchTags = [];
+      if (viewerInstance) viewerInstance.closeViewer();
+
+      // 1. Clear search tags and input
+      if (autocompleteInstance?.clear) {
+        autocompleteInstance.clear();
+      } else {
+        state.searchTags = [];
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) searchInput.value = '';
+        const btnClearSearch = document.getElementById('btnClearSearch');
+        if (btnClearSearch) btnClearSearch.style.display = 'none';
+        autocompleteInstance?.renderTagsChips?.();
+      }
+
+      // 2. Reset category and site
       state.currentCategory = 'feed';
       state.currentSite = 'danbooru';
-      autocompleteInstance.renderTagsChips();
+
+      // 3. Reset toggle sliders (content hiding) to defaults
+      state.hideFurry = true;
+      state.hidePregnant = true;
+      state.hideLgbt = false;
+      const checkHideFurry = document.getElementById('checkHideFurry');
+      if (checkHideFurry) checkHideFurry.checked = true;
+      const checkHidePregnant = document.getElementById('checkHidePregnant');
+      if (checkHidePregnant) checkHidePregnant.checked = true;
+      const checkHideLgbt = document.getElementById('checkHideLgbt');
+      if (checkHideLgbt) checkHideLgbt.checked = false;
+
+      // 4. Reset other filters and sorts to defaults
+      state.postSort = 'new';
+      state.aiFilter = 'no-ai';
+      state.ratingFilter = 'all';
+      state.typeFilter = 'all';
+      state.ageFilter = 'all';
+      state.videoDurationSort = 'none';
+      state.pawchiveService = 'all';
+      state.kemonoService = 'all';
+
+      // 5. Update UI controls
       updateCategoryTabsUI();
       renderSitesBar({ onSelectSite: selectSite });
+      updateSiteCapabilitiesUI('danbooru');
+      updatePostSortUI();
+      updateAiFilterUI();
+      updateRatingFilterUI();
+      updateTypeFilterUI();
+      updateAgeFilterUI();
+      updateVideoSortUI();
+      updatePawchiveServiceUI();
+      updateKemonoServiceUI();
+      updateFilterActiveDot();
+
+      // 6. Persist reset filter settings
+      persistSettings({
+        hideFurry: true,
+        hidePregnant: true,
+        hideLgbt: false,
+        postSort: 'new',
+        aiFilter: 'no-ai',
+        ratingFilter: 'all',
+        typeFilter: 'all',
+        ageFilter: 'all',
+        pawchiveService: 'all',
+        kemonoService: 'all'
+      });
+
+      // 7. Close drawers, scroll to top, and trigger clean search
+      closeAllDrawers();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       performSearch(true);
     });
   }
