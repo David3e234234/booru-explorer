@@ -24,7 +24,7 @@ import { fetchSafebooruPostById } from '../parsers/safebooru.js';
 import { fetchMoebooruPostById } from '../parsers/moebooru.js';
 import { fetchAllgirlPostById } from '../parsers/allgirl.js';
 import { loadGlobalTagSummary, getTagCategory, META_KEYWORDS } from '../utils/tagClassifier.js';
-import { groupPostsIntoAlbums, sortAlbumItems } from '../utils/albumHelper.js';
+import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAuthorCompatible } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
@@ -782,6 +782,20 @@ router.get('/posts/album', async (req, res) => {
       }
     };
 
+    let targetPost = null;
+    if (originalId && String(originalId) !== '0') {
+      try {
+        const targetPosts = await fetchPosts(site, { tags: `id:${originalId}`, page: 1, limit: 1, ratingFilter: 'all', typeFilter: 'all' }, aiTagsList, settings);
+        if (targetPosts && targetPosts[0]) {
+          targetPost = { ...targetPosts[0] };
+          delete targetPost.albumItems;
+          foundPostsMap.set(targetPost.id, targetPost);
+        }
+      } catch (err) {
+        logError('AlbumSearch', `Не удалось загрузить целевой пост id:${originalId}`, err);
+      }
+    }
+
     // Run independent requests in parallel
     const pendingQueries = [];
     if (parentId && String(parentId) !== '0') {
@@ -794,76 +808,148 @@ router.get('/posts/album', async (req, res) => {
       pendingQueries.push(fetchAndCollect(seriesKey));
     } else if (seriesKey.startsWith('twitter:')) {
       const twId = seriesKey.replace('twitter:', '');
-      pendingQueries.push(fetchAndCollect(`source:*${twId}*`));
+      pendingQueries.push(fetchAndCollect(`source:*status*${twId}*`));
+      pendingQueries.push(fetchAndCollect(`twitter:${twId}`));
     } else if (seriesKey.startsWith('fanbox:')) {
       const fbId = seriesKey.replace('fanbox:', '');
-      pendingQueries.push(fetchAndCollect(`source:*${fbId}*`));
+      pendingQueries.push(fetchAndCollect(`source:*fanbox*${fbId}*`));
+      pendingQueries.push(fetchAndCollect(`fanbox:${fbId}`));
     } else if (seriesKey.startsWith('fantia:')) {
       const ftId = seriesKey.replace('fantia:', '');
-      pendingQueries.push(fetchAndCollect(`source:*${ftId}*`));
+      pendingQueries.push(fetchAndCollect(`source:*fantia*${ftId}*`));
+      pendingQueries.push(fetchAndCollect(`fantia:${ftId}`));
     } else if (seriesKey.startsWith('patreon:')) {
       const ptId = seriesKey.replace('patreon:', '');
-      pendingQueries.push(fetchAndCollect(`source:*${ptId}*`));
+      pendingQueries.push(fetchAndCollect(`source:*patreon*${ptId}*`));
+      pendingQueries.push(fetchAndCollect(`patreon:${ptId}`));
     } else if (seriesKey.startsWith('pool:')) {
       const poolIdOnly = seriesKey.split(':').pop();
       pendingQueries.push(fetchAndCollect(`pool:${poolIdOnly}`));
-    } else if (seriesKey.startsWith('cien:') || seriesKey.startsWith('gumroad:') || seriesKey.startsWith('boosty:') || seriesKey.startsWith('subscribestar:') || seriesKey.startsWith('aipictors:') || seriesKey.startsWith('weibo:') || seriesKey.startsWith('bilibili:') || seriesKey.startsWith('plurk:') || seriesKey.startsWith('bsky:')) {
-      const idOnly = seriesKey.split(':').pop();
-      pendingQueries.push(fetchAndCollect(`source:*${idOnly}*`));
+    } else if (seriesKey.startsWith('cien:')) {
+      const idOnly = seriesKey.replace('cien:', '');
+      pendingQueries.push(fetchAndCollect(`source:*ci-en*${idOnly}*`));
+    } else if (seriesKey.startsWith('gumroad:')) {
+      const idOnly = seriesKey.replace('gumroad:', '');
+      pendingQueries.push(fetchAndCollect(`source:*gumroad*${idOnly}*`));
+    } else if (seriesKey.startsWith('boosty:')) {
+      const idOnly = seriesKey.replace('boosty:', '');
+      pendingQueries.push(fetchAndCollect(`source:*boosty*${idOnly}*`));
+    } else if (seriesKey.startsWith('subscribestar:')) {
+      const idOnly = seriesKey.replace('subscribestar:', '');
+      pendingQueries.push(fetchAndCollect(`source:*subscribestar*${idOnly}*`));
+    } else if (seriesKey.startsWith('aipictors:')) {
+      const idOnly = seriesKey.replace('aipictors:', '');
+      pendingQueries.push(fetchAndCollect(`source:*aipictors*${idOnly}*`));
+    } else if (seriesKey.startsWith('weibo:')) {
+      const idOnly = seriesKey.replace('weibo:', '');
+      pendingQueries.push(fetchAndCollect(`source:*weibo*${idOnly}*`));
+    } else if (seriesKey.startsWith('bilibili:')) {
+      const idOnly = seriesKey.replace('bilibili:', '');
+      pendingQueries.push(fetchAndCollect(`source:*bilibili*${idOnly}*`));
+    } else if (seriesKey.startsWith('plurk:')) {
+      const idOnly = seriesKey.replace('plurk:', '');
+      pendingQueries.push(fetchAndCollect(`source:*plurk*${idOnly}*`));
+    } else if (seriesKey.startsWith('bsky:')) {
+      const idOnly = seriesKey.replace('bsky:', '');
+      pendingQueries.push(fetchAndCollect(`source:*bsky*${idOnly}*`));
     }
     if (pendingQueries.length > 0) {
       await Promise.all(pendingQueries);
     }
 
     // Fallback requests that depend on the first results (sequential)
-    if (seriesKey.startsWith('pixiv:') && foundPostsMap.size === 0) {
+    if (seriesKey.startsWith('pixiv:') && foundPostsMap.size <= 1) {
       const pixivId = seriesKey.replace('pixiv:', '');
       await fetchAndCollect(`pixiv_id:${pixivId}`);
-    } else if (seriesKey.startsWith('fanbox:') && foundPostsMap.size === 0) {
+    } else if (seriesKey.startsWith('fanbox:') && foundPostsMap.size <= 1) {
       const fbId = seriesKey.replace('fanbox:', '');
-      await fetchAndCollect(`fanbox:${fbId}`);
-      if (foundPostsMap.size === 0) await fetchAndCollect(`fanbox_id:${fbId}`);
-    } else if (seriesKey.startsWith('fantia:') && foundPostsMap.size === 0) {
+      await fetchAndCollect(`fanbox_id:${fbId}`);
+    } else if (seriesKey.startsWith('fantia:') && foundPostsMap.size <= 1) {
       const ftId = seriesKey.replace('fantia:', '');
-      await fetchAndCollect(`fantia:${ftId}`);
-    } else if (seriesKey.startsWith('patreon:') && foundPostsMap.size === 0) {
+      await fetchAndCollect(`fantia_id:${ftId}`);
+    } else if (seriesKey.startsWith('patreon:') && foundPostsMap.size <= 1) {
       const ptId = seriesKey.replace('patreon:', '');
-      await fetchAndCollect(`patreon:${ptId}`);
+      await fetchAndCollect(`patreon_id:${ptId}`);
     }
 
-    let items = Array.from(foundPostsMap.values());
-
     // If the parent post did not come back under parent:ID (on some Boorus), query the parentId itself
-    if (parentId && !foundPostsMap.has(`${site}_${parentId}`) && !foundPostsMap.has(parentId)) {
+    if (parentId && String(parentId) !== '0' && !foundPostsMap.has(`${site}_${parentId}`) && !foundPostsMap.has(parentId)) {
       try {
         const rootPost = await fetchPosts(site, { tags: `id:${parentId}`, page: 1, limit: 1, ratingFilter: 'all', typeFilter: 'all' }, aiTagsList, settings);
         if (rootPost && rootPost[0]) {
           const cleanRoot = { ...rootPost[0] };
           delete cleanRoot.albumItems;
-          items.unshift(cleanRoot);
+          foundPostsMap.set(cleanRoot.id, cleanRoot);
+          if (!targetPost) targetPost = cleanRoot;
         }
       } catch {}
     }
 
+    if (!targetPost) {
+      targetPost = foundPostsMap.get(`${site}_${originalId}`) ||
+                   foundPostsMap.get(originalId) ||
+                   Array.from(foundPostsMap.values())[0] || null;
+    }
+
+    const rawCandidates = Array.from(foundPostsMap.values());
+    const validItems = [];
+
+    const cleanTargetId = String(originalId || '').replace(/^[a-z0-9]+_/, '');
+    const cleanParentId = String(parentId || '').replace(/^[a-z0-9]+_/, '');
+
+    for (const p of rawCandidates) {
+      const pOrigId = String(p.originalId || p.id || '').replace(/^[a-z0-9]+_/, '');
+      const pParentId = p.parentId ? String(p.parentId).replace(/^[a-z0-9]+_/, '') : '';
+
+      // Is it the target post itself?
+      const isTargetPost = Boolean(cleanTargetId && pOrigId === cleanTargetId);
+
+      // Does it match seriesKey?
+      const pKeys = extractAllSeriesKeys(p, site);
+      const matchesSeries = Boolean(seriesKey && pKeys.includes(seriesKey));
+
+      // Does it match parent/child relation?
+      const isChildOfTarget = Boolean(cleanTargetId && pParentId && pParentId === cleanTargetId);
+      const isParentOfTarget = Boolean(cleanParentId && pOrigId === cleanParentId);
+      const isSiblingOfTarget = Boolean(cleanParentId && pParentId && pParentId === cleanParentId);
+
+      const isRelationValid = matchesSeries || isChildOfTarget || isParentOfTarget || isSiblingOfTarget || isTargetPost;
+      if (!isRelationValid) continue;
+
+      // Author compatibility check (against target post)
+      if (targetPost && !arePostsAuthorCompatible(targetPost, p)) {
+        continue;
+      }
+
+      validItems.push(p);
+    }
+
     // Sort the set pages using canonical page numbers
-    items = sortAlbumItems(items);
+    const items = sortAlbumItems(validItems);
 
-    logInfo('AlbumSearch', `Успешно найдено ${items.length} частей серии для site=${site}`);
+    // A valid album must contain at least 2 items
+    if (items.length > 1) {
+      logInfo('AlbumSearch', `Успешно найдено ${items.length} частей серии для site=${site}`);
+      const responsePayload = {
+        success: true,
+        site,
+        seriesKey,
+        parentId,
+        albumCount: items.length,
+        albumItems: items
+      };
+      apiPostsCache.set(albumCacheKey, responsePayload);
+      return res.json(responsePayload);
+    }
 
-    const responsePayload = {
-      success: true,
+    return res.json({
+      success: false,
       site,
       seriesKey,
       parentId,
-      albumCount: items.length,
-      albumItems: items
-    };
-
-    if (items.length > 0) {
-      apiPostsCache.set(albumCacheKey, responsePayload);
-    }
-
-    res.json(responsePayload);
+      albumCount: 0,
+      albumItems: []
+    });
   } catch (err) {
     logError('AlbumSearch', `Ошибка при поиске альбома`, err);
     res.json({

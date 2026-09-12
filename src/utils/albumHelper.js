@@ -98,7 +98,7 @@ export function extractAllSeriesKeys(post, site = '') {
   const pixivPatterns = [
     /pixiv\.net\/(?:en\/)?artworks\/(\d{5,})/i,
     /pixiv\.net\/member_illust\.php\?.*illust_id=(\d{5,})/i,
-    /i\.pximg\.net\/.*\/(\d{5,})_p\d+/i
+    /i\.pximg\.net\/.*\/(\d{5,})(?:_p\d+|_ugoira)/i
   ];
   for (const regex of pixivPatterns) {
     const match = source.match(regex);
@@ -133,7 +133,7 @@ export function extractAllSeriesKeys(post, site = '') {
   const fanboxMatch = source.match(/(?:(?:[\w.-]+\.)?fanbox\.(?:cc|pixiv\.net)\/(?:@[\w.-]+\/|[\w.-]+\/)?posts?\/|fanbox\/user\/\d+\/post\/)(\d+)/i);
   if (fanboxMatch && fanboxMatch[1]) keys.add(`fanbox:${fanboxMatch[1]}`);
   for (const tag of tags) {
-    const fbTagMatch = tag.match(/^(?:fanbox|fanbox_id):(\d+)$/i);
+    const fbTagMatch = tag.match(/^(?:fanbox|fanbox_id):(\d{4,})$/i);
     if (fbTagMatch && fbTagMatch[1]) keys.add(`fanbox:${fbTagMatch[1]}`);
   }
 
@@ -141,7 +141,7 @@ export function extractAllSeriesKeys(post, site = '') {
   const fantiaMatch = source.match(/(?:fantia\.jp\/(?:[^\s"'<>]*\/)?posts?\/|fantia\/user\/\d+\/post\/)(\d+)/i);
   if (fantiaMatch && fantiaMatch[1]) keys.add(`fantia:${fantiaMatch[1]}`);
   for (const tag of tags) {
-    const fantiaTagMatch = tag.match(/^(?:fantia|fantia_id):(\d+)$/i);
+    const fantiaTagMatch = tag.match(/^(?:fantia|fantia_id):(\d{4,})$/i);
     if (fantiaTagMatch && fantiaTagMatch[1]) keys.add(`fantia:${fantiaTagMatch[1]}`);
   }
 
@@ -149,7 +149,7 @@ export function extractAllSeriesKeys(post, site = '') {
   const patreonMatch = source.match(/(?:patreon\.com\/(?:[^\s"'<>]*\/)?posts\/(?:[\w-]+-)?|patreon\/user\/\d+\/post\/)(\d+)/i);
   if (patreonMatch && patreonMatch[1]) keys.add(`patreon:${patreonMatch[1]}`);
   for (const tag of tags) {
-    const patreonTagMatch = tag.match(/^(?:patreon|patreon_id):(\d+)$/i);
+    const patreonTagMatch = tag.match(/^(?:patreon|patreon_id):(\d{4,})$/i);
     if (patreonTagMatch && patreonTagMatch[1]) keys.add(`patreon:${patreonTagMatch[1]}`);
   }
 
@@ -299,7 +299,7 @@ export function sortAlbumItems(items) {
 /**
  * Checks whether two posts have compatible authors (i.e. not different creators)
  */
-function arePostsAuthorCompatible(postA, postB) {
+export function arePostsAuthorCompatible(postA, postB) {
   if (!postA || !postB) return true;
   const authorA = (postA.author || '').trim().toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' ');
   const authorB = (postB.author || '').trim().toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' ');
@@ -390,6 +390,24 @@ export function groupPostsIntoAlbums(posts, options = {}) {
       // Guard against runaway transitive merging of too many separate posts
       const distinctRootPosts = new Set(items.map(it => String(it.originalId || it.id).replace(/^[a-z0-9]+_/, '').split('_')[0]));
       if (distinctRootPosts.size > 20) {
+        items.forEach((item, itemIdx) => {
+          resultMap.set(rootIndex + itemIdx * 0.001, item);
+        });
+        return;
+      }
+
+      // Ensure all items in the cluster are author-compatible
+      let clusterAuthorConflict = false;
+      for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+          if (!arePostsAuthorCompatible(items[i], items[j])) {
+            clusterAuthorConflict = true;
+            break;
+          }
+        }
+        if (clusterAuthorConflict) break;
+      }
+      if (clusterAuthorConflict) {
         items.forEach((item, itemIdx) => {
           resultMap.set(rootIndex + itemIdx * 0.001, item);
         });

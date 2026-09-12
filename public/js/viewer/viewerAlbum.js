@@ -300,7 +300,7 @@ export async function loadFullAlbumForPost(targetPost, isUserExplicit = false, o
 
     targetPost._albumFullyFetched = true;
 
-    if (res.success && Array.isArray(res.albumItems) && res.albumItems.length > 0) {
+    if (res.success && Array.isArray(res.albumItems) && res.albumItems.length > 1) {
       const prevAlbumCount = targetPost.albumItems?.length || 1;
       targetPost.isAlbum = true;
       targetPost.albumItems = res.albumItems;
@@ -309,9 +309,16 @@ export async function loadFullAlbumForPost(targetPost, isUserExplicit = false, o
         targetPost.content = res.albumItems[0].content;
       }
 
-      // Always start album from the very first photo (slide 0 / index 0)
+      // Preserve currently viewed item if it's part of the album
+      const targetOrigId = String(targetPost.originalId || targetPost.id || '').replace(/^[a-z0-9]+_/, '');
+      let openIdx = res.albumItems.findIndex(i => {
+        const iOrigId = String(i.originalId || i.id || '').replace(/^[a-z0-9]+_/, '');
+        return (targetOrigId && iOrigId === targetOrigId) || i.id === targetPost.id;
+      });
+      if (openIdx === -1) openIdx = 0;
+
       const firstItem = res.albumItems[0];
-      if (firstItem) {
+      if (firstItem && openIdx === 0) {
         if (firstItem.previewUrl) targetPost.previewUrl = firstItem.previewUrl;
         if (firstItem.thumb180) targetPost.thumb180 = firstItem.thumb180;
         if (firstItem.thumb360) targetPost.thumb360 = firstItem.thumb360;
@@ -320,7 +327,7 @@ export async function loadFullAlbumForPost(targetPost, isUserExplicit = false, o
         if (firstItem.fileUrl) targetPost.fileUrl = firstItem.fileUrl;
       }
 
-      if (albumContext.setAlbumIndex) albumContext.setAlbumIndex(0);
+      if (albumContext.setAlbumIndex) albumContext.setAlbumIndex(openIdx);
 
       // Sync the updated album back into global gallery state
       const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
