@@ -332,7 +332,9 @@ export function openPresetModal(presetToEdit = null, prefillTags = []) {
   }
 
   updateHint();
-  checkSaveFilters?.onchange = updateHint;
+  if (checkSaveFilters) {
+    checkSaveFilters.onchange = updateHint;
+  }
 
   modalBackdrop.style.display = 'flex';
   setTimeout(() => {
