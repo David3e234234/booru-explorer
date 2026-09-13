@@ -400,6 +400,12 @@ Object.assign(en, {
   'settings.lgbtHint': 'Tags cut off when the "Hide LGBT" toggle is on.',
   'settings.lgbt.placeholder': 'Add a tag (e.g. yaoi, gay, futanari)...',
 
+  'settings.authorAliasesTitle': 'Author & Tag Aliases',
+  'settings.authorAliasesLabel': 'Custom mappings (cross-site synonyms):',
+  'settings.authorAliasesHint': 'Formats tags for different booru engines. Format: tag = danbooru:tag1, rule34:tag2 or tag1 = tag2.',
+  'settings.clear': 'Clear',
+  'set.customAliasesReset': 'Custom aliases cleared',
+
   'settings.sortTagsTitle': 'Per-site sort tags:',
   'settings.sortTagsHint': 'Customize search tags used for the sort pills (Hot, Views, Top, New) for each site individually. Leave blank to use site defaults.',
   'settings.selectSortSite': 'Select site to configure:',

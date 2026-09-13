@@ -780,6 +780,9 @@ export function openSettingsModal() {
   renderTasteProfileUI();
   updateStorageUsageInfo();
 
+  const customAliasesInput = document.getElementById('customAliasesInput');
+  if (customAliasesInput) customAliasesInput.value = state.settings.customAliases || '';
+
   if (inputRule34ApiKey) inputRule34ApiKey.value = state.settings.rule34ApiKey || '';
   if (inputRule34UserId) inputRule34UserId.value = state.settings.rule34UserId || '';
   if (inputGelbooruApiKey) inputGelbooruApiKey.value = state.settings.gelbooruApiKey || '';
@@ -1067,6 +1070,15 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       tempLgbtTags = [...DEFAULT_LGBT_TAGS];
       renderSettingsChips();
       showToast(t('set.lgbtReset', 'Слова для «ЛГБТ» сброшены к стандартным'));
+    });
+  }
+
+  const btnResetCustomAliases = document.getElementById('btnResetCustomAliases');
+  if (btnResetCustomAliases) {
+    btnResetCustomAliases.addEventListener('click', () => {
+      const customAliasesInput = document.getElementById('customAliasesInput');
+      if (customAliasesInput) customAliasesInput.value = '';
+      showToast(t('set.customAliasesReset', 'Пользовательские алиасы очищены'));
     });
   }
 
@@ -1702,7 +1714,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         recommendationMode: document.getElementById('selectRecommendationMode')?.value || 'tags-only',
         enableRecommendations: document.getElementById('selectRecommendationMode')?.value !== 'off',
         recommendationEnableSkipPenalty: document.getElementById('checkRecSkipPenalty')?.checked !== false,
-        siteSortTags: tempSiteSortTags
+        siteSortTags: tempSiteSortTags,
+        customAliases: document.getElementById('customAliasesInput')?.value || ''
       };
 
       saveLocalSettings(updated);
@@ -1797,6 +1810,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
       if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       if (selectMaxServerCache) selectMaxServerCache.value = '1500';
+      const customAliasesInput = document.getElementById('customAliasesInput');
+      if (customAliasesInput) customAliasesInput.value = '';
       tempSiteSortTags = {};
       renderSiteSortTagsUI(currentSortEditingSite || 'gelbooru');
       renderSettingsChips();
@@ -1812,6 +1827,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         aiTags: tempAiTags,
         curvyTags: tempCurvyTags,
         petiteTags: tempPetiteTags,
+        customAliases: '',
         rule34ApiKey: '',
         rule34UserId: '',
         gelbooruApiKey: '',

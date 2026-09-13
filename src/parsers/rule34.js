@@ -17,7 +17,7 @@ function getRecentDateFilter(days = 30) {
 export async function fetchRule34(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   
-  let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter);
+  let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter, settings);
 
   const customRule34Tag = settings?.siteSortTags?.rule34?.[category];
   if (customRule34Tag) {

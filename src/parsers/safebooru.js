@@ -40,7 +40,7 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
     return [];
   }
 
-  let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter);
+  let finalTags = adaptTagsForSite('safebooru', tags, ageFilter, typeFilter, settings);
   const customSafebooruTag = settings?.siteSortTags?.safebooru?.[category];
   if (customSafebooruTag) {
     finalTags = finalTags ? `${finalTags} ${customSafebooruTag}` : customSafebooruTag;

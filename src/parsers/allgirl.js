@@ -1,5 +1,5 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, normalizeDate, decodeHtmlEntities } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, decodeHtmlEntities, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
@@ -71,7 +71,8 @@ export async function fetchAllgirl(params, aiTagsList, settings = {}) {
   }
 
   // Gelbooru 0.1.11 rejects negative query tokens (-tag); exclude them from remote URL
-  const searchTokens = (tags || '')
+  const adaptedTags = adaptTagsForSite('allgirl', tags, ratingFilter, typeFilter, settings);
+  const searchTokens = (adaptedTags || '')
     .trim()
     .split(/\s+/)
     .filter(t => t && !t.startsWith('-') && !t.includes(':'));

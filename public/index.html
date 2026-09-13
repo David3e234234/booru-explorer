@@ -1077,6 +1077,20 @@
             </div>
           </div>
 
+          <!-- Divider: Author and Tag Aliases -->
+          <div class="settings-section-header" style="margin-top: 18px; margin-bottom: 6px; padding-top: 14px; border-top: 1px solid var(--border-subtle);">
+            <span class="settings-section-title" style="font-weight: 600; font-size: 13px; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.authorAliasesTitle">Алиасы авторов и тегов</span>
+          </div>
+
+          <div class="settings-group">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="customAliasesInput" data-i18n="settings.authorAliasesLabel">Пользовательские соответствия (межсайтовые синонимы):</label>
+              <button type="button" class="btn-text" id="btnResetCustomAliases" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.clear">Очистить</button>
+            </div>
+            <p class="settings-hint" data-i18n="settings.authorAliasesHint">Форматирует теги под движки сайтов. Формат: ник = danbooru:ник1, rule34:ник2 или ник1 = ник2.</p>
+            <textarea id="customAliasesInput" class="input-setting" style="width: 100%; min-height: 80px; font-family: monospace; font-size: 12px; line-height: 1.4; resize: vertical;" placeholder="# Пример:&#10;redrainsfm = danbooru:redrain3d, rule34:redrainsfm&#10;csr = cutesexyrobutts" spellcheck="false"></textarea>
+          </div>
+
           <!-- Divider: Recommendation and Taste Profile -->
           <div class="settings-section-header" style="margin-top: 18px; margin-bottom: 6px; padding-top: 14px; border-top: 1px solid var(--border-subtle);">
             <span class="settings-section-title" style="font-weight: 600; font-size: 13px; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.recTasteProfileTitle">Профиль вкусов и рекомендаций</span>
@@ -2612,6 +2626,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=20.8"></script>
+  <script type="module" src="js/app.js?v=20.9"></script>
 </body>
 </html>

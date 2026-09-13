@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
-import { checkIsAi, normalizeDate } from '../utils/tagHelpers.js';
+import { checkIsAi, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
 
@@ -647,7 +647,8 @@ export async function fetchKemono(params, aiTagsList, settings = {}) {
     offset = Math.floor(Math.random() * 200) * 50;
   }
 
-  const tokens = (tags || '').split(/\s+/).filter(Boolean);
+  const adaptedTags = adaptTagsForSite('kemono', tags, ratingFilter, typeFilter, settings);
+  const tokens = (adaptedTags || '').split(/\s+/).filter(Boolean);
   let idFilter = null;
   let serviceFilter = null;
   let userFilter = null;

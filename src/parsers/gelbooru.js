@@ -16,7 +16,7 @@ function getRecentDateFilter(days = 30) {
 export async function fetchGelbooru(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   
-  let searchTags = adaptTagsForSite('gelbooru', tags, ageFilter, typeFilter);
+  let searchTags = adaptTagsForSite('gelbooru', tags, ageFilter, typeFilter, settings);
 
   const customTag = settings?.siteSortTags?.gelbooru?.[category];
   if (customTag) {

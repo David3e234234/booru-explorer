@@ -9,6 +9,8 @@ import {
   PREGNANT_TAGS,
   LGBT_TAGS
 } from '../config/constants.js';
+import { resolveQueryTagsForSite } from '../services/aliasService.js';
+
 
 const criteriaSetsCache = new WeakMap();
 
@@ -530,8 +532,13 @@ export function classifyTags(rawTags = [], author = '') {
   return { artist, copyright, character, general, meta };
 }
 
-export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'all') {
+export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'all', settings = null) {
   let tags = (rawTags || '').trim();
+
+  // 0. Resolve author and tag aliases specific to the target booru engine
+  if (tags) {
+    tags = resolveQueryTagsForSite(tags, site, settings);
+  }
 
   // 1. Tag adaptation: convert parentheses into search phrases for Rule34Video
   if (site === 'rule34video' && tags) {

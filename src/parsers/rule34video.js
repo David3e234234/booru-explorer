@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
-import { checkIsAi, classifyTags } from '../utils/tagHelpers.js';
+import { checkIsAi, classifyTags, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
 
@@ -259,7 +259,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
     return [];
   }
 
-  let rawTags = (tags || '').trim();
+  let rawTags = adaptTagsForSite('rule34video', tags, ageFilter, 'video', settings);
   if (ageFilter === 'young' && !rawTags) {
     rawTags = 'small tits';
   } else if (ageFilter === 'adult' && !rawTags) {

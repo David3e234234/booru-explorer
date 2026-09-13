@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, normalizeDate } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
 
@@ -619,7 +619,8 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
   }
 
   // Parse query tags for creator or service filters
-  const tokens = (tags || '').split(/\s+/).filter(Boolean);
+  const adaptedTags = adaptTagsForSite('pawchive', tags, ratingFilter, typeFilter, settings);
+  const tokens = (adaptedTags || '').split(/\s+/).filter(Boolean);
   let idFilter = null;
   let serviceFilter = null;
   let userFilter = null;

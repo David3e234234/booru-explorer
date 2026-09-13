@@ -39,6 +39,7 @@ const MAX_POSTS_LIMIT = 200;
 const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
   'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'hideZipPosts', 'groupAlbums', 'customSources',
+  'customAliases',
   // Switches the Paheal fallback in the rule34 parser on and off - without it in the
   // key, toggling the setting kept serving a cached page built for the other value
   'enablePaheal',

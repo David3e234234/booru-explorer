@@ -60,7 +60,7 @@ async function getHypnohubMaxId(settings) {
 export async function fetchXbooru(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
 
-  let searchTags = adaptTagsForSite('xbooru', tags, ageFilter, typeFilter);
+  let searchTags = adaptTagsForSite('xbooru', tags, ageFilter, typeFilter, settings);
   const customXbooruTag = settings?.siteSortTags?.xbooru?.[category];
   if (customXbooruTag) {
     searchTags = searchTags ? `${searchTags} ${customXbooruTag}` : customXbooruTag;
@@ -180,7 +180,7 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
 export async function fetchHypnohub(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
 
-  let searchTags = adaptTagsForSite('hypnohub', tags, ageFilter, typeFilter);
+  let searchTags = adaptTagsForSite('hypnohub', tags, ageFilter, typeFilter, settings);
   const customHypnohubTag = settings?.siteSortTags?.hypnohub?.[category];
   if (customHypnohubTag) {
     searchTags = searchTags ? `${searchTags} ${customHypnohubTag}` : customHypnohubTag;
@@ -307,7 +307,7 @@ function normalizeTbibRating(raw) {
 export async function fetchTbib(params, aiTagsList, settings = {}) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
 
-  let searchTags = adaptTagsForSite('tbib', tags, ageFilter, typeFilter);
+  let searchTags = adaptTagsForSite('tbib', tags, ageFilter, typeFilter, settings);
   // TBIB does not support date:* metatags - strip them or results come back empty
   searchTags = searchTags.replace(/\bdate:\S+/gi, '').trim();
 

@@ -40,7 +40,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     effectiveSiteUrl = 'https://konachan.net';
   }
 
-  let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter);
+  let finalTags = adaptTagsForSite(siteId, tags, ageFilter, typeFilter, settings);
   let url = '';
 
   const customMoebooruTag = settings?.siteSortTags?.[siteId]?.[category];

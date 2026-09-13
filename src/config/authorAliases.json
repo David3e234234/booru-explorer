@@ -1,0 +1,51 @@
+[
+  {
+    "id": "redrain",
+    "aliases": ["redrain3d", "redrainsfm", "redrain"],
+    "sites": {
+      "danbooru": "redrain3d",
+      "gelbooru": "redrain3d",
+      "rule34": "redrainsfm",
+      "rule34video": "redrainsfm",
+      "yandere": "redrain3d",
+      "konachan": "redrain3d"
+    }
+  },
+  {
+    "id": "sakimichan",
+    "aliases": ["sakimichan", "sakimi_chan", "sakimi-chan"],
+    "sites": {
+      "danbooru": "sakimichan",
+      "gelbooru": "sakimichan",
+      "rule34": "sakimi_chan"
+    }
+  },
+  {
+    "id": "cutesexyrobutts",
+    "aliases": ["cutesexyrobutts", "csr"],
+    "sites": {
+      "danbooru": "cutesexyrobutts",
+      "gelbooru": "cutesexyrobutts",
+      "rule34": "cutesexyrobutts"
+    }
+  },
+  {
+    "id": "derpixon",
+    "aliases": ["derpixon"],
+    "sites": {
+      "danbooru": "derpixon",
+      "gelbooru": "derpixon",
+      "rule34": "derpixon",
+      "rule34video": "derpixon"
+    }
+  },
+  {
+    "id": "general_cowslip",
+    "aliases": ["general_cowslip", "cowslip"],
+    "sites": {
+      "danbooru": "cowslip",
+      "gelbooru": "cowslip",
+      "rule34": "general_cowslip"
+    }
+  }
+]

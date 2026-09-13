@@ -8,14 +8,15 @@ import {
   LGBT_TAGS
 } from '../config/constants.js';
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, isPostMatchingFilters } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, isPostMatchingFilters, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { separateAuthorAndAssistants } from '../utils/tagClassifier.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 export async function fetchDanbooru(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all' } = params;
-  const userTagList = tags.trim().split(/\s+/).filter(Boolean);
+  const adaptedTags = adaptTagsForSite('danbooru', tags, ratingFilter, typeFilter, settings);
+  const userTagList = adaptedTags.trim().split(/\s+/).filter(Boolean);
   const queryTags = [];
   
   const prioritizeUserTags = settings?.prioritizeUserTags === true;
@@ -82,7 +83,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   }
 
   const targetLimit = parseInt(params.limit, 10) || 40;
-  const negativeTokens = (tags || '')
+  const negativeTokens = (adaptedTags || '')
     .split(/\s+/)
     .filter(t => t.startsWith('-') && t.length > 1)
     .map(t => t.substring(1).toLowerCase().replace(/_/g, ' '));
