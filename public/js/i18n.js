@@ -404,7 +404,10 @@ Object.assign(en, {
   'settings.authorAliasesLabel': 'Custom mappings (cross-site synonyms):',
   'settings.authorAliasesHint': 'Formats tags for different booru engines. Format: tag = danbooru:tag1, rule34:tag2 or tag1 = tag2.',
   'settings.clear': 'Clear',
+  'settings.discoveredAliasesCount': 'Discovered automatically:',
+  'settings.clearDiscoveredBtn': 'Clear auto-discovered',
   'set.customAliasesReset': 'Custom aliases cleared',
+  'set.discoveredAliasesCleared': 'Auto-discovered aliases cache cleared',
 
   'settings.sortTagsTitle': 'Per-site sort tags:',
   'settings.sortTagsHint': 'Customize search tags used for the sort pills (Hot, Views, Top, New) for each site individually. Leave blank to use site defaults.',

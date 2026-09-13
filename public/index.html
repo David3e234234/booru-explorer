@@ -1089,6 +1089,10 @@
             </div>
             <p class="settings-hint" data-i18n="settings.authorAliasesHint">Форматирует теги под движки сайтов. Формат: ник = danbooru:ник1, rule34:ник2 или ник1 = ник2.</p>
             <textarea id="customAliasesInput" class="input-setting" style="width: 100%; min-height: 80px; font-family: monospace; font-size: 12px; line-height: 1.4; resize: vertical;" placeholder="# Пример:&#10;redrainsfm = danbooru:redrain3d, rule34:redrainsfm&#10;csr = cutesexyrobutts" spellcheck="false"></textarea>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+              <span><span data-i18n="settings.discoveredAliasesCount">Обнаружено автоматически:</span> <strong id="discoveredAliasesCountText" style="color: var(--text-primary);">0</strong></span>
+              <button type="button" class="btn-text" id="btnClearDiscoveredAliases" style="font-size: 11px; color: var(--text-muted); cursor: pointer; background: none; border: none;" data-i18n="settings.clearDiscoveredBtn">Очистить кэш автопоиска</button>
+            </div>
           </div>
 
           <!-- Divider: Recommendation and Taste Profile -->
@@ -2626,6 +2630,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=20.9"></script>
+  <script type="module" src="js/app.js?v=21.0"></script>
 </body>
 </html>

@@ -28,6 +28,7 @@ import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAut
 import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
+import { getAliasesInfo, clearDiscoveredAliases } from '../services/aliasService.js';
 
 const router = express.Router();
 
@@ -566,6 +567,17 @@ router.get('/version', (req, res) => {
     buildTime: '2026-08-19 12:17',
     features: ['space-normalized-autocomplete', 'danbooru-universal-fallback', 'client-auth-forwarding', 'video-1080p-r34video']
   });
+});
+
+// GET /api/aliases/info
+router.get('/aliases/info', (req, res) => {
+  res.json(getAliasesInfo());
+});
+
+// POST /api/aliases/clear-discovered
+router.post('/aliases/clear-discovered', (req, res) => {
+  clearDiscoveredAliases();
+  res.json({ success: true });
 });
 
 // GET /api/posts

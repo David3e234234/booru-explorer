@@ -25,7 +25,9 @@ import {
   fetchTelegramBackupStatus,
   apiExportAccount,
   apiRestoreAccount,
-  syncExternalAccounts
+  syncExternalAccounts,
+  fetchAliasesInfo,
+  clearDiscoveredAliasesApi
 } from '../api.js';
 import { showToast, formatBytes } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
@@ -639,6 +641,17 @@ export async function updateStorageUsageInfo() {
   }
 }
 
+export async function updateDiscoveredAliasesUI() {
+  const countEl = document.getElementById('discoveredAliasesCountText');
+  if (!countEl) return;
+  try {
+    const info = await fetchAliasesInfo();
+    countEl.textContent = String(info.discoveredCount || 0);
+  } catch {
+    countEl.textContent = '0';
+  }
+}
+
 export async function handleClearStorageCache() {
   const btn = document.getElementById('btnClearStorageBtn');
   const statusEl = document.getElementById('storageClearStatus');
@@ -779,6 +792,7 @@ export function openSettingsModal() {
   renderSettingsChips();
   renderTasteProfileUI();
   updateStorageUsageInfo();
+  updateDiscoveredAliasesUI();
 
   const customAliasesInput = document.getElementById('customAliasesInput');
   if (customAliasesInput) customAliasesInput.value = state.settings.customAliases || '';
@@ -1079,6 +1093,18 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const customAliasesInput = document.getElementById('customAliasesInput');
       if (customAliasesInput) customAliasesInput.value = '';
       showToast(t('set.customAliasesReset', 'Пользовательские алиасы очищены'));
+    });
+  }
+
+  const btnClearDiscoveredAliases = document.getElementById('btnClearDiscoveredAliases');
+  if (btnClearDiscoveredAliases) {
+    btnClearDiscoveredAliases.addEventListener('click', async () => {
+      const res = await clearDiscoveredAliasesApi();
+      if (res && res.success) {
+        const countEl = document.getElementById('discoveredAliasesCountText');
+        if (countEl) countEl.textContent = '0';
+        showToast(t('set.discoveredAliasesCleared', 'Кэш автопоиска алиасов очищен'));
+      }
     });
   }
 

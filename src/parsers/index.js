@@ -18,6 +18,7 @@ import {
   LGBT_TAGS
 } from '../config/constants.js';
 import { logInfo } from '../utils/logger.js';
+import { learnAliasesFromPostMatches } from '../services/aliasService.js';
 
 export {
   fetchDanbooru,
@@ -178,6 +179,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
         }
       }
     }
+    learnAliasesFromPostMatches(combined);
     return combined;
   }
 

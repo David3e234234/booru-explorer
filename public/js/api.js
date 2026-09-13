@@ -496,4 +496,27 @@ export async function syncExternalAccounts(options = {}) {
   return await res.json();
 }
 
+export async function fetchAliasesInfo() {
+  try {
+    const res = await fetch('/api/aliases/info', { headers: getAuthHeaders() });
+    if (!res.ok) return { builtinCount: 0, discoveredCount: 0 };
+    return await res.json();
+  } catch {
+    return { builtinCount: 0, discoveredCount: 0 };
+  }
+}
+
+export async function clearDiscoveredAliasesApi() {
+  try {
+    const res = await fetch('/api/aliases/clear-discovered', {
+      method: 'POST',
+      headers: getAuthHeaders(true)
+    });
+    return await res.json();
+  } catch {
+    return { success: false };
+  }
+}
+
+
 
