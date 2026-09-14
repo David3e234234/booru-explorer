@@ -21,7 +21,7 @@
   <link rel="stylesheet" href="css/settings.css?v=1.1">
   <link rel="stylesheet" href="css/authors.css?v=1.0">
   <link rel="stylesheet" href="css/profile.css?v=1.0">
-  <link rel="stylesheet" href="css/viewer.css?v=13.3">
+  <link rel="stylesheet" href="css/viewer.css?v=13.4">
   <link rel="stylesheet" href="css/archive-inspect.css?v=1.0">
   <script src="js/mp4box.all.min.js"></script>
 </head>
@@ -662,6 +662,9 @@
           <button class="viewer-fav-author-btn" id="viewerFavAuthorBtn" style="display: none;" title="Добавить/удалить автора из избранных" data-i18n-title="viewer.favAuthor.title">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
+          <button class="viewer-fav-author-btn viewer-find-creator-btn" id="viewerFindCreatorBtn" style="display: none;" title="Найти оригинал или профиль автора на Kemono / Pawchive" data-i18n-title="viewer.findOnKemono.title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
         </div>
         <div class="viewer-top-actions">
           <!-- Not interested (hide from recommendations) -->
@@ -766,6 +769,10 @@
                   <button class="btn-fav-author-inline btn-cover-author-inline" id="btnSetAuthorCoverSidebar" title="Сделать этот арт обложкой автора" style="display: none;" data-i18n-title="viewer.makeCover.title">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
                     <span data-i18n="viewer.makeCover">Сделать обложкой</span>
+                  </button>
+                  <button class="btn-fav-author-inline btn-find-creator-inline" id="btnFindCreatorSidebar" title="Найти оригинал или профиль автора на Kemono / Pawchive" data-i18n-title="viewer.findOnKemono.title">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <span data-i18n="viewer.findOnKemono">Kemono / Pawchive</span>
                   </button>
                 </div>
               </div>
@@ -2583,6 +2590,31 @@
     </div>
   </div>
 
+  <!-- Kemono & Pawchive Creator Resolver Modal -->
+  <div class="settings-modal" id="creatorResolverModal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="creatorResolverModalTitle">
+    <div class="settings-backdrop" id="creatorResolverBackdrop"></div>
+    <div class="settings-dialog creator-resolver-dialog">
+      <div class="settings-header">
+        <div class="settings-header-title-row">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          <div class="creator-resolver-header-text">
+            <h3 class="settings-title" id="creatorResolverModalTitle" data-i18n="viewer.resolverTitle">Поиск автора на Kemono и Pawchive</h3>
+            <span class="creator-resolver-subtitle" data-i18n="viewer.resolverSubtitle">Оригиналы без цензуры, Patreon и Fanbox версии</span>
+          </div>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btnCloseCreatorResolverModal" title="Закрыть" data-i18n-title="modal.close.title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body creator-resolver-body" id="creatorResolverBody">
+        <!-- Dynamic content: loading, matches, detected links, fallbacks -->
+      </div>
+    </div>
+  </div>
+
   <!-- Search preset add/edit modal -->
   <div class="modal-backdrop" id="modalPresetBackdrop" style="display: none;">
     <div class="modal-dialog modal-dialog-sm">
@@ -2630,6 +2662,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=21.1"></script>
+  <script type="module" src="js/app.js?v=21.2"></script>
 </body>
 </html>

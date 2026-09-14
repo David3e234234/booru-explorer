@@ -29,6 +29,7 @@ import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '
 import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
 import { getAliasesInfo, clearDiscoveredAliases } from '../services/aliasService.js';
+import { resolveAuthorCreators } from '../services/creatorResolverService.js';
 
 const router = express.Router();
 
@@ -463,6 +464,28 @@ router.get('/resolve-post', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Сайт не поддерживается для resolve-post' });
   } catch (err) {
     logError('ResolvePost', 'Ошибка разрешения данных поста', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// GET /api/resolve-author-creators - searches Kemono and Pawchive directories for matching creators
+router.get('/resolve-author-creators', async (req, res) => {
+  try {
+    const { author, source, site, originalId } = req.query;
+    const clientAuth = parseClientAuth(req);
+    const settings = { ...getSettings(), ...clientAuth };
+
+    const data = await resolveAuthorCreators({
+      author: author || '',
+      source: source || '',
+      site: site || '',
+      originalId: originalId || '',
+      settings
+    });
+
+    res.json(data);
+  } catch (err) {
+    logError('ResolveAuthorCreators', 'Ошибка поиска автора на Kemono / Pawchive', err);
     res.status(500).json({ success: false, message: err.message });
   }
 });

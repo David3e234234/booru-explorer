@@ -2,6 +2,7 @@ import { state, isAuthorFavorite, setFavoriteAuthors } from '../state.js';
 import { toggleFavoriteAuthor, updateFavoriteAuthorPreview, syncFavoriteAuthors, getAuthHeaders } from '../api.js';
 import { showToast, haptic } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
+import { openCreatorResolverModal } from './viewerCreatorResolver.js';
 
 function isVideoUrl(url) {
   if (!url) return false;
@@ -275,11 +276,13 @@ export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
  * @param {Function} [params.closeViewer]
  * @param {Function} [params.onTagSelect]
  * @param {Function} [params.onFavoriteAuthorToggle]
+ * @param {Function} [params.onSwitchSiteAndSearch]
  */
-export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onFavoriteAuthorToggle } = {}) {
+export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onFavoriteAuthorToggle, onSwitchSiteAndSearch } = {}) {
   const viewerAuthorBadge = document.getElementById('viewerAuthorBadge');
   const viewerAuthorText = document.getElementById('viewerAuthorText');
   const viewerFavAuthorBtn = document.getElementById('viewerFavAuthorBtn');
+  const viewerFindCreatorBtn = document.getElementById('viewerFindCreatorBtn');
   const infoAuthorRow = document.getElementById('infoAuthorRow');
   const infoAuthor = document.getElementById('infoAuthor');
   const infoAssistantsRow = document.getElementById('infoAssistantsRow');
@@ -287,6 +290,7 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onFavo
   const btnFavAuthorSidebar = document.getElementById('btnFavAuthorSidebar');
   const btnFavAuthorSidebarText = document.getElementById('btnFavAuthorSidebarText');
   const btnSetAuthorCoverSidebar = document.getElementById('btnSetAuthorCoverSidebar');
+  const btnFindCreatorSidebar = document.getElementById('btnFindCreatorSidebar');
 
   let primaryVisualArtist = '';
   if (currentPost?.tagDetails?.artist && currentPost.tagDetails.artist.length > 0) {
@@ -406,12 +410,30 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onFavo
         }
       };
     }
+    if (viewerFindCreatorBtn) {
+      viewerFindCreatorBtn.style.display = 'inline-flex';
+      viewerFindCreatorBtn.onclick = (e) => {
+        e.stopPropagation();
+        haptic(15);
+        openCreatorResolverModal(currentPost, { onSwitchSiteAndSearch, closeViewer });
+      };
+    }
+    if (btnFindCreatorSidebar) {
+      btnFindCreatorSidebar.style.display = 'inline-flex';
+      btnFindCreatorSidebar.onclick = (e) => {
+        e.stopPropagation();
+        haptic(15);
+        openCreatorResolverModal(currentPost, { onSwitchSiteAndSearch, closeViewer });
+      };
+    }
   } else {
     if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
     if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
+    if (viewerFindCreatorBtn) viewerFindCreatorBtn.style.display = 'none';
     if (infoAuthorRow) infoAuthorRow.style.display = 'none';
     if (infoAssistantsRow) infoAssistantsRow.style.display = 'none';
     if (btnSetAuthorCoverSidebar) btnSetAuthorCoverSidebar.style.display = 'none';
+    if (btnFindCreatorSidebar) btnFindCreatorSidebar.style.display = 'none';
   }
 }
 

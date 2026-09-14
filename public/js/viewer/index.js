@@ -10,12 +10,13 @@ import { t } from '../i18n.js';
 import { resolvePostMetadata, renderAuthorInfo, handleAuthorFavToggle } from './viewerMetadata.js';
 import { renderSidebarArchives, renderArchivePostCard, cancelAllArchiveDownloads } from './viewerArchives.js';
 import { isArchiveInspectModalOpen, closeArchiveInspectModal, setArchiveInspectContext } from './viewerArchiveInspect.js';
+import { closeCreatorResolverModal } from './viewerCreatorResolver.js';
 import { renderSidebarCloudLinks, renderSidebarContent } from './viewerCloudLinks.js';
 import { renderSidebarSimilarPosts, configureSimilar, initSimilarEvents } from './viewerSimilar.js';
 import { getCurrentMediaItem, renderAlbumFilmstrip, switchAlbumSlide, preloadAdjacentMedia, loadFullAlbumForPost, downloadFullAlbum, downloadSingleMedia, configureAlbum } from './viewerAlbum.js';
 import { setupViewerGestures } from './viewerGestures.js';
 
-export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle, onFindSimilar } = {}) {
+export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle, onFindSimilar, onSwitchSiteAndSearch } = {}) {
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
   const btnClose = document.getElementById('btnCloseViewer');
@@ -254,7 +255,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     renderAuthorInfo(currentPost, {
       closeViewer,
       onTagSelect: (tag) => onTagSelect?.(tag),
-      onFavoriteAuthorToggle
+      onFavoriteAuthorToggle,
+      onSwitchSiteAndSearch
     });
 
     updateInteractionStates(currentPost);
@@ -332,6 +334,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (!modal || modal.style.display === 'none') return;
     if (modal) modal.style.display = 'none';
     closeArchiveInspectModal();
+    closeCreatorResolverModal();
     document.body.style.overflow = '';
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) {

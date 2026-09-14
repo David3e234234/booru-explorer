@@ -296,6 +296,27 @@ async function init() {
       galleryInstance.renderGallery(false, { preserveScroll: true });
     },
     onFindSimilar: (post) => handleFindSimilarPost(post),
+    onSwitchSiteAndSearch: (site, query) => {
+      if (viewerInstance) viewerInstance.closeViewer();
+      if (site) {
+        state.currentSite = site;
+        persistSettings({ defaultSite: site });
+        updateSiteCapabilitiesUI(site);
+        updateCurrentSiteLabel();
+        renderSitesBar({ onSelectSite: selectSite });
+        renderMobileSourcesSheet({ onSelectSite: selectSite });
+        if (site === 'pawchive') ensurePawchiveServiceOptions();
+        if (site === 'kemono') ensureKemonoServiceOptions();
+      }
+      state.currentCategory = 'feed';
+      selectCategory('feed');
+      autocompleteInstance.clearTags();
+      if (query) {
+        autocompleteInstance.selectTag(query, true);
+      } else {
+        performSearch(true);
+      }
+    },
     showToast
   });
 
