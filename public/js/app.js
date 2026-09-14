@@ -310,12 +310,19 @@ async function init() {
       }
       state.currentCategory = 'feed';
       selectCategory('feed');
-      autocompleteInstance.clearTags();
-      if (query) {
-        autocompleteInstance.selectTag(query, true);
+      if (autocompleteInstance) {
+        if (typeof autocompleteInstance.clear === 'function') {
+          autocompleteInstance.clear();
+        } else if (typeof autocompleteInstance.clearTags === 'function') {
+          autocompleteInstance.clearTags();
+        }
+        if (query) {
+          autocompleteInstance.selectTag(query, false);
+        }
       } else {
-        performSearch(true);
+        state.searchTags = query ? [query] : [];
       }
+      performSearch(true);
     },
     showToast
   });

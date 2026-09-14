@@ -183,7 +183,8 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
   return {
     renderTagsChips,
     selectTag,
-    clear
+    clear,
+    clearTags: clear
   };
 }
 
