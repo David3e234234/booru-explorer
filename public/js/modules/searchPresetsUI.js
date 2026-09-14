@@ -1,4 +1,5 @@
 import { state, loadLocalPresets, saveLocalPresets } from '../state.js';
+import { saveSettings } from '../api.js';
 import { showToast } from './uiUtils.js';
 import { t } from '../i18n.js';
 
@@ -408,6 +409,9 @@ function handleSavePresetSubmit() {
   saveLocalPresets(presets);
   renderPresetsList();
   closePresetModal();
+  if (state.currentUser) {
+    saveSettings({ searchPresets: presets }).catch(() => {});
+  }
 }
 
 export function deletePreset(presetId) {
@@ -420,6 +424,9 @@ export function deletePreset(presetId) {
   const updated = presets.filter(x => x.id !== presetId);
   saveLocalPresets(updated);
   renderPresetsList();
+  if (state.currentUser) {
+    saveSettings({ searchPresets: updated }).catch(() => {});
+  }
 
   showToast(`${t('presets.deleted', 'Пресет удален')}: ${name}`);
 }

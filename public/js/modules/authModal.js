@@ -1,6 +1,7 @@
-import { state, saveLocalAuth, clearLocalAuth, loadLocalFavorites, loadLocalLikes, loadLocalFavoriteAuthors, loadLocalSettings, saveLocalSettings } from '../state.js';
+import { state, saveLocalAuth, clearLocalAuth, loadLocalFavorites, loadLocalLikes, loadLocalFavoriteAuthors, loadLocalSettings, saveLocalSettings, setPresets, loadLocalPresets } from '../state.js';
 import { apiLogin, apiRegister, apiLogout } from '../api.js';
 import { applySettingsToUIAndState } from './settingsModal.js';
+import { renderPresetsList } from './searchPresetsUI.js';
 import { showToast } from './uiUtils.js';
 import { t } from '../i18n.js';
 
@@ -109,9 +110,13 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
       if (res.success && res.token && res.user) {
         saveLocalAuth(res.token, res.user);
         if (res.settings && typeof res.settings === 'object') {
+          if (Array.isArray(res.settings.searchPresets)) {
+            setPresets(res.settings.searchPresets);
+          }
           applySettingsToUIAndState(res.settings);
           saveLocalSettings(res.settings);
         }
+        renderPresetsList();
         showToast(t('auth.welcome', 'С возвращением, {name}!').replace('{name}', res.user.username), 'success');
         closeAuthModal();
         if (typeof onAuthSuccess === 'function') onAuthSuccess(res.user);
@@ -157,7 +162,10 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
       initialData.favorites = state.favorites || [];
       initialData.likes = state.likes || [];
       initialData.favoriteAuthors = state.favoriteAuthors || [];
-      initialData.settings = state.settings || {};
+      const currentPresets = (state.searchPresets && state.searchPresets.length > 0)
+        ? state.searchPresets
+        : (loadLocalPresets() || []);
+      initialData.settings = { ...(state.settings || {}), searchPresets: currentPresets };
     }
 
     try {

@@ -259,6 +259,11 @@ export function clearLocalAuth() {
     localStorage.removeItem(STORAGE_KEYS.LIKES);
     localStorage.removeItem(STORAGE_KEYS.DISLIKES);
     localStorage.removeItem(STORAGE_KEYS.FAVORITE_AUTHORS);
+    localStorage.removeItem(STORAGE_KEYS.PRESETS);
+    state.searchPresets = [];
+    if (state.settings) {
+      state.settings.searchPresets = [];
+    }
     const current = loadLocalSettings() || {};
     let changed = false;
     for (const field of SECRET_SETTING_FIELDS) {
@@ -269,6 +274,10 @@ export function clearLocalAuth() {
       if (state.settings && state.settings[field]) {
         state.settings[field] = '';
       }
+    }
+    if (current.searchPresets) {
+      current.searchPresets = [];
+      changed = true;
     }
     if (changed) {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(current));
@@ -388,18 +397,29 @@ export function loadLocalPresets() {
     const raw = localStorage.getItem(STORAGE_KEYS.PRESETS);
     if (raw) {
       const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {}
+  if (Array.isArray(state.searchPresets) && state.searchPresets.length > 0) {
+    return state.searchPresets;
+  }
+  if (Array.isArray(state.settings?.searchPresets) && state.settings.searchPresets.length > 0) {
+    return state.settings.searchPresets;
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PRESETS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
     }
   } catch (e) {}
-  if (Array.isArray(state.settings?.searchPresets)) {
-    return state.settings.searchPresets;
-  }
   return [];
 }
 
 export function saveLocalPresets(presetsList) {
   try {
     const cleanList = Array.isArray(presetsList) ? presetsList : [];
+    state.searchPresets = cleanList;
     localStorage.setItem(STORAGE_KEYS.PRESETS, JSON.stringify(cleanList));
     if (state.settings) {
       state.settings.searchPresets = cleanList;

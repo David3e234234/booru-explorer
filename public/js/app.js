@@ -24,7 +24,9 @@ import {
   calculatePostMatchPercent,
   getUserMediaPreferences,
   isAuthorFavorite,
-  SECRET_SETTING_FIELDS
+  SECRET_SETTING_FIELDS,
+  setPresets,
+  loadLocalPresets
 } from './state.js';
 import { 
   fetchPosts, 
@@ -84,7 +86,7 @@ import {
   closeSettingsModal 
 } from './modules/settingsModal.js';
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
-import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js?v=20.8';
+import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js?v=20.9';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initWikiModal } from './modules/wikiModal.js';
 import { initProfileUI } from './modules/profileUI.js';
@@ -694,13 +696,35 @@ async function loadUserSettings() {
           shouldSyncToServer = true;
         }
       }
+
+      // Search presets synchronization
+      const serverPresets = Array.isArray(serverSettings.searchPresets) ? serverSettings.searchPresets : null;
+      const localPresets = loadLocalPresets() || [];
+      if (serverPresets && serverPresets.length > 0) {
+        merged.searchPresets = serverPresets;
+        setPresets(serverPresets);
+      } else if (localPresets.length > 0 && (!serverPresets || serverPresets.length === 0)) {
+        merged.searchPresets = localPresets;
+        setPresets(localPresets);
+        shouldSyncToServer = true;
+      } else if (serverPresets && serverPresets.length === 0) {
+        merged.searchPresets = [];
+        setPresets([]);
+      }
     } else {
       // Anonymous / logged out: local settings override server defaults
       merged = { ...serverSettings, ...local };
+      const localPresets = loadLocalPresets() || [];
+      if (localPresets.length > 0) {
+        merged.searchPresets = localPresets;
+        setPresets(localPresets);
+      }
     }
 
     applySettingsToUIAndState(merged);
     saveLocalSettings(merged);
+    renderPresetsList();
+    updatePresetActiveState();
 
     if (shouldSyncToServer && state.currentUser) {
       saveSettings(merged).catch(() => {});
@@ -844,6 +868,8 @@ async function refreshAllUserData() {
     loadDislikes()
   ]);
   updateFavoritesBadge();
+  renderPresetsList();
+  updatePresetActiveState();
   if (profileUIInstance) profileUIInstance.renderProfile();
 }
 
