@@ -91,6 +91,7 @@ export function openCreatorResolverModal(currentPost, { onSwitchSiteAndSearch, c
   activeAbortController = new AbortController();
 
   modal.style.display = 'flex';
+  modal.style.zIndex = '100010';
   if (backdrop) backdrop.style.display = 'block';
 
   // Backdrop and Close Button listeners

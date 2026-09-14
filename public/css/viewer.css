@@ -2217,6 +2217,8 @@
   color: #f59e0b;
   border-color: rgba(245, 158, 11, 0.4);
   background: rgba(245, 158, 11, 0.1);
+}
+
 #creatorResolverModal {
   z-index: 100010 !important;
 }
