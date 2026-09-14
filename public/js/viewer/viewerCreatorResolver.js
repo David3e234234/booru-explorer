@@ -1,17 +1,33 @@
 import { t } from '../i18n.js';
-import { haptic, showToast } from '../modules/uiUtils.js';
+import { haptic } from '../modules/uiUtils.js';
 
 let activeAbortController = null;
 let escHandler = null;
 
+function escapeHtml(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function getConfidenceBadge(confidence, matchReason) {
   if (confidence === 'high' || matchReason === 'exact_id') {
-    return `<span class="cr-confidence-badge cr-confidence-high" title="${t('viewer.confidenceExact', 'Точное совпадение по ID/источнику')}">${t('viewer.confidenceExact', 'Точное совпадение')}</span>`;
+    return `<span class="cr-confidence-badge cr-confidence-high" title="${escapeAttr(t('viewer.confidenceExact', 'Точное совпадение по ID/источнику'))}">${t('viewer.confidenceExact', 'Точное совпадение')}</span>`;
   }
   if (confidence === 'medium' || matchReason === 'exact_name' || matchReason === 'normalized_name') {
-    return `<span class="cr-confidence-badge cr-confidence-medium" title="${t('viewer.confidenceMedium', 'Совпадение по имени')}">${t('viewer.confidenceMedium', 'По имени')}</span>`;
+    return `<span class="cr-confidence-badge cr-confidence-medium" title="${escapeAttr(t('viewer.confidenceMedium', 'Совпадение по имени'))}">${t('viewer.confidenceMedium', 'По имени')}</span>`;
   }
-  return `<span class="cr-confidence-badge cr-confidence-fuzzy" title="${t('viewer.confidenceFuzzy', 'Похожее имя')}">${t('viewer.confidenceFuzzy', 'Похожее')}</span>`;
+  return `<span class="cr-confidence-badge cr-confidence-fuzzy" title="${escapeAttr(t('viewer.confidenceFuzzy', 'Похожее имя'))}">${t('viewer.confidenceFuzzy', 'Похожее')}</span>`;
 }
 
 function getServiceClass(service) {
@@ -80,6 +96,9 @@ export function openCreatorResolverModal(currentPost, { onSwitchSiteAndSearch, c
   // Backdrop and Close Button listeners
   if (backdrop) backdrop.onclick = () => closeCreatorResolverModal();
   if (btnClose) btnClose.onclick = () => closeCreatorResolverModal();
+  modal.onclick = (e) => {
+    if (e.target === modal) closeCreatorResolverModal();
+  };
 
   // Esc listener
   if (escHandler) document.removeEventListener('keydown', escHandler);
@@ -146,7 +165,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
   const body = document.getElementById('creatorResolverBody');
   if (!body) return;
 
-  const { author, detectedSources = [], kemono = [], pawchive = [], fallbackSearch = {} } = data;
+  const { author, aliases = [], detectedSources = [], kemono = [], pawchive = [], fallbackSearch = {} } = data;
   const authorDisplay = author || currentPost.author || 'Автор';
 
   let html = '';
@@ -157,9 +176,9 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
       <div class="cr-sources-bar">
         <span class="cr-sources-label">${t('viewer.detectedSource', 'Источник автора:')}</span>
         ${detectedSources.map(s => `
-          <a href="${s.url}" target="_blank" rel="noopener noreferrer" class="cr-source-chip" title="${s.url}">
-            <span class="cr-service-badge ${getServiceClass(s.service)}">${s.service}</span>
-            <span>${s.slug || s.id || 'Ссылка'}</span>
+          <a href="${escapeAttr(s.url)}" target="_blank" rel="noopener noreferrer" class="cr-source-chip" title="${escapeAttr(s.url)}">
+            <span class="cr-service-badge ${getServiceClass(s.service)}">${escapeHtml(s.service)}</span>
+            <span>${escapeHtml(s.slug || s.id || 'Ссылка')}</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
         `).join('')}
@@ -167,7 +186,27 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
     `;
   }
 
-  // 2. Kemono Section
+  // 2. Known aliases bar (if Danbooru / e621 gave other names)
+  const distinctAliases = (aliases || []).filter(a => a && a.toLowerCase() !== authorDisplay.toLowerCase());
+  if (distinctAliases.length > 0) {
+    html += `
+      <div class="cr-aliases-bar">
+        <div class="cr-aliases-header">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          <span>${t('viewer.knownAliases', 'Другие ники / псевдонимы автора:')}</span>
+        </div>
+        <div class="cr-aliases-list">
+          ${distinctAliases.map(a => `
+            <button class="cr-alias-chip btn-cr-in-app" data-site="kemono" data-query="${escapeAttr(a)}" title="Искать на Kemono по нику: ${escapeAttr(a)}">
+              <span>${escapeHtml(a)}</span>
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // 3. Kemono Section
   html += `
     <div class="cr-section">
       <div class="cr-section-header">
@@ -175,7 +214,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
           <span>Kemono</span>
           <span class="cr-section-badge">${kemono.length}</span>
         </div>
-        <a href="${fallbackSearch.kemonoWebUrl}" target="_blank" rel="noopener noreferrer" class="btn-text" style="font-size: 11px;">
+        <a href="${escapeAttr(fallbackSearch.kemonoWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-text" style="font-size: 11px;">
           ${t('viewer.openExternal', 'Открыть kemono.cr')} ↗
         </a>
       </div>
@@ -186,24 +225,24 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
     kemono.forEach(k => {
       const favFormatted = formatFavorited(k.favorited);
       html += `
-        <div class="cr-card" data-site="kemono" data-query="${k.searchQuery || k.name}">
+        <div class="cr-card">
           <div class="cr-card-info">
             <div class="cr-card-top-row">
-              <span class="cr-card-name" title="${k.name}">${k.name}</span>
-              <span class="cr-service-badge ${getServiceClass(k.service)}">${k.service}</span>
+              <span class="cr-card-name" title="${escapeAttr(k.name)}">${escapeHtml(k.name)}</span>
+              <span class="cr-service-badge ${getServiceClass(k.service)}">${escapeHtml(k.service)}</span>
               ${getConfidenceBadge(k.matchConfidence, k.matchReason)}
             </div>
             <div class="cr-card-meta">
-              <span>ID: ${k.id}</span>
+              <span>ID: ${escapeHtml(k.id)}</span>
               ${favFormatted ? `<span class="cr-fav-count" title="${k.favorited} избранных">♥ ${favFormatted}</span>` : ''}
             </div>
           </div>
           <div class="cr-card-actions">
-            <button class="btn-cr-action btn-cr-primary btn-cr-in-app" data-site="kemono" data-query="${k.searchQuery || k.name}" title="${t('viewer.openInApp.title', 'Искать работы этого автора в приложении')}">
+            <button class="btn-cr-action btn-cr-primary btn-cr-in-app" data-site="kemono" data-query="${escapeAttr(k.searchQuery || k.name)}" title="${escapeAttr(t('viewer.openInApp.title', 'Искать работы этого автора в приложении'))}">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <span>${t('viewer.openInApp', 'В приложении')}</span>
             </button>
-            <a href="${k.url}" target="_blank" rel="noopener noreferrer" class="btn-cr-action btn-cr-secondary" title="${t('viewer.openExternal.title', 'Открыть страницу автора в новой вкладке')}">
+            <a href="${escapeAttr(k.url)}" target="_blank" rel="noopener noreferrer" class="btn-cr-action btn-cr-secondary" title="${escapeAttr(t('viewer.openExternal.title', 'Открыть страницу автора в новой вкладке'))}">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               <span>${t('viewer.openExternal', 'На сайте')}</span>
             </a>
@@ -217,11 +256,11 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
       <div class="cr-empty-box">
         <div>${t('viewer.resolverNotFound', 'Точных совпадений в каталоге Kemono не найдено')}</div>
         <div class="cr-fallback-actions">
-          <button class="btn-cr-fallback btn-cr-in-app" data-site="kemono" data-query="${fallbackSearch.kemonoAppQuery}">
+          <button class="btn-cr-fallback btn-cr-in-app" data-site="kemono" data-query="${escapeAttr(fallbackSearch.kemonoAppQuery)}">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <span>${t('viewer.searchFallback', 'Искать "{author}" в Kemono').replace('{site}', 'Kemono').replace('{author}', authorDisplay)}</span>
+            <span>${escapeHtml(t('viewer.searchFallback', 'Искать "{author}" в Kemono').replace('{site}', 'Kemono').replace('{author}', authorDisplay))}</span>
           </button>
-          <a href="${fallbackSearch.kemonoWebUrl}" target="_blank" rel="noopener noreferrer" class="btn-cr-fallback">
+          <a href="${escapeAttr(fallbackSearch.kemonoWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-cr-fallback">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             <span>На kemono.cr</span>
           </a>
@@ -231,7 +270,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
   }
   html += `</div>`; // end Kemono section
 
-  // 3. Pawchive Section
+  // 4. Pawchive Section
   html += `
     <div class="cr-section">
       <div class="cr-section-header">
@@ -239,7 +278,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
           <span>Pawchive</span>
           <span class="cr-section-badge">${pawchive.length}</span>
         </div>
-        <a href="${fallbackSearch.pawchiveWebUrl}" target="_blank" rel="noopener noreferrer" class="btn-text" style="font-size: 11px;">
+        <a href="${escapeAttr(fallbackSearch.pawchiveWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-text" style="font-size: 11px;">
           ${t('viewer.openExternal', 'Открыть pawchive.pw')} ↗
         </a>
       </div>
@@ -250,24 +289,24 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
     pawchive.forEach(p => {
       const favFormatted = formatFavorited(p.favorited);
       html += `
-        <div class="cr-card" data-site="pawchive" data-query="${p.searchQuery || p.name}">
+        <div class="cr-card">
           <div class="cr-card-info">
             <div class="cr-card-top-row">
-              <span class="cr-card-name" title="${p.name}">${p.name}</span>
-              <span class="cr-service-badge ${getServiceClass(p.service)}">${p.service}</span>
+              <span class="cr-card-name" title="${escapeAttr(p.name)}">${escapeHtml(p.name)}</span>
+              <span class="cr-service-badge ${getServiceClass(p.service)}">${escapeHtml(p.service)}</span>
               ${getConfidenceBadge(p.matchConfidence, p.matchReason)}
             </div>
             <div class="cr-card-meta">
-              <span>ID: ${p.id}</span>
+              <span>ID: ${escapeHtml(p.id)}</span>
               ${favFormatted ? `<span class="cr-fav-count" title="${p.favorited} избранных">♥ ${favFormatted}</span>` : ''}
             </div>
           </div>
           <div class="cr-card-actions">
-            <button class="btn-cr-action btn-cr-primary btn-cr-in-app" data-site="pawchive" data-query="${p.searchQuery || p.name}" title="${t('viewer.openInApp.title', 'Искать работы этого автора в приложении')}">
+            <button class="btn-cr-action btn-cr-primary btn-cr-in-app" data-site="pawchive" data-query="${escapeAttr(p.searchQuery || p.name)}" title="${escapeAttr(t('viewer.openInApp.title', 'Искать работы этого автора в приложении'))}">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <span>${t('viewer.openInApp', 'В приложении')}</span>
             </button>
-            <a href="${p.url}" target="_blank" rel="noopener noreferrer" class="btn-cr-action btn-cr-secondary" title="${t('viewer.openExternal.title', 'Открыть страницу автора в новой вкладке')}">
+            <a href="${escapeAttr(p.url)}" target="_blank" rel="noopener noreferrer" class="btn-cr-action btn-cr-secondary" title="${escapeAttr(t('viewer.openExternal.title', 'Открыть страницу автора в новой вкладке'))}">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               <span>${t('viewer.openExternal', 'На сайте')}</span>
             </a>
@@ -281,11 +320,11 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
       <div class="cr-empty-box">
         <div>${t('viewer.resolverNotFound', 'Точных совпадений в каталоге Pawchive не найдено')}</div>
         <div class="cr-fallback-actions">
-          <button class="btn-cr-fallback btn-cr-in-app" data-site="pawchive" data-query="${fallbackSearch.pawchiveAppQuery}">
+          <button class="btn-cr-fallback btn-cr-in-app" data-site="pawchive" data-query="${escapeAttr(fallbackSearch.pawchiveAppQuery)}">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <span>${t('viewer.searchFallback', 'Искать "{author}" в Pawchive').replace('{site}', 'Pawchive').replace('{author}', authorDisplay)}</span>
+            <span>${escapeHtml(t('viewer.searchFallback', 'Искать "{author}" в Pawchive').replace('{site}', 'Pawchive').replace('{author}', authorDisplay))}</span>
           </button>
-          <a href="${fallbackSearch.pawchiveWebUrl}" target="_blank" rel="noopener noreferrer" class="btn-cr-fallback">
+          <a href="${escapeAttr(fallbackSearch.pawchiveWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-cr-fallback">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             <span>На pawchive.pw</span>
           </a>
