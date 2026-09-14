@@ -469,7 +469,7 @@ export function resolveTagForSite(token, targetSite, customRules = [], settings 
   }
 
   // If unknown and explicitly an artist or bare single word, trigger background discovery (non-blocking)
-  if (!replacedTag && (isExplicitArtist || (!lookupKey.includes(':') && !lookupKey.startsWith('order:') && !lookupKey.startsWith('sort:')))) {
+  if (process.env.NODE_ENV !== 'test' && !replacedTag && (isExplicitArtist || (!lookupKey.includes(':') && !lookupKey.startsWith('order:') && !lookupKey.startsWith('sort:')))) {
     discoverAuthorAliases(lookupKey, settings).catch(() => {});
   }
 

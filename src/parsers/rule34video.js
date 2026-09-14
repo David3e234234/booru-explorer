@@ -33,6 +33,28 @@ function saveR34vAuthorsCache() {
   } catch (e) {}
 }
 
+export function parseIsoDuration(str) {
+  if (!str || typeof str !== 'string') return 0;
+  const matchH = str.match(/(\d+)H/i);
+  const matchM = str.match(/(\d+)M/i);
+  const matchS = str.match(/(\d+)S/i);
+  const h = matchH ? parseInt(matchH[1], 10) : 0;
+  const m = matchM ? parseInt(matchM[1], 10) : 0;
+  const s = matchS ? parseInt(matchS[1], 10) : 0;
+  return h * 3600 + m * 60 + s;
+}
+
+export function formatDurationSeconds(sec) {
+  if (!sec || sec <= 0) return '';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) {
+    return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  }
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+}
+
 // Insertion-ordered eviction: these caches previously grew without bound
 // (one entry per resolved author/video for the whole uptime)
 const RESOLVED_CACHE_MAX = 500;
@@ -68,27 +90,6 @@ export const NON_AUTHOR_TAGS = new Set([
   'sound effects', 'with audio', 'no sound', 'audio version', 'test animation', 'short clip',
   'fan made', 'fan animation', 'clip', 'webm', 'mp4', 'h264', 'h265', 'hevc'
 ]);
-
-function parseIsoDuration(iso) {
-  if (!iso) return 0;
-  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i);
-  if (!match) return 0;
-  const h = parseInt(match[1] || 0, 10);
-  const m = parseInt(match[2] || 0, 10);
-  const s = parseInt(match[3] || 0, 10);
-  return h * 3600 + m * 60 + s;
-}
-
-function formatDurationSeconds(totalSeconds) {
-  if (!totalSeconds || totalSeconds <= 0) return '';
-  const hours = Math.floor(totalSeconds / 3600);
-  const mins = Math.floor((totalSeconds % 3600) / 60);
-  const secs = totalSeconds % 60;
-  if (hours > 0) {
-    return `${hours}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  }
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
 
 /**
  * Resolves an author/artist/model name to Rule34Video IDs (model_ids, channels, members)
@@ -541,11 +542,19 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         if (durMatch) {
           const rawDur = durMatch[1].trim();
           durationText = rawDur;
-          const parts = rawDur.split(':').map(Number);
-          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-            duration = parts[0] * 60 + parts[1];
-          } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-            duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          if (rawDur.startsWith('PT')) {
+            duration = parseIsoDuration(rawDur);
+            durationText = formatDurationSeconds(duration);
+          } else if (!rawDur.includes(':') && !isNaN(Number(rawDur))) {
+            duration = parseInt(rawDur, 10) || 0;
+            durationText = formatDurationSeconds(duration);
+          } else {
+            const parts = rawDur.split(':').map(Number);
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+              duration = parts[0] * 60 + parts[1];
+            } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+              duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+            }
           }
         }
 
@@ -605,6 +614,27 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
           }
         }
 
+        let width = 1280;
+        let height = 720;
+        const titleAndBlock = `${title} ${block}`.toLowerCase();
+        if (titleAndBlock.includes('4k') || titleAndBlock.includes('2160p')) {
+          width = 3840; height = 2160;
+        } else if (titleAndBlock.includes('1440p') || titleAndBlock.includes('2k')) {
+          width = 2560; height = 1440;
+        } else if (titleAndBlock.includes('1080p') || titleAndBlock.includes('fhd')) {
+          width = 1920; height = 1080;
+        } else if (titleAndBlock.includes('480p')) {
+          width = 854; height = 480;
+        }
+
+        const previewUrl = resolvePreviewUrl(thumb, previewMp4, previewMp4, true);
+        const thumb180 = thumb || previewMp4 || '';
+        const thumb360 = thumb || previewMp4 || '';
+        const thumb720 = thumb || previewMp4 || '';
+        const thumbSample = thumb || '';
+        const thumbOriginal = thumb || '';
+        const mediaUrl = previewMp4 || thumb || '';
+
         pageResults.push({
           id: `rule34video_${id}`,
           originalId: String(id),
@@ -613,9 +643,14 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
           title,
           author,
           assistants: [],
-          previewUrl: resolvePreviewUrl(thumb, previewMp4, previewMp4, true),
-          sampleUrl: previewMp4,
-          fileUrl: previewMp4,
+          previewUrl,
+          thumb180,
+          thumb360,
+          thumb720,
+          thumbSample,
+          thumbOriginal,
+          sampleUrl: mediaUrl,
+          fileUrl: mediaUrl,
           fileExt: 'mp4',
           isVideo: true,
           isGif: false,
@@ -628,8 +663,8 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
           tagDetails,
           score,
           rating: 'e',
-          width: 1280,
-          height: 720,
+          width,
+          height,
           source: pageUrl,
           postUrl: pageUrl,
           createdAt,

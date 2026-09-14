@@ -358,10 +358,12 @@ router.get('/resolve-post', async (req, res) => {
         return res.json({ success: true, post: resolvedPost });
       }
       return res.status(404).json({ success: false, message: 'Пост не найден' });
-    } else if (targetSite === 'rule34') {
+    } else if (targetSite === 'rule34' || targetSite === 'paheal') {
       let targetPostId = postId || id || '';
       if (targetPostId) {
-        targetPostId = String(targetPostId).replace(/^rule34_/, '').split('_')[0];
+        const isPaheal = String(targetPostId).startsWith('paheal_') || targetSite === 'paheal';
+        const numId = String(targetPostId).replace(/^(?:rule34_|paheal_)/, '').split('_')[0].trim();
+        targetPostId = isPaheal ? `paheal_${numId}` : numId;
       }
       if (!targetPostId) {
         return res.status(400).json({ success: false, message: 'Не указан ID поста' });
@@ -383,8 +385,11 @@ router.get('/resolve-post', async (req, res) => {
       if (!targetPostId) {
         return res.status(400).json({ success: false, message: 'Не указан ID поста' });
       }
+      const rawTags = req.query.tags
+        ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean)
+        : [];
       const aiTagsList = settings.aiTags || [];
-      const resolvedPost = await fetchXbooruPostById(targetPostId, aiTagsList, settings);
+      const resolvedPost = await fetchXbooruPostById(targetPostId, aiTagsList, settings, rawTags);
       if (resolvedPost) {
         return res.json({ success: true, post: resolvedPost });
       }

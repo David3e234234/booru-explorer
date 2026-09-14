@@ -17,27 +17,179 @@ const criteriaSetsCache = new WeakMap();
 // O(1) lookups instead of array scans per post
 const soundKeywordsSet = new Set(SOUND_KEYWORDS);
 
-function getCriteriaSets(criteria, activeCurvyTags, activePetiteTags, activeFurryTags, activePregnantTags, activeLgbtTags) {
-  let sets = criteriaSetsCache.get(criteria);
-  if (sets) return sets;
-  sets = {
-    blacklist: new Set((Array.isArray(criteria.blacklist) ? criteria.blacklist : [])
-      .map(b => (typeof b === 'string' ? b.toLowerCase().trim() : '')).filter(Boolean)),
-    curvyInclude: new Set(activeCurvyTags),
-    curvyExclude: new Set(CURVY_EXCLUDE_TAGS),
-    petiteInclude: new Set(activePetiteTags),
-    petiteExclude: new Set(PETITE_EXCLUDE_TAGS),
-    furry: Array.isArray(activeFurryTags) && activeFurryTags.length > 0 ? activeFurryTags : FURRY_TAGS,
-    pregnant: Array.isArray(activePregnantTags) && activePregnantTags.length > 0 ? activePregnantTags : PREGNANT_TAGS,
-    lgbt: Array.isArray(activeLgbtTags) && activeLgbtTags.length > 0 ? activeLgbtTags : LGBT_TAGS
+/**
+ * Normalizes an array of tags (or comma/space-delimited string) into an array of unique,
+ * trimmed, lowercase tags with bidirectional space and underscore expansion.
+ */
+export function normalizeTagList(list) {
+  if (!Array.isArray(list)) {
+    if (typeof list === 'string') {
+      const trimmed = list.trim();
+      if (!trimmed) return [];
+      list = trimmed.includes(',') || trimmed.includes(';') || trimmed.includes('\n')
+        ? trimmed.split(/[,;\n]+/)
+        : trimmed.split(/\s+/);
+    } else {
+      return [];
+    }
+  }
+  const result = [];
+  const seen = new Set();
+  for (const item of list) {
+    if (typeof item !== 'string') continue;
+    const tag = item.toLowerCase().trim();
+    if (!tag) continue;
+    if (!seen.has(tag)) {
+      seen.add(tag);
+      result.push(tag);
+    }
+    // Bidirectional space and underscore expansion:
+    // e.g., 'scat art' -> also adds 'scat_art'
+    if (tag.includes(' ')) {
+      const underscored = tag.replace(/\s+/g, '_');
+      if (!seen.has(underscored)) {
+        seen.add(underscored);
+        result.push(underscored);
+      }
+    }
+    // e.g., 'scat_art' -> also adds 'scat art'
+    if (tag.includes('_')) {
+      const spaced = tag.replace(/_+/g, ' ');
+      if (!seen.has(spaced)) {
+        seen.add(spaced);
+        result.push(spaced);
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Safely converts an array of tags, delimited string, or fallback into a normalized Set.
+ */
+export function toNormalizedTagSet(tags, fallback = []) {
+  let list = fallback;
+  if (Array.isArray(tags) && tags.length > 0) {
+    list = tags;
+  } else if (typeof tags === 'string' && tags.trim().length > 0) {
+    list = tags;
+  }
+  const norm = normalizeTagList(list);
+  return new Set(norm);
+}
+
+/**
+ * Matches a tag against a pattern using booru underscore/space word boundaries:
+ * exact match, prefix (`pattern_`), suffix (`_pattern`), or infix (`_pattern_`).
+ */
+export function matchesTagBoundary(tag, pattern) {
+  if (typeof tag !== 'string' || typeof pattern !== 'string' || !tag || !pattern) return false;
+  if (tag === pattern) return true;
+  const t = tag.includes(' ') ? tag.replace(/\s+/g, '_') : tag;
+  const p = pattern.includes(' ') ? pattern.replace(/\s+/g, '_') : pattern;
+  return (
+    t === p ||
+    t.startsWith(p + '_') ||
+    t.endsWith('_' + p) ||
+    t.includes('_' + p + '_')
+  );
+}
+
+const ARCHIVE_EXTENSIONS = new Set([
+  'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz',
+  'cbz', 'cbr', 'cb7', 'cbt', 'zst'
+]);
+
+const ARCHIVE_REGEX = /\.(zip|rar|7z|tar|gz|bz2|xz|cbz|cbr|cb7|cbt|zst)$/i;
+
+const NON_IMAGE_REGEX = /\.(mp4|webm|gif|mov|m4v|flv|avi|mkv|mp3|ogg|flac|wav|m4a|aac|opus|wma|zip|rar|7z|tar|gz|bz2|xz|cbz|cbr|cb7|cbt|zst)$/i;
+
+/**
+ * Determines whether a post represents a compressed archive (zip/rar/7z/tar/gz/cbz/cbr/etc.).
+ */
+export function isArchivePost(post) {
+  if (!post || typeof post !== 'object') return false;
+  if (post.isArchive) return true;
+  if (Array.isArray(post.archiveUrls) && post.archiveUrls.length > 0) return true;
+
+  if (typeof post.fileExt === 'string') {
+    const ext = post.fileExt.trim().split(/[?#]/)[0].toLowerCase().replace(/^\.+/, '');
+    if (ARCHIVE_EXTENSIONS.has(ext)) return true;
+  }
+
+  const fileUrl = typeof post.fileUrl === 'string' ? post.fileUrl.trim().split(/[?#]/)[0] : '';
+  if (fileUrl && ARCHIVE_REGEX.test(fileUrl)) return true;
+
+  const sampleUrl = typeof post.sampleUrl === 'string' ? post.sampleUrl.trim().split(/[?#]/)[0] : '';
+  if (sampleUrl && ARCHIVE_REGEX.test(sampleUrl)) return true;
+
+  return false;
+}
+
+export function getCriteriaSets(
+  criteria,
+  activeCurvyTags,
+  activePetiteTags,
+  activeFurryTags,
+  activePregnantTags,
+  activeLgbtTags,
+  activeCurvyExcludeTags,
+  activePetiteExcludeTags
+) {
+  const isObj = criteria !== null && typeof criteria === 'object';
+  if (isObj) {
+    const cached = criteriaSetsCache.get(criteria);
+    if (cached) return cached;
+  }
+
+  const c = isObj ? criteria : {};
+
+  // Dual-canonical normalization for blacklist: store both space and underscore forms
+  const blacklistSet = new Set();
+  const rawBlacklist = Array.isArray(c.blacklist)
+    ? c.blacklist
+    : (typeof c.blacklist === 'string' ? c.blacklist.split(/[,;\n]+/) : []);
+  for (const b of rawBlacklist) {
+    if (typeof b !== 'string') continue;
+    const clean = b.toLowerCase().trim();
+    if (!clean) continue;
+    blacklistSet.add(clean);
+    blacklistSet.add(clean.replace(/[\s_]+/g, ' '));
+    blacklistSet.add(clean.replace(/[\s_]+/g, '_'));
+  }
+
+  // Resolve sources with fallbacks
+  const rawCurvyInclude = activeCurvyTags ?? c.activeCurvyTags ?? c.curvyInclude ?? c.curvyTags ?? CURVY_INCLUDE_TAGS;
+  const rawCurvyExclude = activeCurvyExcludeTags ?? c.activeCurvyExcludeTags ?? c.curvyExclude ?? c.curvyExcludeTags ?? CURVY_EXCLUDE_TAGS;
+  const rawPetiteInclude = activePetiteTags ?? c.activePetiteTags ?? c.petiteInclude ?? c.petiteTags ?? PETITE_INCLUDE_TAGS;
+  const rawPetiteExclude = activePetiteExcludeTags ?? c.activePetiteExcludeTags ?? c.petiteExclude ?? c.petiteExcludeTags ?? PETITE_EXCLUDE_TAGS;
+
+  const rawFurry = activeFurryTags ?? c.activeFurryTags ?? c.furry ?? c.furryTags ?? FURRY_TAGS;
+  const rawPregnant = activePregnantTags ?? c.activePregnantTags ?? c.pregnant ?? c.pregnantTags ?? PREGNANT_TAGS;
+  const rawLgbt = activeLgbtTags ?? c.activeLgbtTags ?? c.lgbt ?? c.lgbtTags ?? LGBT_TAGS;
+
+  const sets = {
+    blacklist: blacklistSet,
+    curvyInclude: toNormalizedTagSet(rawCurvyInclude, CURVY_INCLUDE_TAGS),
+    curvyExclude: toNormalizedTagSet(rawCurvyExclude, CURVY_EXCLUDE_TAGS),
+    petiteInclude: toNormalizedTagSet(rawPetiteInclude, PETITE_INCLUDE_TAGS),
+    petiteExclude: toNormalizedTagSet(rawPetiteExclude, PETITE_EXCLUDE_TAGS),
+    furry: normalizeTagList((Array.isArray(rawFurry) && rawFurry.length > 0) || (typeof rawFurry === 'string' && rawFurry.trim()) ? rawFurry : FURRY_TAGS),
+    pregnant: normalizeTagList((Array.isArray(rawPregnant) && rawPregnant.length > 0) || (typeof rawPregnant === 'string' && rawPregnant.trim()) ? rawPregnant : PREGNANT_TAGS),
+    lgbt: normalizeTagList((Array.isArray(rawLgbt) && rawLgbt.length > 0) || (typeof rawLgbt === 'string' && rawLgbt.trim()) ? rawLgbt : LGBT_TAGS)
   };
-  criteriaSetsCache.set(criteria, sets);
+
+  if (isObj) {
+    criteriaSetsCache.set(criteria, sets);
+  }
   return sets;
 }
 
 export function isPostMatchingFilters(post, criteria = {}) {
+  const safeCriteria = (criteria && typeof criteria === 'object') ? criteria : {};
+
   // Archive-only posts (zip packs) carry no direct media URLs until unpacked
-  if (!post || (!post.isArchive && !post.previewUrl && !post.fileUrl && !post.sampleUrl)) return false;
+  if (!post || (!isArchivePost(post) && !post.previewUrl && !post.fileUrl && !post.sampleUrl)) return false;
 
   const {
     typeFilter = 'all',
@@ -48,53 +200,86 @@ export function isPostMatchingFilters(post, criteria = {}) {
     hidePregnant = false,
     hideLgbt = false,
     negativeTokens = [],
-    activeCurvyTags = CURVY_INCLUDE_TAGS,
-    activePetiteTags = PETITE_INCLUDE_TAGS,
-    activeFurryTags = FURRY_TAGS,
-    activePregnantTags = PREGNANT_TAGS,
-    activeLgbtTags = LGBT_TAGS,
+    activeCurvyTags,
+    activePetiteTags,
+    activeFurryTags,
+    activePregnantTags,
+    activeLgbtTags,
+    activeCurvyExcludeTags,
+    activePetiteExcludeTags,
     hasUserPositiveTags = false
-  } = criteria;
+  } = safeCriteria;
 
-  const sets = getCriteriaSets(criteria, activeCurvyTags, activePetiteTags, activeFurryTags, activePregnantTags, activeLgbtTags);
+  const sets = getCriteriaSets(
+    safeCriteria,
+    activeCurvyTags,
+    activePetiteTags,
+    activeFurryTags,
+    activePregnantTags,
+    activeLgbtTags,
+    activeCurvyExcludeTags,
+    activePetiteExcludeTags
+  );
 
   // 1. Content type filter
   if (typeFilter === 'audio' || typeFilter === 'sound') {
+    if (isArchivePost(post)) return false;
     if (!post.isVideo || !post.hasSound) return false;
   } else if (typeFilter === 'video') {
+    if (isArchivePost(post)) return false;
     if (!post.isVideo && !post.isGif) return false;
   } else if (typeFilter === 'image') {
-    if (post.isVideo || post.isGif) return false;
-    const fileUrl = (post.fileUrl || '').toLowerCase();
-    const sampleUrl = (post.sampleUrl || '').toLowerCase();
-    if (/\.(mp4|webm|gif|mov|m4v|flv|avi|mkv)(\?.*)?$/i.test(fileUrl) ||
-        /\.(mp4|webm|gif|mov|m4v|flv|avi|mkv)(\?.*)?$/i.test(sampleUrl)) {
+    if (post.isVideo || post.isGif || post.hasSound) return false;
+    if (isArchivePost(post)) return false;
+    const cleanFileUrl = typeof post.fileUrl === 'string' ? post.fileUrl.trim().split(/[?#]/)[0].toLowerCase() : '';
+    const cleanSampleUrl = typeof post.sampleUrl === 'string' ? post.sampleUrl.trim().split(/[?#]/)[0].toLowerCase() : '';
+    if (NON_IMAGE_REGEX.test(cleanFileUrl) || NON_IMAGE_REGEX.test(cleanSampleUrl)) {
       return false;
     }
+    if (!post.fileUrl && !post.sampleUrl && !post.previewUrl) return false;
   } else if (typeFilter === 'zip' || typeFilter === 'archive') {
-    const hasZip = Boolean(
-      post.isArchive ||
-      post.fileExt === 'zip' ||
-      post.fileExt === 'rar' ||
-      post.fileExt === '7z' ||
-      (Array.isArray(post.archiveUrls) && post.archiveUrls.length > 0)
-    );
-    if (!hasZip) return false;
+    if (!isArchivePost(post)) return false;
   }
 
-  const postTagSet = new Set(Array.isArray(post.tags)
-    ? post.tags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean)
-    : []);
+  const rawPostTags = Array.isArray(post.tags)
+    ? post.tags
+    : (typeof post.tags === 'string' ? post.tags.split(/[\s,;\n]+/) : []);
+  const postTagSet = new Set(
+    rawPostTags
+      .map(t => (typeof t === 'string' ? t.toLowerCase().trim() : ''))
+      .filter(Boolean)
+  );
 
   // 2. Local filtering by excluded (-tag) tags
   // Exact match against both spellings: negative tokens arrive space-separated
-  // ("long blonde hair") while tags are stored underscored. Substring matching
-  // used to hide unrelated posts (e.g. -blonde_hair also hid long_blonde_haired_girl).
+  // ("long blonde hair") while tags are stored underscored. Also handles leading '-'
+  // and prefix wildcards ("bad*").
   if (negativeTokens && negativeTokens.length > 0) {
     let hidden = false;
-    for (const neg of negativeTokens) {
-      if (postTagSet.has(neg)) { hidden = true; break; }
-      if (neg.indexOf(' ') !== -1 && postTagSet.has(neg.replace(/ /g, '_'))) { hidden = true; break; }
+    for (const rawNeg of negativeTokens) {
+      if (!rawNeg || typeof rawNeg !== 'string') continue;
+      let neg = rawNeg.toLowerCase().trim();
+      if (neg.startsWith('-')) neg = neg.slice(1).trim();
+      if (!neg) continue;
+
+      if (neg.endsWith('*')) {
+        const prefix = neg.slice(0, -1);
+        if (prefix) {
+          const prefixSpace = prefix.includes('_') ? prefix.replace(/_/g, ' ') : prefix;
+          const prefixUnder = prefix.includes(' ') ? prefix.replace(/\s+/g, '_') : prefix;
+          for (const t of postTagSet) {
+            if (t.startsWith(prefix) || t.startsWith(prefixSpace) || t.startsWith(prefixUnder)) {
+              hidden = true;
+              break;
+            }
+          }
+        }
+      } else {
+        if (postTagSet.has(neg)) { hidden = true; break; }
+        if (neg.includes(' ') && postTagSet.has(neg.replace(/\s+/g, '_'))) { hidden = true; break; }
+        if (neg.includes('_') && postTagSet.has(neg.replace(/_+/g, ' '))) { hidden = true; break; }
+      }
+      if (hidden) break;
     }
     if (hidden) return false;
   }
@@ -128,21 +313,24 @@ export function isPostMatchingFilters(post, criteria = {}) {
   }
 
   // 5. Age rating
+  const r = (typeof post.rating === 'string' || typeof post.rating === 'number')
+    ? String(post.rating).toLowerCase().trim()
+    : '';
+  const site = typeof post.site === 'string' ? post.site.toLowerCase().trim() : '';
+  const isDanbooruOrGelbooru = site === 'danbooru' || site === 'gelbooru';
+
   if (ratingFilter === 'nsfw') {
-    const r = (post.rating || '').toLowerCase();
     if (r !== 'e' && r !== 'explicit' && r !== '?') return false;
   } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
-    const r = (post.rating || '').toLowerCase();
-    if (post.site === 'danbooru' || post.site === 'gelbooru') {
+    if (isDanbooruOrGelbooru) {
       if (r !== 'q' && r !== 'questionable' && r !== 'sensitive' && r !== 's') return false;
     } else {
       if (r !== 'q' && r !== 'questionable' && r !== 'sensitive') return false;
     }
   } else if (ratingFilter === 'sfw') {
-    const r = (post.rating || '').toLowerCase();
     // Danbooru and Gelbooru use a 4-level scale: 's' = sensitive (16+), only 'g' is safe there.
     // Other sites use the legacy scale where 's' = safe.
-    if (post.site === 'danbooru' || post.site === 'gelbooru') {
+    if (isDanbooruOrGelbooru) {
       if (r !== 'g' && r !== 'general') return false;
     } else {
       if (r !== 's' && r !== 'g' && r !== 'safe' && r !== 'general') return false;
@@ -152,15 +340,17 @@ export function isPostMatchingFilters(post, criteria = {}) {
   // 6-8. Content filters (furry / pregnancy / LGBT)
   if (hideFurry || hidePregnant || hideLgbt) {
     const tagList = Array.from(postTagSet);
-    if (hideFurry && sets.furry.some(fTag => tagList.some(t => t === fTag || t.startsWith(fTag + '_') || t.endsWith('_' + fTag)))) return false;
-    if (hidePregnant && sets.pregnant.some(pTag => tagList.some(t => t === pTag || t.includes(pTag)))) return false;
-    if (hideLgbt && sets.lgbt.some(lTag => tagList.some(t => t === lTag || t.startsWith(lTag + '_') || t.endsWith('_' + lTag) || t.includes('_' + lTag + '_')))) return false;
+    if (hideFurry && sets.furry.some(fTag => tagList.some(t => matchesTagBoundary(t, fTag)))) return false;
+    if (hidePregnant && sets.pregnant.some(pTag => tagList.some(t => matchesTagBoundary(t, pTag)))) return false;
+    if (hideLgbt && sets.lgbt.some(lTag => tagList.some(t => matchesTagBoundary(t, lTag)))) return false;
   }
 
   // 8. Blacklist (Set - O(1) per tag)
   if (sets.blacklist.size > 0) {
     for (const t of postTagSet) {
       if (sets.blacklist.has(t)) return false;
+      if (t.includes(' ') && sets.blacklist.has(t.replace(/\s+/g, '_'))) return false;
+      if (t.includes('_') && sets.blacklist.has(t.replace(/_+/g, ' '))) return false;
     }
   }
 
@@ -171,10 +361,10 @@ const aiTagsSetCache = new WeakMap();
 
 export function checkIsAi(tagsArray, aiTagsList) {
   if (!Array.isArray(tagsArray)) return false;
-  const source = (aiTagsList && aiTagsList.length > 0 ? aiTagsList : DEFAULT_AI_TAGS);
+  const source = (Array.isArray(aiTagsList) && aiTagsList.length > 0 ? aiTagsList : DEFAULT_AI_TAGS);
   let checkSet = aiTagsSetCache.get(source);
   if (!checkSet) {
-    checkSet = new Set(source.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')));
+    checkSet = new Set(source.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')).filter(Boolean));
     aiTagsSetCache.set(source, checkSet);
   }
   return tagsArray.some(rawTag => {
@@ -187,22 +377,22 @@ export function checkIsAi(tagsArray, aiTagsList) {
 export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
   const lowerTags = Array.isArray(rawTags) ? rawTags.map(t => (typeof t === 'string' ? t.toLowerCase().trim() : '')) : [];
   const tagsStr = lowerTags.join(' ');
-  const lowerUrl = typeof url === 'string' ? url.toLowerCase() : '';
-  const lowerFileExt = typeof fileExt === 'string' ? fileExt.toLowerCase() : '';
+  const cleanUrl = typeof url === 'string' ? url.trim().split(/[?#]/)[0] : '';
+  const cleanFileExt = typeof fileExt === 'string' ? fileExt.trim().split(/[?#]/)[0] : '';
+  const lowerUrl = cleanUrl.toLowerCase();
+  const lowerFileExt = cleanFileExt.toLowerCase();
   
   // 1. Extract the clean extension (no path, params, or stray dots)
   let ext = '';
-  if (fileExt && typeof fileExt === 'string') {
-    const cleanExt = fileExt.trim().split('?')[0];
-    const dotIdx = cleanExt.lastIndexOf('.');
+  if (cleanFileExt) {
+    const dotIdx = cleanFileExt.lastIndexOf('.');
     if (dotIdx !== -1) {
-      ext = cleanExt.slice(dotIdx + 1).toLowerCase();
-    } else if (cleanExt.length <= 5 && !cleanExt.includes('/') && !cleanExt.includes('\\')) {
-      ext = cleanExt.toLowerCase();
+      ext = cleanFileExt.slice(dotIdx + 1).toLowerCase();
+    } else if (cleanFileExt.length <= 5 && !cleanFileExt.includes('/') && !cleanFileExt.includes('\\')) {
+      ext = cleanFileExt.toLowerCase();
     }
   }
-  if (!ext && url && typeof url === 'string') {
-    const cleanUrl = url.trim().split('?')[0];
+  if (!ext && cleanUrl) {
     const match = cleanUrl.match(/\.([a-z0-9]+)$/i);
     if (match) {
       ext = match[1].toLowerCase();
@@ -277,7 +467,12 @@ const LOCATION_NOUNS = new Set([
 ]);
 
 export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
-  const tags = Array.isArray(rawTags) ? rawTags : [];
+  let tags = [];
+  if (Array.isArray(rawTags)) {
+    tags = rawTags.filter(t => typeof t === 'string' && t.length > 0);
+  } else if (typeof rawTags === 'string' && rawTags.trim()) {
+    tags = rawTags.split(/[,;\s]+/).filter(Boolean);
+  }
   
   // 1. Look in explicit artist tags
   const explicitArtistTags = tags.filter(t => 
@@ -441,7 +636,12 @@ const META_HELPER_KEYWORDS = new Set([
 ]);
 
 export function classifyTags(rawTags = [], author = '') {
-  const tags = Array.isArray(rawTags) ? rawTags : [];
+  let tags = [];
+  if (Array.isArray(rawTags)) {
+    tags = rawTags.filter(t => typeof t === 'string' && t.length > 0);
+  } else if (typeof rawTags === 'string' && rawTags.trim()) {
+    tags = rawTags.split(/[,;\s]+/).filter(Boolean);
+  }
   const artist = [];
   const character = [];
   const copyright = [];
@@ -452,7 +652,7 @@ export function classifyTags(rawTags = [], author = '') {
     if (val && !arr.includes(val)) arr.push(val);
   };
 
-  if (author) {
+  if (typeof author === 'string' && author.trim()) {
     author.split(',').forEach(a => {
       const clean = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
       if (clean && !LOCATION_NOUNS.has(clean.toLowerCase())) addUnique(artist, clean);
@@ -533,77 +733,90 @@ export function classifyTags(rawTags = [], author = '') {
 }
 
 export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'all', settings = null) {
-  let tags = (rawTags || '').trim();
+  let tags = '';
+  if (typeof rawTags === 'string') {
+    tags = rawTags.trim();
+  } else if (Array.isArray(rawTags)) {
+    tags = rawTags
+      .filter(t => typeof t === 'string')
+      .map(t => t.trim())
+      .filter(Boolean)
+      .join(' ');
+  } else if (rawTags != null && typeof rawTags !== 'symbol') {
+    tags = String(rawTags).trim();
+  }
+
+  const normalizedSite = typeof site === 'string' ? site.toLowerCase() : '';
 
   // 0. Resolve author and tag aliases specific to the target booru engine
   if (tags) {
-    tags = resolveQueryTagsForSite(tags, site, settings);
+    tags = resolveQueryTagsForSite(tags, normalizedSite, settings);
   }
 
   // 1. Tag adaptation: convert parentheses into search phrases for Rule34Video
-  if (site === 'rule34video' && tags) {
+  if (normalizedSite === 'rule34video' && tags) {
     tags = tags.replace(/([a-zA-Z0-9_-]+)_\(([^)]+)\)/g, '$1 $2');
     tags = tags.replace(/([a-zA-Z0-9_-]+)\s*\(([^)]+)\)/g, '$1 $2');
     tags = tags.replace(/[()]/g, '');
   }
 
   // 2. Tag aliases for Danbooru compatibility
-  if (site === 'gelbooru' || site === 'rule34' || site === 'safebooru' || site === 'yandere' || site === 'konachan' || site === 'rule34video' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
+  if (normalizedSite === 'gelbooru' || normalizedSite === 'rule34' || normalizedSite === 'safebooru' || normalizedSite === 'yandere' || normalizedSite === 'konachan' || normalizedSite === 'rule34video' || normalizedSite === 'xbooru' || normalizedSite === 'hypnohub' || normalizedSite === 'tbib') {
     tags = tags.replace(/\bpetite\b/gi, 'small_breasts');
   }
 
   // 2.5 Strip category prefixes for DAPI engines that do not support them (e.g. artist:tag -> tag)
-  if (site === 'xbooru' || site === 'hypnohub' || site === 'tbib' || site === 'safebooru') {
+  if (normalizedSite === 'xbooru' || normalizedSite === 'hypnohub' || normalizedSite === 'tbib' || normalizedSite === 'safebooru') {
     tags = tags.replace(/(?:^|\s)(?:artist|character|copyright|meta):\s*/gi, m => m.startsWith(' ') ? ' ' : '');
   }
 
   // 3. Adapt sort directives (order:* <-> sort:*) between engines
-  if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
+  if (normalizedSite === 'rule34' || normalizedSite === 'gelbooru' || normalizedSite === 'safebooru' || normalizedSite === 'xbooru' || normalizedSite === 'hypnohub' || normalizedSite === 'tbib') {
     tags = tags
       .replace(/\border:score_desc\b/gi, 'sort:score:desc')
       .replace(/\border:score\b/gi, 'sort:score:desc')
-      .replace(/\border:rank\b/gi, site === 'gelbooru' ? 'sort:updated:desc' : 'sort:score:desc')
+      .replace(/\border:rank\b/gi, normalizedSite === 'gelbooru' ? 'sort:updated:desc' : 'sort:score:desc')
       .replace(/\border:vote\b/gi, 'sort:score:desc')
       .replace(/\border:random\b/gi, 'sort:random')
       .replace(/\border:id_desc\b/gi, 'sort:id:desc')
       .replace(/\border:id_asc\b/gi, 'sort:id:asc')
       .replace(/\border:score_asc\b/gi, 'sort:score:asc');
-  } else if (site === 'danbooru' || site === 'yandere' || site === 'konachan') {
+  } else if (normalizedSite === 'danbooru' || normalizedSite === 'yandere' || normalizedSite === 'konachan') {
     tags = tags
       .replace(/\bsort:score:desc\b/gi, 'order:score')
       .replace(/\bsort:score:asc\b/gi, 'order:score_asc')
       .replace(/\bsort:score\b/gi, 'order:score')
       .replace(/\bsort:random\b/gi, 'order:random')
       .replace(/\bsort:id:desc\b/gi, 'order:id_desc')
-      .replace(/\bsort:id:asc\b/gi, 'order:id_asc')
-      .replace(/\bsort:updated:desc\b/gi, site === 'danbooru' ? 'order:rank' : 'order:vote');
+      .replace(/\bsort:id_asc\b/gi, 'order:id_asc')
+      .replace(/\bsort:updated:desc\b/gi, normalizedSite === 'danbooru' ? 'order:rank' : 'order:vote');
   }
 
   const tagList = tags.split(/\s+/).filter(Boolean);
 
   // 4. Mix in body type / archetype tags
   if (ageFilter === 'adult') {
-    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
+    if (normalizedSite === 'rule34' || normalizedSite === 'gelbooru' || normalizedSite === 'yandere' || normalizedSite === 'konachan' || normalizedSite === 'safebooru' || normalizedSite === 'xbooru' || normalizedSite === 'hypnohub' || normalizedSite === 'tbib') {
       if (!tagList.some(t => t.startsWith('-loli'))) tagList.push('-loli');
       if (!tagList.some(t => t.startsWith('-shota'))) tagList.push('-shota');
       if (!tagList.some(t => t.startsWith('-flat_chest'))) tagList.push('-flat_chest');
     }
     if (tagList.length === 0) {
-      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
+      if (normalizedSite === 'rule34' || normalizedSite === 'gelbooru' || normalizedSite === 'safebooru' || normalizedSite === 'xbooru' || normalizedSite === 'hypnohub' || normalizedSite === 'tbib') {
         tagList.push('mature_female');
-      } else if (site === 'yandere' || site === 'konachan') {
+      } else if (normalizedSite === 'yandere' || normalizedSite === 'konachan') {
         tagList.push('mature');
       }
     }
   } else if (ageFilter === 'young') {
-    if (site === 'rule34' || site === 'gelbooru' || site === 'yandere' || site === 'konachan' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
+    if (normalizedSite === 'rule34' || normalizedSite === 'gelbooru' || normalizedSite === 'yandere' || normalizedSite === 'konachan' || normalizedSite === 'safebooru' || normalizedSite === 'xbooru' || normalizedSite === 'hypnohub' || normalizedSite === 'tbib') {
       if (!tagList.some(t => t.startsWith('-milf'))) tagList.push('-milf');
       if (!tagList.some(t => t.startsWith('-huge_breasts'))) tagList.push('-huge_breasts');
     }
     if (tagList.length === 0) {
-      if (site === 'rule34' || site === 'gelbooru' || site === 'safebooru' || site === 'xbooru' || site === 'hypnohub' || site === 'tbib') {
+      if (normalizedSite === 'rule34' || normalizedSite === 'gelbooru' || normalizedSite === 'safebooru' || normalizedSite === 'xbooru' || normalizedSite === 'hypnohub' || normalizedSite === 'tbib') {
         tagList.push('small_breasts');
-      } else if (site === 'yandere' || site === 'konachan') {
+      } else if (normalizedSite === 'yandere' || normalizedSite === 'konachan') {
         tagList.push('loli');
       }
     }

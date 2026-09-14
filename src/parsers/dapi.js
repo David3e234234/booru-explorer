@@ -3,6 +3,23 @@ import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtml
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
+import { parseDapiXmlPosts } from './gelbooru.js';
+
+export function normalizeDapiRating(raw, defaultRating = 'e') {
+  const r = String(raw || '').toLowerCase().trim();
+  if (r === 'safe' || r === 's' || r === 'general' || r === 'g') return 's';
+  if (r === 'questionable' || r === 'q' || r === 'sensitive') return 'q';
+  if (r === 'explicit' || r === 'e') return 'e';
+  return defaultRating;
+}
+
+function safeDecode(str) {
+  try {
+    return decodeURIComponent(String(str || ''));
+  } catch {
+    return String(str || '');
+  }
+}
 
 function getRecentDateFilter(days = 30) {
   const d = new Date();
@@ -109,11 +126,16 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
       return [];
     }
     const text = await res.text();
-    const data = safeJsonParse(text, []);
-    const posts = data?.post || (Array.isArray(data) ? data : []);
+    let posts = [];
+    if (text.trim().startsWith('<')) {
+      posts = parseDapiXmlPosts(text);
+    } else {
+      const data = safeJsonParse(text, []);
+      posts = data?.post || (Array.isArray(data) ? data : []);
+    }
 
     return await Promise.all(posts.map(async item => {
-      const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
+      const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
         fileUrl = `https://img.xbooru.com/images/${item.directory}/${item.image}`;
@@ -129,6 +151,12 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+      const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+      const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+      const thumbSample = sampleUrl;
+      const thumbOriginal = fileUrl;
+
       const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
 
@@ -148,6 +176,11 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
         site: 'xbooru',
         siteName: 'Xbooru',
         previewUrl,
+        thumb180,
+        thumb360,
+        thumb720,
+        thumbSample,
+        thumbOriginal,
         sampleUrl,
         fileUrl,
         fileExt,
@@ -159,7 +192,7 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
         tags: rawTags,
         tagDetails,
         score: parseInt(item.score, 10) || 0,
-        rating: item.rating || 'e',
+        rating: normalizeDapiRating(item.rating, 'e'),
         width: parseInt(item.width, 10) || 0,
         height: parseInt(item.height, 10) || 0,
         source: item.source || '',
@@ -229,11 +262,16 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
       return [];
     }
     const text = await res.text();
-    const data = safeJsonParse(text, []);
-    const posts = data?.post || (Array.isArray(data) ? data : []);
+    let posts = [];
+    if (text.trim().startsWith('<')) {
+      posts = parseDapiXmlPosts(text);
+    } else {
+      const data = safeJsonParse(text, []);
+      posts = data?.post || (Array.isArray(data) ? data : []);
+    }
 
     return await Promise.all(posts.map(async item => {
-      const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
+      const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
         fileUrl = `https://hypnohub.net/images/${item.directory}/${item.image}`;
@@ -249,6 +287,12 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+      const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+      const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+      const thumbSample = sampleUrl;
+      const thumbOriginal = fileUrl;
+
       const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
       const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
@@ -267,6 +311,11 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
         site: 'hypnohub',
         siteName: 'Hypnohub',
         previewUrl,
+        thumb180,
+        thumb360,
+        thumb720,
+        thumbSample,
+        thumbOriginal,
         sampleUrl,
         fileUrl,
         fileExt,
@@ -278,7 +327,7 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
         tags: rawTags,
         tagDetails,
         score: parseInt(item.score, 10) || 0,
-        rating: item.rating || 'e',
+        rating: normalizeDapiRating(item.rating, 'e'),
         width: parseInt(item.width, 10) || 0,
         height: parseInt(item.height, 10) || 0,
         source: item.source || '',
@@ -350,22 +399,35 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
       return [];
     }
     const text = await res.text();
-    const data = safeJsonParse(text, []);
-    const posts = Array.isArray(data) ? data : [];
+    let posts = [];
+    if (text.trim().startsWith('<')) {
+      posts = parseDapiXmlPosts(text);
+    } else {
+      const data = safeJsonParse(text, []);
+      posts = Array.isArray(data) ? data : (data?.post || []);
+    }
 
     return await Promise.all(posts.map(async item => {
-      const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
+      const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
         fileUrl = `https://tbib.org/images/${item.directory}/${item.image}`;
+      } else if (fileUrl.startsWith('//')) {
+        fileUrl = 'https:' + fileUrl;
       }
 
-      const sampleUrl = fileUrl;
+      const sampleUrl = item.sample_url || fileUrl;
       let previewUrlRaw = item.preview_url || (item.directory && item.image ? `https://tbib.org/thumbnails/${item.directory}/thumbnail_${item.image}` : fileUrl);
       if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+      const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+      const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+      const thumbSample = sampleUrl;
+      const thumbOriginal = fileUrl;
+
       const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
       const createdAt = normalizeDate(item.created_at || item.change);
 
@@ -385,6 +447,11 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
         site: 'tbib',
         siteName: 'TBIB',
         previewUrl,
+        thumb180,
+        thumb360,
+        thumb720,
+        thumbSample,
+        thumbOriginal,
         sampleUrl,
         fileUrl,
         fileExt,
@@ -396,7 +463,7 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
         tags: rawTags,
         tagDetails,
         score: parseInt(item.score, 10) || 0,
-        rating: normalizeTbibRating(item.rating),
+        rating: normalizeDapiRating(item.rating, 's'),
         width: parseInt(item.width, 10) || 0,
         height: parseInt(item.height, 10) || 0,
         source: item.source || '',
@@ -417,7 +484,7 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
 /**
  * Resolves full post details for Xbooru including categorized tags and verified artist
  */
-export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}) {
+export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}, fallbackTags = []) {
   const cleanId = String(postId || '').replace(/^xbooru_/, '').split('_')[0].trim();
   if (!cleanId || !/^\d+$/.test(cleanId)) return null;
 
@@ -427,8 +494,13 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
     let postItem = null;
     if (dapiRes.ok) {
       const text = await dapiRes.text();
-      const data = safeJsonParse(text, null);
-      postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : null;
+      if (text.trim().startsWith('<')) {
+        const posts = parseDapiXmlPosts(text);
+        postItem = posts.find(p => String(p.id) === cleanId) || posts[0] || null;
+      } else {
+        const data = safeJsonParse(text, null);
+        postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+      }
     } else {
       await discardResponse(dapiRes);
     }
@@ -455,7 +527,7 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
       const tagMatches = [...html.matchAll(/class="[^"]*tag-type-([a-z0-9_-]+)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[\s\S]*?<\/li>/gi)];
       for (const m of tagMatches) {
         const rawType = m[1].replace(/\s+tag/, '').trim().toLowerCase();
-        const tagName = decodeURIComponent(m[2]).trim();
+        const tagName = safeDecode(m[2]).trim();
         if (!tagName) continue;
         if (!allTags.includes(tagName)) allTags.push(tagName);
 
@@ -475,9 +547,9 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
       await discardResponse(pageRes);
     }
 
-    if (!postItem && allTags.length === 0) return null;
+    if (!postItem && allTags.length === 0 && (!fallbackTags || fallbackTags.length === 0)) return null;
 
-    const rawTags = allTags.length > 0 ? allTags : (decodeHtmlEntities(postItem?.tags || '').split(' ').filter(Boolean));
+    const rawTags = allTags.length > 0 ? allTags : (postItem?.tags ? decodeHtmlEntities(postItem.tags).split(/\s+/).filter(Boolean) : (fallbackTags || []));
     const finalSource = pageSource || postItem?.source || '';
     let author = tagDetails.artist[0] || '';
     let assistants = [];
@@ -514,6 +586,12 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+    const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+    const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+    const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+    const thumbSample = sampleUrl;
+    const thumbOriginal = fileUrl;
+
     const createdAt = normalizeDate(postItem?.created_at || postItem?.change);
 
     const parentId = postItem?.parent_id && String(postItem.parent_id) !== '0' ? String(postItem.parent_id) : null;
@@ -532,6 +610,11 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
       site: 'xbooru',
       siteName: 'Xbooru',
       previewUrl,
+      thumb180,
+      thumb360,
+      thumb720,
+      thumbSample,
+      thumbOriginal,
       sampleUrl,
       fileUrl,
       fileExt,
@@ -543,7 +626,7 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
       tags: rawTags,
       tagDetails,
       score: parseInt(postItem?.score, 10) || 0,
-      rating: postItem?.rating || 'e',
+      rating: normalizeDapiRating(postItem?.rating, 'e'),
       width: parseInt(postItem?.width, 10) || 0,
       height: parseInt(postItem?.height, 10) || 0,
       source: finalSource,
@@ -571,8 +654,13 @@ export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, 
       const res = await fetchSafe(dapiUrl, { timeout: 6000, settings, site: 'hypnohub' });
       if (res.ok) {
         const text = await res.text();
-        const data = safeJsonParse(text, []);
-        postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+        if (text.trim().startsWith('<')) {
+          const posts = parseDapiXmlPosts(text);
+          postItem = posts.find(p => String(p.id) === cleanId) || posts[0] || null;
+        } else {
+          const data = safeJsonParse(text, []);
+          postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+        }
       } else {
         await discardResponse(res);
       }
@@ -595,7 +683,7 @@ export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, 
       const tagMatches = [...html.matchAll(/class="[^"]*tag-type-([a-z0-9_-]+)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[\s\S]*?<\/li>/gi)];
       for (const m of tagMatches) {
         const rawType = m[1].replace(/\s+tag/, '').trim().toLowerCase();
-        const tagName = decodeURIComponent(m[2]).trim();
+        const tagName = safeDecode(m[2]).trim();
         if (!tagName) continue;
         if (!allTags.includes(tagName)) allTags.push(tagName);
 
@@ -615,9 +703,9 @@ export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, 
       await discardResponse(pageRes);
     }
 
-    if (!postItem && allTags.length === 0) return null;
+    if (!postItem && allTags.length === 0 && (!fallbackTags || fallbackTags.length === 0)) return null;
 
-    const rawTags = allTags.length > 0 ? allTags : (decodeHtmlEntities(postItem?.tags || '').split(' ').filter(Boolean));
+    const rawTags = allTags.length > 0 ? allTags : (postItem?.tags ? decodeHtmlEntities(postItem.tags).split(/\s+/).filter(Boolean) : (fallbackTags || []));
     const finalSource = pageSource || postItem?.source || '';
     let author = tagDetails.artist[0] || '';
     let assistants = [];
@@ -646,6 +734,12 @@ export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, 
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+    const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+    const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+    const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+    const thumbSample = sampleUrl;
+    const thumbOriginal = fileUrl;
+
     const createdAt = normalizeDate(postItem?.created_at || postItem?.change);
 
     const parentId = postItem?.parent_id && String(postItem.parent_id) !== '0' ? String(postItem.parent_id) : null;
@@ -664,6 +758,11 @@ export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, 
       site: 'hypnohub',
       siteName: 'Hypnohub',
       previewUrl,
+      thumb180,
+      thumb360,
+      thumb720,
+      thumbSample,
+      thumbOriginal,
       sampleUrl,
       fileUrl,
       fileExt,
@@ -675,7 +774,7 @@ export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, 
       tags: rawTags,
       tagDetails,
       score: parseInt(postItem?.score, 10) || 0,
-      rating: postItem?.rating || 'e',
+      rating: normalizeDapiRating(postItem?.rating, 'e'),
       width: parseInt(postItem?.width, 10) || 0,
       height: parseInt(postItem?.height, 10) || 0,
       source: finalSource,
@@ -703,8 +802,13 @@ export async function fetchTbibPostById(id, aiTagsList = [], settings = {}, fall
       const res = await fetchSafe(dapiUrl, { timeout: 6000, settings, site: 'tbib' });
       if (res.ok) {
         const text = await res.text();
-        const data = safeJsonParse(text, []);
-        postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+        if (text.trim().startsWith('<')) {
+          const posts = parseDapiXmlPosts(text);
+          postItem = posts.find(p => String(p.id) === cleanId) || posts[0] || null;
+        } else {
+          const data = safeJsonParse(text, []);
+          postItem = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+        }
       } else {
         await discardResponse(res);
       }
@@ -727,7 +831,7 @@ export async function fetchTbibPostById(id, aiTagsList = [], settings = {}, fall
       const tagMatches = [...html.matchAll(/class="[^"]*tag-type-([a-z0-9_-]+)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[\s\S]*?<\/li>/gi)];
       for (const m of tagMatches) {
         const rawType = m[1].replace(/\s+tag/, '').trim().toLowerCase();
-        const tagName = decodeURIComponent(m[2]).trim();
+        const tagName = safeDecode(m[2]).trim();
         if (!tagName) continue;
         if (!allTags.includes(tagName)) allTags.push(tagName);
 
@@ -747,9 +851,9 @@ export async function fetchTbibPostById(id, aiTagsList = [], settings = {}, fall
       await discardResponse(pageRes);
     }
 
-    if (!postItem && allTags.length === 0) return null;
+    if (!postItem && allTags.length === 0 && (!fallbackTags || fallbackTags.length === 0)) return null;
 
-    const rawTags = allTags.length > 0 ? allTags : (decodeHtmlEntities(postItem?.tags || '').split(' ').filter(Boolean));
+    const rawTags = allTags.length > 0 ? allTags : (postItem?.tags ? decodeHtmlEntities(postItem.tags).split(/\s+/).filter(Boolean) : (fallbackTags || []));
     const finalSource = pageSource || postItem?.source || '';
     let author = tagDetails.artist[0] || '';
     let assistants = [];
@@ -778,6 +882,12 @@ export async function fetchTbibPostById(id, aiTagsList = [], settings = {}, fall
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
+    const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+    const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+    const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+    const thumbSample = sampleUrl;
+    const thumbOriginal = fileUrl;
+
     const createdAt = normalizeDate(postItem?.created_at || postItem?.change);
 
     const parentId = postItem?.parent_id && String(postItem.parent_id) !== '0' ? String(postItem.parent_id) : null;
@@ -796,18 +906,23 @@ export async function fetchTbibPostById(id, aiTagsList = [], settings = {}, fall
       site: 'tbib',
       siteName: 'TBIB',
       previewUrl,
+      thumb180,
+      thumb360,
+      thumb720,
+      thumbSample,
+      thumbOriginal,
       sampleUrl,
       fileUrl,
       fileExt,
-      isVideo: false,
+      isVideo,
       isGif,
-      hasSound: false,
+      hasSound: isVideo && hasSound,
       author,
       assistants: assistants || [],
       tags: rawTags,
       tagDetails,
       score: parseInt(postItem?.score, 10) || 0,
-      rating: normalizeTbibRating(postItem?.rating),
+      rating: normalizeDapiRating(postItem?.rating, 's'),
       width: parseInt(postItem?.width, 10) || 0,
       height: parseInt(postItem?.height, 10) || 0,
       source: finalSource,

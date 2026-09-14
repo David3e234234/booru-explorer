@@ -13,6 +13,43 @@ function getRecentDateFilter(days = 30) {
   return `date:>=${year}-${month}-${day}`;
 }
 
+export function normalizeGelbooruRating(rawRating) {
+  if (!rawRating) return 'g';
+  const r = String(rawRating).toLowerCase().trim();
+  if (r === 'general' || r === 'safe' || r === 'g') return 'g';
+  if (r === 'sensitive' || r === 's') return 's';
+  if (r === 'questionable' || r === 'q') return 'q';
+  if (r === 'explicit' || r === 'e') return 'e';
+  return 'g';
+}
+
+export function parseDapiXmlPosts(xmlText) {
+  if (!xmlText || typeof xmlText !== 'string') return [];
+  const posts = [];
+  const postTagRegex = /<(?:post|tag)\b\s+([^>]+)>/gi;
+  const attrRegex = /([a-z0-9_]+)=['"]([^'"]*)['"]/gi;
+  let match;
+  while ((match = postTagRegex.exec(xmlText)) !== null) {
+    const attrs = {};
+    let attrMatch;
+    while ((attrMatch = attrRegex.exec(match[1])) !== null) {
+      attrs[attrMatch[1]] = attrMatch[2];
+    }
+    if (attrs.id && (attrs.file_url || attrs.preview_url || attrs.image)) {
+      posts.push(attrs);
+    }
+  }
+  return posts;
+}
+
+function safeDecodeURIComponent(str) {
+  try {
+    return decodeURIComponent(String(str || ''));
+  } catch {
+    return String(str || '');
+  }
+}
+
 export async function fetchGelbooru(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   
@@ -63,15 +100,25 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
       const res = await fetchSafe(url, { timeout: 8000, settings, site: 'gelbooru' });
       if (res.ok) {
         const text = await res.text();
-        const data = safeJsonParse(text, []);
-        const posts = data?.post || (Array.isArray(data) ? data : []);
+        let posts = [];
+        const data = safeJsonParse(text, null);
+        if (data) {
+          posts = data?.post || (Array.isArray(data) ? data : []);
+        } else if (text.includes('<post')) {
+          posts = parseDapiXmlPosts(text);
+        }
         if (Array.isArray(posts) && posts.length > 0) {
           return await Promise.all(posts.map(async item => {
-            const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
-            const fileUrl = item.file_url || '';
+            const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
+            const fileUrl = item.file_url || (item.image && item.directory ? `https://img3.gelbooru.com/images/${item.directory}/${item.image}` : '');
             const sampleUrl = item.sample_url || fileUrl;
-            const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+            const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
             const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
+            const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+            const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+            const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+            const thumbSample = sampleUrl;
+            const thumbOriginal = fileUrl;
             const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
@@ -90,6 +137,11 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
               site: 'gelbooru',
               siteName: 'Gelbooru',
               previewUrl,
+              thumb180,
+              thumb360,
+              thumb720,
+              thumbSample,
+              thumbOriginal,
               sampleUrl,
               fileUrl,
               fileExt,
@@ -101,7 +153,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
               tags: rawTags,
               tagDetails,
               score: parseInt(item.score, 10) || 0,
-              rating: item.rating || 's',
+              rating: normalizeGelbooruRating(item.rating),
               width: parseInt(item.width, 10) || 0,
               height: parseInt(item.height, 10) || 0,
               source: item.source || '',
@@ -150,9 +202,9 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
       const scoreMatch = titleAttr.match(/score:(-?\d+)/);
       if (scoreMatch) score = parseInt(scoreMatch[1], 10);
 
-      let rating = 's';
+      let rating = 'g';
       const ratingMatch = titleAttr.match(/rating:(\w+)/);
-      if (ratingMatch) rating = ratingMatch[1].charAt(0).toLowerCase();
+      if (ratingMatch) rating = normalizeGelbooruRating(ratingMatch[1]);
 
       const cleanTitleTags = decodeHtmlEntities(titleAttr.replace(/score:-?\d+/g, '').replace(/rating:\w+/g, '')).trim();
       const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
@@ -191,12 +243,23 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
           tags: p.rawTags
         }, 'gelbooru');
 
+        const thumb180 = p.previewUrl || p.sampleUrl || p.fileUrl || '';
+        const thumb360 = p.isVideo ? p.previewUrl : (p.sampleUrl || p.previewUrl || p.fileUrl || '');
+        const thumb720 = p.isVideo ? p.previewUrl : (p.sampleUrl || p.fileUrl || p.previewUrl || '');
+        const thumbSample = p.sampleUrl;
+        const thumbOriginal = p.fileUrl;
+
         return {
           id: `gelbooru_${p.id}`,
           originalId: p.id,
           site: 'gelbooru',
           siteName: 'Gelbooru',
           previewUrl: p.previewUrl,
+          thumb180,
+          thumb360,
+          thumb720,
+          thumbSample,
+          thumbOriginal,
           sampleUrl: p.sampleUrl,
           fileUrl: p.fileUrl,
           fileExt: p.fileExt,
@@ -245,54 +308,75 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
       });
       if (res.ok) {
         const text = await res.text();
+        let item = null;
         const data = safeJsonParse(text, null);
-        const item = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+        if (data) {
+          item = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : (data?.post?.[0] || null);
+        } else if (text.includes('<post')) {
+          const xmlPosts = parseDapiXmlPosts(text);
+          item = xmlPosts.find(p => String(p.id) === cleanId) || xmlPosts[0] || null;
+        }
         if (item) {
-          const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
-          const fileUrl = item.file_url || '';
-          const sampleUrl = item.sample_url || fileUrl;
-          const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
-          const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
-          const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true);
-          const createdAt = normalizeDate(item.created_at || item.change);
-          const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
-          const hasChildren = item.has_children === 'true' || item.has_children === true;
-          const seriesKey = extractSeriesKey({
-            source: item.source || '',
-            parentId,
-            hasChildren,
-            originalId: String(item.id),
-            tags: rawTags
-          }, 'gelbooru');
+          const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
+          let fileUrl = item.file_url || (item.image && item.directory ? `https://img3.gelbooru.com/images/${item.directory}/${item.image}` : '');
+          if (fileUrl.startsWith('//')) fileUrl = 'https:' + fileUrl;
+          let sampleUrl = item.sample_url || fileUrl;
+          if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
 
-          return {
-            id: `gelbooru_${item.id}`,
-            originalId: String(item.id),
-            site: 'gelbooru',
-            siteName: 'Gelbooru',
-            previewUrl,
-            sampleUrl,
-            fileUrl,
-            fileExt,
-            isVideo,
-            isGif,
-            hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
-            author,
-            assistants: assistants || [],
-            tags: rawTags,
-            tagDetails,
-            score: parseInt(item.score, 10) || 0,
-            rating: item.rating || 's',
-            width: parseInt(item.width, 10) || 0,
-            height: parseInt(item.height, 10) || 0,
-            source: item.source || '',
-            postUrl: `https://gelbooru.com/index.php?page=post&s=view&id=${item.id}`,
-            parentId,
-            hasChildren,
-            seriesKey,
-            createdAt,
-            isAi: checkIsAi(rawTags, aiTagsList)
-          };
+          if (fileUrl || sampleUrl || item.preview_url) {
+            const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
+            const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
+            const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+            const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+            const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+            const thumbSample = sampleUrl;
+            const thumbOriginal = fileUrl;
+            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true);
+            const createdAt = normalizeDate(item.created_at || item.change);
+            const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
+            const hasChildren = item.has_children === 'true' || item.has_children === true;
+            const seriesKey = extractSeriesKey({
+              source: item.source || '',
+              parentId,
+              hasChildren,
+              originalId: String(item.id),
+              tags: rawTags
+            }, 'gelbooru');
+
+            return {
+              id: `gelbooru_${item.id}`,
+              originalId: String(item.id),
+              site: 'gelbooru',
+              siteName: 'Gelbooru',
+              previewUrl,
+              thumb180,
+              thumb360,
+              thumb720,
+              thumbSample,
+              thumbOriginal,
+              sampleUrl,
+              fileUrl,
+              fileExt,
+              isVideo,
+              isGif,
+              hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+              author,
+              assistants: assistants || [],
+              tags: rawTags,
+              tagDetails,
+              score: parseInt(item.score, 10) || 0,
+              rating: normalizeGelbooruRating(item.rating),
+              width: parseInt(item.width, 10) || 0,
+              height: parseInt(item.height, 10) || 0,
+              source: item.source || '',
+              postUrl: `https://gelbooru.com/index.php?page=post&s=view&id=${item.id}`,
+              parentId,
+              hasChildren,
+              seriesKey,
+              createdAt,
+              isAi: checkIsAi(rawTags, aiTagsList)
+            };
+          }
         }
       } else {
         await discardResponse(res);
@@ -314,25 +398,39 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
 
     if (res.ok) {
       const html = await res.text();
-      const artistMatches = [...html.matchAll(/class="[^"]*tag-type-artist[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => decodeURIComponent(m[1]).trim());
-      const copyrightMatches = [...html.matchAll(/class="[^"]*tag-type-copyright[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => decodeURIComponent(m[1]).trim());
-      const characterMatches = [...html.matchAll(/class="[^"]*tag-type-character[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => decodeURIComponent(m[1]).trim());
-      const metadataMatches = [...html.matchAll(/class="[^"]*tag-type-(?:metadata|meta)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => decodeURIComponent(m[1]).trim());
-      const generalMatches = [...html.matchAll(/class="[^"]*tag-type-general[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => decodeURIComponent(m[1]).trim());
+      const artistMatches = [...html.matchAll(/class="[^"]*tag-type-artist[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
+      const copyrightMatches = [...html.matchAll(/class="[^"]*tag-type-copyright[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
+      const characterMatches = [...html.matchAll(/class="[^"]*tag-type-character[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
+      const metadataMatches = [...html.matchAll(/class="[^"]*tag-type-(?:metadata|meta)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
+      const generalMatches = [...html.matchAll(/class="[^"]*tag-type-general[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
 
       const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...metadataMatches, ...generalMatches, ...fallbackTags])];
 
-      const imgMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i) || html.match(/<li><a\s+href="([^"]+)"[^>]*>Original image<\/a>/i);
-      const fileUrl = imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : '';
+      const videoMatch = html.match(/<video[^>]*>[\s\S]*?<source[^>]+src="([^"]+)"/i) || html.match(/<video[^>]+src="([^"]+)"/i);
+      const imgMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i) || html.match(/<li><a\s+href="([^"]+)"[^>]*>Original image<\/a>/i) || html.match(/<li><a\s+href="([^"]+)"[^>]*>Original video<\/a>/i);
+      let fileUrl = videoMatch ? videoMatch[1].replace(/&amp;/g, '&') : (imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : '');
+      if (fileUrl.startsWith('//')) fileUrl = 'https:' + fileUrl;
+      else if (fileUrl.startsWith('/')) fileUrl = 'https://gelbooru.com' + fileUrl;
 
       const sampleMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i);
-      const sampleUrl = sampleMatch ? sampleMatch[1].replace(/&amp;/g, '&') : fileUrl;
+      let sampleUrl = sampleMatch ? sampleMatch[1].replace(/&amp;/g, '&') : fileUrl;
+      if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+      else if (sampleUrl.startsWith('/')) sampleUrl = 'https://gelbooru.com' + sampleUrl;
+
+      if (!fileUrl) {
+        return null;
+      }
 
       const sourceMatch = html.match(/Source:\s*<a[^>]+href="([^"]+)"/i) || html.match(/<li>Source:\s*([^\s<]+)/i);
       const source = sourceMatch ? sourceMatch[1].trim().replace(/&amp;/g, '&') : '';
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', allTags);
       const previewUrl = resolvePreviewUrl(sampleUrl, fileUrl, sampleUrl, isVideo);
+      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+      const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+      const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+      const thumbSample = sampleUrl;
+      const thumbOriginal = fileUrl;
 
       const initialAuthor = artistMatches.join(', ');
       const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true);
@@ -346,13 +444,10 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
       const scoreMatch = html.match(/Score:\s*(-?\d+)/i) || html.match(/id="psc">(-?\d+)</i);
       if (scoreMatch) score = parseInt(scoreMatch[1], 10) || 0;
 
-      let rating = 's';
+      let rating = 'g';
       const ratingMatch = html.match(/Rating:\s*(\w+)/i);
       if (ratingMatch) {
-        const r = ratingMatch[1].toLowerCase();
-        if (r === 'explicit') rating = 'e';
-        else if (r === 'questionable') rating = 'q';
-        else if (r === 'general' || r === 'safe') rating = 's';
+        rating = normalizeGelbooruRating(ratingMatch[1]);
       }
 
       const dateMatch = html.match(/Posted:\s*([0-9-]+\s+[0-9:]+)/i) || html.match(/([0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9:]+)/i);
@@ -364,6 +459,11 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
         site: 'gelbooru',
         siteName: 'Gelbooru',
         previewUrl,
+        thumb180,
+        thumb360,
+        thumb720,
+        thumbSample,
+        thumbOriginal,
         sampleUrl,
         fileUrl,
         fileExt,

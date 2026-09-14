@@ -22,14 +22,24 @@ function buildCookieHeader(settings) {
   return cookie ? { Cookie: cookie } : {};
 }
 
+function safeDecode(str) {
+  try {
+    return decodeURIComponent(String(str || ''));
+  } catch {
+    return String(str || '');
+  }
+}
+
 function cleanBooruOrgUrl(raw) {
   if (!raw || typeof raw !== 'string') return '';
+  let s = raw.trim();
+  if (s.startsWith('//')) s = 'https:' + s;
   try {
-    const u = new URL(raw);
+    const u = new URL(s);
     u.pathname = u.pathname.replace(/\/+/g, '/');
     return u.toString();
   } catch {
-    return raw;
+    return s;
   }
 }
 
@@ -225,9 +235,9 @@ export async function fetchAllgirl(params, aiTagsList, settings = {}) {
         site: 'allgirl',
         siteName: 'AllGirl',
         previewUrl: item.previewUrl,
-        thumb180: item.thumbUrl,
-        thumb360: item.thumbUrl,
-        thumb720: item.thumbUrl,
+        thumb180: item.thumbUrl || item.sampleUrl || item.fileUrl || '',
+        thumb360: item.thumbUrl || item.sampleUrl || item.fileUrl || '',
+        thumb720: item.thumbUrl || item.sampleUrl || item.fileUrl || '',
         thumbSample: item.sampleUrl,
         thumbOriginal: item.fileUrl,
         sampleUrl: item.sampleUrl,
@@ -290,6 +300,7 @@ export async function fetchAllgirlPostById(id, aiTagsList = [], settings = {}, f
     const imgMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i) || html.match(/<img[^>]+src="([^"]+images[^"]+)"[^>]*id="image"/i);
     const rawFileUrl = imgMatch ? imgMatch[1] : '';
     const fileUrl = cleanBooruOrgUrl(rawFileUrl);
+    if (!fileUrl) return null;
 
     let width = 0;
     let height = 0;
@@ -335,7 +346,7 @@ export async function fetchAllgirlPostById(id, aiTagsList = [], settings = {}, f
     const tagMatches = [...html.matchAll(/<a[^>]+href="index\.php\?page=post&amp;s=list&amp;tags=([^"&]+)"[^>]*>([^<]+)<\/a>/gi)];
     const parsedTags = [];
     tagMatches.forEach(m => {
-      const rawTag = decodeURIComponent(m[1]).replace(/\+/g, '_').trim().toLowerCase();
+      const rawTag = safeDecode(m[1]).replace(/\+/g, '_').trim().toLowerCase();
       if (rawTag && rawTag !== 'all' && !parsedTags.includes(rawTag)) {
         parsedTags.push(rawTag);
       }
@@ -361,9 +372,9 @@ export async function fetchAllgirlPostById(id, aiTagsList = [], settings = {}, f
       site: 'allgirl',
       siteName: 'AllGirl',
       previewUrl: thumbUrl || fileUrl,
-      thumb180: thumbUrl,
-      thumb360: thumbUrl,
-      thumb720: thumbUrl,
+      thumb180: thumbUrl || fileUrl || '',
+      thumb360: thumbUrl || fileUrl || '',
+      thumb720: thumbUrl || fileUrl || '',
       thumbSample: fileUrl,
       thumbOriginal: fileUrl,
       sampleUrl: fileUrl,

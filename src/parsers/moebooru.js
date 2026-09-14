@@ -24,6 +24,14 @@ function buildAuthQuery(siteId, settings) {
   return `&login=${encodeURIComponent(login)}&password_hash=${hash}`;
 }
 
+function safeDecodeURIComponent(str) {
+  try {
+    return decodeURIComponent(String(str || ''));
+  } catch {
+    return String(str || '');
+  }
+}
+
 // Sticky failover: if konachan.com is unreachable/blocked, switch to konachan.net for 30 minutes
 let preferredKonachanHost = 'konachan.com';
 let lastKonachanFailureTime = 0;
@@ -120,10 +128,12 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
   const data = safeJsonParse(text, []);
   if (!Array.isArray(data)) return [];
 
-  return await Promise.all(data.map(async item => {
+  const validData = data.filter(item => item && typeof item === 'object');
+
+  return await Promise.all(validData.map(async item => {
     const rawTags = (item.tags || '').split(' ').filter(Boolean);
-    const fileUrl = item.file_url || item.jpeg_url || item.sample_url || item.preview_url;
-    const sampleUrl = item.sample_url || item.jpeg_url || fileUrl;
+    const fileUrl = item.file_url || item.jpeg_url || item.sample_url || item.preview_url || '';
+    const sampleUrl = item.sample_url || item.jpeg_url || fileUrl || '';
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList);
@@ -141,12 +151,23 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
       tags: rawTags
     }, siteId);
 
+    const thumb180 = previewUrl || item.preview_url || sampleUrl || fileUrl || '';
+    const thumb360 = isVideo ? previewUrl : (item.preview_url || previewUrl || sampleUrl || fileUrl || '');
+    const thumb720 = isVideo ? previewUrl : (sampleUrl || item.jpeg_url || fileUrl || previewUrl || '');
+    const thumbSample = sampleUrl || item.jpeg_url || '';
+    const thumbOriginal = item.file_url || fileUrl || '';
+
     return {
       id: `${siteId}_${item.id}`,
       originalId: String(item.id),
       site: siteId,
       siteName,
       previewUrl,
+      thumb180,
+      thumb360,
+      thumb720,
+      thumbSample,
+      thumbOriginal,
       sampleUrl,
       fileUrl,
       fileExt,
@@ -191,7 +212,8 @@ export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTag
       const text = await res.text();
       const data = safeJsonParse(text, []);
       if (Array.isArray(data) && data.length > 0) {
-        postItem = data.find(p => String(p.id) === cleanId) || data[0];
+        const valid = data.filter(p => p && typeof p === 'object');
+        postItem = valid.find(p => String(p.id) === cleanId) || valid[0] || null;
       }
     } else {
       await discardResponse(res);
@@ -202,6 +224,11 @@ export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTag
   let htmlSource = '';
   let htmlAuthor = '';
   let htmlDate = '';
+  let htmlFileUrl = '';
+  let htmlSampleUrl = '';
+  let htmlPreviewUrl = '';
+  let htmlRating = '';
+  let htmlScore = 0;
 
   if (!postItem) {
     try {
@@ -211,7 +238,7 @@ export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTag
         const html = await res.text();
         const tagMatches = [...html.matchAll(/class="[^"]*tag-type-([a-z0-9_-]+)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)];
         for (const m of tagMatches) {
-          const tagName = decodeURIComponent(m[2]).trim();
+          const tagName = safeDecodeURIComponent(m[2]).trim();
           if (tagName && !htmlTags.includes(tagName)) htmlTags.push(tagName);
         }
         const srcMatch = html.match(/Source:?\s*<a[^>]*href="([^"]+)"/i) || html.match(/Source:?\s*([^\s<"'>]+)/i);
@@ -220,22 +247,44 @@ export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTag
         if (authorMatch) htmlAuthor = authorMatch[1].trim();
         const dateMatch = html.match(/([0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9:]+)/i);
         if (dateMatch) htmlDate = normalizeDate(dateMatch[1]);
+
+        const highresMatch = html.match(/<a[^>]+id="highres"[^>]+href="([^"]+)"/i) ||
+                             html.match(/<a[^>]+class="[^"]*original-file-[^"]*"[^>]+href="([^"]+)"/i);
+        const imgMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i);
+        if (highresMatch) htmlFileUrl = highresMatch[1];
+        if (imgMatch) htmlSampleUrl = imgMatch[1];
+        if (!htmlFileUrl && htmlSampleUrl) htmlFileUrl = htmlSampleUrl;
+        if (!htmlSampleUrl && htmlFileUrl) htmlSampleUrl = htmlFileUrl;
+        htmlPreviewUrl = htmlSampleUrl || htmlFileUrl;
+
+        const ratingMatch = html.match(/Rating:?\s*([A-Za-z]+)/i);
+        if (ratingMatch) {
+          const r = ratingMatch[1].toLowerCase().charAt(0);
+          if (r === 's' || r === 'q' || r === 'e') htmlRating = r;
+        }
+        const scoreMatch = html.match(/Score:?\s*(-?\d+)/i) || html.match(/id="post-score-[^"]*">(-?\d+)</i);
+        if (scoreMatch) htmlScore = parseInt(scoreMatch[1], 10) || 0;
       } else {
         await discardResponse(res);
       }
     } catch (err) {}
   }
 
-  if (!postItem && htmlTags.length === 0 && fallbackTags.length === 0) return null;
+  if (!postItem && htmlTags.length === 0 && fallbackTags.length === 0 && !htmlFileUrl) return null;
 
   const rawTags = postItem?.tags
-    ? (postItem.tags || '').split(' ').filter(Boolean)
+    ? (postItem.tags || '').split(/\s+/).filter(Boolean)
     : (htmlTags.length > 0 ? htmlTags : fallbackTags);
 
-  const fileUrl = postItem?.file_url || postItem?.jpeg_url || postItem?.sample_url || postItem?.preview_url || '';
-  const sampleUrl = postItem?.sample_url || postItem?.jpeg_url || fileUrl;
+  const fileUrl = postItem?.file_url || postItem?.jpeg_url || postItem?.sample_url || postItem?.preview_url || htmlFileUrl || htmlSampleUrl || '';
+  const sampleUrl = postItem?.sample_url || postItem?.jpeg_url || htmlSampleUrl || fileUrl || '';
   const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
-  const previewUrl = resolvePreviewUrl(postItem?.preview_url, fileUrl, sampleUrl, isVideo);
+  const previewUrl = resolvePreviewUrl(postItem?.preview_url || htmlPreviewUrl, fileUrl, sampleUrl, isVideo);
+  const thumb180 = previewUrl || postItem?.preview_url || sampleUrl || fileUrl || '';
+  const thumb360 = isVideo ? previewUrl : (postItem?.preview_url || previewUrl || sampleUrl || fileUrl || '');
+  const thumb720 = isVideo ? previewUrl : (sampleUrl || postItem?.jpeg_url || fileUrl || previewUrl || '');
+  const thumbSample = sampleUrl || postItem?.jpeg_url || '';
+  const thumbOriginal = postItem?.file_url || fileUrl || '';
   const isAi = checkIsAi(rawTags, aiTagsList);
 
   const finalSource = htmlSource || postItem?.source || '';
@@ -259,6 +308,11 @@ export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTag
     site: siteId,
     siteName,
     previewUrl,
+    thumb180,
+    thumb360,
+    thumb720,
+    thumbSample,
+    thumbOriginal,
     sampleUrl,
     fileUrl,
     fileExt,
@@ -269,8 +323,8 @@ export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTag
     assistants: assistants || [],
     tags: rawTags,
     tagDetails,
-    score: postItem?.score || 0,
-    rating: postItem?.rating || 's',
+    score: postItem?.score || htmlScore || 0,
+    rating: postItem?.rating || htmlRating || 's',
     width: parseInt(postItem?.width, 10) || 0,
     height: parseInt(postItem?.height, 10) || 0,
     source: finalSource,

@@ -155,7 +155,7 @@ function startServer(port) {
   });
 }
 
-if (!isServerless) {
+if (!isServerless && process.env.NODE_ENV !== 'test') {
   initBackupScheduler();
   startServer(Number(PORT));
 }

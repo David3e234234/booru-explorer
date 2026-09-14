@@ -552,10 +552,25 @@ export async function fetchKemonoPostById(postIdOrOptions, service, user, aiTags
     aiTagsList = postIdOrOptions.aiTagsList || aiTagsList;
     settings = postIdOrOptions.settings || settings;
   }
+  if (Array.isArray(service)) {
+    aiTagsList = service;
+    settings = (user && typeof user === 'object' && !Array.isArray(user)) ? user : {};
+    service = undefined;
+    user = undefined;
+  }
   if (!postId) return null;
   try {
-    let targetService = service;
-    let targetUser = user;
+    let targetService = typeof service === 'string' ? service : undefined;
+    let targetUser = typeof user === 'string' ? user : undefined;
+    if ((!targetService || !targetUser) && typeof postId === 'string') {
+      const raw = postId.replace(/^kemono_/, '');
+      const parts = raw.split('_');
+      if (parts.length >= 3) {
+        targetService = targetService || parts[0];
+        targetUser = targetUser || parts[1];
+        postId = parts.slice(2).join('_');
+      }
+    }
     const authHeaders = getKemonoAuthHeaders(settings);
 
     if (!targetService || !targetUser) {

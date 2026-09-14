@@ -121,6 +121,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   let skipUserTagCheck = false;
 
   const isPostMatch = (item) => {
+    if (!item || typeof item !== 'object') return false;
     if (item.is_banned) return false;
     const rawTags = (item.tag_string || '').toLowerCase().split(/\s+/).filter(Boolean);
     if (userTagList.length > 0 && !skipUserTagCheck) {
@@ -166,6 +167,16 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       if (PETITE_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
       if (!userTagList.length && !activePetite.some(t => rawTags.includes(t))) return false;
     }
+    if (filterCriteria.aiFilter === 'no-ai') {
+      const isAi = checkIsAi(rawTags, aiTagsList) || (item.tag_string_meta && item.tag_string_meta.includes('ai_generated'));
+      if (isAi) return false;
+    } else if (filterCriteria.aiFilter === 'only-ai') {
+      const isAi = checkIsAi(rawTags, aiTagsList) || (item.tag_string_meta && item.tag_string_meta.includes('ai_generated'));
+      if (!isAi) return false;
+    }
+    if (Array.isArray(filterCriteria.blacklist) && filterCriteria.blacklist.length > 0) {
+      if (filterCriteria.blacklist.some(b => rawTags.includes(b.toLowerCase().replace(/\s+/g, '_')))) return false;
+    }
     return true;
   };
 
@@ -203,7 +214,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
           const text = await res.text();
           const parsed = safeJsonParse(text, null);
           if (Array.isArray(parsed)) {
-            data = parsed;
+            data = parsed.filter(item => item && typeof item === 'object');
             break;
           }
         } catch (err) {
@@ -224,7 +235,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       }
 
       const isCustomOrder = finalTags.includes('order:score') || finalTags.includes('order:favcount') || finalTags.includes('order:rank');
-      const ids = data.map(d => d.id).filter(id => typeof id === 'number');
+      const ids = data.map(d => d?.id).filter(id => typeof id === 'number');
       if (ids.length > 0 && !isCustomOrder) {
         const minId = Math.min(...ids);
         currentCursor = `page=b${minId}`;
@@ -255,7 +266,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       if (res.ok) {
         const text = await res.text();
         const data = safeJsonParse(text, null);
-        if (Array.isArray(data)) allData = data;
+        if (Array.isArray(data)) allData = data.filter(item => item && typeof item === 'object');
       } else {
         logError('Danbooru', `API статус: ${res.status}`);
         await discardResponse(res);
@@ -281,6 +292,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         if (Array.isArray(data) && data.length > 0) {
           const lowerRaw = rawTag.toLowerCase();
           const filteredBySource = data.filter(item => {
+            if (!item || typeof item !== 'object') return false;
             const src = String(item?.source || '').toLowerCase();
             if (!src) return false;
             return src.includes(`/${lowerRaw}`) || src.includes(`@${lowerRaw}`) || src.includes(`=${lowerRaw}`);
@@ -308,7 +320,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
         const text = await res.text();
         const data = safeJsonParse(text, null);
         if (Array.isArray(data) && data.length > 0) {
-          allData = data;
+          allData = data.filter(item => item && typeof item === 'object');
         }
       } else {
         await discardResponse(res);
@@ -319,6 +331,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   logInfo('Danbooru', `Получено из API: ${allData.length} постов до локальной фильтрации`);
 
   const validItems = allData.filter(item => {
+    if (!item || typeof item !== 'object') return false;
     if (item.is_banned) return false;
     const variants = item.media_asset?.variants || [];
     const hasMedia = !!(item.file_url || item.large_file_url || item.preview_file_url || variants.length > 0);
@@ -350,10 +363,10 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     const isVideo = (checkVideo || hasPlayableVideo) && (!fileUrl.endsWith('.zip') || !!any_video);
     const hasSound = isVideo && (checkSound || rawTags.includes('sound') || rawTags.includes('audio') || variants.some(v => v.has_sound || v.audio));
     
-    const findImgVariant = (types) => variants.find(v => types.includes(v.type) && (v.file_ext === 'jpg' || v.file_ext === 'webp' || v.file_ext === 'png'));
-    const thumb180 = findImgVariant(['180x180'])?.url || item.preview_file_url || '';
-    const thumb360 = findImgVariant(['360x360'])?.url || '';
-    const thumb720 = findImgVariant(['720x720'])?.url || '';
+    const findImgVariant = (types) => variants.find(v => types.includes(v.type) && (v.file_ext === 'jpg' || v.file_ext === 'webp' || v.file_ext === 'png' || (v.url && /\.(jpg|jpeg|webp|png)($|\?)/i.test(v.url))));
+    const thumb180 = findImgVariant(['180x180'])?.url || item.preview_file_url || sampleUrl || fileUrl || '';
+    const thumb360 = findImgVariant(['360x360'])?.url || findImgVariant(['sample'])?.url || item.large_file_url || sampleUrl || item.preview_file_url || fileUrl || '';
+    const thumb720 = findImgVariant(['720x720'])?.url || findImgVariant(['sample'])?.url || item.large_file_url || sampleUrl || fileUrl || item.preview_file_url || '';
     const thumbSample = findImgVariant(['sample'])?.url || item.large_file_url || sampleUrl || '';
     const thumbOriginal = (!isVideo && (findImgVariant(['original'])?.url || item.file_url || fileUrl)) || '';
     const previewUrl = resolvePreviewUrl(thumb180 || item.preview_file_url, fileUrl, sampleUrl, isVideo);
@@ -449,7 +462,7 @@ export async function fetchDanbooruPostById(id, aiTagsList = [], settings = {}, 
 
     const text = await res.text();
     const item = safeJsonParse(text, null);
-    if (!item || item.is_banned) return null;
+    if (!item || typeof item !== 'object' || item.is_banned) return null;
 
     const rawTags = (item.tag_string || '').split(' ').filter(Boolean);
     const variants = item.media_asset?.variants || [];
@@ -471,10 +484,10 @@ export async function fetchDanbooruPostById(id, aiTagsList = [], settings = {}, 
     const isVideo = (checkVideo || hasPlayableVideo) && (!fileUrl.endsWith('.zip') || !!any_video);
     const hasSound = isVideo && (checkSound || rawTags.includes('sound') || rawTags.includes('audio') || variants.some(v => v.has_sound || v.audio));
 
-    const findImgVariant = (types) => variants.find(v => types.includes(v.type) && (v.file_ext === 'jpg' || v.file_ext === 'webp' || v.file_ext === 'png'));
-    const thumb180 = findImgVariant(['180x180'])?.url || item.preview_file_url || '';
-    const thumb360 = findImgVariant(['360x360'])?.url || '';
-    const thumb720 = findImgVariant(['720x720'])?.url || '';
+    const findImgVariant = (types) => variants.find(v => types.includes(v.type) && (v.file_ext === 'jpg' || v.file_ext === 'webp' || v.file_ext === 'png' || (v.url && /\.(jpg|jpeg|webp|png)($|\?)/i.test(v.url))));
+    const thumb180 = findImgVariant(['180x180'])?.url || item.preview_file_url || sampleUrl || fileUrl || '';
+    const thumb360 = findImgVariant(['360x360'])?.url || findImgVariant(['sample'])?.url || item.large_file_url || sampleUrl || item.preview_file_url || fileUrl || '';
+    const thumb720 = findImgVariant(['720x720'])?.url || findImgVariant(['sample'])?.url || item.large_file_url || sampleUrl || fileUrl || item.preview_file_url || '';
     const thumbSample = findImgVariant(['sample'])?.url || item.large_file_url || sampleUrl || '';
     const thumbOriginal = (!isVideo && (findImgVariant(['original'])?.url || item.file_url || fileUrl)) || '';
     const previewUrl = resolvePreviewUrl(thumb180 || item.preview_file_url, fileUrl, sampleUrl, isVideo);

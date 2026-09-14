@@ -5,6 +5,14 @@ import { classifyPostTags, loadGlobalTagSummary } from '../utils/tagClassifier.j
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 
+export function normalizeRule34Rating(raw) {
+  const r = String(raw || '').toLowerCase().trim();
+  if (r === 'safe' || r === 's' || r === 'general' || r === 'g') return 's';
+  if (r === 'questionable' || r === 'q' || r === 'sensitive') return 'q';
+  if (r === 'explicit' || r === 'e') return 'e';
+  return 'e';
+}
+
 function getRecentDateFilter(days = 30) {
   const d = new Date();
   d.setDate(d.getDate() - days);
@@ -129,12 +137,23 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 tags: rawTags
               }, 'rule34');
 
+              const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+              const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+              const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+              const thumbSample = sampleUrl;
+              const thumbOriginal = fileUrl;
+
               return {
                 id: `rule34_${item.id}`,
                 originalId: String(item.id),
                 site: 'rule34',
                 siteName: 'Rule34.xxx',
                 previewUrl,
+                thumb180,
+                thumb360,
+                thumb720,
+                thumbSample,
+                thumbOriginal,
                 sampleUrl,
                 fileUrl,
                 fileExt,
@@ -146,7 +165,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 tags: rawTags,
                 tagDetails,
                 score: parseInt(item.score, 10) || 0,
-                rating: item.rating || 'e',
+                rating: normalizeRule34Rating(item.rating),
                 width: parseInt(item.width, 10) || 0,
                 height: parseInt(item.height, 10) || 0,
                 source: item.source || '',
@@ -302,12 +321,23 @@ export async function fetchRule34(params, aiTagsList, settings) {
             tags: p.rawTags
           }, 'rule34');
 
+          const thumb180 = p.previewUrl || p.sampleUrl || p.fileUrl || '';
+          const thumb360 = p.isVideo ? p.previewUrl : (p.sampleUrl || p.previewUrl || p.fileUrl || '');
+          const thumb720 = p.isVideo ? p.previewUrl : (p.sampleUrl || p.fileUrl || p.previewUrl || '');
+          const thumbSample = p.sampleUrl;
+          const thumbOriginal = p.fileUrl;
+
           return {
             id: `rule34_${p.id}`,
             originalId: p.id,
             site: 'rule34',
             siteName: 'Rule34.xxx',
             previewUrl: p.previewUrl,
+            thumb180,
+            thumb360,
+            thumb720,
+            thumbSample,
+            thumbOriginal,
             sampleUrl: p.sampleUrl,
             fileUrl: p.fileUrl,
             fileExt: p.fileExt,
@@ -408,12 +438,23 @@ export async function fetchRule34(params, aiTagsList, settings) {
         if (altItems.length > 0) {
           posts = await Promise.all(altItems.map(async p => {
             const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false);
+            const thumb180 = p.thumbUrl || p.sampleUrl || p.fileUrl || '';
+            const thumb360 = p.isVideo ? p.thumbUrl : (p.sampleUrl || p.thumbUrl || p.fileUrl || '');
+            const thumb720 = p.isVideo ? p.thumbUrl : (p.sampleUrl || p.fileUrl || p.thumbUrl || '');
+            const thumbSample = p.sampleUrl;
+            const thumbOriginal = p.fileUrl;
+
             return {
               id: `rule34_${p.id}`,
               originalId: p.id,
               site: 'rule34',
               siteName: 'Rule34.xxx',
               previewUrl: p.thumbUrl,
+              thumb180,
+              thumb360,
+              thumb720,
+              thumbSample,
+              thumbOriginal,
               sampleUrl: p.sampleUrl,
               fileUrl: p.fileUrl,
               fileExt: p.fileExt,
@@ -526,12 +567,22 @@ export async function fetchRule34(params, aiTagsList, settings) {
       const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
       const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false);
       const createdAt = normalizeDate(attrs.created_at || attrs.date);
+      const thumb180 = previewUrl || attrs.file_url || '';
+      const thumb360 = attrs.file_url || previewUrl || '';
+      const thumb720 = attrs.file_url || previewUrl || '';
+      const thumbSample = attrs.file_url;
+      const thumbOriginal = attrs.file_url;
       return {
         id: `paheal_${attrs.id}`,
         originalId: attrs.id,
         site: 'rule34',
         siteName: 'Rule34',
         previewUrl,
+        thumb180,
+        thumb360,
+        thumb720,
+        thumbSample,
+        thumbOriginal,
         sampleUrl: attrs.file_url,
         fileUrl: attrs.file_url,
         fileExt,
@@ -585,11 +636,92 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
     settings = fallbackTags;
     fallbackTags = tmp;
   }
-  const cleanId = String(id || '').replace(/^rule34_/, '').split('_')[0].trim();
-  if (!cleanId) return null;
+  const isPaheal = String(id || '').startsWith('paheal_');
+  const cleanId = String(id || '').replace(/^(?:rule34_|paheal_)/, '').split('_')[0].trim();
+  if (!cleanId || !/^\d+$/.test(cleanId)) return null;
 
-  // 1. Direct DAPI request when api key is configured
-  if (settings?.rule34ApiKey && settings?.rule34UserId) {
+  // 1. Paheal Resolution Branch
+  if (isPaheal) {
+    try {
+      const pahealXmlUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=id:${cleanId}&limit=1&page=1`;
+      const res = await fetchSafe(pahealXmlUrl, {
+        headers: { 'Referer': 'https://rule34.paheal.net/' },
+        timeout: 8000,
+        settings,
+        site: 'rule34'
+      });
+      if (res.ok) {
+        const text = await res.text();
+        const tagRegex = /<(?:post|tag)\b\s+([^>]+)>/gi;
+        const match = tagRegex.exec(text);
+        if (match) {
+          const attrsStr = match[1];
+          const attrs = {};
+          const attrRegex = /([a-z0-9_]+)=['"]([^'"]*)['"]/gi;
+          let attrMatch;
+          while ((attrMatch = attrRegex.exec(attrsStr)) !== null) {
+            attrs[attrMatch[1]] = attrMatch[2];
+          }
+          if (attrs.file_url) {
+            const rawTags = decodeHtmlEntities(attrs.tags || '').split(/\s+/).filter(Boolean);
+            const fileName = attrs.file_name || '';
+            let { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(attrs.file_url, fileName, rawTags);
+            if (fileName.toLowerCase().endsWith('.mp4') || fileName.toLowerCase().endsWith('.webm')) {
+              isVideo = true;
+              fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
+            }
+            const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
+            const thumb180 = previewUrl || attrs.file_url || '';
+            const thumb360 = attrs.file_url || previewUrl || '';
+            const thumb720 = attrs.file_url || previewUrl || '';
+            const thumbSample = attrs.file_url;
+            const thumbOriginal = attrs.file_url;
+            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false);
+            return {
+              id: `paheal_${attrs.id}`,
+              originalId: String(attrs.id),
+              site: 'rule34',
+              siteName: 'Rule34',
+              previewUrl,
+              thumb180,
+              thumb360,
+              thumb720,
+              thumbSample,
+              thumbOriginal,
+              sampleUrl: attrs.file_url,
+              fileUrl: attrs.file_url,
+              fileExt,
+              isVideo,
+              isGif,
+              hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+              author,
+              assistants: assistants || [],
+              tags: rawTags,
+              tagDetails,
+              score: parseInt(attrs.score, 10) || 0,
+              rating: 'e',
+              width: parseInt(attrs.width, 10) || 0,
+              height: parseInt(attrs.height, 10) || 0,
+              source: attrs.source || '',
+              postUrl: `https://rule34.paheal.net/post/view/${attrs.id}`,
+              parentId: null,
+              hasChildren: false,
+              seriesKey: null,
+              createdAt: normalizeDate(attrs.created_at || attrs.date),
+              isAi: checkIsAi(rawTags, aiTagsList)
+            };
+          }
+        }
+      } else {
+        await discardResponse(res);
+      }
+    } catch (err) {
+      logError('Rule34 Paheal Resolve', `Ошибка разрешения Paheal id:${cleanId}`, err);
+    }
+  }
+
+  // 2. Direct DAPI request when api key is configured
+  if (!isPaheal && settings?.rule34ApiKey && settings?.rule34UserId) {
     try {
       const dapiUrl = `https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags=id:${cleanId}&limit=1&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`;
       const res = await fetchSafe(dapiUrl, {
@@ -607,7 +739,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
           const data = safeJsonParse(text, null);
           const item = Array.isArray(data) ? (data.find(p => String(p.id) === cleanId) || data[0]) : null;
           if (item) {
-            const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
+            const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
             let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
             let sampleUrl = item.sample_url || fileUrl;
@@ -619,6 +751,11 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
               sampleUrl = fileUrl;
             }
             previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
+            const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+            const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+            const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+            const thumbSample = sampleUrl;
+            const thumbOriginal = fileUrl;
             const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true);
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
@@ -637,6 +774,11 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
               site: 'rule34',
               siteName: 'Rule34.xxx',
               previewUrl,
+              thumb180,
+              thumb360,
+              thumb720,
+              thumbSample,
+              thumbOriginal,
               sampleUrl,
               fileUrl,
               fileExt,
@@ -648,7 +790,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
               tags: rawTags,
               tagDetails,
               score: parseInt(item.score, 10) || 0,
-              rating: item.rating || 'e',
+              rating: normalizeRule34Rating(item.rating),
               width: parseInt(item.width, 10) || 0,
               height: parseInt(item.height, 10) || 0,
               source: item.source || '',
@@ -669,84 +811,148 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
     }
   }
 
-  // 2. Second attempt: scrape single post page https://rule34.xxx/index.php?page=post&s=view&id=...
-  try {
-    const viewUrl = `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`;
-    const res = await fetchSafe(viewUrl, {
-      headers: {
-        'User-Agent': BROWSER_USER_AGENT,
-        'Referer': 'https://rule34.xxx/'
-      },
-      timeout: 5000,
-      settings,
-      site: 'rule34'
-    });
+  // 3. Second attempt: scrape single post page https://rule34.xxx/index.php?page=post&s=view&id=...
+  if (!isPaheal) {
+    try {
+      const viewUrl = `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`;
+      const res = await fetchSafe(viewUrl, {
+        headers: {
+          'User-Agent': BROWSER_USER_AGENT,
+          'Referer': 'https://rule34.xxx/'
+        },
+        timeout: 6000,
+        settings,
+        site: 'rule34'
+      });
 
-    if (res.ok) {
-      const html = await res.text();
-      const artistMatches = [...html.matchAll(/class="[^"]*tag-type-artist[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
-      const copyrightMatches = [...html.matchAll(/class="[^"]*tag-type-copyright[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
-      const characterMatches = [...html.matchAll(/class="[^"]*tag-type-character[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
-      const metadataMatches = [...html.matchAll(/class="[^"]*tag-type-(?:metadata|meta)[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
-      const generalMatches = [...html.matchAll(/class="[^"]*tag-type-general[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+      if (res.ok) {
+        const html = await res.text();
+        const artistMatches = [...html.matchAll(/class="[^"]*tag-type-artist[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+        const copyrightMatches = [...html.matchAll(/class="[^"]*tag-type-copyright[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+        const characterMatches = [...html.matchAll(/class="[^"]*tag-type-character[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+        const metadataMatches = [...html.matchAll(/class="[^"]*tag-type-(?:metadata|meta)[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+        const generalMatches = [...html.matchAll(/class="[^"]*tag-type-general[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
 
-      const sourceMatch = html.match(/Source:\s*<a[^>]+href="([^"]+)"/i) || html.match(/Source:\s*([^\s<]+)/i);
-      const source = sourceMatch ? sourceMatch[1].trim().replace(/&amp;/g, '&') : '';
+        const sourceMatch = html.match(/Source:\s*<a[^>]+href="([^"]+)"/i) || html.match(/Source:\s*([^\s<]+)/i);
+        const source = sourceMatch ? sourceMatch[1].trim().replace(/&amp;/g, '&') : '';
 
-      const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...metadataMatches, ...generalMatches, ...fallbackTags])];
-      const initialAuthor = artistMatches.join(', ');
-      const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true);
+        const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...metadataMatches, ...generalMatches, ...fallbackTags])];
+        const initialAuthor = artistMatches.join(', ');
+        const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true);
 
-      if (artistMatches.length > 0) {
-        tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
+        if (artistMatches.length > 0) tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
+        if (copyrightMatches.length > 0) tagDetails.copyright = [...new Set([...copyrightMatches, ...(tagDetails.copyright || [])])];
+        if (characterMatches.length > 0) tagDetails.character = [...new Set([...characterMatches, ...(tagDetails.character || [])])];
+        if (metadataMatches.length > 0) tagDetails.meta = [...new Set([...metadataMatches, ...(tagDetails.meta || [])])];
+
+        const videoMatch = html.match(/<video[^>]*>[\s\S]*?<source[^>]+src="([^"]+)"/i) || html.match(/<video[^>]+src="([^"]+)"/i);
+        const highresMatch = html.match(/<a[^>]+href="([^"]+)"[^>]*id="highres"/i) || html.match(/<a[^>]+href="([^"]+)"[^>]*>Original image<\/a>/i);
+        const imgMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i) || html.match(/<img[^>]+class="[^"]*fit-width[^"]*"[^>]+src="([^"]+)"/i);
+        let fileUrl = videoMatch ? videoMatch[1].replace(/&amp;/g, '&') : (highresMatch ? highresMatch[1].replace(/&amp;/g, '&') : (imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : ''));
+        let sampleUrl = imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : fileUrl;
+        let previewUrl = fileUrl ? fileUrl.replace(/\/images\//, '/thumbnails/').replace(/\/([a-f0-9]+)\./, '/thumbnail_$1.') : '';
+
+        const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl || sampleUrl, '', allTags);
+        previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
+        const thumb180 = previewUrl || sampleUrl || fileUrl || '';
+        const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
+        const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+        const thumbSample = sampleUrl;
+        const thumbOriginal = fileUrl;
+
+        const scoreMatch = html.match(/Score:\s*<span[^>]*>(-?\d+)<\/span>/i) || html.match(/Score:\s*(-?\d+)/i);
+        const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
+        const ratingMatch = html.match(/Rating:\s*([A-Za-z]+)/i);
+        let rating = 'e';
+        if (ratingMatch) {
+          const r = ratingMatch[1].toLowerCase().charAt(0);
+          rating = (r === 's' || r === 'q' || r === 'e') ? r : 'e';
+        }
+        const sizeMatch = html.match(/Size:\s*(\d+)\s*x\s*(\d+)/i);
+        const width = sizeMatch ? parseInt(sizeMatch[1], 10) : 0;
+        const height = sizeMatch ? parseInt(sizeMatch[2], 10) : 0;
+        const parentMatch = html.match(/Parent:\s*<a[^>]+id=(\d+)/i);
+        const parentId = parentMatch ? parentMatch[1] : null;
+
+        const dateMatch = html.match(/Posted on\s+([0-9-]+\s+[0-9:]+)/i) || html.match(/Posted:\s*([0-9-]+\s+[0-9:]+)/i) || html.match(/Posted:\s*([0-9-]+)/i);
+        const createdAt = dateMatch ? normalizeDate(dateMatch[1]) : '';
+
+        return {
+          id: `rule34_${cleanId}`,
+          originalId: cleanId,
+          site: 'rule34',
+          siteName: 'Rule34.xxx',
+          previewUrl,
+          thumb180,
+          thumb360,
+          thumb720,
+          thumbSample,
+          thumbOriginal,
+          sampleUrl: sampleUrl || fileUrl,
+          fileUrl: fileUrl || sampleUrl,
+          fileExt,
+          isVideo,
+          isGif,
+          hasSound: isVideo && (hasSound || allTags.includes('sound') || allTags.includes('audio')),
+          author: author || initialAuthor,
+          assistants: assistants || [],
+          tags: allTags,
+          tagDetails,
+          score,
+          rating,
+          width,
+          height,
+          source: source || viewUrl,
+          postUrl: viewUrl,
+          parentId,
+          hasChildren: /Has children:\s*(?:true|yes)/i.test(html),
+          seriesKey: null,
+          createdAt,
+          isAi: checkIsAi(allTags, aiTagsList)
+        };
+      } else {
+        await discardResponse(res);
       }
-      if (copyrightMatches.length > 0) {
-        tagDetails.copyright = [...new Set([...copyrightMatches, ...(tagDetails.copyright || [])])];
-      }
-      if (characterMatches.length > 0) {
-        tagDetails.character = [...new Set([...characterMatches, ...(tagDetails.character || [])])];
-      }
-      if (metadataMatches.length > 0) {
-        tagDetails.meta = [...new Set([...metadataMatches, ...(tagDetails.meta || [])])];
-      }
-
-      const dateMatch = html.match(/Posted on\s+([0-9-]+\s+[0-9:]+)/i) || html.match(/Posted:\s*([0-9-]+\s+[0-9:]+)/i) || html.match(/Posted:\s*([0-9-]+)/i);
-      const createdAt = dateMatch ? normalizeDate(dateMatch[1]) : '';
-
-      return {
-        id: `rule34_${cleanId}`,
-        originalId: cleanId,
-        site: 'rule34',
-        siteName: 'Rule34.xxx',
-        source: source || `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
-        postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
-        author: author || artistMatches.join(', '),
-        assistants: assistants || [],
-        tags: allTags,
-        tagDetails,
-        createdAt
-      };
-    } else {
-      await discardResponse(res);
+    } catch (err) {
+      logError('Rule34 Resolve', `Ошибка HTML-парсинга страницы поста id:${cleanId}`, err);
     }
-  } catch (err) {
-    logError('Rule34 Resolve', `Ошибка HTML-парсинга страницы поста id:${cleanId}`, err);
   }
 
-  // 3. Fallback: classify from fallbackTags if provided
+  // 4. Fallback: classify from fallbackTags if provided
   if (Array.isArray(fallbackTags) && fallbackTags.length > 0) {
     const { tagDetails, author, assistants } = await classifyPostTags(fallbackTags, '', '', settings, true);
     return {
-      id: `rule34_${cleanId}`,
+      id: isPaheal ? `paheal_${cleanId}` : `rule34_${cleanId}`,
       originalId: cleanId,
       site: 'rule34',
-      siteName: 'Rule34.xxx',
-      source: `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
-      postUrl: `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
+      siteName: isPaheal ? 'Rule34' : 'Rule34.xxx',
+      previewUrl: '',
+      thumb180: '',
+      thumb360: '',
+      thumb720: '',
+      thumbSample: '',
+      thumbOriginal: '',
+      sampleUrl: '',
+      fileUrl: '',
+      fileExt: '',
+      isVideo: false,
+      isGif: false,
+      hasSound: false,
       author,
       assistants: assistants || [],
       tags: fallbackTags,
-      tagDetails
+      tagDetails,
+      score: 0,
+      rating: 'e',
+      width: 0,
+      height: 0,
+      source: isPaheal ? `https://rule34.paheal.net/post/view/${cleanId}` : `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
+      postUrl: isPaheal ? `https://rule34.paheal.net/post/view/${cleanId}` : `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`,
+      parentId: null,
+      hasChildren: false,
+      seriesKey: null,
+      createdAt: '',
+      isAi: checkIsAi(fallbackTags, aiTagsList)
     };
   }
 

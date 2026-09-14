@@ -526,11 +526,34 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
 /**
  * Fetches single Pawchive post by ID and service/user
  */
-export async function fetchPawchivePostById(postId, service, user, aiTagsList = [], settings = {}) {
+export async function fetchPawchivePostById(postIdOrOptions, service, user, aiTagsList = [], settings = {}) {
+  let postId = postIdOrOptions;
+  if (postIdOrOptions && typeof postIdOrOptions === 'object') {
+    postId = postIdOrOptions.postId || postIdOrOptions.id || postIdOrOptions.originalId;
+    service = postIdOrOptions.service;
+    user = postIdOrOptions.user;
+    aiTagsList = postIdOrOptions.aiTagsList || aiTagsList;
+    settings = postIdOrOptions.settings || settings;
+  }
+  if (Array.isArray(service)) {
+    aiTagsList = service;
+    settings = (user && typeof user === 'object' && !Array.isArray(user)) ? user : {};
+    service = undefined;
+    user = undefined;
+  }
   if (!postId) return null;
   try {
-    let targetService = service;
-    let targetUser = user;
+    let targetService = typeof service === 'string' ? service : undefined;
+    let targetUser = typeof user === 'string' ? user : undefined;
+    if ((!targetService || !targetUser) && typeof postId === 'string') {
+      const raw = postId.replace(/^pawchive_/, '');
+      const parts = raw.split('_');
+      if (parts.length >= 3) {
+        targetService = targetService || parts[0];
+        targetUser = targetUser || parts[1];
+        postId = parts.slice(2).join('_');
+      }
+    }
     const authHeaders = getPawchiveAuthHeaders(settings);
 
     if (!targetService || !targetUser) {

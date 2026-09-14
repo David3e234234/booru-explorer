@@ -17,7 +17,7 @@ import {
   PREGNANT_TAGS,
   LGBT_TAGS
 } from '../config/constants.js';
-import { logInfo } from '../utils/logger.js';
+import { logInfo, logError } from '../utils/logger.js';
 import { learnAliasesFromPostMatches } from '../services/aliasService.js';
 
 export {
@@ -30,40 +30,49 @@ export {
   fetchXbooru,
   fetchXbooruPostById,
   fetchHypnohub,
+  fetchTbib,
   fetchPawchive,
   fetchKemono,
   fetchAllgirl,
-  fetchAllgirlPostById
+  fetchAllgirlPostById,
+  fetchSingleSiteBatch
 };
 
 async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
-  switch (site) {
-    case 'rule34video':
-      return await fetchRule34Video(params, aiTagsList, settings);
-    case 'yandere':
-      return await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', params, aiTagsList, settings);
-    case 'safebooru':
-      return await fetchSafebooru(params, aiTagsList, settings);
-    case 'konachan':
-      return await fetchMoebooru('konachan', 'https://konachan.com', 'Konachan', params, aiTagsList, settings);
-    case 'rule34':
-      return await fetchRule34(params, aiTagsList, settings);
-    case 'gelbooru':
-      return await fetchGelbooru(params, aiTagsList, settings);
-    case 'xbooru':
-      return await fetchXbooru(params, aiTagsList, settings);
-    case 'hypnohub':
-      return await fetchHypnohub(params, aiTagsList, settings);
-    case 'tbib':
-      return await fetchTbib(params, aiTagsList, settings);
-    case 'pawchive':
-      return await fetchPawchive(params, aiTagsList, settings);
-    case 'kemono':
-      return await fetchKemono(params, aiTagsList, settings);
-    case 'allgirl':
-      return await fetchAllgirl(params, aiTagsList, settings);
-    default:
-      return [];
+  try {
+    switch (site) {
+      case 'danbooru':
+        return await fetchDanbooru(params, aiTagsList, settings);
+      case 'rule34video':
+        return await fetchRule34Video(params, aiTagsList, settings);
+      case 'yandere':
+        return await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', params, aiTagsList, settings);
+      case 'safebooru':
+        return await fetchSafebooru(params, aiTagsList, settings);
+      case 'konachan':
+        return await fetchMoebooru('konachan', 'https://konachan.com', 'Konachan', params, aiTagsList, settings);
+      case 'rule34':
+        return await fetchRule34(params, aiTagsList, settings);
+      case 'gelbooru':
+        return await fetchGelbooru(params, aiTagsList, settings);
+      case 'xbooru':
+        return await fetchXbooru(params, aiTagsList, settings);
+      case 'hypnohub':
+        return await fetchHypnohub(params, aiTagsList, settings);
+      case 'tbib':
+        return await fetchTbib(params, aiTagsList, settings);
+      case 'pawchive':
+        return await fetchPawchive(params, aiTagsList, settings);
+      case 'kemono':
+        return await fetchKemono(params, aiTagsList, settings);
+      case 'allgirl':
+        return await fetchAllgirl(params, aiTagsList, settings);
+      default:
+        return [];
+    }
+  } catch (err) {
+    logError('Parser Batch', `Ошибка выполнения парсера [${site}]`, err);
+    return [];
   }
 }
 
