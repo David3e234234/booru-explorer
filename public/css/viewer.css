@@ -1009,7 +1009,7 @@
 }
 
 .btn-archive-download.is-downloading .btn-archive-progress-fill {
-  background: rgba(99, 102, 241, 0.22);
+  background: var(--accent-primary-subtle);
 }
 
 /* Completed state */
@@ -2153,7 +2153,7 @@
 
 .viewer-similar-card:hover {
   transform: translateY(-2px);
-  border-color: var(--accent-primary, #6366f1);
+  border-color: var(--accent-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
 }
 
@@ -2574,8 +2574,8 @@
 }
 
 .btn-cr-primary:hover {
-  background: var(--accent-primary-hover, #4f46e5);
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  background: var(--accent-primary-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-cr-secondary {

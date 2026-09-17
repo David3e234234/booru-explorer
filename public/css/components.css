@@ -1683,13 +1683,12 @@
   height: 8px;
   border-radius: 50%;
   background: var(--accent-primary);
-  box-shadow: 0 0 8px var(--accent-primary);
-  animation: dlPillPulse 1.2s ease-in-out infinite;
+  animation: dlPillPulse 1.6s ease-in-out infinite;
 }
 
 @keyframes dlPillPulse {
-  0%, 100% { opacity: 0.4; transform: scale(0.85); }
-  50% { opacity: 1; transform: scale(1.2); }
+  0%, 100% { opacity: 0.35; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); }
 }
 
 .dl-pill-icon {

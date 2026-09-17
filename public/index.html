@@ -17,12 +17,12 @@
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.4">
   <link rel="stylesheet" href="css/main.css?v=9.2">
-  <link rel="stylesheet" href="css/components.css?v=10.8">
+  <link rel="stylesheet" href="css/components.css?v=10.9">
   <link rel="stylesheet" href="css/settings.css?v=1.1">
   <link rel="stylesheet" href="css/authors.css?v=1.0">
   <link rel="stylesheet" href="css/profile.css?v=1.0">
-  <link rel="stylesheet" href="css/viewer.css?v=13.6">
-  <link rel="stylesheet" href="css/archive-inspect.css?v=1.0">
+  <link rel="stylesheet" href="css/viewer.css?v=13.7">
+  <link rel="stylesheet" href="css/archive-inspect.css?v=1.1">
   <script src="js/mp4box.all.min.js"></script>
 </head>
 <body>
@@ -35,9 +35,8 @@
     <symbol id="ic-bookmark" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></symbol>
     <symbol id="ic-bookmark-filled" viewBox="0 0 24 24"><path fill="currentColor" stroke="currentColor" stroke-width="2" d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></symbol>
     <symbol id="ic-star-filled" viewBox="0 0 24 24"><polygon fill="currentColor" stroke="currentColor" points="12 2 15.09 8.26 22 9.27 17 14.14 28.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
-    <symbol id="ic-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></g></symbol>
     <symbol id="ic-album" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.5"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></g></symbol>
-    <symbol id="ic-sparkles" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M19 3v4M21 5h-4M5 19v2M6 20H4"/></symbol>
+    <symbol id="ic-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
     <symbol id="ic-user" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
   </svg>
 
@@ -62,7 +61,7 @@
           <span data-i18n="nav.following">Подписки</span>
         </button>
         <button class="nav-tab" data-category="recommended" title="Персональные рекомендации на основе ваших лайков" data-i18n-title="nav.recommended.title">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
           <span data-i18n="nav.recommended">Для вас</span>
         </button>
       </nav>
@@ -614,7 +613,7 @@
         </button>
         <button class="category-card" data-category="recommended">
           <div class="category-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3z"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
           </div>
           <div class="category-info">
             <span class="category-name" data-i18n="sheet.catRecommended.name">Для вас</span>
@@ -681,7 +680,7 @@
           </button>
           <!-- More like this (find similar works) -->
           <button class="viewer-btn" id="btnSimilarModal" title="Найти похожие работы" data-i18n-title="viewer.similar.title">
-            <svg width="18" height="18" viewBox="0 0 24 24"><use href="#ic-sparkles"/></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24"><use href="#ic-compass"/></svg>
           </button>
           <button class="viewer-btn mobile-only" id="btnViewerTagsToggle" title="Теги и информация" data-i18n-title="viewer.tagsToggle.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
@@ -1706,7 +1705,7 @@
 
           <div class="settings-group">
             <label class="settings-label" for="selectArchiveDownloadThreads" data-i18n="settings.archiveDownloadThreads">Количество потоков загрузки архивов:</label>
-            <p class="settings-hint" data-i18n="settings.archiveDownloadThreadsHint">Многопоточное скачивание через параллельные запросы HTTP Range для значительного ускорения загрузки архивов (1 — один поток, 4 — по умолчанию, до 16 потоков).</p>
+            <p class="settings-hint" data-i18n="settings.archiveDownloadThreadsHint">Многопоточное скачивание через параллельные запросы HTTP Range для значительного ускорения загрузки архивов (1: один поток, 4: по умолчанию, до 16 потоков).</p>
             <select id="selectArchiveDownloadThreads" class="input-setting">
               <option value="1" data-i18n="settings.archiveThreads1">1 поток (обычный режим)</option>
               <option value="2" data-i18n="settings.archiveThreads2">2 потока</option>
@@ -1966,7 +1965,7 @@
                 </div>
               </div>
               <div class="wiki-card-body">
-                <p data-i18n="wiki.basics.syntaxDesc">В Booru-системах понятия из нескольких слов всегда соединяются <strong>подчеркиванием <code>_</code></strong>. Пробел между словами означает логическое <strong>«И» (AND)</strong> — то есть на картинке должны присутствовать оба признака.</p>
+                <p data-i18n="wiki.basics.syntaxDesc">В Booru-системах понятия из нескольких слов всегда соединяются <strong>подчеркиванием <code>_</code></strong>. Пробел между словами означает логическое <strong>«И» (AND)</strong>: то есть на картинке должны присутствовать оба признака.</p>
                 <div class="wiki-example-box">
                   <div class="wiki-example-row">
                     <span class="wiki-tag-example" data-tag="hatsune_miku">hatsune_miku</span>
@@ -2253,7 +2252,7 @@
                   <h4 class="wiki-source-title">DAPI-источники (Safebooru, TBIB, Hypnohub, Xbooru)</h4>
                 </div>
               </div>
-              <p class="wiki-source-desc" data-i18n="wiki.dapi.desc"><strong>Safebooru</strong> — только чистый SFW контент. <strong>TBIB</strong> — гигантский агрегатор изображений (~19 млн постов). <strong>Hypnohub</strong> и <strong>Xbooru</strong> — тематические DAPI-каталоги с быстрой выдачей.</p>
+              <p class="wiki-source-desc" data-i18n="wiki.dapi.desc"><strong>Safebooru</strong>: только чистый SFW контент. <strong>TBIB</strong>: гигантский агрегатор изображений (~19 млн постов). <strong>Hypnohub</strong> и <strong>Xbooru</strong>: тематические DAPI-каталоги с быстрой выдачей.</p>
             </div>
           </div>
         </div>

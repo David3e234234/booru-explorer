@@ -155,7 +155,9 @@ function startServer(port) {
   });
 }
 
-if (!isServerless && process.env.NODE_ENV !== 'test') {
+const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+
+if (!isServerless && process.env.NODE_ENV !== 'test' && isMainModule) {
   initBackupScheduler();
   startServer(Number(PORT));
 }

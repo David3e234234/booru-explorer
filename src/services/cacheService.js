@@ -122,4 +122,7 @@ export async function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
 }
 
 // Periodic check every 30 minutes
-setInterval(() => cleanDiskCacheIfNeeded(), 30 * 60 * 1000);
+const cacheInterval = setInterval(() => cleanDiskCacheIfNeeded(), 30 * 60 * 1000);
+if (cacheInterval && typeof cacheInterval.unref === 'function') {
+  cacheInterval.unref();
+}

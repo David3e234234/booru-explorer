@@ -149,16 +149,16 @@
 }
 
 .btn-archive-pill.is-downloading .btn-archive-progress-fill {
-  background: rgba(99, 102, 241, 0.25);
+  background: var(--accent-primary-subtle);
 }
 
 .btn-archive-pill.is-extracting {
-  border-color: #8b5cf6;
-  color: #8b5cf6;
+  border-color: var(--accent-warning);
+  color: var(--accent-warning);
 }
 
 .btn-archive-pill.is-extracting .btn-archive-progress-fill {
-  background: rgba(139, 92, 246, 0.25);
+  background: var(--accent-warning-subtle);
 }
 
 .btn-archive-pill.is-inspecting {
@@ -167,7 +167,7 @@
 }
 
 .btn-archive-pill.is-inspecting .btn-archive-progress-fill {
-  background: rgba(99, 102, 241, 0.25);
+  background: var(--accent-primary-subtle);
 }
 
 .btn-archive-pill.is-completed {
@@ -218,7 +218,7 @@
 .sidebar-archive-live-bar-fill {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, var(--accent-primary) 0%, #8b5cf6 100%);
+  background: var(--accent-primary);
   border-radius: 3px;
   transition: width 0.15s ease-out;
 }
@@ -285,8 +285,8 @@
 }
 
 .sidebar-archive-summary.has-links {
-  border-color: rgba(99, 102, 241, 0.35);
-  background: rgba(99, 102, 241, 0.08);
+  border-color: var(--border-medium);
+  background: var(--accent-primary-subtle);
 }
 
 .sidebar-archive-summary-header {
@@ -698,9 +698,9 @@
   border-radius: var(--radius-sm, 6px);
   font-size: 11px;
   font-weight: 500;
-  color: var(--accent-primary, #6366f1);
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: var(--accent-primary);
+  background: var(--accent-primary-subtle);
+  border: 1px solid var(--border-medium);
   text-decoration: none;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -721,7 +721,7 @@
   top: 0;
   bottom: 0;
   width: 0%;
-  background: var(--accent-primary, #6366f1);
+  background: var(--accent-primary);
   opacity: 0.25;
   transition: width 0.15s ease;
   z-index: 0;
@@ -729,8 +729,8 @@
 }
 
 .btn-archive-file-download.is-downloading {
-  border-color: var(--accent-primary, #6366f1);
-  background: rgba(99, 102, 241, 0.12);
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-subtle);
 }
 
 .btn-archive-file-download.is-downloading .btn-archive-file-progress {
@@ -758,9 +758,9 @@
 }
 
 .btn-archive-file-download:hover:not(.is-downloading):not(.is-completed) {
-  background: var(--accent-primary, #6366f1);
-  color: #fff;
-  border-color: var(--accent-primary, #6366f1);
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  border-color: var(--accent-primary);
 }
 
 .btn-archive-file-download:active:not(.is-downloading) {
