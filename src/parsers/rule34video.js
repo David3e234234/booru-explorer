@@ -123,7 +123,81 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
   }
 
   try {
-    // 1. Official Rule34Video JSON API for model/author search
+    // Helper to normalize strings for author comparison (ignoring punctuation, leetspeak i/l)
+    const normalizeName = (s) => (s || '').toLowerCase().replace(/[\s_-]+/g, '').replace(/l/g, 'i');
+    const cleanNorm = normalizeName(clean);
+
+    // 1. Prioritize official members/uploaders (so official accounts like Sakura Nlght take precedence over compilations/reuploads)
+    const memberQueries = [clean, clean.replace(/\s+/g, '')];
+    const firstWord = clean.trim().split(/[\s_]+/)[0];
+    if (firstWord && firstWord.length >= 3 && !memberQueries.includes(firstWord)) {
+      memberQueries.push(firstWord);
+    }
+
+    for (const mq of memberQueries) {
+      const memberUrl = `https://rule34video.com/members/?mode=async&function=get_block&block_id=list_members_members&q=${encodeURIComponent(mq)}&from_members=1`;
+      const resMember = await fetchSafe(memberUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        timeout: 5000,
+        settings,
+        site: 'rule34video'
+      });
+
+      if (resMember.ok) {
+        const html = await resMember.text();
+        const items = [...html.matchAll(/href="https:\/\/rule34video\.com\/members\/(\d+)\/"[\s\S]*?<div class="name">([^<]+)<\/div>([\s\S]*?)<\/a>/gi)];
+        
+        // Collect candidates matching the author name
+        const matchedCandidates = [];
+        for (const item of items) {
+          const id = item[1];
+          const name = item[2].trim();
+          const isVerified = item[3].includes('verified-status');
+          const mNorm = normalizeName(name);
+
+          if (mNorm === cleanNorm || (isVerified && (mNorm.includes(cleanNorm) || cleanNorm.includes(mNorm)))) {
+            matchedCandidates.push({ id, name, isVerified });
+          }
+        }
+
+        // Prioritize verified accounts first
+        let bestCandidate = matchedCandidates.find(c => c.isVerified);
+
+        // If not verified, check if the account actually has uploaded videos
+        if (!bestCandidate && matchedCandidates.length > 0) {
+          for (const cand of matchedCandidates) {
+            const memberPageUrl = `https://rule34video.com/members/${cand.id}/`;
+            const resPage = await fetchSafe(memberPageUrl, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              timeout: 4000,
+              settings,
+              site: 'rule34video'
+            });
+            if (resPage.ok) {
+              const pageHtml = await resPage.text();
+              const hasVerified = pageHtml.includes('verified-status');
+              const videosMatch = pageHtml.match(/Videos\s*\(([\d,]+)\)/i);
+              const videoCount = videosMatch ? parseInt(videosMatch[1].replace(/,/g, ''), 10) : 0;
+              if (hasVerified || videoCount > 0) {
+                bestCandidate = { id: cand.id, name: cand.name, isVerified: hasVerified };
+                break;
+              }
+            }
+          }
+        }
+
+        if (bestCandidate) {
+          const result = { type: 'member', id: bestCandidate.id, slug: '', name: bestCandidate.name };
+          cacheResolved(resolvedAuthorCache, cacheKey, result);
+          return result;
+        }
+      }
+    }
+
+    // 2. Official Rule34Video JSON API for model/author search
     const modelJsonUrl = `https://rule34video.com/models_json.php?advanced_search=true&q=${encodeURIComponent(clean)}`;
     const resModelJson = await fetchSafe(modelJsonUrl, {
       headers: {
@@ -139,8 +213,7 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
       const data = await resModelJson.json();
       if (data && Array.isArray(data.items) && data.items.length > 0) {
         // Look for an exact or the closest match
-        const cleanNoSpace = clean.toLowerCase().replace(/[\s_]+/g, '');
-        const exact = data.items.find(i => (i.title || '').toLowerCase().replace(/[\s_]+/g, '') === cleanNoSpace) || data.items[0];
+        const exact = data.items.find(i => normalizeName(i.title) === cleanNorm) || data.items[0];
         if (exact && exact.id) {
           const result = {
             type: 'model',
@@ -154,7 +227,7 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
       }
     }
 
-    // 2. Search channels
+    // 3. Search channels
     const channelUrl = `https://rule34video.com/channels/?mode=async&function=get_block&block_id=custom_list_channels_common_channels_list&q=${encodeURIComponent(clean)}&from=1`;
     const resChannel = await fetchSafe(channelUrl, {
       headers: {
@@ -175,32 +248,6 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
         const slug = channelMatch[2] || '';
         const name = (channelMatch[3] || slug || clean).replace(/&#34;/g, '"').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
         const result = { type: 'channel', id, slug, name: name || clean };
-        cacheResolved(resolvedAuthorCache, cacheKey, result);
-        return result;
-      }
-    }
-
-    // 3. Search members/uploaders
-    const memberUrl = `https://rule34video.com/members/?mode=async&function=get_block&block_id=custom_list_members_common_members_list&q=${encodeURIComponent(clean)}&from=1`;
-    const resMember = await fetchSafe(memberUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'X-Requested-With': 'XMLHttpRequest'
-      },
-      timeout: 5000,
-      settings,
-      site: 'rule34video'
-    });
-
-    if (resMember.ok) {
-      const html = await resMember.text();
-      const memberMatch = html.match(/href="[^"]*\/members\/(\d+)(?:\/([^"/?#]+))?\/?(?:\?|")[^>]*>([^<]*)<\/a>/i) ||
-                          html.match(/href="[^"]*\/members\/(\d+)(?:\/([^"/?#]+))?\/?/i);
-      if (memberMatch && memberMatch[1]) {
-        const id = memberMatch[1];
-        const slug = memberMatch[2] || '';
-        const name = (memberMatch[3] || slug || clean).replace(/&#34;/g, '"').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
-        const result = { type: 'member', id, slug, name: name || clean };
         cacheResolved(resolvedAuthorCache, cacheKey, result);
         return result;
       }
@@ -339,7 +386,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         const slugPart = authorTarget.slug ? `${authorTarget.slug}/` : '';
         url = `https://rule34video.com/channels/${authorTarget.id}/${slugPart}?mode=async&function=get_block&block_id=custom_list_videos_channel_videos${sortByParam}&from=${p}`;
       } else if (authorTarget.type === 'member') {
-        url = `https://rule34video.com/members/${authorTarget.id}/videos/?mode=async&function=get_block&block_id=custom_list_videos_member_videos${sortByParam}&from=${p}`;
+        url = `https://rule34video.com/members/${authorTarget.id}/videos/?mode=async&function=get_block&block_id=list_videos_uploaded_videos${sortByParam}&from_videos=${p}`;
       }
     } else if (cleanQuery) {
       const urlSlug = cleanQuery.replace(/[\s_]+/g, '-');
