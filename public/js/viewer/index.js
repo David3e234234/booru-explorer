@@ -16,7 +16,7 @@ import { renderSidebarSimilarPosts, configureSimilar, initSimilarEvents } from '
 import { getCurrentMediaItem, renderAlbumFilmstrip, switchAlbumSlide, preloadAdjacentMedia, loadFullAlbumForPost, downloadFullAlbum, downloadSingleMedia, configureAlbum } from './viewerAlbum.js';
 import { setupViewerGestures } from './viewerGestures.js';
 
-export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onDislikeToggle, onFindSimilar, onSwitchSiteAndSearch } = {}) {
+export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onAuthorSelect, onDislikeToggle, onFindSimilar, onSwitchSiteAndSearch } = {}) {
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
   const btnClose = document.getElementById('btnCloseViewer');
@@ -255,6 +255,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     renderAuthorInfo(currentPost, {
       closeViewer,
       onTagSelect: (tag) => onTagSelect?.(tag),
+      onAuthorSelect: (author) => onAuthorSelect?.(author),
       onFavoriteAuthorToggle,
       onSwitchSiteAndSearch
     });
@@ -264,6 +265,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     renderSidebarTags(currentPost, {
       onTagSelect: (tag) => onTagSelect?.(tag),
+      onAuthorSelect: (author) => onAuthorSelect?.(author),
       closeViewer
     });
 

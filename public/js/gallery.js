@@ -14,7 +14,7 @@ import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } f
 import { showToast, showActionToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
 import { t } from './i18n.js';
 
-export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite, onFindSimilar }) {
+export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onAuthorSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite, onFindSimilar }) {
   const galleryGrid = document.getElementById('galleryGrid');
   const loadingSpinner = document.getElementById('loadingSpinner');
   const emptyState = document.getElementById('emptyState');
@@ -1287,9 +1287,15 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       e.stopPropagation();
       const rawA = authorBadgeEl.getAttribute('data-author') || post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
       let cleanTag = rawA.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/, '').replace(/\s+/g, '_');
-      if (cleanTag && onTagSelect) {
-        onTagSelect(cleanTag);
-        return;
+      if (cleanTag) {
+        if (onAuthorSelect) {
+          onAuthorSelect(cleanTag);
+          return;
+        }
+        if (onTagSelect) {
+          onTagSelect(cleanTag);
+          return;
+        }
       }
     }
     onOpenViewer(parseInt(card.dataset.index, 10));

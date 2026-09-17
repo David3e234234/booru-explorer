@@ -278,7 +278,7 @@ export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
  * @param {Function} [params.onFavoriteAuthorToggle]
  * @param {Function} [params.onSwitchSiteAndSearch]
  */
-export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onFavoriteAuthorToggle, onSwitchSiteAndSearch } = {}) {
+export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onAuthorSelect, onFavoriteAuthorToggle, onSwitchSiteAndSearch } = {}) {
   const viewerAuthorBadge = document.getElementById('viewerAuthorBadge');
   const viewerAuthorText = document.getElementById('viewerAuthorText');
   const viewerFavAuthorBtn = document.getElementById('viewerFavAuthorBtn');
@@ -317,7 +317,8 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onFavo
         const tagToSearch = (targetSite === 'rule34video' && !cleanAuthorTag.includes(':'))
           ? `artist:${cleanAuthorTag}`
           : cleanAuthorTag;
-        if (onTagSelect) onTagSelect(tagToSearch);
+        if (onAuthorSelect) onAuthorSelect(tagToSearch);
+        else if (onTagSelect) onTagSelect(tagToSearch);
       };
     }
     if (viewerFavAuthorBtn) {
@@ -336,7 +337,8 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onFavo
         const tagToSearch = (targetSite === 'rule34video' && !cleanAuthorTag.includes(':'))
           ? `artist:${cleanAuthorTag}`
           : cleanAuthorTag;
-        if (onTagSelect) onTagSelect(tagToSearch);
+        if (onAuthorSelect) onAuthorSelect(tagToSearch);
+        else if (onTagSelect) onTagSelect(tagToSearch);
       };
     }
 
@@ -356,7 +358,8 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onFavo
             const tagToSearch = (targetSite === 'rule34video' && !cleanAsstTag.includes(':'))
               ? `artist:${cleanAsstTag}`
               : cleanAsstTag;
-            if (onTagSelect) onTagSelect(tagToSearch);
+            if (onAuthorSelect) onAuthorSelect(tagToSearch);
+            else if (onTagSelect) onTagSelect(tagToSearch);
           };
           infoAssistantsList.appendChild(asstChip);
         });

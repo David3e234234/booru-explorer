@@ -176,7 +176,7 @@ export function getTagCategoryClass(tag, details) {
   return `tag-${cat}`;
 }
 
-export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
+export function renderSidebarTags(post, { onTagSelect, onAuthorSelect, closeViewer }) {
   const tagsCloud = document.getElementById('viewerTagsCloud');
   const tagsCountTotal = document.getElementById('tagsCountTotal');
   const viewerTagsBadgeCount = document.getElementById('viewerTagsBadgeCount');
@@ -271,7 +271,11 @@ export function renderSidebarTags(post, { onTagSelect, closeViewer }) {
         e.preventDefault();
         haptic(10);
         if (closeViewer) closeViewer();
-        if (onTagSelect) onTagSelect(tag);
+        if (catKey === 'artist' && onAuthorSelect) {
+          onAuthorSelect(tag);
+        } else if (onTagSelect) {
+          onTagSelect(tag);
+        }
       });
 
       // 2. Tag copy button on the right

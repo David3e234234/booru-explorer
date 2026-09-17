@@ -260,6 +260,9 @@ async function init() {
     onTagSelect: (tag) => {
       autocompleteInstance.selectTag(tag, true);
     },
+    onAuthorSelect: (author) => {
+      handleAuthorSelect(author);
+    },
     onLoadMore: () => {
       const now = Date.now();
       if (now - lastLoadMoreTime < 450) return;
@@ -291,6 +294,9 @@ async function init() {
     },
     onTagSelect: (tag) => {
       autocompleteInstance.selectTag(tag, true);
+    },
+    onAuthorSelect: (author) => {
+      handleAuthorSelect(author);
     },
     onDislikeToggle: () => {
       galleryInstance.renderGallery(false, { preserveScroll: true });
@@ -647,6 +653,23 @@ function selectCategory(category) {
   if (state.currentCategory === category && category !== 'favorites') return;
   state.currentCategory = category;
   updateCategoryTabsUI();
+  performSearch(true);
+}
+
+function handleAuthorSelect(authorTag) {
+  if (!authorTag) return;
+  state.currentCategory = 'feed';
+  updateCategoryTabsUI();
+  if (autocompleteInstance) {
+    if (typeof autocompleteInstance.clear === 'function') {
+      autocompleteInstance.clear();
+    } else if (typeof autocompleteInstance.clearTags === 'function') {
+      autocompleteInstance.clearTags();
+    }
+    autocompleteInstance.selectTag(authorTag, false);
+  } else {
+    state.searchTags = [authorTag];
+  }
   performSearch(true);
 }
 
