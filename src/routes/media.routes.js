@@ -35,7 +35,7 @@ router.get('/resolve-video', async (req, res) => {
   if (site === 'rule34video' || (url && url.includes('rule34video.com'))) {
     const clientAuth = parseClientAuth(req);
     const settings = { ...getSettings(), ...clientAuth };
-    const resolved = await resolveRule34VideoFullMedia(url, id, settings);
+    const resolved = await resolveRule34VideoFullMedia(url, id, settings, req.query.author || '');
     if (resolved) {
       return res.json(resolved);
     }

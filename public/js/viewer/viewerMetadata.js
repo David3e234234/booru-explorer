@@ -28,7 +28,8 @@ export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
 
   if (currentPost.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
     const targetPostId = currentPost.id;
-    return fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
+    const authorParam = encodeURIComponent(currentPost.author || '');
+    return fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video&author=${authorParam}`)
       .then(r => r.json())
       .then(data => {
         if (!data || currentPost?.id !== targetPostId) return null;
@@ -38,9 +39,13 @@ export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
           currentPost.author = data.author;
           changed = true;
         }
-        if (data.tags && Array.isArray(data.tags) && data.tags.length > (currentPost.tags?.length || 0)) {
+        if (data.assistants && Array.isArray(data.assistants)) {
+          currentPost.assistants = data.assistants;
+        }
+        if (data.tags && Array.isArray(data.tags) && (data.tags.length > 0 || currentPost.hasSyntheticTags)) {
           currentPost.tags = data.tags;
           currentPost.tagDetails = data.tagDetails || currentPost.tagDetails;
+          currentPost.hasSyntheticTags = false;
           changed = true;
         }
         if (data.fullVideoUrl) {

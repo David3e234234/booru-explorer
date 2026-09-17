@@ -668,6 +668,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
           source: pageUrl,
           postUrl: pageUrl,
           createdAt,
+          hasSyntheticTags: true,
           isAi
         });
       }
@@ -692,8 +693,8 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
 
 const resolvedVideoCache = new Map();
 
-export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) {
-  const cacheKey = String(id || sourceUrl);
+export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, preferredAuthor = '') {
+  const cacheKey = `${String(id || sourceUrl)}_${preferredAuthor || ''}`;
   if (resolvedVideoCache.has(cacheKey)) {
     return resolvedVideoCache.get(cacheKey);
   }
@@ -755,7 +756,6 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
         quality = '480p HQ';
       } else {
         fullVideoUrl = candidateUrls[0];
-        quality = 'HD';
       }
     }
 
@@ -770,6 +770,18 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
       const artistSectionMatch = html.match(/<div class="label">Artist<\/div>[\s\S]*?<a[^>]*href="[^"]*\/models\/[^"]*"[^>]*>[\s\S]*?<span class="name">([^<]+)<\/span>/i);
       if (artistSectionMatch) {
         artist = artistSectionMatch[1].trim();
+      }
+    }
+
+    // Prioritize preferred author if it matches one of the models
+    if (artist && preferredAuthor) {
+      const cleanPref = preferredAuthor.toLowerCase().replace(/[\s_-]+/g, '');
+      const models = artist.split(',').map(m => m.trim()).filter(Boolean);
+      const matchIdx = models.findIndex(m => m.toLowerCase().replace(/[\s_-]+/g, '') === cleanPref);
+      if (matchIdx > 0) {
+        const [matchedModel] = models.splice(matchIdx, 1);
+        models.unshift(matchedModel);
+        artist = models.join(', ');
       }
     }
 
@@ -827,14 +839,36 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}) 
     const flashCatMatch = html.match(/video_categories\s*:\s*'([^']*)'/i);
 
     const rawTagsList = [];
+    const classifierInputTags = [];
+
+    // Categories are copyrights/series
     if (flashCatMatch && flashCatMatch[1]) {
-      flashCatMatch[1].split(',').map(s => s.trim()).filter(Boolean).forEach(t => rawTagsList.push(t));
-    }
-    if (flashTagsMatch && flashTagsMatch[1]) {
-      flashTagsMatch[1].split(',').map(s => s.trim()).filter(Boolean).forEach(t => rawTagsList.push(t));
+      flashCatMatch[1].split(',').map(s => s.trim()).filter(Boolean).forEach(t => {
+        rawTagsList.push(t);
+        classifierInputTags.push(`copyright:${t}`);
+      });
     }
 
-    const { tagDetails, author: classifiedAuthor, assistants } = await classifyPostTags(rawTagsList, `https://rule34video.com/video/${id}/`, finalAuthor, settings);
+    // Tags: if a tag contains parentheses like "character (series)", normalize spaces to underscores for booru character classification
+    if (flashTagsMatch && flashTagsMatch[1]) {
+      flashTagsMatch[1].split(',').map(s => s.trim()).filter(Boolean).forEach(t => {
+        rawTagsList.push(t);
+        if (/\([^\)]+\)/.test(t)) {
+          classifierInputTags.push(t.replace(/\s+/g, '_'));
+        } else {
+          classifierInputTags.push(t);
+        }
+      });
+    }
+
+    // Include artists as artist tags so classifyPostTags can properly categorize and order them
+    if (artist) {
+      artist.split(',').map(s => s.trim()).filter(Boolean).forEach(a => {
+        classifierInputTags.push(`artist:${a}`);
+      });
+    }
+
+    const { tagDetails, author: classifiedAuthor, assistants } = await classifyPostTags(classifierInputTags, `https://rule34video.com/video/${id}/`, finalAuthor, settings);
 
     let duration = 0;
     let durationText = '';
