@@ -1,6 +1,6 @@
 import { MockAgent, setGlobalDispatcher, getGlobalDispatcher } from 'undici';
 import assert from 'node:assert/strict';
-import { fetchPosts, fetchSingleSiteBatch, fetchDanbooru, fetchSafebooru, fetchGelbooru, fetchRule34, fetchRule34Video, fetchMoebooru, fetchXbooru, fetchHypnohub, fetchTbib, fetchPawchive, fetchKemono, fetchAllgirl } from '../src/parsers/index.js';
+import { fetchPosts, fetchSingleSiteBatch, fetchDanbooru, fetchSafebooru, fetchGelbooru, fetchRule34, fetchRule34Video, fetchMoebooru, fetchXbooru, fetchHypnohub, fetchTbib, fetchPawchive, fetchKemono } from '../src/parsers/index.js';
 import { fetchDanbooruPostById } from '../src/parsers/danbooru.js';
 import { fetchGelbooruPostById } from '../src/parsers/gelbooru.js';
 import { fetchRule34PostById } from '../src/parsers/rule34.js';
@@ -9,7 +9,6 @@ import { fetchMoebooruPostById } from '../src/parsers/moebooru.js';
 import { fetchXbooruPostById } from '../src/parsers/dapi.js';
 import { fetchKemonoPostById } from '../src/parsers/kemono.js';
 import { fetchPawchivePostById } from '../src/parsers/pawchive.js';
-import { fetchAllgirlPostById } from '../src/parsers/allgirl.js';
 import { resolveRule34VideoFullMedia } from '../src/parsers/rule34video.js';
 import { fetchSafe, runWithDeadlineSignal } from '../src/utils/network.js';
 import { assertNormalizedPost } from '../test/unit/parsers/harness.js';
@@ -29,14 +28,13 @@ const ALL_DOMAINS = [
   'https://hypnohub.net',
   'https://tbib.org',
   'https://kemono.cr',
-  'https://pawchive.pw',
-  'https://allgirl.booru.org'
+  'https://pawchive.pw'
 ];
 
 const ALL_SITES = [
   'danbooru', 'yandere', 'safebooru', 'konachan',
   'rule34', 'gelbooru', 'rule34video', 'xbooru',
-  'hypnohub', 'tbib', 'pawchive', 'kemono', 'allgirl'
+  'hypnohub', 'tbib', 'pawchive', 'kemono'
 ];
 
 let globalUnhandled = [];
@@ -102,7 +100,6 @@ async function runTestSuite() {
       ['xbooru', () => fetchXbooruPostById('106')],
       ['kemono', () => fetchKemonoPostById('107')],
       ['pawchive', () => fetchPawchivePostById('108')],
-      ['allgirl', () => fetchAllgirlPostById('109')],
       ['rule34video', () => resolveRule34VideoFullMedia('https://rule34video.com/video/110', '110')]
     ];
 
@@ -176,8 +173,7 @@ async function runTestSuite() {
       ['hypnohub', () => fetchHypnohub({ tags: 'test' }, [], {})],
       ['tbib', () => fetchTbib({ tags: 'test' }, [], {})],
       ['pawchive', () => fetchPawchive({ tags: 'test' }, [], {})],
-      ['kemono', () => fetchKemono({ tags: 'test' }, [], {})],
-      ['allgirl', () => fetchAllgirl({ tags: 'test' }, [], {})]
+      ['kemono', () => fetchKemono({ tags: 'test' }, [], {})]
     ];
 
     for (const [site, fn] of directParsers) {

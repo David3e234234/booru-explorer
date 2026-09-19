@@ -2,7 +2,6 @@ process.env.NODE_ENV = 'test';
 
 // Central test runner importing all unit, parser, and integration suites
 import './unit/tagHelpers.test.js';
-import './unit/parsers/allgirl.test.js';
 import './unit/parsers/danbooru.test.js';
 import './unit/parsers/dapi.test.js';
 import './unit/parsers/gelbooru.test.js';

@@ -12,7 +12,6 @@ import { fetchRule34Video } from '../src/parsers/rule34video.js';
 import { fetchXbooru, fetchHypnohub, fetchTbib, fetchXbooruPostById, fetchHypnohubPostById, fetchTbibPostById } from '../src/parsers/dapi.js';
 import { fetchKemono, fetchKemonoPostById } from '../src/parsers/kemono.js';
 import { fetchPawchive, fetchPawchivePostById } from '../src/parsers/pawchive.js';
-import { fetchAllgirl, fetchAllgirlPostById } from '../src/parsers/allgirl.js';
 import { fetchPosts, fetchSingleSiteBatch } from '../src/parsers/index.js';
 
 console.log('--- Starting Auditor M2 Adversarial Stress Tests ---');
@@ -108,10 +107,6 @@ try {
   // Test Pawchive invalid ID
   const pInvalid = await fetchPawchivePostById('', '', '', [], {});
   assert.equal(pInvalid, null, 'Pawchive with empty ID should return null');
-
-  // Test AllGirl invalid ID
-  const aInvalid = await fetchAllgirlPostById('', [], {});
-  assert.equal(aInvalid, null, 'Allgirl with empty ID should return null');
 
   // Test Aggregator single-site unknown
   const aggUnknown = await fetchSingleSiteBatch('invalid_booru', {}, [], {});

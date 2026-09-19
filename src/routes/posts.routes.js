@@ -22,7 +22,6 @@ import { fetchDanbooruPostById } from '../parsers/danbooru.js';
 import { fetchGelbooruPostById } from '../parsers/gelbooru.js';
 import { fetchSafebooruPostById } from '../parsers/safebooru.js';
 import { fetchMoebooruPostById } from '../parsers/moebooru.js';
-import { fetchAllgirlPostById } from '../parsers/allgirl.js';
 import { loadGlobalTagSummary, getTagCategory, META_KEYWORDS } from '../utils/tagClassifier.js';
 import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAuthorCompatible } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '../utils/network.js';
@@ -47,9 +46,8 @@ const AUTH_CACHE_FIELDS = [
   'enablePaheal',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
   'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession', 'kemonoSession',
-  'allgirlCookie',
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
-  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy', 'allgirlProxy',
+  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy',
   'siteSortTags', 'kemonoService', 'pawchiveService'
 ];
 
@@ -449,14 +447,6 @@ router.get('/resolve-post', async (req, res) => {
       if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
       const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
       const resolvedPost = await fetchMoebooruPostById('konachan', 'https://konachan.com', 'Konachan', targetPostId, settings.aiTags || [], settings, rawTags);
-      if (resolvedPost) return res.json({ success: true, post: resolvedPost });
-      return res.status(404).json({ success: false, message: 'Пост не найден' });
-    } else if (targetSite === 'allgirl') {
-      let targetPostId = postId || id || '';
-      if (targetPostId) targetPostId = String(targetPostId).replace(/^allgirl_/, '').split('_')[0];
-      if (!targetPostId) return res.status(400).json({ success: false, message: 'Не указан ID поста' });
-      const rawTags = req.query.tags ? (Array.isArray(req.query.tags) ? req.query.tags : String(req.query.tags).split(/[,\s]+/)).filter(Boolean) : [];
-      const resolvedPost = await fetchAllgirlPostById(targetPostId, settings.aiTags || [], settings, rawTags);
       if (resolvedPost) return res.json({ success: true, post: resolvedPost });
       return res.status(404).json({ success: false, message: 'Пост не найден' });
     }
@@ -1317,8 +1307,6 @@ router.get('/tags/autocomplete', async (req, res) => {
       if (tagsResult.length === 0) {
         tagsResult = await fetchDanbooruTags(query);
       }
-    } else if (site === 'allgirl') {
-      tagsResult = await fetchDanbooruTags(query);
     } else if (site === 'pawchive') {
       try {
         const { list } = await getCreatorsDirectory(settings);

@@ -234,7 +234,6 @@ export function applySettingsToUIAndState(s) {
   const inputYanderePassword = document.getElementById('inputYanderePassword');
   const inputPawchiveSession = document.getElementById('inputPawchiveSession');
   const inputKemonoSession = document.getElementById('inputKemonoSession');
-  const inputAllgirlCookie = document.getElementById('inputAllgirlCookie');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
@@ -258,7 +257,6 @@ export function applySettingsToUIAndState(s) {
   if (inputYanderePassword && s.yanderePassword !== undefined) inputYanderePassword.value = s.yanderePassword || '';
   if (inputPawchiveSession && s.pawchiveSession !== undefined) inputPawchiveSession.value = s.pawchiveSession || '';
   if (inputKemonoSession && s.kemonoSession !== undefined) inputKemonoSession.value = s.kemonoSession || '';
-  if (inputAllgirlCookie && s.allgirlCookie !== undefined) inputAllgirlCookie.value = s.allgirlCookie || '';
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -273,8 +271,7 @@ export function applySettingsToUIAndState(s) {
     { key: 'kemonoProxy', id: 'inputKemonoProxy' },
     { key: 'xbooruProxy', id: 'inputXbooruProxy' },
     { key: 'hypnohubProxy', id: 'inputHypnohubProxy' },
-    { key: 'tbibProxy', id: 'inputTbibProxy' },
-    { key: 'allgirlProxy', id: 'inputAllgirlProxy' }
+    { key: 'tbibProxy', id: 'inputTbibProxy' }
   ];
   proxyInputs.forEach(({ key, id }) => {
     const el = document.getElementById(id);
@@ -745,7 +742,6 @@ export function openSettingsModal() {
   const inputYanderePassword = document.getElementById('inputYanderePassword');
   const inputPawchiveSession = document.getElementById('inputPawchiveSession');
   const inputKemonoSession = document.getElementById('inputKemonoSession');
-  const inputAllgirlCookie = document.getElementById('inputAllgirlCookie');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const selectPreviewQuality = document.getElementById('selectPreviewQuality');
   const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
@@ -810,7 +806,6 @@ export function openSettingsModal() {
   if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
   if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
   if (inputKemonoSession) inputKemonoSession.value = state.settings.kemonoSession || '';
-  if (inputAllgirlCookie) inputAllgirlCookie.value = state.settings.allgirlCookie || '';
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -825,8 +820,7 @@ export function openSettingsModal() {
     { key: 'kemonoProxy', id: 'inputKemonoProxy' },
     { key: 'xbooruProxy', id: 'inputXbooruProxy' },
     { key: 'hypnohubProxy', id: 'inputHypnohubProxy' },
-    { key: 'tbibProxy', id: 'inputTbibProxy' },
-    { key: 'allgirlProxy', id: 'inputAllgirlProxy' }
+    { key: 'tbibProxy', id: 'inputTbibProxy' }
   ];
   proxyInputs.forEach(({ key, id }) => {
     const el = document.getElementById(id);
@@ -1483,8 +1477,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     { btnId: 'btnTestKemonoProxy', site: 'kemono', inputId: 'inputKemonoProxy' },
     { btnId: 'btnTestXbooruProxy', site: 'xbooru', inputId: 'inputXbooruProxy' },
     { btnId: 'btnTestHypnohubProxy', site: 'hypnohub', inputId: 'inputHypnohubProxy' },
-    { btnId: 'btnTestTbibProxy', site: 'tbib', inputId: 'inputTbibProxy' },
-    { btnId: 'btnTestAllgirlProxy', site: 'allgirl', inputId: 'inputAllgirlProxy' }
+    { btnId: 'btnTestTbibProxy', site: 'tbib', inputId: 'inputTbibProxy' }
   ];
   proxyTestConfigs.forEach(({ btnId, site, inputId }) => {
     const btn = document.getElementById(btnId);
@@ -1671,7 +1664,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputYanderePassword = document.getElementById('inputYanderePassword');
       const inputPawchiveSession = document.getElementById('inputPawchiveSession');
       const inputKemonoSession = document.getElementById('inputKemonoSession');
-      const inputAllgirlCookie = document.getElementById('inputAllgirlCookie');
 
       const checkTgEnabled = document.getElementById('checkTelegramBackupEnabled');
       const inputTgToken = document.getElementById('inputTelegramBotToken');
@@ -1715,7 +1707,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : '',
         pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : '',
         kemonoSession: inputKemonoSession ? inputKemonoSession.value.trim() : '',
-        allgirlCookie: inputAllgirlCookie ? inputAllgirlCookie.value.trim() : '',
         globalProxy: normalizeProxyString(document.getElementById('inputGlobalProxy')?.value.trim() || ''),
         danbooruProxy: normalizeProxyString(document.getElementById('inputDanbooruProxy')?.value.trim() || ''),
         gelbooruProxy: normalizeProxyString(document.getElementById('inputGelbooruProxy')?.value.trim() || ''),
@@ -1729,7 +1720,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         xbooruProxy: normalizeProxyString(document.getElementById('inputXbooruProxy')?.value.trim() || ''),
         hypnohubProxy: normalizeProxyString(document.getElementById('inputHypnohubProxy')?.value.trim() || ''),
         tbibProxy: normalizeProxyString(document.getElementById('inputTbibProxy')?.value.trim() || ''),
-        allgirlProxy: normalizeProxyString(document.getElementById('inputAllgirlProxy')?.value.trim() || ''),
         telegramBackupEnabled: checkTgEnabled ? checkTgEnabled.checked : false,
         telegramBotToken: inputTgToken ? inputTgToken.value.trim() : '',
         telegramChatId: inputTgChat ? inputTgChat.value.trim() : '',
@@ -1820,11 +1810,10 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (inputYanderePassword) inputYanderePassword.value = '';
       if (inputPawchiveSession) inputPawchiveSession.value = '';
       if (inputKemonoSession) inputKemonoSession.value = '';
-      if (inputAllgirlCookie) inputAllgirlCookie.value = '';
       const proxyInputIds = [
         'inputGlobalProxy', 'inputDanbooruProxy', 'inputGelbooruProxy', 'inputRule34Proxy',
         'inputYandereProxy', 'inputKonachanProxy', 'inputSafebooruProxy', 'inputRule34videoProxy',
-        'inputPawchiveProxy', 'inputKemonoProxy', 'inputXbooruProxy', 'inputHypnohubProxy', 'inputTbibProxy', 'inputAllgirlProxy'
+        'inputPawchiveProxy', 'inputKemonoProxy', 'inputXbooruProxy', 'inputHypnohubProxy', 'inputTbibProxy'
       ];
       proxyInputIds.forEach(id => {
         const el = document.getElementById(id);
@@ -1873,7 +1862,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         yanderePassword: '',
         pawchiveSession: '',
         kemonoSession: '',
-        allgirlCookie: '',
         telegramBackupEnabled: false,
         telegramBotToken: '',
         telegramChatId: '',

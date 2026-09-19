@@ -269,8 +269,6 @@ export const DEFAULT_SETTINGS = {
   tbibProxy: '',
   pawchiveProxy: '',
   kemonoProxy: '',
-  allgirlProxy: '',
-  allgirlCookie: '',
   telegramBackupEnabled: false,
   telegramBotToken: '',
   telegramChatId: '',
@@ -289,7 +287,6 @@ export const SECRET_SETTING_FIELDS = [
   'konachanLogin', 'konachanPassword',
   'yandereLogin', 'yanderePassword',
   'pawchiveSession', 'kemonoSession',
-  'allgirlCookie',
   'telegramBotToken', 'telegramChatId'
 ];
 
@@ -487,22 +484,6 @@ export const SITES = {
     supportedCategories: ['feed', 'following', 'recommended'],
     accentColor: '#3b82f6',
     description: 'Архив платных подписок (Patreon, Fanbox, Fantia, Boosty, Gumroad) с поиском по авторам и альбомами'
-  },
-  allgirl: {
-    id: 'allgirl',
-    name: 'AllGirl',
-    baseUrl: 'https://allgirl.booru.org',
-    rating: 'all',
-    supportsVideo: false,
-    supportsImages: true,
-    supportsTags: true,
-    supportsAiFilter: true,
-    supportsShapesFilter: true,
-    supportsContentHiding: true,
-    supportsSort: true,
-    supportedCategories: ['feed', 'following', 'recommended'],
-    accentColor: '#ec4899',
-    description: 'Архив аниме-артов на классическом движке Gelbooru 0.1'
   }
 };
 

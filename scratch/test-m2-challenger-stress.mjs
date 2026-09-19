@@ -10,7 +10,6 @@ import { fetchRule34Video, resolveRule34VideoFullMedia, parseIsoDuration, format
 import { fetchXbooru, fetchHypnohub, fetchTbib, fetchXbooruPostById } from '../src/parsers/dapi.js';
 import { fetchKemono, fetchKemonoPostById } from '../src/parsers/kemono.js';
 import { fetchPawchive, fetchPawchivePostById } from '../src/parsers/pawchive.js';
-import { fetchAllgirl, fetchAllgirlPostById } from '../src/parsers/allgirl.js';
 import { fetchPosts, fetchSingleSiteBatch } from '../src/parsers/index.js';
 
 // Setup MockAgent

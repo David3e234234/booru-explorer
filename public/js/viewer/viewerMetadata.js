@@ -180,16 +180,15 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
         return data;
       })
       .catch(() => null);
-  } else if ((currentPost.site === 'rule34' || currentPost.site === 'xbooru' || currentPost.site === 'allgirl') && (currentPost.originalId || currentPost.id)) {
+  } else if ((currentPost.site === 'rule34' || currentPost.site === 'xbooru') && (currentPost.originalId || currentPost.id)) {
     const targetPostId = currentPost.id;
-    const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(rule34|xbooru|allgirl)_/, '').split('_')[0];
+    const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(rule34|xbooru)_/, '').split('_')[0];
     const needsResolve = !currentPost.width ||
       !currentPost.author ||
       !(currentPost.tagDetails?.artist?.length) ||
       !currentPost.source ||
       currentPost.source.includes('rule34.xxx/index.php') ||
-      currentPost.source.includes('xbooru.com/index.php') ||
-      currentPost.source.includes('allgirl.booru.org/index.php');
+      currentPost.source.includes('xbooru.com/index.php');
 
     if (needsResolve && cleanOrigId) {
       const tagsParam = Array.isArray(currentPost.tags) ? currentPost.tags.join(',') : '';

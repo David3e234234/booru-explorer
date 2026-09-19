@@ -10,7 +10,6 @@ import { fetchRule34Video, parseIsoDuration, formatDurationSeconds } from '../sr
 import { fetchXbooru, fetchHypnohub, fetchTbib, fetchXbooruPostById, fetchHypnohubPostById, fetchTbibPostById, normalizeDapiRating } from '../src/parsers/dapi.js';
 import { fetchKemono, fetchKemonoPostById } from '../src/parsers/kemono.js';
 import { fetchPawchive, fetchPawchivePostById } from '../src/parsers/pawchive.js';
-import { fetchAllgirl, fetchAllgirlPostById } from '../src/parsers/allgirl.js';
 import { fetchPosts, fetchSingleSiteBatch } from '../src/parsers/index.js';
 
 console.log('--- STARTING ADVERSARIAL STRESS TEST SUITE ---');
@@ -183,20 +182,6 @@ function logPass(desc) {
   assert.equal(post.service, 'fanbox');
   assert.equal(post.user, '456');
   logPass('Kemono safely resolves composite postId string');
-}
-
-// 9. AllGirl: protocol-relative URL cleanup and missing image handling
-{
-  const client = agent.get('https://allgirl.booru.org');
-  client.intercept({ path: (p) => p.includes('s=view') && p.includes('1111'), method: 'GET' }).reply(200, `
-    <html><body><img id="image" src="//img.booru.org/allgirl/images/1/1111.jpg" /><div>Rating: Questionable</div></body></html>
-  `);
-  const post = await fetchAllgirlPostById('1111', [], {});
-  assert.ok(post);
-  assertNormalizedPost(post, 'allgirl');
-  assert.ok(post.fileUrl.startsWith('https://img.booru.org'));
-  assert.equal(post.rating, 'q');
-  logPass('AllGirl cleans protocol-relative URLs to https:');
 }
 
 // 10. Aggregator: Danbooru and TBIB dispatch in fetchSingleSiteBatch

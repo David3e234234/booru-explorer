@@ -10,7 +10,6 @@ import { fetchSafebooru, fetchSafebooruPostById } from '../src/parsers/safebooru
 import { fetchMoebooru, fetchMoebooruPostById } from '../src/parsers/moebooru.js';
 import { fetchKemono, fetchKemonoPostById } from '../src/parsers/kemono.js';
 import { fetchPawchive, fetchPawchivePostById } from '../src/parsers/pawchive.js';
-import { fetchAllgirl, fetchAllgirlPostById } from '../src/parsers/allgirl.js';
 import { fetchSingleSiteBatch, fetchPosts } from '../src/parsers/index.js';
 import { assertNormalizedPost } from '../test/unit/parsers/harness.js';
 

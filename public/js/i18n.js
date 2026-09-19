@@ -572,7 +572,6 @@ Object.assign(en, {
   'settings.noExcludedTags': 'No excluded tags',
   'settings.clearAllBtn': 'Clear all',
   'settings.excludedCleared': 'Exclusion list cleared',
-  'settings.allgirlCookie.placeholder': 'Session cookie (user_id=...; pass_hash=...)',
 
   'settings.resetAll': 'Reset to defaults',
   'settings.save': 'Save',

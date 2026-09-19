@@ -141,10 +141,6 @@ export function getPostSiteUrl(post) {
     if (post.source && /^https?:\/\/(?:www\.)?kemono\./i.test(post.source)) return post.source;
     if (origId) return `https://kemono.cr`;
   }
-  if (site === 'allgirl') {
-    if (post.postUrl) return post.postUrl;
-    if (origId) return `https://allgirl.booru.org/index.php?page=post&s=view&id=${origId}`;
-  }
 
   if (post.source && /^https?:\/\//i.test(post.source)) {
     return post.source;

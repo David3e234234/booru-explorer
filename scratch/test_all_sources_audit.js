@@ -1,5 +1,4 @@
 import { classifyPostTags, getTagCategory, loadGlobalTagSummary } from '../src/utils/tagClassifier.js';
-import { fetchAllgirl, fetchAllgirlPostById } from '../src/parsers/allgirl.js';
 import { fetchDanbooruPostById } from '../src/parsers/danbooru.js';
 import { fetchGelbooruPostById } from '../src/parsers/gelbooru.js';
 import { fetchSafebooruPostById } from '../src/parsers/safebooru.js';
@@ -51,41 +50,7 @@ async function runAudit() {
   }
   console.log('--> Tag Classification Test: PASSED!\n');
 
-  console.log('=== 2. AUDIT: AllGirl parser (allgirl.booru.org) ===');
-  // 2.1 Fetch feed
-  console.log('Testing fetchAllgirl feed...');
-  const feed = await fetchAllgirl({ page: 1, limit: 5 });
-  console.log(`Fetched ${feed.length} posts from AllGirl feed.`);
-  if (feed.length > 0) {
-    const p = feed[0];
-    console.log(`Sample post: id=${p.id}, fileUrl=${p.fileUrl}, rating=${p.rating}, tags=${p.tags.slice(0, 5).join(', ')}`);
-    console.log(`Tag details sample:`, p.tagDetails);
-  }
-
-  // 2.2 Test search with tag
-  console.log('Testing fetchAllgirl with tag "miku"...');
-  const mikuPosts = await fetchAllgirl({ tags: 'miku', page: 1, limit: 3 });
-  console.log(`Found ${mikuPosts.length} posts for "miku".`);
-
-  // 2.3 Test sorting top
-  console.log('Testing fetchAllgirl category "top"...');
-  const topPosts = await fetchAllgirl({ category: 'top', page: 1, limit: 3 });
-  console.log(`Found ${topPosts.length} top posts (scores: ${topPosts.map(p => p.score).join(', ')})`);
-
-  // 2.4 Test single post resolve
-  if (feed.length > 0) {
-    const sampleId = feed[0].originalId;
-    console.log(`Testing fetchAllgirlPostById for id ${sampleId}...`);
-    const resolved = await fetchAllgirlPostById(sampleId);
-    if (resolved) {
-      console.log(`Resolved AllGirl post ${resolved.id}: width=${resolved.width}, height=${resolved.height}, author=${resolved.author}, tagsCount=${resolved.tags.length}`);
-    } else {
-      console.warn(`Could not resolve AllGirl post ${sampleId}`);
-    }
-  }
-  console.log('--> AllGirl Parser Test: PASSED!\n');
-
-  console.log('=== 3. AUDIT: Post Resolving across other Booru engines ===');
+  console.log('=== 2. AUDIT: Post Resolving across other Booru engines ===');
   // 3.1 Danbooru
   console.log('Testing fetchDanbooruPostById (id 8000000)...');
   try {
