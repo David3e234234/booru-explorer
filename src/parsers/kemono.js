@@ -675,9 +675,16 @@ export async function fetchKemono(params, aiTagsList, settings = {}) {
     if (lower.startsWith('id:') || lower.startsWith('post:')) {
       idFilter = token.replace(/^(?:id|post):/i, '').trim();
     } else if (lower.startsWith('service:')) {
-      const svc = token.substring(8).trim().toLowerCase();
-      if (svc && svc !== 'all') {
-        serviceFilter = svc;
+      const rest = token.substring(8).trim();
+      const combinedUserMatch = rest.match(/^([a-z0-9_-]+)[_ ]user:([a-z0-9_-]+)$/i);
+      if (combinedUserMatch) {
+        serviceFilter = combinedUserMatch[1].toLowerCase();
+        userFilter = combinedUserMatch[2];
+      } else {
+        const svc = rest.toLowerCase();
+        if (svc && svc !== 'all') {
+          serviceFilter = svc;
+        }
       }
     } else if (lower.startsWith('user:')) {
       userFilter = token.substring(5).trim();

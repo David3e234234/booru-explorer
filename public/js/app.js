@@ -553,15 +553,18 @@ function searchAuthorPosts(author) {
     renderMobileSourcesSheet({ onSelectSite: selectSite });
   }
   state.searchTags = [];
-  let tagToAdd = author.name;
   if (state.currentSite === 'rule34video' && !author.name.includes(':')) {
-    tagToAdd = `artist:${author.name}`;
+    addSearchTag(`artist:${author.name}`);
   } else if (state.currentSite === 'pawchive' || state.currentSite === 'kemono') {
-    tagToAdd = (author.service && author.user)
-      ? `service:${author.service} user:${author.user}`
-      : `artist:${author.name}`;
+    if (author.service && author.user) {
+      addSearchTag(`service:${author.service}`);
+      addSearchTag(`user:${author.user}`);
+    } else {
+      addSearchTag(`artist:${author.name}`);
+    }
+  } else {
+    addSearchTag(author.name);
   }
-  addSearchTag(tagToAdd);
   if (autocompleteInstance) {
     autocompleteInstance.renderTagsChips();
   }
