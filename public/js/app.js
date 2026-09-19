@@ -315,7 +315,24 @@ async function init() {
         if (site === 'kemono') ensureKemonoServiceOptions();
       }
       state.currentCategory = 'feed';
-      selectCategory('feed');
+      updateCategoryTabsUI();
+
+      // Reset filters and sorting to defaults
+      state.postSort = 'new';
+      state.videoDurationSort = 'none';
+      state.typeFilter = 'all';
+      state.ageFilter = 'all';
+      state.ratingFilter = 'all';
+      state.aiFilter = 'no-ai';
+
+      updatePostSortUI();
+      updateVideoSortUI();
+      updateTypeFilterUI();
+      updateAgeFilterUI();
+      updateRatingFilterUI();
+      updateAiFilterUI();
+      updateFilterActiveDot();
+
       if (autocompleteInstance) {
         if (typeof autocompleteInstance.clear === 'function') {
           autocompleteInstance.clear();
