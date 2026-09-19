@@ -1,5 +1,5 @@
-const CACHE_NAME = 'booru-explorer-v8.20';
-const MEDIA_CACHE = 'booru-media-v8.20';
+const CACHE_NAME = 'booru-explorer-v8.21';
+const MEDIA_CACHE = 'booru-media-v8.21';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
 

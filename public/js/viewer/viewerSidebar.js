@@ -270,7 +270,7 @@ export function renderSidebarTags(post, { onTagSelect, onAuthorSelect, closeView
       tagBtn.addEventListener('click', (e) => {
         e.preventDefault();
         haptic(10);
-        if (closeViewer) closeViewer();
+        if (closeViewer) closeViewer({ skipHistoryBack: true });
         if (catKey === 'artist' && onAuthorSelect) {
           onAuthorSelect(tag);
         } else if (onTagSelect) {

@@ -323,7 +323,7 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onAuth
       viewerAuthorBadge.onclick = (e) => {
         e.stopPropagation();
         const targetSite = currentPost?.site;
-        if (closeViewer) closeViewer();
+        if (closeViewer) closeViewer({ skipHistoryBack: true });
         const tagToSearch = (targetSite === 'rule34video' && !cleanAuthorTag.includes(':'))
           ? `artist:${cleanAuthorTag}`
           : cleanAuthorTag;
@@ -343,7 +343,7 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onAuth
       infoAuthorRow.style.display = 'flex';
       infoAuthor.onclick = () => {
         const targetSite = currentPost?.site;
-        if (closeViewer) closeViewer();
+        if (closeViewer) closeViewer({ skipHistoryBack: true });
         const tagToSearch = (targetSite === 'rule34video' && !cleanAuthorTag.includes(':'))
           ? `artist:${cleanAuthorTag}`
           : cleanAuthorTag;
@@ -363,7 +363,7 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onAuth
           asstChip.title = t('viewer.author.title', 'Автор / Создатель (нажмите для поиска всех работ)');
           asstChip.onclick = () => {
             const targetSite = currentPost?.site;
-            if (closeViewer) closeViewer();
+            if (closeViewer) closeViewer({ skipHistoryBack: true });
             const cleanAsstTag = asst.replace(/\s*\([^)]*\)/g, '').trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
             const tagToSearch = (targetSite === 'rule34video' && !cleanAsstTag.includes(':'))
               ? `artist:${cleanAsstTag}`

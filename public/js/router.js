@@ -219,15 +219,15 @@ export function notifyViewerMoved(postId) {
   history.replaceState({ vr: 1 }, '', buildUrl(activePostId));
 }
 
-export function notifyViewerClosed() {
+export function notifyViewerClosed(options = {}) {
   activePostId = null;
   bootPostId = null;
   if (applyingPopState) return;
-  if (history.state && history.state.vr) {
+  if (options.skipHistoryBack || !history.state?.vr) {
+    history.replaceState(history.state, '', buildUrl(null));
+  } else if (history.state && history.state.vr) {
     if (awaitingBackPop) return;
     awaitingBackPop = true;
     history.back();
-  } else {
-    history.replaceState(history.state, '', buildUrl(null));
   }
 }

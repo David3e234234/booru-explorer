@@ -346,7 +346,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
       const site = btn.getAttribute('data-site');
       const query = btn.getAttribute('data-query');
       closeCreatorResolverModal();
-      if (typeof closeViewer === 'function') closeViewer();
+      if (typeof closeViewer === 'function') closeViewer({ skipHistoryBack: true });
       if (typeof onSwitchSiteAndSearch === 'function') {
         onSwitchSiteAndSearch(site, query);
       }

@@ -337,7 +337,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
   }
 
-  function closeViewer() {
+  function closeViewer(options = {}) {
     if (!modal || modal.style.display === 'none') return;
     if (modal) modal.style.display = 'none';
     closeArchiveInspectModal();
@@ -366,7 +366,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     currentAlbumIndex = 0;
     directPostRef = null;
     state.currentViewerIndex = -1;
-    notifyViewerClosed();
+    notifyViewerClosed(options);
   }
 
   async function handleDislikeToggle() {

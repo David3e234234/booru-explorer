@@ -303,7 +303,7 @@ async function init() {
     },
     onFindSimilar: (post) => handleFindSimilarPost(post),
     onSwitchSiteAndSearch: (site, query) => {
-      if (viewerInstance) viewerInstance.closeViewer();
+      if (viewerInstance) viewerInstance.closeViewer({ skipHistoryBack: true });
       if (site) {
         state.currentSite = site;
         persistSettings({ defaultSite: site });
@@ -2027,7 +2027,7 @@ function setupEventListeners() {
   const btnLogo = document.getElementById('btnLogo');
   if (btnLogo) {
     btnLogo.addEventListener('click', () => {
-      if (viewerInstance) viewerInstance.closeViewer();
+      if (viewerInstance) viewerInstance.closeViewer({ skipHistoryBack: true });
 
       // 1. Clear search tags and input
       if (autocompleteInstance?.clear) {
