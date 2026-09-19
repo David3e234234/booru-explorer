@@ -128,7 +128,7 @@ export async function getCreatorsDirectory(settings = {}) {
       if (now - stat.mtimeMs < 24 * 3600 * 1000) {
         const text = fs.readFileSync(DISK_CREATORS_PATH, 'utf8');
         const data = safeJsonParse(text, null);
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data) && data.length > 10) {
           const creatorMap = new Map();
           for (const c of data) {
             if (c && c.service && c.id) {
