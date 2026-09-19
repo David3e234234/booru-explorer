@@ -118,7 +118,7 @@ export function getTagCategory(tag, tagDetails, author = '', assistants = []) {
   // 3. Known assistants exact match
   if (Array.isArray(assistants) && assistants.length > 0) {
     const isExactAssistant = assistants.some(a => {
-      const cleanA = String(a).toLowerCase().trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
+      const cleanA = String(a).toLowerCase().trim().replace(/^(?:@|pixiv:)+/i, '').replace(/\s+/g, '_');
       const cleanABase = cleanA.replace(/_\([^)]+\)$/, '');
       const cleanBase = clean.replace(/_\([^)]+\)$/, '');
       return clean === cleanA || cleanBase === cleanABase;
@@ -130,7 +130,7 @@ export function getTagCategory(tag, tagDetails, author = '', assistants = []) {
 
   // 4. Fallback matching against author (exact match only, never substring)
   if (author) {
-    const authorClean = String(author).toLowerCase().replace(/^[@pixiv:]+/, '').trim().replace(/\s+/g, '_');
+    const authorClean = String(author).toLowerCase().replace(/^(?:@|pixiv:)+/i, '').trim().replace(/\s+/g, '_');
     const authorBase = authorClean.replace(/_\([^)]+\)$/, '');
     const cleanBase = clean.replace(/_\([^)]+\)$/, '');
     if (clean === authorClean || cleanBase === authorBase) {
@@ -220,7 +220,7 @@ export function renderSidebarTags(post, { onTagSelect, onAuthorSelect, closeView
 
   // Sort groups.artist so the primary author always appears at index 0
   if (post?.author && groups.artist.length > 1) {
-    const authorClean = post.author.toLowerCase().replace(/^[@pixiv:]+/, '').trim().replace(/\s+/g, '_');
+    const authorClean = post.author.toLowerCase().replace(/^(?:@|pixiv:)+/i, '').trim().replace(/\s+/g, '_');
     groups.artist.sort((a, b) => {
       const aMatch = a.toLowerCase().includes(authorClean);
       const bMatch = b.toLowerCase().includes(authorClean);

@@ -8,7 +8,7 @@ import { notifyViewerOpened, notifyViewerMoved, notifyViewerClosed } from '../ro
 import { t } from '../i18n.js';
 
 import { resolvePostMetadata, renderAuthorInfo, handleAuthorFavToggle } from './viewerMetadata.js';
-import { renderSidebarArchives, renderArchivePostCard, cancelAllArchiveDownloads } from './viewerArchives.js';
+import { renderSidebarArchives, renderArchivePostCard, cancelAllArchiveDownloads, flushArchiveSubscriptions } from './viewerArchives.js';
 import { isArchiveInspectModalOpen, closeArchiveInspectModal, setArchiveInspectContext } from './viewerArchiveInspect.js';
 import { closeCreatorResolverModal } from './viewerCreatorResolver.js';
 import { renderSidebarCloudLinks, renderSidebarContent } from './viewerCloudLinks.js';
@@ -243,6 +243,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   function renderViewerPost(skipMediaLoad = false) {
     if (!currentPost) return;
 
+    // Re-renders recreate the archive cards: release the previous cards'
+    // download/job subscriptions so they don't accumulate on detached DOM
+    flushArchiveSubscriptions();
+
     if (currentPost.id) {
       markPostViewed(currentPost.id);
       recordSessionInteraction(currentPost, 'view');
@@ -314,6 +318,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (viewerContent) viewerContent.classList.remove('ui-hidden');
 
     activeResolvePromise = resolvePostMetadata(currentPost, {
+      getCurrentPost: () => currentPost,
       onPostUpdated: () => {
         renderViewerPost(true);
       }
@@ -559,6 +564,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (!modal || modal.style.display !== 'flex') return;
     const tag = document.activeElement?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    // Do not hijack browser shortcuts (Ctrl+F find, Ctrl+L address bar, Alt+arrows history)
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
 
     if (e.key === 'Escape') {
       e.preventDefault();

@@ -88,6 +88,7 @@ class DownloadManager {
       id,
       url,
       filename: cleanFilename,
+      isZip,
       size: Number(size) || 0,
       loaded: 0,
       total: Number(size) || 0,

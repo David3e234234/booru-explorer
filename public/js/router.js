@@ -13,7 +13,7 @@ const ENUMS = {
   sort: ['new', 'hot', 'views', 'top'],
   ai: ['all', 'no-ai', 'only-ai'],
   rating: ['all', 'nsfw', 'questionable', 'sfw'],
-  type: ['all', 'video', 'image'],
+  type: ['all', 'video', 'audio', 'image', 'zip'],
   age: ['all', 'adult', 'young']
 };
 

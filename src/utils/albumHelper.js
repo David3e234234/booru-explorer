@@ -301,12 +301,12 @@ export function sortAlbumItems(items) {
  */
 export function arePostsAuthorCompatible(postA, postB) {
   if (!postA || !postB) return true;
-  const authorA = (postA.author || '').trim().toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' ');
-  const authorB = (postB.author || '').trim().toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' ');
+  const authorA = (postA.author || '').trim().toLowerCase().replace(/^(?:@|pixiv:)+/i, '').replace(/[\s_]+/g, ' ');
+  const authorB = (postB.author || '').trim().toLowerCase().replace(/^(?:@|pixiv:)+/i, '').replace(/[\s_]+/g, ' ');
   // If both posts have distinct non-empty authors, they cannot be merged
   if (authorA && authorB && authorA !== authorB) {
-    const assistantsA = (Array.isArray(postA.assistants) ? postA.assistants : []).map(a => a.toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' '));
-    const assistantsB = (Array.isArray(postB.assistants) ? postB.assistants : []).map(a => a.toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_]+/g, ' '));
+    const assistantsA = (Array.isArray(postA.assistants) ? postA.assistants : []).map(a => a.toLowerCase().replace(/^(?:@|pixiv:)+/i, '').replace(/[\s_]+/g, ' '));
+    const assistantsB = (Array.isArray(postB.assistants) ? postB.assistants : []).map(a => a.toLowerCase().replace(/^(?:@|pixiv:)+/i, '').replace(/[\s_]+/g, ' '));
     if (!assistantsA.includes(authorB) && !assistantsB.includes(authorA)) {
       return false;
     }

@@ -654,7 +654,7 @@ export function classifyTags(rawTags = [], author = '') {
 
   if (typeof author === 'string' && author.trim()) {
     author.split(',').forEach(a => {
-      const clean = a.trim().replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
+      const clean = a.trim().replace(/^(?:@|pixiv:)+/i, '').replace(/\s+/g, '_');
       if (clean && !LOCATION_NOUNS.has(clean.toLowerCase())) addUnique(artist, clean);
     });
   }

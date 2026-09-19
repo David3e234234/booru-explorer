@@ -353,7 +353,6 @@ async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer,
   });
 
   const fileHandle = await fs.promises.open(destPath, 'w+');
-  await fileHandle.truncate(totalBytes);
 
   let writeLock = Promise.resolve();
   const writeSafe = (buf, pos) => {
@@ -377,6 +376,7 @@ async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer,
   let lastProgressUpdate = 0;
 
   try {
+    await fileHandle.truncate(totalBytes);
     const workerPromises = segments.map(async (seg) => {
       const segRes = await fetchSafe(zipUrl, {
         headers: {
@@ -434,6 +434,8 @@ async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer,
     }
   } catch (err) {
     abortController.abort();
+    // Drain queued segment writes so close() below cannot race an in-flight write
+    try { await writeLock; } catch {}
     throw err;
   } finally {
     await fileHandle.close().catch(() => {});
@@ -577,7 +579,9 @@ export async function downloadArchiveFile(zipUrl, finalZipPath, options = {}) {
       throw lastErr || new Error('Не удалось скачать архив со всех доступных узлов');
     }
 
-    await fs.promises.rename(tmpPath, finalZipPath).catch(() => {});
+    // Surface rename failures: reporting success without the final zip on disk
+    // would send extraction into an opaque ENOENT later
+    await fs.promises.rename(tmpPath, finalZipPath);
   })().finally(() => {
     inflightDownloads.delete(zipUrl);
   });
@@ -1359,12 +1363,12 @@ export async function downloadArchiveEntry(zipUrl, targetPathOrName, res, option
     } catch {}
   }
 
-  // 2. If full zip file is saved on disk, stream entry directly using yauzl
+  // 2. If full zip file is saved on disk, stream entry directly using node-stream-zip
   const zipPath = path.join(ARCHIVES_DIR, `${key}.zip`);
   if (fs.existsSync(zipPath)) {
     let zip;
     try {
-      zip = await openZip(zipPath);
+      zip = new StreamZip.async({ file: zipPath });
       for await (const entry of zip) {
         const norm = entry.name.replace(/\\/g, '/');
         const base = norm.split('/').pop();
@@ -1376,11 +1380,16 @@ export async function downloadArchiveEntry(zipUrl, targetPathOrName, res, option
           res.setHeader('Content-Disposition', `attachment; filename="${asciiSafe}"; filename*=UTF-8''${encodeURIComponent(base)}`);
           if (entry.size > 0) res.setHeader('Content-Length', entry.size);
 
+          // Await the pipe so the zip handle is only closed after the body has
+          // fully streamed (closing early would truncate the transfer)
           const readStream = await zip.openReadStream(entry);
-          return readStream.pipe(res);
+          await pipeline(readStream, res);
+          return;
         }
       }
     } catch (err) {
+      // Client disconnected mid-stream: do not fall through to the remote extract
+      if (res.writableEnded || res.destroyed) return;
       logError('Archive Download Entry', `Ошибка извлечения файла ${baseTarget} из локального zip`, err);
     } finally {
       if (zip) try { await zip.close(); } catch {}

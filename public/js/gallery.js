@@ -10,7 +10,7 @@ import {
   excludeInterestTag,
   restoreInterestTag
 } from './state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
+import { getProxiedUrl, getAuthHeaders, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
 import { showToast, showActionToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
 import { t } from './i18n.js';
 
@@ -582,6 +582,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       if (mainContent) {
         mainContent.scrollTop = opts.preserveScroll ? prevScrollTop : 0;
       }
+      // On mobile the window is the scroller (.main-content has height:auto),
+      // so a fresh render must also reset the window scroll or the user lands
+      // in the middle of the new feed
+      if (!opts.preserveScroll && window.innerWidth <= 800) {
+        window.scrollTo(0, 0);
+      }
       updateVisibleChunks();
     } else {
       // Append: new posts get placeholders, visible ones mount themselves
@@ -631,7 +637,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (!postId || resolvingCardAuthors.has(postId)) return;
     resolvingCardAuthors.add(postId);
 
-    fetch(`/api/resolve-video?id=${encodeURIComponent(post.originalId)}&url=${encodeURIComponent(post.source || '')}&site=rule34video`)
+    fetch(`/api/resolve-video?id=${encodeURIComponent(post.originalId)}&url=${encodeURIComponent(post.source || '')}&site=rule34video`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
         resolvingCardAuthors.delete(postId);

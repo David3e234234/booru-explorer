@@ -38,6 +38,7 @@
     <symbol id="ic-album" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.5"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></g></symbol>
     <symbol id="ic-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
     <symbol id="ic-user" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
+    <symbol id="ic-eye" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></g></symbol>
   </svg>
 
   <!-- Top navigation bar -->
@@ -335,7 +336,7 @@
     </aside>
 
     <!-- Main work area with the gallery -->
-    <main class="main-content">
+    <main class="main-content" id="mainContent">
       <!-- Fullscreen user profile block (TikTok style) -->
       <section class="user-profile-section" id="userProfileSection" style="display: none;">
         <!-- Profile header card -->
@@ -696,6 +697,7 @@
           </button>
           <button class="viewer-btn" id="btnCopyLink" title="Скопировать ссылку" data-i18n-title="viewer.copyLink.title">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </button>
           <button class="viewer-btn viewer-close" id="btnCloseViewer" title="Закрыть (Esc или свайп вниз)" data-i18n-title="viewer.close.title">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
@@ -2661,6 +2663,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=21.8"></script>
+  <script type="module" src="js/app.js?v=21.9"></script>
 </body>
 </html>

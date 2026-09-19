@@ -1,5 +1,6 @@
 import { t } from '../i18n.js';
 import { haptic } from '../modules/uiUtils.js';
+import { getAuthHeaders } from '../api.js';
 
 let activeAbortController = null;
 let escHandler = null;
@@ -137,7 +138,7 @@ export function openCreatorResolverModal(currentPost, { onSwitchSiteAndSearch, c
     originalId: currentPost?.originalId || currentPost?.id || ''
   });
 
-  fetch(`/api/resolve-author-creators?${params.toString()}`, { signal: activeAbortController.signal })
+  fetch(`/api/resolve-author-creators?${params.toString()}`, { signal: activeAbortController.signal, headers: getAuthHeaders() })
     .then(r => r.json())
     .then(data => {
       if (!data || !data.success) {

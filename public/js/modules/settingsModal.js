@@ -745,6 +745,7 @@ export function openSettingsModal() {
   const inputYanderePassword = document.getElementById('inputYanderePassword');
   const inputPawchiveSession = document.getElementById('inputPawchiveSession');
   const inputKemonoSession = document.getElementById('inputKemonoSession');
+  const inputAllgirlCookie = document.getElementById('inputAllgirlCookie');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const selectPreviewQuality = document.getElementById('selectPreviewQuality');
   const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
@@ -809,6 +810,7 @@ export function openSettingsModal() {
   if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
   if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
   if (inputKemonoSession) inputKemonoSession.value = state.settings.kemonoSession || '';
+  if (inputAllgirlCookie) inputAllgirlCookie.value = state.settings.allgirlCookie || '';
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -1421,6 +1423,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         const inputYandereLogin = document.getElementById('inputYandereLogin');
         const inputYanderePassword = document.getElementById('inputYanderePassword');
         const inputPawchiveSession = document.getElementById('inputPawchiveSession');
+        const inputKemonoSession = document.getElementById('inputKemonoSession');
 
         const activeSettings = {
           ...(state.settings || {}),
@@ -1667,6 +1670,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputYandereLogin = document.getElementById('inputYandereLogin');
       const inputYanderePassword = document.getElementById('inputYanderePassword');
       const inputPawchiveSession = document.getElementById('inputPawchiveSession');
+      const inputKemonoSession = document.getElementById('inputKemonoSession');
+      const inputAllgirlCookie = document.getElementById('inputAllgirlCookie');
 
       const checkTgEnabled = document.getElementById('checkTelegramBackupEnabled');
       const inputTgToken = document.getElementById('inputTelegramBotToken');
@@ -1814,6 +1819,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (inputYandereLogin) inputYandereLogin.value = '';
       if (inputYanderePassword) inputYanderePassword.value = '';
       if (inputPawchiveSession) inputPawchiveSession.value = '';
+      if (inputKemonoSession) inputKemonoSession.value = '';
+      if (inputAllgirlCookie) inputAllgirlCookie.value = '';
       const proxyInputIds = [
         'inputGlobalProxy', 'inputDanbooruProxy', 'inputGelbooruProxy', 'inputRule34Proxy',
         'inputYandereProxy', 'inputKonachanProxy', 'inputSafebooruProxy', 'inputRule34videoProxy',
@@ -1864,6 +1871,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         konachanPassword: '',
         yandereLogin: '',
         yanderePassword: '',
+        pawchiveSession: '',
+        kemonoSession: '',
+        allgirlCookie: '',
         telegramBackupEnabled: false,
         telegramBotToken: '',
         telegramChatId: '',

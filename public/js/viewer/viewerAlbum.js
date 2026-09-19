@@ -294,7 +294,7 @@ export async function loadFullAlbumForPost(targetPost, isUserExplicit = false, o
     });
 
     const currentPost = options.currentPost || albumContext.getCurrentPost?.();
-    if (currentSeq !== albumFetchSeq && currentPost?.id !== targetPost.id) {
+    if (currentSeq !== albumFetchSeq || currentPost?.id !== targetPost.id) {
       return;
     }
 
@@ -372,8 +372,8 @@ export async function loadFullAlbumForPost(targetPost, isUserExplicit = false, o
 
       // Re-render viewer UI if the user is currently viewing this post
       if (currentPost?.id === targetPost.id) {
-        renderAlbumFilmstrip(targetPost, 0, options);
-        switchAlbumSlide(0, options);
+        renderAlbumFilmstrip(targetPost, openIdx, options);
+        switchAlbumSlide(openIdx, options);
         if (btnFetchFullAlbumText) {
           btnFetchFullAlbumText.textContent = t('vw.refreshSet', 'Обновить сет ({n} фото)').replace('{n}', targetPost.albumItems.length);
         }

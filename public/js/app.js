@@ -86,7 +86,7 @@ import {
   closeSettingsModal 
 } from './modules/settingsModal.js';
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
-import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js?v=20.9';
+import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initWikiModal } from './modules/wikiModal.js';
 import { initProfileUI } from './modules/profileUI.js';

@@ -706,13 +706,13 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   if (sourceUrl && typeof sourceUrl === 'string') {
     const rawSrcAuthor = extractAuthorFromSource(tags, sourceUrl, '');
     if (rawSrcAuthor) {
-      sourceHandle = rawSrcAuthor.replace(/^[@pixiv:]+/, '').trim().toLowerCase();
+      sourceHandle = rawSrcAuthor.replace(/^(?:@|pixiv:)+/i, '').trim().toLowerCase();
     }
   }
 
   const isInvalidArtist = (cand) => {
     if (!cand || typeof cand !== 'string') return true;
-    const lower = cand.trim().toLowerCase().replace(/^[@pixiv:]+/, '').replace(/[\s_.-]+/g, '_');
+    const lower = cand.trim().toLowerCase().replace(/^(?:@|pixiv:)+/i, '').replace(/[\s_.-]+/g, '_');
     if (!lower || lower.length < 2) return true;
     if (GENERIC_NON_ARTIST_TAGS.has(lower) || LOCATION_BY_NOUNS.has(lower) || META_KEYWORDS.has(lower)) return true;
     if (tagMap) {
@@ -818,7 +818,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
 
     // 3.5. Check if tag matches known initial author (only if not a known non-artist)
     if (initialAuthor && typeof initialAuthor === 'string') {
-      const cleanInitial = initialAuthor.replace(/^[@pixiv:]+/, '').trim().toLowerCase().replace(/[\s_.-]+/g, '_');
+      const cleanInitial = initialAuthor.replace(/^(?:@|pixiv:)+/i, '').trim().toLowerCase().replace(/[\s_.-]+/g, '_');
       if (cleanInitial && !isInvalidArtist(cleanInitial)) {
         const cleanTagLower = lower.replace(/[\s_.-]+/g, '_');
         if (cleanTagLower === cleanInitial || cleanTagLower === `artist:${cleanInitial}`) {
@@ -942,7 +942,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   if (validInitialAuthors.length > 0) {
     candidateList = [...validInitialAuthors];
     validInitialAuthors.forEach(a => {
-      const cleanA = a.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
+      const cleanA = a.replace(/^(?:@|pixiv:)+/i, '').replace(/\s+/g, '_');
       if (cleanA && !artist.includes(cleanA) && !artist.includes(a)) {
         artist.push(cleanA);
       }
@@ -955,7 +955,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     const authorFromSource = extractAuthorFromSource(tags, sourceUrl, '');
     if (authorFromSource && !isInvalidArtist(authorFromSource)) {
       candidateList = [authorFromSource];
-      const cleanA = authorFromSource.replace(/^[@pixiv:]+/, '').replace(/\s+/g, '_');
+      const cleanA = authorFromSource.replace(/^(?:@|pixiv:)+/i, '').replace(/\s+/g, '_');
       if (cleanA && !artist.includes(cleanA)) {
         artist.push(cleanA);
       }

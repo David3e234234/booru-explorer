@@ -23,16 +23,21 @@ function isVideoUrl(url) {
  * @param {Function} [options.onPostUpdated] - Invoked when post fields change.
  * @returns {Promise<Object|null>|null} The active resolve promise.
  */
-export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
+export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost } = {}) {
+  // Live reader for the viewer's current post: navigation swaps the closure
+  // variable in index.js, so comparing against it (not the captured object)
+  // is what actually drops stale resolve results
+  const livePostId = () => (getCurrentPost ? getCurrentPost()?.id : currentPost?.id);
+
   if (!currentPost) return null;
 
   if (currentPost.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
     const targetPostId = currentPost.id;
     const authorParam = encodeURIComponent(currentPost.author || '');
-    return fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video&author=${authorParam}`)
+    return fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video&author=${authorParam}`, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
-        if (!data || currentPost?.id !== targetPostId) return null;
+        if (!data || livePostId() !== targetPostId) return null;
         let changed = false;
 
         if (data.author && data.author !== currentPost.author) {
@@ -121,10 +126,10 @@ export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
     const targetUser = currentPost.user || (currentPost.seriesKey ? currentPost.seriesKey.split(':')[2] : '') || '';
     const reqUrl = `/api/resolve-post?site=${encodeURIComponent(targetSite)}&postId=${encodeURIComponent(cleanOrigId)}&service=${encodeURIComponent(targetService)}&user=${encodeURIComponent(targetUser)}&seriesKey=${encodeURIComponent(currentPost.seriesKey || '')}&postUrl=${encodeURIComponent(currentPost.postUrl || currentPost.source || '')}`;
 
-    return fetch(reqUrl)
+    return fetch(reqUrl, { headers: getAuthHeaders() })
       .then(r => r.json())
       .then(data => {
-        if (!data || !data.success || !data.post || currentPost?.id !== targetPostId) return null;
+        if (!data || !data.success || !data.post || livePostId() !== targetPostId) return null;
         const resolved = data.post;
         let changed = false;
 
@@ -193,7 +198,7 @@ export function resolvePostMetadata(currentPost, { onPostUpdated } = {}) {
       return fetch(reqUrl, { headers: getAuthHeaders() })
         .then(r => r.json())
         .then(data => {
-          if (!data || !data.success || !data.post || currentPost?.id !== targetPostId) return null;
+          if (!data || !data.success || !data.post || livePostId() !== targetPostId) return null;
           const resolved = data.post;
           let changed = false;
 
@@ -438,6 +443,7 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onAuth
     if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
     if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
     if (viewerFindCreatorBtn) viewerFindCreatorBtn.style.display = 'none';
+    if (btnFavAuthorSidebar) btnFavAuthorSidebar.style.display = 'none';
     if (infoAuthorRow) infoAuthorRow.style.display = 'none';
     if (infoAssistantsRow) infoAssistantsRow.style.display = 'none';
     if (btnSetAuthorCoverSidebar) btnSetAuthorCoverSidebar.style.display = 'none';

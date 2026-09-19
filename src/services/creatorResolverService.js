@@ -140,7 +140,7 @@ export function extractPlatformInfoFromUrl(sourceUrl) {
  */
 export async function fetchBooruArtistInfo(rawAuthor, booruSite = 'danbooru', settings = {}) {
   const cleanAuthor = cleanString(rawAuthor)
-    .replace(/^[@pixiv:]+/i, '')
+    .replace(/^(?:@|pixiv:)+/i, '')
     .replace(/_?\((artist|creator|circle|studio|doujin|illustrator|mangaka|animator)\)$/i, '')
     .replace(/\s+/g, '_')
     .toLowerCase();
@@ -336,7 +336,7 @@ function matchCreatorsAgainstDirectory(creatorsList, criteria, targetSite) {
 export async function resolveAuthorCreators({ author = '', source = '', site = '', originalId = '', settings = {} } = {}) {
   const rawAuthor = cleanString(author);
   const cleanAuthor = rawAuthor
-    .replace(/^[@pixiv:]+/i, '')
+    .replace(/^(?:@|pixiv:)+/i, '')
     .replace(/_?\((artist|creator|circle|studio|doujin|illustrator|mangaka|animator)\)$/i, '')
     .trim();
 

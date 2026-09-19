@@ -12,6 +12,21 @@ export const activeArchiveJobs = new Map(); // url -> { active, phase, percent, 
 export const archiveJobListeners = new Map(); // url -> Set of callbacks
 export const activeArchivePollers = new Map(); // url -> intervalId
 
+// Unsubscribe functions for subscriptions created by rendered archive cards.
+// Cards are recreated on every render, so stale subscriptions are flushed there
+// to keep download/progress listeners from accumulating on detached DOM
+let activeArchiveUnsubscribers = [];
+
+export function trackArchiveUnsubscriber(unsub) {
+  if (typeof unsub === 'function') activeArchiveUnsubscribers.push(unsub);
+}
+
+export function flushArchiveSubscriptions() {
+  const subs = activeArchiveUnsubscribers;
+  activeArchiveUnsubscribers = [];
+  subs.forEach(unsub => { try { unsub(); } catch {} });
+}
+
 export const ARCHIVE_PLAY_ICON_SVG = `<svg class="btn-archive-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
 export const ARCHIVE_SEARCH_ICON_SVG = `<svg class="btn-archive-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
 export const ARCHIVE_SPINNER_ICON_SVG = `<svg class="btn-archive-icon btn-archive-spinner" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="38" stroke-dashoffset="12"/></svg>`;
@@ -134,6 +149,7 @@ export function cancelAllArchiveDownloads() {
     });
     activeArchiveDownloads.clear();
   }
+  flushArchiveSubscriptions();
 }
 
 /**
@@ -352,7 +368,7 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
   };
 
   // 1. Subscribe to downloadManager for direct browser streaming downloads
-  downloadManager.subscribeToUrl(url, (task) => {
+  trackArchiveUnsubscriber(downloadManager.subscribeToUrl(url, (task) => {
     if (!task || isServerUnpacking) return;
     clearTimeout(resetTimer);
 
@@ -422,10 +438,10 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
     } else if (task.status === 'cancelled') {
       resetToDefault();
     }
-  });
+  }));
 
   // 2. Subscribe to centralized archive job tracker (server unpacking / inspection)
-  subscribeArchiveJob(url, (jobState) => {
+  trackArchiveUnsubscriber(subscribeArchiveJob(url, (jobState) => {
     if (!jobState) return;
     clearTimeout(resetTimer);
 
@@ -604,7 +620,7 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
       if (livePhase) livePhase.textContent = jobState.error || t('vw.archiveFailed', 'Ошибка при обработке архива');
       resetTimer = setTimeout(resetToDefault, 4000);
     }
-  });
+  }));
 
   // Button event listeners
   btnDownload.addEventListener('click', async (e) => {

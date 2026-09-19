@@ -1,4 +1,5 @@
 import { t } from '../i18n.js';
+import { getAuthHeaders } from '../api.js';
 
 export function makeBannerDraggable(bannerEl) {
   if (!bannerEl) return;
@@ -690,7 +691,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (currentPost.site === 'rule34video' && !reresolvedOnce) {
       reresolvedOnce = true;
       setProgress(0, t('vp.linkExpired', 'Ссылка источника устарела, обновляем...'), true);
-      fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`)
+      fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`, { headers: getAuthHeaders() })
         .then(r => r.json())
         .then(data => {
           if (data && data.fullVideoUrl) {
@@ -813,7 +814,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const r34VideoPromise = (currentPost.site === 'rule34video' && typeof resolvedVideoPromise?.then === 'function')
     ? resolvedVideoPromise
     : (currentPost.site === 'rule34video' && (currentPost.source || currentPost.originalId)
-      ? fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`).then(r => r.json()).catch(() => null)
+      ? fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => null)
       : null);
 
   if (r34VideoPromise) {

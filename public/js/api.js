@@ -194,12 +194,13 @@ export async function fetchPosts({
   return await res.json();
 }
 
-export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', parentId = '', originalId = '' }) {
+export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', parentId = '', originalId = '', postUrl = '' }) {
   const params = new URLSearchParams();
   if (site) params.set('site', site);
   if (seriesKey) params.set('seriesKey', seriesKey);
   if (parentId) params.set('parentId', parentId);
   if (originalId) params.set('originalId', originalId);
+  if (postUrl) params.set('postUrl', postUrl);
 
   const res = await fetch(`/api/posts/album?${params.toString()}`, {
     headers: getAuthHeaders()
