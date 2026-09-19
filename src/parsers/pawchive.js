@@ -721,10 +721,8 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     resolvedCreators = await resolvePawchiveCreators(authorQuery, serviceFilter, settings);
   } else if (searchKeywords.length === 1 && !userFilter) {
     const candidates = await resolvePawchiveCreators(searchKeywords[0], serviceFilter, settings);
-    const kwNoSpace = searchKeywords[0].toLowerCase().replace(/[\s_.-]+/g, '');
-    const exactOrNormalized = candidates.filter(c => c.name.toLowerCase().replace(/[\s_.-]+/g, '') === kwNoSpace);
-    if (exactOrNormalized.length > 0) {
-      resolvedCreators = exactOrNormalized;
+    if (candidates.length > 0) {
+      resolvedCreators = candidates;
     }
   }
 

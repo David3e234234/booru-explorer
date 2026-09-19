@@ -729,10 +729,8 @@ export async function fetchKemono(params, aiTagsList, settings = {}) {
     resolvedCreators = await resolveKemonoCreators(authorQuery, serviceFilter, settings);
   } else if (searchKeywords.length === 1 && !userFilter) {
     const candidates = await resolveKemonoCreators(searchKeywords[0], serviceFilter, settings);
-    const kwNoSpace = searchKeywords[0].toLowerCase().replace(/[\s_.-]+/g, '');
-    const exactOrNormalized = candidates.filter(c => c.name.toLowerCase().replace(/[\s_.-]+/g, '') === kwNoSpace);
-    if (exactOrNormalized.length > 0) {
-      resolvedCreators = exactOrNormalized;
+    if (candidates.length > 0) {
+      resolvedCreators = candidates;
     }
   }
 
