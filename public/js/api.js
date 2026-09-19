@@ -505,6 +505,16 @@ export async function fetchAliasesInfo() {
   }
 }
 
+export async function fetchAliasesMap() {
+  try {
+    const res = await fetch('/api/aliases/map', { headers: getAuthHeaders() });
+    if (!res.ok) return {};
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
+
 export async function clearDiscoveredAliasesApi() {
   try {
     const res = await fetch('/api/aliases/clear-discovered', {

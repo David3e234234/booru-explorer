@@ -595,11 +595,39 @@ export function clearDiscoveredAliases() {
   return true;
 }
 
-export function getBuiltinAliases() {
-  return builtinAliasList;
-}
+/**
+ * Returns a complete bidirectional alias mapping: lowercased alias/name -> Array of lowercased alias variants.
+ * Used by client-side Following and Recommended algorithms to resolve aliases across sites.
+ */
+export function getAllKnownAliasesMap() {
+  const map = {};
 
-export function reloadBuiltinAliases() {
-  loadBuiltinAliases();
-  loadDiscoveredAliases();
+  const addVariants = (variants) => {
+    const list = Array.from(new Set(variants.map(v => String(v).trim().toLowerCase()).filter(Boolean)));
+    if (list.length <= 1) return;
+    for (const item of list) {
+      if (!map[item]) map[item] = [];
+      for (const other of list) {
+        if (!map[item].includes(other)) {
+          map[item].push(other);
+        }
+      }
+    }
+  };
+
+  // 1. Built-in aliases
+  for (const entry of builtinAliasList) {
+    if (!entry) continue;
+    const items = [entry.id, ...(entry.aliases || []), ...Object.values(entry.sites || {})];
+    addVariants(items);
+  }
+
+  // 2. Discovered aliases
+  for (const entry of discoveredAliasList) {
+    if (!entry) continue;
+    const items = [entry.id, ...(entry.aliases || []), ...Object.values(entry.sites || {})];
+    addVariants(items);
+  }
+
+  return map;
 }

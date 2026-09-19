@@ -184,11 +184,19 @@ export const state = {
   authToken: null,
   favoriteAuthors: [],
   favoriteAuthorNames: new Set(),
+  authorAliases: {}, // lowercased alias/name -> Array of lowercased alias variants
   settings: getInitialSettings(),
   currentViewerIndex: -1,
   isLoading: false,
   hasMore: true
 };
+
+export function setAuthorAliases(map) {
+  state.authorAliases = (map && typeof map === 'object') ? map : {};
+  if (state.favoriteAuthors && state.favoriteAuthors.length > 0) {
+    setFavoriteAuthors(state.favoriteAuthors);
+  }
+}
 
 export function addSearchTag(tag) {
   const clean = tag.trim().toLowerCase().replace(/\s+/g, '_');
@@ -641,28 +649,38 @@ export function toggleLikeLocally(post) {
 export function setFavoriteAuthors(authorsList) {
   state.favoriteAuthors = authorsList || [];
   const names = new Set();
-  for (const a of state.favoriteAuthors) {
-    if (!a) continue;
-    if (a.name) {
-      const clean = String(a.name).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
-      if (clean) {
-        names.add(clean);
-        names.add(clean.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
-        const noDelim = clean.replace(/[\s_.-]+/g, '');
-        if (noDelim) names.add(noDelim);
-      }
-    }
-    if (a.displayName) {
-      const parts = String(a.displayName).split(',');
-      for (const part of parts) {
-        const cleanDisplay = part.toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
-        if (cleanDisplay) {
-          names.add(cleanDisplay);
-          names.add(cleanDisplay.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
-          const noDelim = cleanDisplay.replace(/[\s_.-]+/g, '');
-          if (noDelim) names.add(noDelim);
+  const aliasMap = state.authorAliases || {};
+
+  const registerName = (rawStr) => {
+    if (!rawStr) return;
+    const clean = String(rawStr).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
+    if (!clean) return;
+
+    const variants = [clean, clean.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''), clean.replace(/[\s_.-]+/g, '')];
+    for (const v of variants) {
+      if (!v) continue;
+      names.add(v);
+      // Also register all aliases known from aliasService / authorAliases
+      if (aliasMap[v]) {
+        for (const al of aliasMap[v]) {
+          const cleanAl = String(al).toLowerCase().replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
+          if (cleanAl) {
+            names.add(cleanAl);
+            names.add(cleanAl.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, ''));
+            const noD = cleanAl.replace(/[\s_.-]+/g, '');
+            if (noD) names.add(noD);
+          }
         }
       }
+    }
+  };
+
+  for (const a of state.favoriteAuthors) {
+    if (!a) continue;
+    if (a.name) registerName(a.name);
+    if (a.displayName) {
+      const parts = String(a.displayName).split(',');
+      for (const part of parts) registerName(part);
     }
   }
   state.favoriteAuthorNames = names;
@@ -676,7 +694,18 @@ export function isAuthorFavorite(name) {
   const base = clean.replace(/_\(artist\)$/i, '').replace(/_\(circle\)$/i, '');
   if (state.favoriteAuthorNames.has(base)) return true;
   const noDelim = clean.replace(/[\s_.-]+/g, '');
-  return state.favoriteAuthorNames.has(noDelim);
+  if (state.favoriteAuthorNames.has(noDelim)) return true;
+
+  // Check if any alias of this name is in favoriteAuthorNames
+  const aliasMap = state.authorAliases || {};
+  const aliases = aliasMap[clean] || aliasMap[base] || aliasMap[noDelim];
+  if (Array.isArray(aliases)) {
+    for (const al of aliases) {
+      const cAl = String(al).toLowerCase().replace(/[\s_.-]+/g, '');
+      if (state.favoriteAuthorNames.has(cAl) || state.favoriteAuthorNames.has(al.toLowerCase())) return true;
+    }
+  }
+  return false;
 }
 
 
@@ -937,13 +966,25 @@ export function getUserInterestTags(limit = null, options = {}) {
     scores.set(tag, score);
   }
 
-  // 5. Favorite authors bonus
+  // 5. Favorite authors bonus (including bidirectional aliases)
+  const aliasMap = state.authorAliases || {};
   for (const author of state.favoriteAuthors) {
     const raw = (author.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
     if (raw) {
       const bonus = (focusMode === 'artists' ? 16.0 : 10.0);
       scores.set(raw, (scores.get(raw) || 0) + bonus);
       catMap.set(raw, 'artist');
+
+      const knownAliases = aliasMap[raw] || aliasMap[raw.replace(/[\s_.-]+/g, '')];
+      if (Array.isArray(knownAliases)) {
+        for (const al of knownAliases) {
+          const cleanAl = String(al).toLowerCase().replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
+          if (cleanAl && cleanAl !== raw) {
+            scores.set(cleanAl, (scores.get(cleanAl) || 0) + bonus * 0.9);
+            catMap.set(cleanAl, 'artist');
+          }
+        }
+      }
     }
   }
 
@@ -1273,12 +1314,27 @@ export function calculatePostMatchPercent(post, userInterestMap, options = {}) {
   const matchedTags = [];
   const addedSet = new Set();
 
+  const aliasMap = state.authorAliases || {};
   const checkTag = (tag, weightMultiplier = 1.0, displayPrefix = '', category = 'general') => {
     if (!tag) return;
     const clean = cleanTagString(tag);
     if (!clean) return;
-    if (userInterestMap.has(clean)) {
-      const score = userInterestMap.get(clean) || 1;
+
+    let score = userInterestMap.get(clean) || 0;
+    if (score === 0 && category === 'artist') {
+      const knownAliases = aliasMap[clean] || aliasMap[clean.replace(/[\s_.-]+/g, '')];
+      if (Array.isArray(knownAliases)) {
+        for (const al of knownAliases) {
+          const cleanAl = cleanTagString(al);
+          if (userInterestMap.has(cleanAl)) {
+            score = userInterestMap.get(cleanAl) || 1;
+            break;
+          }
+        }
+      }
+    }
+
+    if (score > 0) {
       matchPoints += score * weightMultiplier;
       if (!addedSet.has(clean)) {
         addedSet.add(clean);

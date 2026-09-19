@@ -25,6 +25,7 @@ import {
   getUserMediaPreferences,
   isAuthorFavorite,
   SECRET_SETTING_FIELDS,
+  setAuthorAliases,
   setPresets,
   loadLocalPresets
 } from './state.js';
@@ -42,6 +43,7 @@ import {
   saveSettings,
   fetchPawchiveServices,
   fetchKemonoServices,
+  fetchAliasesMap,
   apiGetMe
 } from './api.js';
 import { initAutocomplete } from './autocomplete.js';
@@ -427,7 +429,7 @@ async function init() {
   // 2. Set up button listeners
   setupEventListeners();
 
-  // 3. Load settings, favorites, likes, and sites in parallel
+  // 3. Load settings, favorites, likes, sites, and author aliases in parallel
   await Promise.allSettled([
     loadUserSettings(),
     loadFavorites(),
@@ -435,6 +437,7 @@ async function init() {
     loadLikes(),
     loadDislikes(),
     loadLocalViewed(),
+    loadAuthorAliasesMap(),
     loadBooruSites({ onSelectSite: selectSite })
   ]);
 
@@ -889,6 +892,17 @@ async function loadFavoriteAuthors() {
   }
 }
 
+async function loadAuthorAliasesMap() {
+  try {
+    const map = await fetchAliasesMap();
+    if (map && typeof map === 'object') {
+      setAuthorAliases(map);
+    }
+  } catch (err) {
+    console.warn('Не удалось загрузить карту алиасов авторов:', err);
+  }
+}
+
 async function loadLikes() {
   try {
     if (state.currentUser) {
@@ -1049,6 +1063,14 @@ async function performSearch(reset = false, options = {}) {
           if (isAllSites || (isCustomSites && customSitesList.includes(authSite)) || state.currentSite === authSite) {
             return true;
           }
+          // If viewing another site (e.g. Booru), include archive author if they have known aliases
+          const checkNames = [author.name, author.displayName].filter(Boolean);
+          for (const n of checkNames) {
+            const clean = String(n).toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').trim();
+            if (state.authorAliases && (state.authorAliases[clean] || state.authorAliases[clean.replace(/[\s_.-]+/g, '_')])) {
+              return true;
+            }
+          }
           return false;
         }
         // General booru authors (e.g. the_atko, vicineko, doridoriko) exist across multiple boorus
@@ -1064,6 +1086,15 @@ async function performSearch(reset = false, options = {}) {
         return;
       }
 
+      // Helper to find aliases for a given author name
+      const getKnownAliases = (name) => {
+        if (!name || !state.authorAliases) return [];
+        const nLower = String(name).toLowerCase().trim();
+        const nUnder = nLower.replace(/[\s_.-]+/g, '_');
+        const list = state.authorAliases[nLower] || state.authorAliases[nUnder] || [];
+        return Array.isArray(list) ? list : [];
+      };
+
       // Collect author queries for search
       const authorQueries = [];
       for (const author of followedAuthors) {
@@ -1074,29 +1105,56 @@ async function performSearch(reset = false, options = {}) {
 
         const isArchiveAuthor = author.site === 'pawchive' || author.site === 'kemono' || Boolean(author.service && author.user);
         let targetSite = state.currentSite;
-        let queryTag = '';
 
         if (isArchiveAuthor) {
           const authSite = author.site || 'pawchive';
           if (state.currentSite === 'all' || (isCustomSites && customSitesList.includes(authSite)) || state.currentSite === authSite) {
             targetSite = authSite;
+            let queryTag = '';
             if (author.service && author.user) {
               queryTag = `service:${author.service} user:${author.user}`;
             } else {
               queryTag = `artist:${baseName.replace(/\s+/g, '_')}`;
             }
+            const queryKey = `${targetSite}:${queryTag}`;
+            if (queryTag && !authorQueries.some(q => q.key === queryKey)) {
+              authorQueries.push({ site: targetSite, tag: queryTag, key: queryKey });
+            }
           } else {
-            continue;
+            // Archive author being queried on a non-archive site (e.g. Booru): query their aliases
+            const aliases = getKnownAliases(baseName);
+            for (const alias of aliases) {
+              const queryTag = alias.replace(/\s+/g, '_');
+              const queryKey = `${targetSite}:${queryTag}`;
+              if (queryTag && !authorQueries.some(q => q.key === queryKey)) {
+                authorQueries.push({ site: targetSite, tag: queryTag, key: queryKey });
+              }
+            }
           }
         } else {
-          queryTag = (targetSite === 'pawchive' || targetSite === 'kemono')
-            ? `artist:${baseName.replace(/\s+/g, '_')}`
-            : baseName.replace(/\s+/g, '_');
-        }
-
-        const queryKey = `${targetSite}:${queryTag}`;
-        if (queryTag && !authorQueries.some(q => q.key === queryKey)) {
-          authorQueries.push({ site: targetSite, tag: queryTag, key: queryKey });
+          // Booru author queried on archive or booru site
+          if (targetSite === 'pawchive' || targetSite === 'kemono') {
+            const queryTag = `artist:${baseName.replace(/\s+/g, '_')}`;
+            const queryKey = `${targetSite}:${queryTag}`;
+            if (queryTag && !authorQueries.some(q => q.key === queryKey)) {
+              authorQueries.push({ site: targetSite, tag: queryTag, key: queryKey });
+            }
+            // Also explicitly query known aliases if any
+            const aliases = getKnownAliases(baseName);
+            for (const alias of aliases) {
+              const aQueryTag = `artist:${alias.replace(/\s+/g, '_')}`;
+              const aQueryKey = `${targetSite}:${aQueryTag}`;
+              if (!authorQueries.some(q => q.key === aQueryKey)) {
+                authorQueries.push({ site: targetSite, tag: aQueryTag, key: aQueryKey });
+              }
+            }
+          } else {
+            const queryTag = baseName.replace(/\s+/g, '_');
+            const queryKey = `${targetSite}:${queryTag}`;
+            if (queryTag && !authorQueries.some(q => q.key === queryKey)) {
+              authorQueries.push({ site: targetSite, tag: queryTag, key: queryKey });
+            }
+          }
         }
       }
 
@@ -1329,20 +1387,32 @@ async function performSearch(reset = false, options = {}) {
           const recSite = state.currentSite;
           // Creator-centric recommendation: extract liked and favorite artists
           const candidateArtists = [];
+          const addArtistCandidate = (name) => {
+            if (!name) return;
+            const clean = name.toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/^artist:/i, '').trim();
+            if (clean && !candidateArtists.includes(clean)) {
+              candidateArtists.push(clean);
+            }
+            if (state.authorAliases) {
+              const aliases = state.authorAliases[clean] || state.authorAliases[clean.replace(/[\s_.-]+/g, '_')] || [];
+              for (const a of aliases) {
+                const aClean = String(a).toLowerCase().trim();
+                if (aClean && !candidateArtists.includes(aClean)) {
+                  candidateArtists.push(aClean);
+                }
+              }
+            }
+          };
+
           if (userInterests.length > 0) {
             const creatorInterests = userInterests.filter(i => i.category === 'artist' || i.score >= 5.0);
             for (const item of creatorInterests) {
-              const cleanAuthor = item.tag.replace(/^@/, '').replace(/^artist:/i, '').trim();
-              if (cleanAuthor && !candidateArtists.includes(cleanAuthor)) {
-                candidateArtists.push(cleanAuthor);
-              }
+              addArtistCandidate(item.tag);
             }
           }
           for (const fa of (state.favoriteAuthors || [])) {
-            const raw = (fa.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').trim();
-            if (raw && !candidateArtists.includes(raw)) {
-              candidateArtists.push(raw);
-            }
+            addArtistCandidate(fa.name || '');
+            if (fa.displayName) addArtistCandidate(fa.displayName);
           }
 
           if (candidateArtists.length > 0) {

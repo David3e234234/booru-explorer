@@ -27,7 +27,7 @@ import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAut
 import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
-import { getAliasesInfo, clearDiscoveredAliases, getAllAliasesForName } from '../services/aliasService.js';
+import { getAliasesInfo, clearDiscoveredAliases, getAllAliasesForName, getAllKnownAliasesMap } from '../services/aliasService.js';
 import { resolveAuthorCreators } from '../services/creatorResolverService.js';
 
 const router = express.Router();
@@ -590,6 +590,11 @@ router.get('/version', (req, res) => {
 // GET /api/aliases/info
 router.get('/aliases/info', (req, res) => {
   res.json(getAliasesInfo());
+});
+
+// GET /api/aliases/map - bidirectional alias map for client-side following and recommendations
+router.get('/aliases/map', (req, res) => {
+  res.json(getAllKnownAliasesMap());
 });
 
 // POST /api/aliases/clear-discovered
