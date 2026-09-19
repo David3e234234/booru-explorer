@@ -8,7 +8,9 @@
       "rule34": "redrainsfm",
       "rule34video": "redrainsfm",
       "yandere": "redrain3d",
-      "konachan": "redrain3d"
+      "konachan": "redrain3d",
+      "kemono": "RedRainSFM",
+      "pawchive": "RedRainSFM"
     }
   },
   {
@@ -17,7 +19,9 @@
     "sites": {
       "danbooru": "sakimichan",
       "gelbooru": "sakimichan",
-      "rule34": "sakimi_chan"
+      "rule34": "sakimi_chan",
+      "kemono": "sakimichan",
+      "pawchive": "sakimichan"
     }
   },
   {
@@ -26,7 +30,9 @@
     "sites": {
       "danbooru": "cutesexyrobutts",
       "gelbooru": "cutesexyrobutts",
-      "rule34": "cutesexyrobutts"
+      "rule34": "cutesexyrobutts",
+      "kemono": "cutesexyrobutts",
+      "pawchive": "cutesexyrobutts"
     }
   },
   {
@@ -36,7 +42,9 @@
       "danbooru": "derpixon",
       "gelbooru": "derpixon",
       "rule34": "derpixon",
-      "rule34video": "derpixon"
+      "rule34video": "derpixon",
+      "kemono": "derpixon",
+      "pawchive": "derpixon"
     }
   },
   {
@@ -46,6 +54,18 @@
       "danbooru": "cowslip",
       "gelbooru": "cowslip",
       "rule34": "general_cowslip"
+    }
+  },
+  {
+    "id": "dorahdew",
+    "aliases": ["dorahdew", "ddd", "dorah_dew"],
+    "sites": {
+      "danbooru": "dorahdew",
+      "gelbooru": "dorahdew",
+      "rule34": "dorahdew",
+      "rule34video": "dorahdew",
+      "kemono": "DDD",
+      "pawchive": "DDD"
     }
   }
 ]

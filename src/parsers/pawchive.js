@@ -4,6 +4,7 @@ import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '..
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
+import { getAllAliasesForName, resolveTagForSite, parseCustomAliases } from '../services/aliasService.js';
 
 let creatorsCache = null;
 let creatorsCacheTime = 0;
@@ -222,12 +223,33 @@ export async function resolvePawchiveCreators(authorQuery, preferredService = nu
 
   if (candidates.length === 0) return [];
 
-  // 1. Exact name match first (across all candidate platforms)
-  let matches = candidates.filter(c => (c.name || '').toLowerCase() === cleanLower);
+  const exactVariants = new Set([cleanLower]);
+  const noSpaceVariants = new Set([cleanNoSpace]);
+
+  // Cross-site author aliases lookup (Doradew <-> DDD, etc.)
+  try {
+    const customRules = parseCustomAliases(settings?.customAliases);
+    const resolvedSiteTag = resolveTagForSite(clean, 'pawchive', customRules, settings);
+    if (resolvedSiteTag && resolvedSiteTag !== clean) {
+      const rLower = resolvedSiteTag.toLowerCase();
+      exactVariants.add(rLower);
+      noSpaceVariants.add(rLower.replace(/[\s_.-]+/g, ''));
+    }
+
+    const aliases = getAllAliasesForName(clean, settings?.customAliases);
+    for (const al of aliases) {
+      const alLower = String(al).toLowerCase();
+      exactVariants.add(alLower);
+      noSpaceVariants.add(alLower.replace(/[\s_.-]+/g, ''));
+    }
+  } catch {}
+
+  // 1. Exact name match first (across all candidate platforms and alias variants)
+  let matches = candidates.filter(c => exactVariants.has((c.name || '').toLowerCase()));
 
   // 2. Normalized no-space match
   if (matches.length === 0) {
-    matches = candidates.filter(c => (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '') === cleanNoSpace);
+    matches = candidates.filter(c => noSpaceVariants.has((c.name || '').toLowerCase().replace(/[\s_.-]+/g, '')));
   }
 
   // 3. ID match or substring match
@@ -236,7 +258,13 @@ export async function resolvePawchiveCreators(authorQuery, preferredService = nu
     if (idMatches.length > 0) {
       matches = idMatches;
     } else if (cleanLower.length >= 3) {
-      matches = candidates.filter(c => (c.name || '').toLowerCase().includes(cleanLower));
+      matches = candidates.filter(c => {
+        const cLower = (c.name || '').toLowerCase();
+        for (const v of exactVariants) {
+          if (v.length >= 3 && cLower.includes(v)) return true;
+        }
+        return false;
+      });
     }
   }
 

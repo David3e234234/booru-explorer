@@ -4,6 +4,7 @@ import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '..
 import { checkIsAi, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
+import { getAllAliasesForName, resolveTagForSite, parseCustomAliases } from '../services/aliasService.js';
 
 let creatorsCache = null;
 let creatorsCacheTime = 0;
@@ -238,6 +239,24 @@ export async function resolveKemonoCreators(authorQuery, preferredService = null
     exactVariants.add(withoutDigits);
     noSpaceVariants.add(withoutDigits);
   }
+
+  // Cross-site author aliases lookup (Doradew <-> DDD, etc.)
+  try {
+    const customRules = parseCustomAliases(settings?.customAliases);
+    const resolvedSiteTag = resolveTagForSite(clean, 'kemono', customRules, settings);
+    if (resolvedSiteTag && resolvedSiteTag !== clean) {
+      const rLower = resolvedSiteTag.toLowerCase();
+      exactVariants.add(rLower);
+      noSpaceVariants.add(rLower.replace(/[\s_.-]+/g, ''));
+    }
+
+    const aliases = getAllAliasesForName(clean, settings?.customAliases);
+    for (const al of aliases) {
+      const alLower = String(al).toLowerCase();
+      exactVariants.add(alLower);
+      noSpaceVariants.add(alLower.replace(/[\s_.-]+/g, ''));
+    }
+  } catch {}
 
   const targetService = (preferredService && preferredService !== 'all')
     ? String(preferredService).toLowerCase()

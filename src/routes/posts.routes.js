@@ -27,7 +27,7 @@ import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAut
 import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
-import { getAliasesInfo, clearDiscoveredAliases } from '../services/aliasService.js';
+import { getAliasesInfo, clearDiscoveredAliases, getAllAliasesForName } from '../services/aliasService.js';
 import { resolveAuthorCreators } from '../services/creatorResolverService.js';
 
 const router = express.Router();
@@ -1312,9 +1312,16 @@ router.get('/tags/autocomplete', async (req, res) => {
         const { list } = await getCreatorsDirectory(settings);
         if (Array.isArray(list) && list.length > 0) {
           const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
+          const queryAliases = getAllAliasesForName(query, settings?.customAliases).map(a => a.toLowerCase().replace(/[\s_.-]+/g, ''));
+          const aliasSet = new Set(queryAliases);
+
           const matches = list.filter(c => {
             const nameClean = (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '');
-            return nameClean.includes(cleanQ) || (c.service && c.service.toLowerCase().includes(cleanQ));
+            if (nameClean.includes(cleanQ) || (c.service && c.service.toLowerCase().includes(cleanQ))) return true;
+            for (const al of aliasSet) {
+              if (al.length >= 2 && (nameClean === al || nameClean.includes(al))) return true;
+            }
+            return false;
           }).slice(0, 15);
 
           tagsResult = matches.map(c => ({
@@ -1330,9 +1337,16 @@ router.get('/tags/autocomplete', async (req, res) => {
         const { list } = await getKemonoCreatorsDirectory(settings);
         if (Array.isArray(list) && list.length > 0) {
           const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
+          const queryAliases = getAllAliasesForName(query, settings?.customAliases).map(a => a.toLowerCase().replace(/[\s_.-]+/g, ''));
+          const aliasSet = new Set(queryAliases);
+
           const matches = list.filter(c => {
             const nameClean = (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '');
-            return nameClean.includes(cleanQ) || (c.service && c.service.toLowerCase().includes(cleanQ));
+            if (nameClean.includes(cleanQ) || (c.service && c.service.toLowerCase().includes(cleanQ))) return true;
+            for (const al of aliasSet) {
+              if (al.length >= 2 && (nameClean === al || nameClean.includes(al))) return true;
+            }
+            return false;
           }).slice(0, 15);
 
           tagsResult = matches.map(c => ({

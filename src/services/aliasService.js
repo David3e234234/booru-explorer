@@ -144,12 +144,23 @@ function extractHandleFromUrl(rawUrl) {
     }
     // https://www.patreon.com/username or https://www.patreon.com/user?u=...
     if (host.includes('patreon.com')) {
-      if (parts[0] && parts[0] !== 'user') return cleanAuthorHandle(parts[0]);
+      if (parts[0] && parts[0] !== 'user' && parts[0] !== 'posts' && parts[0] !== 'creation') {
+        return cleanAuthorHandle(parts[0]);
+      }
     }
-    // https://username.fanbox.cc
+    // https://username.fanbox.cc or https://www.fanbox.cc/@username
     if (host.includes('fanbox.cc')) {
       const sub = host.split('.')[0];
-      if (sub && sub !== 'www') return cleanAuthorHandle(sub);
+      if (sub && sub !== 'www' && sub !== 'api') return cleanAuthorHandle(sub);
+      if (parts[0] && parts[0].startsWith('@')) return cleanAuthorHandle(parts[0].slice(1));
+    }
+    // https://fantia.jp/fanclubs/12345
+    if (host.includes('fantia.jp') && parts[0] === 'fanclubs' && parts[1]) {
+      return cleanAuthorHandle(parts[1]);
+    }
+    // https://boosty.to/username
+    if (host.includes('boosty.to') && parts[0] && !['app', 'feed', 'explore'].includes(parts[0])) {
+      return cleanAuthorHandle(parts[0]);
     }
     // https://www.iwara.tv/profile/username
     if (host.includes('iwara.tv') && parts[0] === 'profile' && parts[1]) {
@@ -162,6 +173,70 @@ function extractHandleFromUrl(rawUrl) {
     }
   } catch {}
   return '';
+}
+
+/**
+ * Returns all known alias variants for a given name/tag across custom rules, discovered aliases, and built-in aliases.
+ * @param {string} rawName
+ * @param {Array|string} [customAliases]
+ * @returns {string[]}
+ */
+export function getAllAliasesForName(rawName, customAliases = []) {
+  if (!rawName || typeof rawName !== 'string') return [];
+  const clean = rawName.trim().toLowerCase().replace(/^(?:artist|author|creator):/i, '');
+  if (!clean) return [];
+
+  const result = new Set();
+  result.add(clean);
+
+  // 1. Check custom rules
+  const rules = parseCustomAliases(customAliases);
+  for (const r of rules) {
+    if (!r || !Array.isArray(r.aliases)) continue;
+    const match = r.aliases.some(a => a.toLowerCase() === clean);
+    if (match) {
+      r.aliases.forEach(a => result.add(a.toLowerCase()));
+      if (r.defaultTarget) result.add(r.defaultTarget.toLowerCase());
+      if (r.sites) {
+        Object.values(r.sites).forEach(s => s && result.add(String(s).toLowerCase()));
+      }
+    }
+  }
+
+  // 2. Check discovered map
+  if (discoveredAliasMap.has(clean)) {
+    const entry = discoveredAliasMap.get(clean);
+    if (entry.id) result.add(entry.id.toLowerCase());
+    if (Array.isArray(entry.aliases)) entry.aliases.forEach(a => result.add(String(a).toLowerCase()));
+    if (entry.sites) Object.values(entry.sites).forEach(s => s && result.add(String(s).toLowerCase()));
+  }
+
+  // Also scan discoveredAliasList for any entry containing clean
+  for (const entry of discoveredAliasList) {
+    if (entry.id?.toLowerCase() === clean || entry.aliases?.some(a => a.toLowerCase() === clean)) {
+      if (entry.id) result.add(entry.id.toLowerCase());
+      if (Array.isArray(entry.aliases)) entry.aliases.forEach(a => result.add(String(a).toLowerCase()));
+      if (entry.sites) Object.values(entry.sites).forEach(s => s && result.add(String(s).toLowerCase()));
+    }
+  }
+
+  // 3. Check built-in map
+  if (builtinAliasMap.has(clean)) {
+    const entry = builtinAliasMap.get(clean);
+    if (entry.id) result.add(entry.id.toLowerCase());
+    if (entry.sites) Object.values(entry.sites).forEach(s => s && result.add(String(s).toLowerCase()));
+  }
+
+  // Also scan builtinAliasList
+  for (const entry of builtinAliasList) {
+    if (entry.id?.toLowerCase() === clean || entry.aliases?.some(a => a.toLowerCase() === clean)) {
+      if (entry.id) result.add(entry.id.toLowerCase());
+      if (Array.isArray(entry.aliases)) entry.aliases.forEach(a => result.add(String(a).toLowerCase()));
+      if (entry.sites) Object.values(entry.sites).forEach(s => s && result.add(String(s).toLowerCase()));
+    }
+  }
+
+  return Array.from(result);
 }
 
 /**
@@ -287,7 +362,7 @@ export function learnAliasesFromPostMatches(posts = []) {
       const u = new URL(post.source);
       const host = u.hostname.toLowerCase();
       // Correlate on specific author platforms with distinct work IDs
-      if (['twitter.com', 'x.com', 'pixiv.net', 'artstation.com', 'patreon.com'].some(h => host.includes(h))) {
+      if (['twitter.com', 'x.com', 'pixiv.net', 'artstation.com', 'patreon.com', 'fanbox.cc', 'fantia.jp', 'boosty.to', 'subscribestar.adult', 'subscribestar.com'].some(h => host.includes(h))) {
         const normKey = `${host}${u.pathname}`.replace(/\/+$/, '').toLowerCase();
         if (!sourceGroups.has(normKey)) sourceGroups.set(normKey, []);
         sourceGroups.get(normKey).push({ site: post.site, author: post.author.toLowerCase().trim() });
