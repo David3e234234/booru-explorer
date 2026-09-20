@@ -230,7 +230,15 @@ export async function handleTranscodeVideoRequest(req, res) {
       fs.mkdirSync(VIDEOS_DIR, { recursive: true });
     }
 
-    const currentSettings = getSettings();
+    let clientAuth = {};
+    if (req.headers['x-booru-auth']) {
+      try {
+        clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
+      } catch {
+        try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
+      }
+    }
+    const currentSettings = { ...getSettings(), ...clientAuth };
     const { input: ffmpegInput, isLocal } = resolveFfmpegInput(targetUrl);
     if (!ffmpegInput) {
       logError('Transcode', `Недопустимый источник для транскодирования: ${targetUrl}`);
@@ -306,6 +314,7 @@ export async function handleTranscodeVideoRequest(req, res) {
     res.setHeader('Cache-Control', 'no-cache');
 
     let completedSuccessfully = false;
+    let stderrChunks = [];
 
     const transcodePromise = new Promise((resolve) => {
       proc.on('close', (code) => {
@@ -321,12 +330,17 @@ export async function handleTranscodeVideoRequest(req, res) {
               logError('Transcode', `Ошибка сохранения кэша ${cachedVideoPath}`, renameErr);
             }
           }
+          if (code !== 0) {
+            const stderrMsg = Buffer.concat(stderrChunks).toString('utf8').slice(-1000);
+            logError('Transcode', `FFmpeg завершился с кодом ${code} для ${targetUrl}: ${stderrMsg}`);
+          }
           try { if (fs.existsSync(tempCachedPath)) fs.unlinkSync(tempCachedPath); } catch {}
           resolve(false);
         });
       });
-      proc.on('error', () => {
+      proc.on('error', (err) => {
         if (killTimer) clearTimeout(killTimer);
+        logError('Transcode', `Ошибка процесса FFmpeg для ${targetUrl}`, err);
         try { writeStream.end(); if (fs.existsSync(tempCachedPath)) fs.unlinkSync(tempCachedPath); } catch {}
         resolve(false);
       });
@@ -344,7 +358,9 @@ export async function handleTranscodeVideoRequest(req, res) {
       try { writeStream.write(chunk); } catch {}
     });
 
-    proc.stderr.on('data', () => {});
+    proc.stderr.on('data', (chunk) => {
+      if (stderrChunks.length < 20) stderrChunks.push(chunk);
+    });
 
     proc.stdout.on('end', () => {
       try { res.end(); } catch {}
