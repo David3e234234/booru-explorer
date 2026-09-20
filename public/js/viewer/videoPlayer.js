@@ -416,6 +416,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const needsProxy = currentPost.site === 'danbooru' || currentPost.site === 'rule34video' || directMedia.includes('donmai.us') || directMedia.includes('rule34video.com') || directMedia.includes('boomio-cdn.com') || (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
   let currentSource = needsProxy ? 'proxy' : 'direct';
   let isPreCaching = false;
+  let iosTranscodeAbort = null;
+  let iosWaitDone = false;
   let loadTimeout = null;
 
   const setProgress = (percent, text = null, showSpinner = true, isError = false) => {
@@ -705,6 +707,38 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   };
 
+  const startIosTranscodeWait = async (targetUrl) => {
+    if (iosTranscodeAbort) {
+      try { iosTranscodeAbort.abort(); } catch {}
+    }
+    iosTranscodeAbort = new AbortController();
+    iosWaitDone = true;
+    isPreCaching = true; // prevent other errors from firing
+    setProgress(0, t('vp.iosTranscoding', 'Apple устройства не поддерживают стриминг. Ожидание завершения конвертации...'), true);
+    if (switchBtn) switchBtn.textContent = 'Конвертация...';
+
+    try {
+      // The server will hold this request until the background transcode completes
+      const res = await fetch(targetUrl, { 
+        method: 'HEAD',
+        signal: iosTranscodeAbort.signal
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      
+      // Now the file is fully cached and remuxed to standard MP4!
+      isPreCaching = false;
+      setProgress(100, t('vp.iosTranscodeDone', 'Конвертация завершена!'), false);
+      setTimeout(hideStatus, 1500);
+      
+      video.src = targetUrl;
+      safePlay();
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      isPreCaching = false;
+      showUnsupportedVideoFallback();
+    }
+  };
+
   const startRemuxOrFallback = () => {
     const cleanExt = (currentPost.fileExt || '').toLowerCase();
     const hasMseSupport = Boolean(
@@ -717,7 +751,11 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (hasMseSupport && state.settings?.enableJsDemuxing !== false && (cleanExt === 'mp4' || cleanExt === 'm4v' || (!cleanExt && directMedia.includes('.mp4')))) {
       startClientRemux(proxyMedia);
     } else {
-      showUnsupportedVideoFallback();
+      if (activeMediaInfo && activeMediaInfo.isTranscode && !iosWaitDone) {
+        startIosTranscodeWait(proxyMedia);
+      } else {
+        showUnsupportedVideoFallback();
+      }
     }
   };
 
@@ -890,6 +928,11 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     activeQuality = newQuality;
     updateQualityButtonLabel();
     rebuildMediaUrls();
+
+    if (iosTranscodeAbort) {
+      try { iosTranscodeAbort.abort(); iosTranscodeAbort = null; } catch {}
+    }
+    iosWaitDone = false;
 
     const targetUrl = (currentSource === 'proxy' || needsProxy || activeMediaInfo.isTranscode) ? proxyMedia : directMedia;
     const curTime = video.currentTime || 0;
@@ -1090,6 +1133,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     statusBanner,
     video,
     destroy: () => {
+      if (iosTranscodeAbort) {
+        try { iosTranscodeAbort.abort(); iosTranscodeAbort = null; } catch {}
+      }
       clearTimeout(loadTimeout);
       document.removeEventListener('click', onDocClickCloseQuality);
       try { video.pause(); } catch {}
