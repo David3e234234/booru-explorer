@@ -321,8 +321,14 @@ export async function handleTranscodeVideoRequest(req, res) {
         if (killTimer) clearTimeout(killTimer);
         writeStream.end(async () => {
           if (code === 0 && fs.existsSync(tempCachedPath) && fs.statSync(tempCachedPath).size > 1024) {
-            try {
-              await fs.promises.rename(tempCachedPath, cachedVideoPath);
+              try {
+              const remuxProc = spawn('ffmpeg', ['-y', '-i', tempCachedPath, '-c', 'copy', '-movflags', '+faststart', cachedVideoPath]);
+              const remuxCode = await new Promise(r => remuxProc.on('close', r));
+              if (remuxCode === 0) {
+                try { if (fs.existsSync(tempCachedPath)) fs.unlinkSync(tempCachedPath); } catch {}
+              } else {
+                await fs.promises.rename(tempCachedPath, cachedVideoPath);
+              }
               completedSuccessfully = true;
               resolve(true);
               return;

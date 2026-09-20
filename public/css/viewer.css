@@ -2016,7 +2016,7 @@
   }
 
   .video-quality-overlay {
-    bottom: 12px;
+    bottom: max(64px, env(safe-area-inset-bottom, 64px));
     right: 12px;
   }
 
