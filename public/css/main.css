@@ -1468,10 +1468,6 @@ input.search-input:focus,
   .user-name-label.desktop-only {
     display: none !important;
   }
-  .nav-tab[data-category="following"] span,
-  .nav-tab[data-category="recommended"] span {
-    display: none;
-  }
   .header-left {
     gap: 8px;
   }
