@@ -422,13 +422,16 @@ export function resolveSiteReferer(targetUrl) {
 
 export function getFfmpegHeaders(targetUrl, currentSettings = {}) {
   let authHeader = '';
+  let isDanbooru = false;
   try {
     const parsed = new URL(targetUrl);
-    if (parsed.hostname.includes('donmai.us') && currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
+    isDanbooru = parsed.hostname.includes('donmai.us');
+    if (isDanbooru && currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
       authHeader = `Authorization: Basic ${Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64')}\r\n`;
     }
   } catch {}
-  return `User-Agent: ${BROWSER_USER_AGENT}\r\nReferer: ${resolveSiteReferer(targetUrl)}\r\n${authHeader}`;
+  const ua = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
+  return `User-Agent: ${ua}\r\nReferer: ${resolveSiteReferer(targetUrl)}\r\n${authHeader}`;
 }
 
 export function resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo) {
