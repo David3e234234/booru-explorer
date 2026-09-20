@@ -367,12 +367,11 @@ export async function handleTranscodeVideoRequest(req, res) {
     });
 
     req.on('close', () => {
-      // If client closed connection early, keep ffmpeg running if almost done, or kill if disconnected early
-      if (killTimer) clearTimeout(killTimer);
+      // If client closed connection early, we let FFmpeg finish in the background
+      // so that it gets cached fully. Subsequent Range requests will wait for it
+      // to finish and then serve from the cache.
       if (!completedSuccessfully) {
-        try {
-          if (proc && !proc.killed) proc.kill('SIGKILL');
-        } catch {}
+        // Do not kill it, let it finish and save to cachedVideoPath
       }
     });
 
