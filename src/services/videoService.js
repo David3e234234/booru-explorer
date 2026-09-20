@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { THUMBS_DIR, ARCHIVES_DIR } from '../config/constants.js';
+import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
 import { getFfmpegHeaders, getProxyForSite, resolveSiteFromUrl, isSafeExternalUrl } from '../utils/network.js';
 import { getSettings } from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
@@ -196,8 +196,174 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
   })();
 }
 
+const activeTranscodes = new Map();
+
 export async function handleTranscodeVideoRequest(req, res) {
-  return res.status(410).json({
-    error: 'Серверное транскодирование видео отключено. Скачайте файл для просмотра.'
-  });
+  let targetUrl = req.query.url;
+  if (Array.isArray(targetUrl)) targetUrl = targetUrl[0];
+  const quality = req.query.quality || '480p';
+
+  if (!targetUrl || typeof targetUrl !== 'string') {
+    return res.status(400).send('Требуется параметр url');
+  }
+  if (!targetUrl.startsWith('/') && !isSafeExternalUrl(targetUrl)) {
+    return res.status(403).send('URL не разрешён');
+  }
+
+  const hash = crypto.createHash('md5').update(`${targetUrl}_${quality}`).digest('hex');
+  const cachedVideoPath = path.join(VIDEOS_DIR, `${hash}_${quality}.mp4`);
+
+  try {
+    // 1. If already completely cached on disk, serve as static file with Range support
+    if (fs.existsSync(cachedVideoPath)) {
+      const stats = fs.statSync(cachedVideoPath);
+      if (stats.size > 1024) {
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=604800');
+        return res.sendFile(cachedVideoPath);
+      }
+    }
+
+    // Ensure VIDEOS_DIR exists
+    if (!fs.existsSync(VIDEOS_DIR)) {
+      fs.mkdirSync(VIDEOS_DIR, { recursive: true });
+    }
+
+    const currentSettings = getSettings();
+    const { input: ffmpegInput, isLocal } = resolveFfmpegInput(targetUrl);
+    if (!ffmpegInput) {
+      logError('Transcode', `Недопустимый источник для транскодирования: ${targetUrl}`);
+      return res.status(400).send('Недопустимый источник видео');
+    }
+
+    const headers = isLocal ? null : getFfmpegHeaders(targetUrl, currentSettings);
+    const site = isLocal ? null : resolveSiteFromUrl(targetUrl);
+    const proxyUrl = site ? getProxyForSite(site, currentSettings) : '';
+
+    // Resolution scale filter based on quality
+    let scaleFilter = 'scale=-2:480';
+    let targetCrf = '28';
+    if (quality === '720p') {
+      scaleFilter = 'scale=-2:720';
+      targetCrf = '26';
+    } else if (quality === '360p') {
+      scaleFilter = 'scale=-2:360';
+      targetCrf = '30';
+    }
+
+    // If another request is already transcoding this video, wait briefly or attach
+    if (activeTranscodes.has(hash)) {
+      const existing = activeTranscodes.get(hash);
+      const finished = await existing.catch(() => false);
+      if (finished && fs.existsSync(cachedVideoPath)) {
+        res.setHeader('Content-Type', 'video/mp4');
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=604800');
+        return res.sendFile(cachedVideoPath);
+      }
+    }
+
+    const tempCachedPath = `${cachedVideoPath}.${process.pid}.tmp`;
+    const writeStream = fs.createWriteStream(tempCachedPath);
+
+    const httpProxyArg = (proxyUrl && (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://'))) ? ['-http_proxy', proxyUrl] : [];
+    const args = [
+      ...httpProxyArg,
+      ...(headers ? ['-headers', headers] : []),
+      '-i', ffmpegInput,
+      '-vf', scaleFilter,
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-tune', 'zerolatency',
+      '-crf', targetCrf,
+      '-c:a', 'aac',
+      '-b:a', '96k',
+      '-ac', '2',
+      '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+      '-f', 'mp4',
+      'pipe:1'
+    ];
+
+    let proc;
+    const env = proxyUrl ? { ...process.env, HTTP_PROXY: proxyUrl, HTTPS_PROXY: proxyUrl, ALL_PROXY: proxyUrl } : process.env;
+    try {
+      proc = spawn('ffmpeg', args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (spawnErr) {
+      logError('Transcode', `Не удалось запустить FFmpeg для ${targetUrl}`, spawnErr);
+      try { writeStream.close(); fs.unlinkSync(tempCachedPath); } catch {}
+      return res.status(500).send('Ошибка запуска транскодера');
+    }
+
+    let killTimer = setTimeout(() => {
+      try {
+        if (proc && !proc.killed) proc.kill('SIGKILL');
+      } catch {}
+    }, 180000); // 3 minutes timeout for stream
+
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache');
+
+    let completedSuccessfully = false;
+
+    const transcodePromise = new Promise((resolve) => {
+      proc.on('close', (code) => {
+        if (killTimer) clearTimeout(killTimer);
+        writeStream.end(async () => {
+          if (code === 0 && fs.existsSync(tempCachedPath) && fs.statSync(tempCachedPath).size > 1024) {
+            try {
+              await fs.promises.rename(tempCachedPath, cachedVideoPath);
+              completedSuccessfully = true;
+              resolve(true);
+              return;
+            } catch (renameErr) {
+              logError('Transcode', `Ошибка сохранения кэша ${cachedVideoPath}`, renameErr);
+            }
+          }
+          try { if (fs.existsSync(tempCachedPath)) fs.unlinkSync(tempCachedPath); } catch {}
+          resolve(false);
+        });
+      });
+      proc.on('error', () => {
+        if (killTimer) clearTimeout(killTimer);
+        try { writeStream.end(); if (fs.existsSync(tempCachedPath)) fs.unlinkSync(tempCachedPath); } catch {}
+        resolve(false);
+      });
+    });
+
+    activeTranscodes.set(hash, transcodePromise);
+    const cleanupMap = () => {
+      if (activeTranscodes.get(hash) === transcodePromise) activeTranscodes.delete(hash);
+    };
+    transcodePromise.then(cleanupMap, cleanupMap);
+
+    // Pipe stdout both to client response (realtime zero-latency playback) and to writeStream (disk caching)
+    proc.stdout.on('data', (chunk) => {
+      try { res.write(chunk); } catch {}
+      try { writeStream.write(chunk); } catch {}
+    });
+
+    proc.stderr.on('data', () => {});
+
+    proc.stdout.on('end', () => {
+      try { res.end(); } catch {}
+    });
+
+    req.on('close', () => {
+      // If client closed connection early, keep ffmpeg running if almost done, or kill if disconnected early
+      if (killTimer) clearTimeout(killTimer);
+      if (!completedSuccessfully) {
+        try {
+          if (proc && !proc.killed) proc.kill('SIGKILL');
+        } catch {}
+      }
+    });
+
+  } catch (err) {
+    logError('Transcode', `Ошибка обработки транскодирования ${targetUrl}`, err);
+    if (!res.headersSent) {
+      return res.status(500).send('Ошибка транскодирования');
+    }
+  }
 }

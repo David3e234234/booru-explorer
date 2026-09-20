@@ -221,13 +221,44 @@ export function makeBannerDraggable(bannerEl) {
 }
 
 export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef, blobRef, resolvedVideoPromise = null }) {
-  let directMedia = currentPost.fileUrl || currentPost.sampleUrl;
-  let proxyMedia = getProxiedUrl(directMedia);
+  const defaultPrefQuality = state.settings?.videoDefaultQuality || 'original';
+  let activeQuality = defaultPrefQuality; // 'original', '720p', '480p'
+
+  const getMediaUrlForQuality = (qualityKey) => {
+    // 1. Check if post has native quality list from source
+    if (Array.isArray(currentPost.videoQualities) && currentPost.videoQualities.length > 0) {
+      if (qualityKey === '480p') {
+        const q480 = currentPost.videoQualities.find(q => q.quality === '480p');
+        if (q480?.url) return { url: q480.url, isTranscode: false, label: '480p' };
+      } else if (qualityKey === '720p') {
+        const q720 = currentPost.videoQualities.find(q => q.quality === '720p');
+        if (q720?.url) return { url: q720.url, isTranscode: false, label: '720p' };
+      } else if (qualityKey === '1080p') {
+        const q1080 = currentPost.videoQualities.find(q => q.quality === '1080p');
+        if (q1080?.url) return { url: q1080.url, isTranscode: false, label: '1080p' };
+      }
+    }
+
+    const baseOriginal = currentPost.fileUrl || currentPost.sampleUrl;
+
+    // 2. If lower quality requested but no native version, use real-time stream transcode
+    if ((qualityKey === '480p' || qualityKey === '720p') && baseOriginal && !baseOriginal.startsWith('/api/transcode-video')) {
+      const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=${qualityKey}`;
+      return { url: transcodeUrl, isTranscode: true, label: qualityKey };
+    }
+
+    return { url: baseOriginal, isTranscode: false, label: currentPost.quality || 'Оригинал' };
+  };
+
+  let activeMediaInfo = getMediaUrlForQuality(activeQuality);
+  let directMedia = activeMediaInfo.url;
+  let proxyMedia = activeMediaInfo.isTranscode ? directMedia : getProxiedUrl(directMedia);
 
   // Rule34Video links are one-time use: after a token refresh, rebuild every source variant
   const rebuildMediaUrls = () => {
-    directMedia = currentPost.fileUrl || currentPost.sampleUrl;
-    proxyMedia = getProxiedUrl(directMedia);
+    activeMediaInfo = getMediaUrlForQuality(activeQuality);
+    directMedia = activeMediaInfo.url;
+    proxyMedia = activeMediaInfo.isTranscode ? directMedia : getProxiedUrl(directMedia);
   };
 
   const videoContainer = document.createElement('div');
@@ -248,6 +279,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       <div class="video-progress-fill" style="width: 0%;"></div>
     </div>
     <div class="video-status-actions">
+      <button class="btn-video-quality" title="${t('vp.qualityBtn.title', 'Качество видео (нажмите для переключения)')}">
+        <span>${t('vp.quality', 'Качество')}</span>
+        <span class="video-quality-val">Авто</span>
+      </button>
       <button class="btn-download-video" title="${t('vp.downloadBtn.title', 'Скачать исходный видео-файл на устройство')}">${t('vp.downloadBtn', 'Скачать видео')}</button>
       <button class="btn-cache-toggle" title="${t('vp.cacheBtn.title', 'Полностью закэшировать видео в память для просмотра без лагов')}">${t('vp.cacheBtn', 'Кэш в память')}</button>
       <button class="btn-switch-source" title="${t('vp.switchSourceBtn.title', 'Переключить между прямым источником и прокси')}">${t('vp.proxyBtn', 'Прокси')}</button>
@@ -734,6 +769,75 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   };
 
+  const qualityBtn = statusBanner.querySelector('.btn-video-quality');
+  const qualityValEl = statusBanner.querySelector('.video-quality-val');
+
+  const getAvailableQualities = () => {
+    const list = [];
+    if (Array.isArray(currentPost.videoQualities) && currentPost.videoQualities.length > 0) {
+      for (const q of currentPost.videoQualities) {
+        if (!list.some(item => item.key === q.quality)) {
+          list.push({ key: q.quality, label: q.label || q.quality });
+        }
+      }
+    }
+    // Always provide 480p and Original options if not already listed
+    if (!list.some(item => item.key === '480p')) {
+      list.push({ key: '480p', label: '480p (Быстро)' });
+    }
+    if (!list.some(item => item.key === 'original')) {
+      list.push({ key: 'original', label: 'Оригинал' });
+    }
+    return list;
+  };
+
+  const updateQualityButtonLabel = () => {
+    if (!qualityValEl) return;
+    const avail = getAvailableQualities();
+    const match = avail.find(a => a.key === activeQuality);
+    qualityValEl.textContent = match ? match.label : (activeQuality || 'Авто');
+  };
+
+  updateQualityButtonLabel();
+
+  const switchQuality = (newQuality) => {
+    if (activeQuality === newQuality) return;
+    activeQuality = newQuality;
+    updateQualityButtonLabel();
+    rebuildMediaUrls();
+
+    const targetUrl = (currentSource === 'proxy' || needsProxy || activeMediaInfo.isTranscode) ? proxyMedia : directMedia;
+    const curTime = video.currentTime || 0;
+    const isPaused = video.paused;
+
+    if (isPreCaching && abortRef.current) {
+      abortRef.current.abort();
+      isPreCaching = false;
+      btnCache.classList.remove('active');
+      btnCache.textContent = t('vp.cacheBtn', 'Кэш в память');
+    }
+
+    setProgress(0, t('vp.switchingQuality', 'Переключение качества ({q})...').replace('{q}', activeMediaInfo.label || newQuality), true);
+    video.src = targetUrl;
+    video.addEventListener('loadedmetadata', () => {
+      if (curTime > 0 && curTime < video.duration) {
+        try { video.currentTime = curTime; } catch {}
+      }
+      if (!isPaused) safePlay();
+    }, { once: true });
+    safePlay();
+  };
+
+  if (qualityBtn) {
+    qualityBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const avail = getAvailableQualities();
+      const currIdx = avail.findIndex(a => a.key === activeQuality);
+      const nextIdx = (currIdx + 1) % avail.length;
+      switchQuality(avail[nextIdx].key);
+    });
+  }
+
   if (switchBtn) {
     switchBtn.textContent = currentSource === 'proxy' ? t('vp.directCdn', 'Прямой CDN') : t('vp.proxyBtn', 'Прокси');
     switchBtn.addEventListener('click', (e) => {
@@ -823,10 +927,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       currentPost.fileUrl = data.fullVideoUrl;
       currentPost.hasSound = true;
       if (data.quality) currentPost.quality = data.quality;
+      if (Array.isArray(data.videoQualities)) currentPost.videoQualities = data.videoQualities;
+      updateQualityButtonLabel();
       rebuildMediaUrls();
-      const fullDirect = data.fullVideoUrl;
-      const fullProxy = getProxiedUrl(fullDirect);
-      const targetUrl = (currentSource === 'proxy' || needsProxy) ? fullProxy : fullDirect;
+      const targetUrl = (currentSource === 'proxy' || needsProxy || activeMediaInfo.isTranscode) ? proxyMedia : directMedia;
 
       let currentTarget = '';
       try {

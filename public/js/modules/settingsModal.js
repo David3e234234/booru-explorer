@@ -240,6 +240,7 @@ export function applySettingsToUIAndState(s) {
   const checkProxyVideos = document.getElementById('checkProxyVideos');
   const checkProxyDownloads = document.getElementById('checkProxyDownloads');
   const selectPreviewQuality = document.getElementById('selectPreviewQuality');
+  const selectVideoDefaultQuality = document.getElementById('selectVideoDefaultQuality');
   const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
   const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
   const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
@@ -301,6 +302,9 @@ export function applySettingsToUIAndState(s) {
   }
   if (s.previewQuality && selectPreviewQuality) {
     selectPreviewQuality.value = s.previewQuality;
+  }
+  if (s.videoDefaultQuality && selectVideoDefaultQuality) {
+    selectVideoDefaultQuality.value = s.videoDefaultQuality;
   }
   if (typeof s.videoAutoplayHover === 'boolean' && checkVideoAutoplayHover) {
     checkVideoAutoplayHover.checked = s.videoAutoplayHover;
@@ -840,6 +844,8 @@ export function openSettingsModal() {
   });
   if (selectItemsPerPage) selectItemsPerPage.value = String(state.limit || 100);
   if (selectPreviewQuality) selectPreviewQuality.value = state.settings.previewQuality || 'medium';
+  const selectVideoDefaultQualityModal = document.getElementById('selectVideoDefaultQuality');
+  if (selectVideoDefaultQualityModal) selectVideoDefaultQualityModal.value = state.settings.videoDefaultQuality || 'original';
   if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = state.settings.videoAutoplayHover !== false;
   if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = state.settings.videoAutoplayMobile !== false;
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = state.settings.videoAutoplayViewer !== false;
@@ -1603,6 +1609,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
 
       const selectItemsPerPage = document.getElementById('selectItemsPerPage');
       const selectPreviewQuality = document.getElementById('selectPreviewQuality');
+      const selectVideoDefaultQuality = document.getElementById('selectVideoDefaultQuality');
       const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
       const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
       const checkVideoAutoplayViewer = document.getElementById('checkVideoAutoplayViewer');
@@ -1677,6 +1684,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         theme,
         itemsPerPage: itemsPerPageVal,
         previewQuality: previewQualityVal,
+        videoDefaultQuality: selectVideoDefaultQuality ? selectVideoDefaultQuality.value : 'original',
         videoAutoplayHover: videoAutoplayHoverVal,
         videoAutoplayMobile: videoAutoplayMobileVal,
         videoAutoplayViewer: videoAutoplayViewerVal,
@@ -1825,6 +1833,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (selectTgInterval) selectTgInterval.value = 'daily';
       if (telegramBackupForm) telegramBackupForm.classList.add('is-disabled');
       if (selectPreviewQuality) selectPreviewQuality.value = 'medium';
+      const selectVideoDefaultQualityReset = document.getElementById('selectVideoDefaultQuality');
+      if (selectVideoDefaultQualityReset) selectVideoDefaultQualityReset.value = 'original';
       if (checkVideoAutoplayHover) checkVideoAutoplayHover.checked = true;
       if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = true;
       if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = true;

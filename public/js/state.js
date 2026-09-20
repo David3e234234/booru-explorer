@@ -93,6 +93,7 @@ export const DEFAULT_CLIENT_SETTINGS = {
   videoAutoplayViewer: true,
   enableSimilarPosts: true,
   previewQuality: 'medium',
+  videoDefaultQuality: 'original',
   rule34ApiKey: '',
   rule34UserId: '',
   gelbooruApiKey: '',

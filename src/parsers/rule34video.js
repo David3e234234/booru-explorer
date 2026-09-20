@@ -741,7 +741,8 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
 const resolvedVideoCache = new Map();
 
 export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, preferredAuthor = '') {
-  const cacheKey = `${String(id || sourceUrl)}_${preferredAuthor || ''}`;
+  const preferredQuality = settings?.videoDefaultQuality || settings?.preferredQuality || '';
+  const cacheKey = `${String(id || sourceUrl)}_${preferredAuthor || ''}_${preferredQuality || ''}`;
   if (resolvedVideoCache.has(cacheKey)) {
     return resolvedVideoCache.get(cacheKey);
   }
@@ -786,13 +787,64 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, 
 
     let fullVideoUrl = '';
     let quality = '720p HD';
+    const videoQualities = [];
 
     if (candidateUrls.length > 0) {
+      const normalizeVideoUrl = (u) => {
+        if (!u) return '';
+        if (u.startsWith('//')) return 'https:' + u;
+        if (u.startsWith('/')) return 'https://rule34video.com' + u;
+        return u;
+      };
+
+      const seenQualityUrls = new Set();
       const p1080 = candidateUrls.find(u => u.includes('1080p') || u.includes('4k') || u.includes('2160p'));
       const p720 = candidateUrls.find(u => u.includes('720p') || u.includes('hd'));
       const p480 = candidateUrls.find(u => u.includes('480p') || u.includes('hq'));
-      
+
       if (p1080) {
+        const u = normalizeVideoUrl(p1080);
+        if (!seenQualityUrls.has(u)) {
+          seenQualityUrls.add(u);
+          videoQualities.push({ quality: '1080p', label: '1080p Full HD', url: u });
+        }
+      }
+      if (p720) {
+        const u = normalizeVideoUrl(p720);
+        if (!seenQualityUrls.has(u)) {
+          seenQualityUrls.add(u);
+          videoQualities.push({ quality: '720p', label: '720p HD', url: u });
+        }
+      }
+      if (p480) {
+        const u = normalizeVideoUrl(p480);
+        if (!seenQualityUrls.has(u)) {
+          seenQualityUrls.add(u);
+          videoQualities.push({ quality: '480p', label: '480p HQ', url: u });
+        }
+      }
+
+      // Add any remaining candidate URLs if they were not categorized
+      for (const cand of candidateUrls) {
+        const u = normalizeVideoUrl(cand);
+        if (!seenQualityUrls.has(u)) {
+          seenQualityUrls.add(u);
+          videoQualities.push({ quality: 'default', label: 'Default', url: u });
+        }
+      }
+
+      const preferredQuality = settings?.videoDefaultQuality || settings?.preferredQuality || '';
+      let matchedQualityItem = null;
+      if (preferredQuality === '480p' && p480) {
+        matchedQualityItem = { url: p480, quality: '480p HQ' };
+      } else if (preferredQuality === '720p' && (p720 || p480)) {
+        matchedQualityItem = p720 ? { url: p720, quality: '720p HD' } : { url: p480, quality: '480p HQ' };
+      }
+
+      if (matchedQualityItem) {
+        fullVideoUrl = matchedQualityItem.url;
+        quality = matchedQualityItem.quality;
+      } else if (p1080) {
         fullVideoUrl = p1080;
         quality = '1080p Full HD';
       } else if (p720) {
@@ -959,6 +1011,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, 
         success: true,
         fullVideoUrl,
         quality,
+        videoQualities,
         hasSound: true,
         duration,
         durationText,

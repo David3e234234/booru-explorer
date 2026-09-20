@@ -931,13 +931,24 @@
 
           <!-- Feed preview quality -->
           <div class="settings-group">
-            <label class="settings-label" for="selectPreviewQuality">Качество превью в галерее:</label>
-            <p class="settings-hint">Выберите баланс между качеством картинок в ленте и скоростью загрузки.</p>
+            <label class="settings-label" for="selectPreviewQuality" data-i18n="settings.previewQuality">Качество превью в галерее:</label>
+            <p class="settings-hint" data-i18n="settings.previewQualityHint">Выберите баланс между качеством картинок в ленте и скоростью загрузки.</p>
             <select id="selectPreviewQuality" class="input-setting">
-              <option value="low">Низкое (миниатюры), максимальная скорость</option>
-              <option value="medium" selected>Среднее (стандартное), оптимальный баланс (Рекомендуется)</option>
-              <option value="high">Высокое (HD Sample), повышенная четкость</option>
-              <option value="original">Оригинал (Full HD / 4K), максимальная детализация</option>
+              <option value="low" data-i18n="settings.qualityLow">Низкое (миниатюры), максимальная скорость</option>
+              <option value="medium" selected data-i18n="settings.qualityMedium">Среднее (стандартное), оптимальный баланс (Рекомендуется)</option>
+              <option value="high" data-i18n="settings.qualityHigh">Высокое (HD Sample), повышенная четкость</option>
+              <option value="original" data-i18n="settings.qualityOriginal">Оригинал (Full HD / 4K), максимальная детализация</option>
+            </select>
+          </div>
+
+          <!-- Video playback quality -->
+          <div class="settings-group">
+            <label class="settings-label" for="selectVideoDefaultQuality" data-i18n="settings.videoQuality">Качество видео по умолчанию:</label>
+            <p class="settings-hint" data-i18n="settings.videoQualityHint">Качество видео при открытии в просмотрщике. Для слабых планшетов рекомендуется 480p для быстрой и плавной загрузки.</p>
+            <select id="selectVideoDefaultQuality" class="input-setting">
+              <option value="original" selected data-i18n="settings.videoQualityOriginal">Оригинал (Исходное качество)</option>
+              <option value="720p" data-i18n="settings.videoQuality720p">720p HD (Баланс качества и скорости)</option>
+              <option value="480p" data-i18n="settings.videoQuality480p">480p (Быстрая загрузка / Для слабых устройств)</option>
             </select>
           </div>
 
@@ -2634,6 +2645,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=21.15"></script>
+  <script type="module" src="js/app.js?v=21.16"></script>
 </body>
 </html>

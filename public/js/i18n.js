@@ -378,6 +378,12 @@ Object.assign(en, {
   'settings.qualityHigh': 'High (HD Sample), extra sharpness',
   'settings.qualityOriginal': 'Original (Full HD / 4K), maximum detail',
 
+  'settings.videoQuality': 'Default video quality:',
+  'settings.videoQualityHint': 'Video quality when opening in the viewer. 480p is recommended for older tablets for fast and smooth playback.',
+  'settings.videoQualityOriginal': 'Original (Source quality)',
+  'settings.videoQuality720p': '720p HD (Balanced quality and speed)',
+  'settings.videoQuality480p': '480p (Fast loading / Weak devices)',
+
   'settings.playback': 'Video playback and autoplay:',
   'settings.autoplayHover': 'Autoplay in feed on hover (desktop)',
   'settings.autoplayHover.title': 'Play video previews on mouse hover in the gallery',

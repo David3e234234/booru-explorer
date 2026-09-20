@@ -2483,6 +2483,13 @@ function setupEventListeners() {
     });
   }
 
+  const selectVideoDefaultQuality = document.getElementById('selectVideoDefaultQuality');
+  if (selectVideoDefaultQuality) {
+    selectVideoDefaultQuality.addEventListener('change', () => {
+      state.settings.videoDefaultQuality = selectVideoDefaultQuality.value;
+    });
+  }
+
   // Close modals on Escape
   const settingsModal = document.getElementById('settingsModal');
   window.addEventListener('keydown', (e) => {
