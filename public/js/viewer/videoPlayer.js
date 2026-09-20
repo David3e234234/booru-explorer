@@ -772,6 +772,29 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const qualityBtn = statusBanner.querySelector('.btn-video-quality');
   const qualityValEl = statusBanner.querySelector('.video-quality-val');
 
+  // Floating YouTube-style quality menu & bottom-right button
+  const qualityMenuWrapper = document.createElement('div');
+  qualityMenuWrapper.className = 'video-quality-overlay';
+
+  const overlayQualityBtn = document.createElement('button');
+  overlayQualityBtn.className = 'btn-video-quality-overlay';
+  overlayQualityBtn.setAttribute('type', 'button');
+  overlayQualityBtn.setAttribute('title', t('vp.qualityBtn.title', 'Качество видео'));
+  overlayQualityBtn.innerHTML = `
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+    <span class="video-quality-overlay-label">HD</span>
+  `;
+
+  const qualityDropdown = document.createElement('div');
+  qualityDropdown.className = 'video-quality-dropdown';
+  qualityDropdown.style.display = 'none';
+
+  qualityMenuWrapper.appendChild(overlayQualityBtn);
+  qualityMenuWrapper.appendChild(qualityDropdown);
+
   const getAvailableQualities = () => {
     const list = [];
     if (Array.isArray(currentPost.videoQualities) && currentPost.videoQualities.length > 0) {
@@ -791,11 +814,73 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     return list;
   };
 
+  const renderQualityDropdown = () => {
+    const avail = getAvailableQualities();
+    qualityDropdown.innerHTML = `
+      <div class="video-quality-dropdown-header">${t('vp.quality', 'Качество')}</div>
+    `;
+    for (const item of avail) {
+      const isSelected = item.key === activeQuality;
+      const opt = document.createElement('button');
+      opt.className = `video-quality-dropdown-item${isSelected ? ' active' : ''}`;
+      opt.setAttribute('type', 'button');
+      opt.innerHTML = `
+        <span class="video-quality-dropdown-check">
+          ${isSelected ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+        </span>
+        <span class="video-quality-dropdown-name">${item.label}</span>
+      `;
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeQualityDropdown();
+        switchQuality(item.key);
+      });
+      qualityDropdown.appendChild(opt);
+    }
+  };
+
+  const toggleQualityDropdown = () => {
+    const isShowing = qualityDropdown.style.display !== 'none';
+    if (isShowing) {
+      closeQualityDropdown();
+    } else {
+      renderQualityDropdown();
+      qualityDropdown.style.display = 'flex';
+      overlayQualityBtn.classList.add('active');
+    }
+  };
+
+  const closeQualityDropdown = () => {
+    qualityDropdown.style.display = 'none';
+    overlayQualityBtn.classList.remove('active');
+  };
+
+  overlayQualityBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleQualityDropdown();
+  });
+
+  const onDocClickCloseQuality = (e) => {
+    if (!qualityMenuWrapper.contains(e.target)) {
+      closeQualityDropdown();
+    }
+  };
+  document.addEventListener('click', onDocClickCloseQuality);
+
   const updateQualityButtonLabel = () => {
-    if (!qualityValEl) return;
     const avail = getAvailableQualities();
     const match = avail.find(a => a.key === activeQuality);
-    qualityValEl.textContent = match ? match.label : (activeQuality || 'Авто');
+    const labelText = match ? match.label : (activeQuality || 'Авто');
+    if (qualityValEl) qualityValEl.textContent = labelText;
+
+    const overlayLabel = overlayQualityBtn.querySelector('.video-quality-overlay-label');
+    if (overlayLabel) {
+      // Short label for the YouTube-style gear icon badge (e.g. "480p", "720p", "1080p", "Ориг")
+      let shortLabel = activeQuality;
+      if (activeQuality === 'original') shortLabel = 'Ориг';
+      else if (activeQuality.length > 5) shortLabel = activeQuality.slice(0, 5);
+      overlayLabel.textContent = shortLabel || 'HD';
+    }
   };
 
   updateQualityButtonLabel();
@@ -899,7 +984,13 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   });
 
   video.addEventListener('loadedmetadata', () => {
-    if (video.duration && !isNaN(video.duration)) {
+    // During real-time stream transcoding (pipe:1 with fragmented MP4), video.duration initially
+    // reflects only the currently buffered stream fragment and keeps growing.
+    // If the post already has a known duration from its metadata/source, preserve it.
+    const isTranscodingStream = Boolean(activeMediaInfo?.isTranscode);
+    const hasKnownDuration = Boolean(currentPost.duration && currentPost.duration > 0);
+
+    if (video.duration && !isNaN(video.duration) && (!isTranscodingStream || !hasKnownDuration)) {
       currentPost.duration = video.duration;
       const mins = Math.floor(video.duration / 60);
       const secs = Math.floor(video.duration % 60);
@@ -983,6 +1074,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   video.src = currentSource === 'proxy' ? proxyMedia : directMedia;
   videoContainer.appendChild(video);
   videoContainer.appendChild(unmuteBtn);
+  videoContainer.appendChild(qualityMenuWrapper);
 
   const UNPLAYABLE_CONTAINERS = new Set(['mkv', 'avi', 'wmv', 'flv', 'ts']);
   const cleanExt = String(currentPost.fileExt || '').toLowerCase();
@@ -999,6 +1091,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     video,
     destroy: () => {
       clearTimeout(loadTimeout);
+      document.removeEventListener('click', onDocClickCloseQuality);
       try { video.pause(); } catch {}
       video.removeAttribute('src');
       try { video.load(); } catch {}
