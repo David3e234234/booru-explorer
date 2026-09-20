@@ -439,6 +439,30 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   };
 
   let unsupportedFallbackEl = null;
+  let iosWaitOverlay = null;
+
+  const showIosWaitOverlay = () => {
+    if (iosWaitOverlay) return;
+    iosWaitOverlay = document.createElement('div');
+    iosWaitOverlay.className = 'video-unsupported-fallback'; // Reusing this class for styling
+    iosWaitOverlay.innerHTML = `
+      <div class="video-unsupported-icon" style="animation: spin 2s linear infinite;">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+        </svg>
+      </div>
+      <div class="video-unsupported-title">Конвертация для iOS...</div>
+      <div class="video-unsupported-desc" style="max-width: 280px; text-align: center;">Пожалуйста, подождите. Сервер подготавливает совместимый MP4 файл. Это может занять около минуты.</div>
+    `;
+    videoContainer.appendChild(iosWaitOverlay);
+  };
+
+  const hideIosWaitOverlay = () => {
+    if (iosWaitOverlay) {
+      iosWaitOverlay.remove();
+      iosWaitOverlay = null;
+    }
+  };
 
   const showUnsupportedVideoFallback = (message = null) => {
     if (unsupportedFallbackEl) return;
@@ -716,6 +740,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     isPreCaching = true; // prevent other errors from firing
     setProgress(0, t('vp.iosTranscoding', 'Apple устройства не поддерживают стриминг. Ожидание завершения конвертации...'), true);
     if (switchBtn) switchBtn.textContent = 'Конвертация...';
+    
+    showIosWaitOverlay();
 
     try {
       // The server will hold this request until the background transcode completes
@@ -727,6 +753,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       
       // Now the file is fully cached and remuxed to standard MP4!
       isPreCaching = false;
+      hideIosWaitOverlay();
       setProgress(100, t('vp.iosTranscodeDone', 'Конвертация завершена!'), false);
       setTimeout(hideStatus, 1500);
       
@@ -735,6 +762,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     } catch (err) {
       if (err.name === 'AbortError') return;
       isPreCaching = false;
+      hideIosWaitOverlay();
       showUnsupportedVideoFallback();
     }
   };
@@ -787,7 +815,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const handleVideoError = () => {
     if (isPreCaching) return;
     if (video.error && video.error.code === 1) return; // MEDIA_ERR_ABORTED
-    if (video.currentTime > 0 || video.readyState >= 2) return;
+    
+    // Do not ignore fatal errors (decode or format not supported) even if partially buffered
+    const isFatal = video.error && (video.error.code === 3 || video.error.code === 4);
+    if (!isFatal && (video.currentTime > 0 || video.readyState >= 2)) return;
 
     // Errors arrive in bursts per single switch: debounce so we don't hammer the source
     const now = Date.now();
@@ -1136,6 +1167,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       if (iosTranscodeAbort) {
         try { iosTranscodeAbort.abort(); iosTranscodeAbort = null; } catch {}
       }
+      hideIosWaitOverlay();
       clearTimeout(loadTimeout);
       document.removeEventListener('click', onDocClickCloseQuality);
       try { video.pause(); } catch {}
