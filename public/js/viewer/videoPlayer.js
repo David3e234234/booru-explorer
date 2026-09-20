@@ -443,6 +443,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   const showIosWaitOverlay = () => {
     if (iosWaitOverlay) return;
+    video.style.display = 'none';
     iosWaitOverlay = document.createElement('div');
     iosWaitOverlay.className = 'video-unsupported-fallback'; // Reusing this class for styling
     iosWaitOverlay.innerHTML = `
@@ -461,6 +462,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (iosWaitOverlay) {
       iosWaitOverlay.remove();
       iosWaitOverlay = null;
+      video.style.display = '';
     }
   };
 
