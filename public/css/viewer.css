@@ -6,10 +6,18 @@
 .viewer-modal {
   position: fixed;
   inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100%;
+  height: 100dvh;
   z-index: 100000 !important;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
 }
 
 .viewer-backdrop {
@@ -21,9 +29,9 @@
 .viewer-content {
   position: relative;
   z-index: 2;
-  width: 100vw;
-  height: 100dvh;
-  max-height: 100dvh;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -32,6 +40,8 @@
 /* Viewer top bar */
 .viewer-header {
   height: 52px;
+  min-height: 52px;
+  max-height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -555,7 +565,12 @@
 
 /* Media container (pan & zoom) */
 .viewer-media-wrapper {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
   position: relative;
   display: flex;
   align-items: center;
@@ -563,6 +578,7 @@
   overflow: hidden;
   user-select: none;
   transition: padding-bottom 0.25s ease;
+  box-sizing: border-box;
 }
 
 /* Reserve space for the album or similar filmstrip */
@@ -589,6 +605,7 @@
   max-width: 100%;
   max-height: 100%;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 .viewer-image-placeholder {
@@ -625,6 +642,7 @@
   transform-origin: center center;
   opacity: 0;
   transition: opacity 0.22s cubic-bezier(0.2, 0, 0.2, 1), transform 0.22s cubic-bezier(0.2, 0, 0.2, 1);
+  box-sizing: border-box;
 }
 
 .viewer-image.is-loaded {
@@ -1639,8 +1657,8 @@
   border-color: var(--accent-danger);
 }
 
-/* ── Responsive styles for mobile and touch devices (phones & tablets) ── */
-@media (max-width: 1100px) {
+/* ── Responsive styles for mobile devices (phones <= 800px) ── */
+@media (max-width: 800px) {
   .viewer-header {
     height: auto;
     min-height: calc(44px + max(12px, calc(env(safe-area-inset-top, 0px))));
@@ -1728,10 +1746,11 @@
   }
 
   .viewer-body {
-    flex: 1;
+    flex: 1 1 0;
     min-height: 0;
     width: 100%;
-    height: auto;
+    height: 100%;
+    max-height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1740,10 +1759,11 @@
   }
 
   .viewer-media-wrapper {
-    flex: 1;
+    flex: 1 1 0;
     width: 100%;
     height: 100%;
     min-height: 0;
+    max-height: 100%;
     min-width: 0;
     padding: 6px 8px max(12px, env(safe-area-inset-bottom, 12px)) 8px;
     display: flex;
