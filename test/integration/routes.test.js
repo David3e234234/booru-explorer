@@ -42,6 +42,13 @@ describe('Express API Integration & Route Tests', () => {
       assert.ok(data.diskCacheMB !== undefined);
     });
 
+    it('GET /api/version returns version from package.json', async () => {
+      const res = await fetch(`${baseUrl}/api/version`);
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.ok(typeof data.version === 'string' && data.version.length > 0);
+    });
+
     it('POST /api/cache-clear rejects anonymous callers (destructive server-side op)', async () => {
       const res = await fetch(`${baseUrl}/api/cache-clear`, { method: 'POST' });
       assert.strictEqual(res.status, 401);
@@ -258,6 +265,21 @@ describe('Express API Integration & Route Tests', () => {
       const clearData = await clearRes.json();
       assert.strictEqual(clearData.success, true);
       assert.strictEqual(clearData.dislikes.length, 0);
+    });
+
+    it('POST /api/favorites/sync rejects oversized batches with 400 (F-38)', async () => {
+      const oversized = new Array(5001).fill({ id: 'test_1' });
+      const syncRes = await fetch(`${baseUrl}/api/favorites/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ favorites: oversized })
+      });
+      assert.strictEqual(syncRes.status, 400);
+      const data = await syncRes.json();
+      assert.strictEqual(data.success, false);
     });
 
     it('Favorite Authors: add, preview update, and delete', async () => {

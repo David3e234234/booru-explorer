@@ -1,6 +1,6 @@
 import { getCreatorsDirectory as getKemonoCreators } from '../parsers/kemono.js';
 import { getCreatorsDirectory as getPawchiveCreators } from '../parsers/pawchive.js';
-import { fetchSafe, safeJsonParse } from '../utils/network.js';
+import { fetchSafe, safeJsonParse, discardResponse } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 // Cache for booru artist API responses (TTL: 1 hour)
@@ -181,6 +181,8 @@ export async function fetchBooruArtistInfo(rawAuthor, booruSite = 'danbooru', se
             });
           }
         }
+      } else {
+        await discardResponse(res);
       }
     } else {
       const authParam = (settings?.danbooruLogin && settings?.danbooruApiKey)
@@ -207,6 +209,8 @@ export async function fetchBooruArtistInfo(rawAuthor, booruSite = 'danbooru', se
             });
           }
         }
+      } else {
+        await discardResponse(res);
       }
     }
   } catch (err) {

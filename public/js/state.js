@@ -133,9 +133,23 @@ export const SECRET_SETTING_FIELDS = [
   'telegramBotToken', 'telegramChatId'
 ];
 
+export const STORAGE_KEYS = {
+  SETTINGS: 'booru_settings_v1',
+  PRESETS: 'booru_presets_v1',
+  FAVORITES: 'booru_favorites_v1',
+  FAVORITE_AUTHORS: 'booru_favorite_authors_v1',
+  LIKES: 'booru_likes_v1',
+  DISLIKES: 'booru_dislikes_v1',
+  VIEWED: 'booru_viewed_v1',
+  AUTH_TOKEN: 'booru_auth_token_v1',
+  CURRENT_USER: 'booru_current_user_v1'
+};
+
 export function getInitialSettings() {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('booru_settings') : null;
+    const raw = typeof localStorage !== 'undefined'
+      ? (localStorage.getItem(STORAGE_KEYS.SETTINGS) || localStorage.getItem('booru_settings'))
+      : null;
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
@@ -216,18 +230,6 @@ export function removeSearchTag(tag) {
   }
   return false;
 }
-
-const STORAGE_KEYS = {
-  SETTINGS: 'booru_settings_v1',
-  PRESETS: 'booru_presets_v1',
-  FAVORITES: 'booru_favorites_v1',
-  FAVORITE_AUTHORS: 'booru_favorite_authors_v1',
-  LIKES: 'booru_likes_v1',
-  DISLIKES: 'booru_dislikes_v1',
-  VIEWED: 'booru_viewed_v1',
-  AUTH_TOKEN: 'booru_auth_token_v1',
-  CURRENT_USER: 'booru_current_user_v1'
-};
 
 export function loadLocalAuth() {
   try {

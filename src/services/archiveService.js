@@ -716,6 +716,9 @@ export async function getArchiveManifest(zipUrl, options = {}) {
 
   const job = extractArchive(zipUrl, key, options)
     .catch(err => {
+      // A failed unpack must not leave /api/archive/status reporting { active: true }
+      // forever: the progress record is only kept on the success path (below)
+      jobStatus.delete(zipUrl);
       logError('Archive', `Не удалось распаковать ${zipUrl.split('?')[0]}`, err);
       throw err;
     })
@@ -1298,9 +1301,16 @@ export async function inspectArchive(zipUrl, options = {}) {
   } finally {
     try { await zip.close(); } catch {}
   }
-  })().finally(() => {
-    inflightInspects.delete(zipUrl);
-  });
+  })()
+    .catch(err => {
+      // A failed inspection must not leave /api/archive/status reporting
+      // { active: true } forever: the progress record is only kept on success
+      jobStatus.delete(zipUrl);
+      throw err;
+    })
+    .finally(() => {
+      inflightInspects.delete(zipUrl);
+    });
 
   inflightInspects.set(zipUrl, job);
   return job;
@@ -1519,7 +1529,13 @@ export async function downloadFullArchive(zipUrl, res, options = {}) {
   const rawName = options.name || (zipUrl.split('?')[0].split('/').pop()) || 'archive.zip';
   const cleanName = rawName.replace(/[/\\?%*:|"<>]/g, '_');
 
-  await downloadArchiveFile(zipUrl, zipPath, options);
+  try {
+    await downloadArchiveFile(zipUrl, zipPath, options);
+  } catch (err) {
+    // Same as above: a failed download must not leave a stuck progress record
+    jobStatus.delete(zipUrl);
+    throw err;
+  }
 
   if (!fs.existsSync(zipPath)) {
     return res.status(404).send('Не удалось загрузить архив');

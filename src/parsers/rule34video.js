@@ -7,7 +7,9 @@ import { logError } from '../utils/logger.js';
 
 // Persistent disk cache for Rule34Video authors and videos
 const R34V_CACHE_FILE = path.join(path.resolve('data/cache'), 'r34v_authors.json');
+const R34V_MAX_ENTRIES = 2000;
 let r34vAuthorsCache = null;
+let r34vSaveTimer = null;
 
 function loadR34vAuthorsCache() {
   if (r34vAuthorsCache) return r34vAuthorsCache;
@@ -24,12 +26,35 @@ function loadR34vAuthorsCache() {
   return r34vAuthorsCache;
 }
 
+function trimR34vCache(cache) {
+  if (!cache) return;
+  const videoKeys = Object.keys(cache.videos || {});
+  if (videoKeys.length > R34V_MAX_ENTRIES) {
+    const toRemove = videoKeys.slice(0, videoKeys.length - R34V_MAX_ENTRIES);
+    toRemove.forEach(k => delete cache.videos[k]);
+  }
+  const authorKeys = Object.keys(cache.authors || {});
+  if (authorKeys.length > R34V_MAX_ENTRIES) {
+    const toRemove = authorKeys.slice(0, authorKeys.length - R34V_MAX_ENTRIES);
+    toRemove.forEach(k => delete cache.authors[k]);
+  }
+}
+
+function scheduleSaveR34vAuthorsCache() {
+  if (r34vSaveTimer) return;
+  r34vSaveTimer = setTimeout(() => {
+    r34vSaveTimer = null;
+    saveR34vAuthorsCache();
+  }, 1000);
+}
+
 function saveR34vAuthorsCache() {
   if (!r34vAuthorsCache) return;
+  trimR34vCache(r34vAuthorsCache);
   try {
     const dir = path.dirname(R34V_CACHE_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(R34V_CACHE_FILE, JSON.stringify(r34vAuthorsCache, null, 2), 'utf8');
+    fs.promises.writeFile(R34V_CACHE_FILE, JSON.stringify(r34vAuthorsCache), 'utf8').catch(() => {});
   } catch (e) {}
 }
 
@@ -682,6 +707,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         const thumbOriginal = thumb || '';
         const mediaUrl = previewMp4 || thumb || '';
 
+        const silentTags = new Set(['no sound', 'no_sound', 'mute', 'silent', 'muted', 'no-sound']);
+        const isSilent = rawTags.some(t => silentTags.has(String(t).toLowerCase().trim())) || /[\(\[]no\s*sound[\)\]]/i.test(title);
+        const hasSound = !isSilent;
+
         pageResults.push({
           id: `rule34video_${id}`,
           originalId: String(id),
@@ -701,7 +730,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
           fileExt: 'mp4',
           isVideo: true,
           isGif: false,
-          hasSound: true,
+          hasSound,
           duration,
           durationText,
           views,
@@ -930,7 +959,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, 
           cache.authors[cleanA] = a.trim();
         }
       });
-      saveR34vAuthorsCache();
+      scheduleSaveR34vAuthorsCache();
     }
 
     // 7. Tags and categories from the video page
@@ -1007,12 +1036,16 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, 
         fullVideoUrl = 'https://rule34video.com' + fullVideoUrl;
       }
 
+      const silentTags = new Set(['no sound', 'no_sound', 'mute', 'silent', 'muted', 'no-sound']);
+      const isSilent = rawTagsList.some(t => silentTags.has(String(t).toLowerCase().trim())) || /[\(\[]no\s*sound[\)\]]/i.test(title);
+      const hasSound = !isSilent;
+
       const result = {
         success: true,
         fullVideoUrl,
         quality,
         videoQualities,
-        hasSound: true,
+        hasSound,
         duration,
         durationText,
         title,

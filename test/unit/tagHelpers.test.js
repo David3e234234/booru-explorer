@@ -653,12 +653,18 @@ describe('Module 9: Auxiliary tag utilities', () => {
     assert.strictEqual(staticImg.hasSound, false);
   });
 
-  it('checkMediaTypes ensures animated tag alone on JPG does not make it a video', () => {
-    const res = checkMediaTypes('https://cdn.example.com/img.jpg', 'jpg', ['animated']);
+  it('checkMediaTypes does not misclassify static images containing video extension substrings in path/filename', () => {
+    const res = checkMediaTypes('https://x.com/data/video.mp4.jpg', '', ['tag']);
     assert.strictEqual(res.isVideo, false);
     assert.strictEqual(res.isGif, false);
     assert.strictEqual(res.fileExt, 'jpg');
+
+    const res2 = checkMediaTypes('https://cdn.example.com/preview.webm.png?v=1', '', []);
+    assert.strictEqual(res2.isVideo, false);
+    assert.strictEqual(res2.isGif, false);
+    assert.strictEqual(res2.fileExt, 'png');
   });
+
 
   it('normalizeDate correctly converts 10-digit, 13-digit, and ISO dates', () => {
     // 10-digit unix seconds: 1700000000 -> 2023-11-14T22:13:20.000Z

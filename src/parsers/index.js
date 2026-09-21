@@ -193,7 +193,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   }
 
   const targetLimit = parseInt(params.limit, 10) || 40;
-  const page = parseInt(params.page, 10) || 1;
+  const page = Math.max(1, parseInt(params.page, 10) || 1);
   // A non-numeric depth ("auto", "abc") used to reach the loop bound as NaN, and
   // `i < NaN` never runs - the site fetched one page and then discarded it.
   const parsedDeepFetchPages = parseInt(settings?.deepFetchPages, 10);

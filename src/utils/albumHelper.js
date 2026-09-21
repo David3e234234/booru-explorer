@@ -5,14 +5,14 @@
 
 import { logInfo, logError } from './logger.js';
 
-function isValidRelationKey(key) {
+export function isValidRelationKey(key) {
   if (!key || typeof key !== 'string') return false;
   if (key.includes('undefined') || key.includes('null') || key.includes('NaN')) return false;
   if (key.endsWith(':') || key.startsWith(':')) return false;
   const parts = key.split(':');
   if (parts.length < 2) return false;
   if (parts.some(p => !p || p.trim() === '')) return false;
-  if (parts[0] === 'parent' && parts[2] && (parts[2].length < 2 || parts[2] === '0')) return false;
+  if (parts[0] === 'parent' && parts[2] && parts[2] === '0') return false;
 
   const lastPart = parts[parts.length - 1].toLowerCase();
   // Filter out generic paths, profile URLs, and store pages

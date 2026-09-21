@@ -1,6 +1,6 @@
 import { getProxiedUrl, getAuthHeaders } from '../api.js';
 import { state } from '../state.js';
-import { showToast, haptic } from './uiUtils.js';
+import { showToast, haptic, escapeHtml } from './uiUtils.js';
 import { t } from '../i18n.js';
 
 // Central in-page download manager for MEGA-style background downloads
@@ -551,7 +551,7 @@ class DownloadManager {
               </svg>
             </div>
             <div class="dl-item-info">
-              <div class="dl-item-name" title="${task.filename}">${task.filename}</div>
+              <div class="dl-item-name" title="${escapeHtml(task.filename)}">${escapeHtml(task.filename)}</div>
               <div class="dl-item-meta">
                 ${loadedStr} / ${totalStr}
                 ${speedStr ? `<span class="dl-meta-speed">· ${speedStr}</span>` : ''}

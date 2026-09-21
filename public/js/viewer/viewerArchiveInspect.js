@@ -3,11 +3,12 @@ import { subscribeArchiveJob, notifyArchiveJob, startArchivePolling, stopArchive
 import { renderSidebarCloudLinks, renderSidebarContent } from './viewerCloudLinks.js';
 import { downloadManager } from '../modules/downloadManager.js';
 import { openSettingsModal, switchSettingsTab } from '../modules/settingsModal.js';
-import { showToast, haptic, copyToClipboard } from '../modules/uiUtils.js';
+import { showToast, haptic, copyToClipboard, escapeHtml } from '../modules/uiUtils.js';
 import { state } from '../state.js';
 import { t } from '../i18n.js';
 
 let archiveInspectContext = null;
+let currentInspectUnsubscribers = [];
 
 /**
  * Configure shared viewer context for archive unpacking and metadata updates.
@@ -32,6 +33,10 @@ export function isArchiveInspectModalOpen() {
 export function closeArchiveInspectModal() {
   const modal = document.getElementById('archiveInspectModal');
   if (modal) modal.style.display = 'none';
+  if (currentInspectUnsubscribers.length > 0) {
+    currentInspectUnsubscribers.forEach(u => { try { u(); } catch {} });
+    currentInspectUnsubscribers = [];
+  }
 }
 
 /**
@@ -126,7 +131,7 @@ export function renderFileList(data, fileListContainer, effectiveUrl, filterText
     row.innerHTML = `
       <div class="archive-inspect-file-info">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted); flex-shrink: 0;"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
-        <span class="archive-inspect-file-name" title="${f.path || f.name}">${f.name}</span>
+        <span class="archive-inspect-file-name" title="${escapeHtml(f.path || f.name)}">${escapeHtml(f.name)}</span>
         ${f.hasLinks ? `<span class="archive-badge-links">🔗 ${t('vw.links', 'Ссылки')}</span>` : ''}
       </div>
       <div class="archive-inspect-file-meta">
@@ -252,7 +257,7 @@ export function renderInspectResults(data, archiveName, container, archiveUrl) {
     <div class="archive-inspect-meta">
       <div class="archive-inspect-meta-item">
         <span class="archive-inspect-meta-label">${t('vw.archive', 'Архив')}</span>
-        <span class="archive-inspect-meta-value" style="font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${archiveName}">${archiveName}</span>
+        <span class="archive-inspect-meta-value" style="font-family: var(--font-mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(archiveName)}">${escapeHtml(archiveName)}</span>
       </div>
       <div class="archive-inspect-meta-item">
         <span class="archive-inspect-meta-label">${t('vw.filesCount', 'Файлов')}</span>
@@ -291,7 +296,7 @@ export function renderInspectResults(data, archiveName, container, archiveUrl) {
 
   const openInPlayerBtn = container.querySelector('#btnInspectOpenInPlayer');
   if (openInPlayerBtn && effectiveUrl) {
-    subscribeArchiveJob(effectiveUrl, (state) => {
+    const unsub = subscribeArchiveJob(effectiveUrl, (state) => {
       if (state.active) {
         openInPlayerBtn.disabled = true;
         const statusText = state.phase === 'extract'
@@ -303,6 +308,7 @@ export function renderInspectResults(data, archiveName, container, archiveUrl) {
         `;
       }
     });
+    if (typeof unsub === 'function') currentInspectUnsubscribers.push(unsub);
     openInPlayerBtn.addEventListener('click', () => {
       unpackAndViewArchive(effectiveUrl, archiveName);
     });
@@ -319,32 +325,39 @@ export function renderInspectResults(data, archiveName, container, archiveUrl) {
         displayUrl = parsed.hostname + (parsed.pathname.length > 28 ? parsed.pathname.slice(0, 28) + '…' : parsed.pathname);
       } catch {}
 
+      const safeServiceId = escapeHtml(item.serviceId || '');
+      const safeService = escapeHtml(item.service || 'Облако');
+      const safeSourceFile = item.sourceFile ? escapeHtml(item.sourceFile) : '';
+      const safeUrl = escapeHtml(item.url || '');
+      const safeDisplayUrl = escapeHtml(displayUrl || '');
+      const safePassword = item.password ? escapeHtml(item.password) : '';
+
       card.innerHTML = `
         <div class="cloud-card-header">
-          <span class="cloud-card-service-badge" data-service="${item.serviceId}">
+          <span class="cloud-card-service-badge" data-service="${safeServiceId}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
-            ${item.service || 'Облако'}
+            ${safeService}
           </span>
-          ${item.sourceFile ? `<span class="cloud-card-source-tag" title="${t('vw.foundIn', 'Найдено в:')} ${item.sourceFile}">${item.sourceFile}</span>` : ''}
+          ${safeSourceFile ? `<span class="cloud-card-source-tag" title="${escapeHtml(t('vw.foundIn', 'Найдено в:'))} ${safeSourceFile}">${safeSourceFile}</span>` : ''}
         </div>
-        <div class="cloud-card-url" title="${item.url}">${displayUrl}</div>
-        ${item.password ? `
+        <div class="cloud-card-url" title="${safeUrl}">${safeDisplayUrl}</div>
+        ${safePassword ? `
           <div class="cloud-card-pass-row">
-            <span class="cloud-card-pass-label">${t('vw.password', 'Пароль:')}</span>
-            <code class="cloud-card-pass-code">${item.password}</code>
-            <button type="button" class="btn-copy-pass" title="${t('viewer.copyPassword', 'Скопировать пароль')}">
+            <span class="cloud-card-pass-label">${escapeHtml(t('vw.password', 'Пароль:'))}</span>
+            <code class="cloud-card-pass-code">${safePassword}</code>
+            <button type="button" class="btn-copy-pass" title="${escapeHtml(t('viewer.copyPassword', 'Скопировать пароль'))}">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>
           </div>
         ` : ''}
         <div class="cloud-card-actions">
-          <a href="${item.url}" target="_blank" rel="noopener noreferrer" class="cloud-card-btn cloud-card-btn-open">
-            <span>${t('vw.openLink', 'Открыть')}</span>
+          <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="cloud-card-btn cloud-card-btn-open">
+            <span>${escapeHtml(t('vw.openLink', 'Открыть'))}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
           </a>
-          <button type="button" class="cloud-card-btn cloud-card-btn-copy" title="${t('viewer.copyLink', 'Копировать ссылку')}">
+          <button type="button" class="cloud-card-btn cloud-card-btn-copy" title="${escapeHtml(t('viewer.copyLink', 'Копировать ссылку'))}">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            <span>${t('viewer.copyLink', 'Копировать')}</span>
+            <span>${escapeHtml(t('viewer.copyLink', 'Копировать'))}</span>
           </button>
         </div>
       `;
@@ -383,6 +396,10 @@ export function renderInspectResults(data, archiveName, container, archiveUrl) {
 
   let fileListUnsubscribers = [];
   fileListUnsubscribers = renderFileList(data, fileListContainer, effectiveUrl, '', fileListUnsubscribers);
+  currentInspectUnsubscribers.push(() => {
+    fileListUnsubscribers.forEach(u => { try { u(); } catch {} });
+    fileListUnsubscribers = [];
+  });
 
   if (searchInput) {
     searchInput.addEventListener('input', () => {
@@ -397,6 +414,7 @@ export function renderInspectResults(data, archiveName, container, archiveUrl) {
  * @param {string} name
  */
 export async function openArchiveInspectModal(url, name) {
+  closeArchiveInspectModal();
   const modal = document.getElementById('archiveInspectModal');
   const bodyEl = document.getElementById('archiveInspectBody');
   if (!modal || !bodyEl) return;

@@ -144,9 +144,17 @@ export function writeJsonFileAsync(filePath, data, debounceMs = 150) {
 export function flushPendingWrites() {
   const entries = [...pendingWrites.entries()];
   pendingWrites.clear();
-  for (const [filePath] of entries) {
+  for (const [filePath, timer] of entries) {
+    if (timer) clearTimeout(timer);
     const data = pendingData.get(filePath);
     if (data === undefined) continue;
+    try {
+      writeFileAtomicSync(filePath, JSON.stringify(data, null, 2));
+    } catch (err) {
+      logError('Storage', `Не удалось сбросить отложенную запись ${filePath}`, err);
+    }
+  }
+  for (const [filePath, data] of pendingData.entries()) {
     try {
       writeFileAtomicSync(filePath, JSON.stringify(data, null, 2));
     } catch (err) {

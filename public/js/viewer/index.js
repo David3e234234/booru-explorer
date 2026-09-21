@@ -405,34 +405,42 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   async function handleLikeToggle() {
     if (!currentPost) return;
+    const targetPost = currentPost;
     haptic([15, 20]);
-    const isLikedNow = toggleLikeLocally(currentPost);
-    btnLikeModal?.classList.toggle('active', isLikedNow);
-    btnLikeModal?.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'currentColor' : 'none');
+    const isLikedNow = toggleLikeLocally(targetPost);
+    if (currentPost?.id === targetPost.id) {
+      btnLikeModal?.classList.toggle('active', isLikedNow);
+      btnLikeModal?.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'currentColor' : 'none');
+    }
     showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
     try {
-      await toggleLikePost(currentPost);
+      await toggleLikePost(targetPost);
     } catch (e) {}
     if (onFavoriteToggle) onFavoriteToggle();
   }
 
   async function handleFavToggle() {
     if (!currentPost) return;
+    const targetPost = currentPost;
     haptic([15, 25, 15]);
     try {
-      const res = await toggleFavoritePost(currentPost);
+      const res = await toggleFavoritePost(targetPost);
       if (res?.success) {
         if (res.isFavorite) {
-          state.favoriteIds.add(currentPost.id);
-          state.favorites.unshift({ ...currentPost, favoritedAt: new Date().toISOString() });
-          btnFavModal?.classList.add('active');
-          btnFavModal?.querySelector('svg')?.setAttribute('fill', 'currentColor');
+          state.favoriteIds.add(targetPost.id);
+          state.favorites.unshift({ ...targetPost, favoritedAt: new Date().toISOString() });
+          if (currentPost?.id === targetPost.id) {
+            btnFavModal?.classList.add('active');
+            btnFavModal?.querySelector('svg')?.setAttribute('fill', 'currentColor');
+          }
           showToast(t('vw.savedToFavs', 'Сохранено в закладки'));
         } else {
-          state.favoriteIds.delete(currentPost.id);
-          state.favorites = state.favorites.filter(f => f.id !== currentPost.id);
-          btnFavModal?.classList.remove('active');
-          btnFavModal?.querySelector('svg')?.setAttribute('fill', 'none');
+          state.favoriteIds.delete(targetPost.id);
+          state.favorites = state.favorites.filter(f => f.id !== targetPost.id);
+          if (currentPost?.id === targetPost.id) {
+            btnFavModal?.classList.remove('active');
+            btnFavModal?.querySelector('svg')?.setAttribute('fill', 'none');
+          }
           showToast(t('vw.removedFromFavs', 'Удалено из закладок'));
         }
         if (onFavoriteToggle) onFavoriteToggle();

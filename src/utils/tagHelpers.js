@@ -407,18 +407,20 @@ export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
 
   // 3. Video detection (MP4, WebM, MKV, MOV, M4V, FLV, AVI)
   // IMPORTANT: the 'animated' tag is applied to both GIFs and videos, so animated alone does not make a file a video when it is a GIF or a static format.
+  const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'avif'];
   const videoExts = ['mp4', 'webm', 'mkv', 'mov', 'm4v', 'flv', 'avi'];
   let hasVideoExtByUrl = false;
   for (const vExt of videoExts) {
-    if (lowerUrl.includes(`.${vExt}`) || lowerFileExt.includes(`.${vExt}`)) {
+    if (lowerUrl.endsWith(`.${vExt}`) || lowerFileExt.endsWith(`.${vExt}`)) {
       hasVideoExtByUrl = true;
       break;
     }
   }
+  const isImageExt = imageExts.includes(ext);
   const hasVideoExt = videoExts.includes(ext) || hasVideoExtByUrl;
   const hasVideoTag = lowerTags.includes('video') || lowerTags.includes('webm') || lowerTags.includes('mp4') || lowerTags.includes('ugoira');
   
-  const isVideo = !isGif && (hasVideoExt || (hasVideoTag && ext !== 'jpg' && ext !== 'jpeg' && ext !== 'png' && ext !== 'webp' && ext !== 'bmp' && ext !== 'gif'));
+  const isVideo = !isGif && !isImageExt && (hasVideoExt || hasVideoTag);
 
   // 4. Final extension determination
   if (!ext) {

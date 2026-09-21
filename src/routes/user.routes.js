@@ -129,11 +129,13 @@ router.post('/favorites', (req, res) => {
   return res.json({ success: true, isFavorite, count: favorites.length });
 });
 
+const MAX_SYNC_BATCH = 5000;
+
 // POST /api/favorites/sync
 router.post('/favorites/sync', (req, res) => {
   const { favorites } = req.body || {};
-  if (!Array.isArray(favorites)) {
-    return res.status(400).json({ success: false, message: 'Ожидается массив избранного' });
+  if (!Array.isArray(favorites) || favorites.length > MAX_SYNC_BATCH) {
+    return res.status(400).json({ success: false, message: `Ожидается массив избранного (макс. ${MAX_SYNC_BATCH})` });
   }
   const userId = req.user?.id || null;
   const current = getFavorites(userId);
@@ -339,8 +341,8 @@ router.post('/like', async (req, res) => {
 // POST /api/likes/sync
 router.post('/likes/sync', (req, res) => {
   const { likes } = req.body || {};
-  if (!Array.isArray(likes)) {
-    return res.status(400).json({ success: false, message: 'Ожидается массив лайков' });
+  if (!Array.isArray(likes) || likes.length > MAX_SYNC_BATCH) {
+    return res.status(400).json({ success: false, message: `Ожидается массив лайков (макс. ${MAX_SYNC_BATCH})` });
   }
   const userId = req.user?.id || null;
   const current = getLikes(userId);
@@ -393,8 +395,8 @@ router.post('/dislikes/clear', (req, res) => {
 // POST /api/dislikes/sync
 router.post('/dislikes/sync', (req, res) => {
   const { dislikes } = req.body || {};
-  if (!Array.isArray(dislikes)) {
-    return res.status(400).json({ success: false, message: 'Ожидается массив скрытых постов' });
+  if (!Array.isArray(dislikes) || dislikes.length > MAX_SYNC_BATCH) {
+    return res.status(400).json({ success: false, message: `Ожидается массив скрытых постов (макс. ${MAX_SYNC_BATCH})` });
   }
   const userId = req.user?.id || null;
   const current = getDislikes(userId);

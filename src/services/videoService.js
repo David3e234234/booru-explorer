@@ -287,7 +287,7 @@ export async function handleTranscodeVideoRequest(req, res) {
       }
     }
 
-    const tempCachedPath = `${cachedVideoPath}.${process.pid}.tmp`;
+    const tempCachedPath = `${cachedVideoPath}.${process.pid}.${Date.now()}_${Math.random().toString(36).slice(2, 6)}.tmp`;
     const writeStream = fs.createWriteStream(tempCachedPath);
 
     const httpProxyArg = (proxyUrl && (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://'))) ? ['-http_proxy', proxyUrl] : [];

@@ -19,6 +19,7 @@ let discoveredAliasList = [];
 let discoveredAliasMap = new Map();
 
 // Avoid repeating network lookups for known or already checked candidates
+const CHECKED_CANDIDATES_MAX = 5000;
 const checkedCandidates = new Set();
 let isSavingDiscovered = false;
 let saveTimeout = null;
@@ -249,6 +250,15 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
   const candidate = authorCandidate.toLowerCase().trim();
   if (candidate.length < 3 || candidate.length > 50) return null;
   if (checkedCandidates.has(candidate)) return null;
+
+  if (checkedCandidates.size >= CHECKED_CANDIDATES_MAX) {
+    const it = checkedCandidates.values();
+    for (let i = 0; i < 1000; i++) {
+      const next = it.next();
+      if (next.done) break;
+      checkedCandidates.delete(next.value);
+    }
+  }
   checkedCandidates.add(candidate);
 
   // If already mapped in builtin or discovered, no lookup needed

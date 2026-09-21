@@ -1,5 +1,5 @@
 const CACHE_NAME = 'booru-explorer-v8.21';
-const MEDIA_CACHE = 'booru-media-v8.21';
+const MEDIA_CACHE = 'booru-media-v1';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
 
@@ -83,7 +83,7 @@ const STATIC_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[ServiceWorker] Кэширование App Shell v8.20');
+      console.log('[ServiceWorker] Кэширование App Shell:', CACHE_NAME);
       return cache.addAll(STATIC_ASSETS).catch(err => {
         console.warn('[ServiceWorker] Не удалось закэшировать часть ресурсов:', err);
       });
@@ -119,8 +119,12 @@ async function trimMediaCache() {
 function isCacheableMediaResponse(response) {
   const type = response.headers.get('content-type') || '';
   if (!type.startsWith('image/')) return false;
-  const len = parseInt(response.headers.get('content-length') || '0', 10);
-  return len === 0 || len <= MAX_CACHED_MEDIA_BYTES;
+  const cl = response.headers.get('content-length');
+  if (cl !== null) {
+    const len = parseInt(cl, 10);
+    if (isNaN(len) || len <= 0 || len > MAX_CACHED_MEDIA_BYTES) return false;
+  }
+  return true;
 }
 
 // Cache put that never rejects (body may already be consumed on abort)
@@ -160,20 +164,25 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Cache Favorites (/api/favorites) and search results (/api/posts) requests:
-  // Network First with a fallback to the last successful response for offline viewing
+  // Network First with a fallback to the last successful response for offline viewing.
+  // Never cache authenticated/account-specific requests in the shared URL-keyed cache.
   if (url.pathname === '/api/favorites' || url.pathname === '/api/posts') {
+    const hasAuth = event.request.headers.has('authorization') || event.request.headers.has('x-booru-auth');
     event.respondWith(safeRespond(event.request, async () => {
       try {
         const response = await fetch(event.request);
-        if (response && response.status === 200) {
+        if (response && response.status === 200 && !hasAuth) {
           const cache = await caches.open(CACHE_NAME);
           putSafe(cache, event.request, response);
         }
         return response;
       } catch (networkErr) {
         if (networkErr && networkErr.name === 'AbortError') throw networkErr;
-        const cached = await caches.match(event.request);
-        return cached || offlineResponse();
+        if (!hasAuth) {
+          const cached = await caches.match(event.request);
+          if (cached) return cached;
+        }
+        return offlineResponse();
       }
     }));
     return;
@@ -199,7 +208,7 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       } catch (networkErr) {
         if (networkErr && networkErr.name === 'AbortError') throw networkErr;
-        const cached = await caches.match(event.request);
+        const cached = await caches.match(event.request, { ignoreSearch: true });
         return cached || offlineResponse();
       }
     }));

@@ -995,6 +995,9 @@ async function performSearch(reset = false, options = {}) {
 
   // 👤 Profile section (TikTok style)
   if (state.currentCategory === 'profile') {
+    state.isLoading = false;
+    const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+    if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
     if (profileUIInstance) profileUIInstance.renderProfile();
     
     if (state.profileSubTab === 'authors') {
@@ -1024,6 +1027,9 @@ async function performSearch(reset = false, options = {}) {
   }
 
   if (state.currentCategory === 'favorites') {
+    state.isLoading = false;
+    const btnRefreshSearch = document.getElementById('btnRefreshSearch');
+    if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
     if (state.favoritesSubTab === 'authors') {
       renderFavoriteAuthors();
       return;

@@ -15,9 +15,12 @@ data/ai_embeddings.json
 data/users.json
 data/users/
 data/author_feed_state.json
+data/discovered_aliases.json
 data/.session_secret*
 data/cache/
 data/*.json.bak
+data/*.corrupt-*
+downloads/
 
 # Переменные окружения и секреты
 .env
@@ -33,6 +36,7 @@ temp_*
 *.webm
 *.zip
 *.tar.gz
+tmp/
 
 # Системные файлы ОС и IDE
 .DS_Store

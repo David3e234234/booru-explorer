@@ -1568,31 +1568,37 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       } catch (e) {}
     }
 
+    const safeDisplayName = escapeHtml(author.displayName || author.name || '');
+    const safeName = escapeHtml(author.name || '');
+    const safePreview = preview ? escapeHtml(preview) : '';
+    const safeSiteName = escapeHtml(siteName || '');
+    const exploreTitle = escapeHtml(t('gal.exploreAuthor.title', 'Открыть работы автора {name}').replace('{name}', author.name || ''));
+
     card.innerHTML = `
       <div class="author-card-cover">
-        ${preview ? `<img class="author-cover-img" src="${preview}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'; this.parentElement.querySelector('.author-cover-placeholder')?.removeAttribute('style');">` : ''}
-        <div class="author-cover-placeholder" style="${preview ? 'display: none;' : ''}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>
+        ${safePreview ? `<img class="author-cover-img" src="${safePreview}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'; this.parentElement.querySelector('.author-cover-placeholder')?.removeAttribute('style');">` : ''}
+        <div class="author-cover-placeholder" style="${safePreview ? 'display: none;' : ''}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></div>
         <div class="author-card-gradient"></div>
-        <span class="author-card-site-badge">${siteName}</span>
-        <button type="button" class="btn-author-change-cover" title="${t('gal.changeCover.title', 'Сменить обложку автора')}">
+        <span class="author-card-site-badge">${safeSiteName}</span>
+        <button type="button" class="btn-author-change-cover" title="${escapeHtml(t('gal.changeCover.title', 'Сменить обложку автора'))}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-          <span class="change-cover-text">${t('gal.coverText', 'Обложка')}</span>
+          <span class="change-cover-text">${escapeHtml(t('gal.coverText', 'Обложка'))}</span>
         </button>
       </div>
       <div class="author-card-body">
         <div class="author-card-title-row">
-          <span class="author-name-text" title="${author.displayName || author.name}">${author.displayName || author.name}</span>
-          ${formattedDate ? `<span class="author-tag-pill" style="color: var(--text-muted); font-size: 10px;">${formattedDate}</span>` : ''}
+          <span class="author-name-text" title="${safeDisplayName}">${safeDisplayName}</span>
+          ${formattedDate ? `<span class="author-tag-pill" style="color: var(--text-muted); font-size: 10px;">${escapeHtml(formattedDate)}</span>` : ''}
         </div>
         <div class="author-tag-pill">
-          <span>${author.name}</span>
+          <span>${safeName}</span>
         </div>
         <div class="author-card-actions">
-          <button class="btn-author-explore" title="${t('gal.exploreAuthor.title', 'Открыть работы автора {name}').replace('{name}', author.name)}">
+          <button class="btn-author-explore" title="${exploreTitle}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            <span>${t('gal.viewWorks', 'Смотреть работы')}</span>
+            <span>${escapeHtml(t('gal.viewWorks', 'Смотреть работы'))}</span>
           </button>
-          <button class="btn-author-delete" title="${t('gal.removeAuthor.title', 'Удалить из избранных')}">
+          <button class="btn-author-delete" title="${escapeHtml(t('gal.removeAuthor.title', 'Удалить из избранных'))}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
           </button>
         </div>

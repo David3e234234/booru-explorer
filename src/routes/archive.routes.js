@@ -38,8 +38,8 @@ router.get('/inspect', async (req, res) => {
     const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('econnreset') || msg.includes('abort') || msg.includes('не удалось связаться');
     const userMsg = isNetworkErr
       ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
-      : (err.message || 'Не удалось проверить архив');
-    logError('Archive', `Ошибка инспекции архива: ${userMsg}`);
+      : 'Не удалось проверить архив';
+    logError('Archive', `Ошибка инспекции архива: ${err.message}`, err);
     res.json({ success: false, error: userMsg });
   }
 });
@@ -65,8 +65,8 @@ router.get('/list', async (req, res) => {
     const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('econnreset') || msg.includes('abort') || msg.includes('не удалось связаться');
     const userMsg = isNetworkErr
       ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
-      : (err.message || 'Не удалось распаковать архив');
-    logError('Archive', `Ошибка обработки архива: ${userMsg}`);
+      : 'Не удалось распаковать архив';
+    logError('Archive', `Ошибка обработки архива: ${err.message}`, err);
     res.json({ success: false, error: userMsg });
   }
 });

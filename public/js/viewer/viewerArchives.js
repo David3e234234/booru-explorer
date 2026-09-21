@@ -1,6 +1,6 @@
 import { fetchArchiveList, fetchArchiveStatus } from '../api.js';
 import { downloadManager } from '../modules/downloadManager.js';
-import { showToast } from '../modules/uiUtils.js';
+import { showToast, escapeHtml } from '../modules/uiUtils.js';
 import { state } from '../state.js';
 import { t } from '../i18n.js';
 import { unpackAndViewArchive, openArchiveInspectModal } from './viewerArchiveInspect.js';
@@ -116,7 +116,11 @@ export function startArchivePolling(url) {
             totalFiles: status.totalFiles || 0
           });
           stopArchivePolling(url);
+        } else {
+          stopArchivePolling(url);
         }
+      } else {
+        stopArchivePolling(url);
       }
     } catch {}
   };
@@ -148,6 +152,12 @@ export function cancelAllArchiveDownloads() {
       try { ctrl.abort(); } catch {}
     });
     activeArchiveDownloads.clear();
+  }
+  if (activeArchivePollers && activeArchivePollers.size > 0) {
+    activeArchivePollers.forEach((id) => {
+      try { clearInterval(id); } catch {}
+    });
+    activeArchivePollers.clear();
   }
   flushArchiveSubscriptions();
 }
@@ -194,7 +204,7 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
         </svg>
       </div>
       <div class="sidebar-archive-file-info">
-        <div class="sidebar-archive-filename" title="${cleanName}">${cleanName}</div>
+        <div class="sidebar-archive-filename" title="${escapeHtml(cleanName)}">${escapeHtml(cleanName)}</div>
         <div class="sidebar-archive-filesize">${displaySize || t('vw.archiveZip', 'ZIP-архив')}</div>
       </div>
     </div>
@@ -648,8 +658,9 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
 
     if (isUnpackEnabled && isExtractable) {
       isServerUnpacking = true;
-      serverUnpackAbortController = new AbortController();
-      activeArchiveDownloads.set(url, serverUnpackAbortController);
+      const abortCtrl = new AbortController();
+      serverUnpackAbortController = abortCtrl;
+      activeArchiveDownloads.set(url, abortCtrl);
 
       notifyArchiveJob(url, { active: true, phase: 'download', percent: 5, received: 0, total: 0 });
       startArchivePolling(url);
@@ -658,7 +669,7 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
         const res = await fetchArchiveList(url);
         stopArchivePolling(url);
 
-        if (serverUnpackAbortController.signal.aborted) {
+        if (abortCtrl.signal.aborted || !isServerUnpacking) {
           resetToDefault();
           return;
         }
@@ -668,7 +679,7 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
           if (livePhase) livePhase.textContent = t('vw.savingFiles', 'Сохранение файлов ({n})...').replace('{n}', String(res.albumItems.length));
 
           for (let i = 0; i < res.albumItems.length; i++) {
-            if (serverUnpackAbortController.signal.aborted) break;
+            if (abortCtrl.signal.aborted || !isServerUnpacking) break;
             const item = res.albumItems[i];
             const downloadUrl = `${item.fileUrl}&download=1`;
             const a = document.createElement('a');
@@ -684,13 +695,20 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
 
           showToast(t('vw.archiveExtractedAndSaved', 'Архив распакован, файлы ({n} шт.) сохранены на устройство').replace('{n}', String(res.albumItems.length)));
           return;
+        } else {
+          resetToDefault();
+          showToast(res?.error || t('vw.archiveUnpackFailed', 'Ошибка при распаковке архива'), 3500);
+          return;
         }
       } catch (err) {
         stopArchivePolling(url);
-        if (err.name === 'AbortError') {
+        if (abortCtrl.signal.aborted || err.name === 'AbortError') {
           resetToDefault();
           return;
         }
+        resetToDefault();
+        showToast(err.message || t('vw.archiveUnpackFailed', 'Ошибка при распаковке архива'), 3500);
+        return;
       } finally {
         activeArchiveDownloads.delete(url);
       }

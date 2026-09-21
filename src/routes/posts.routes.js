@@ -454,7 +454,7 @@ router.get('/resolve-post', async (req, res) => {
     return res.status(400).json({ success: false, message: 'Сайт не поддерживается для resolve-post' });
   } catch (err) {
     logError('ResolvePost', 'Ошибка разрешения данных поста', err);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Ошибка разрешения данных поста' });
   }
 });
 
@@ -575,9 +575,15 @@ router.get('/kemono-services', async (req, res) => {
 });
 
 // GET /api/version
+let packageVersion = '0.2.0';
+try {
+  const pkg = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  if (pkg.version) packageVersion = pkg.version;
+} catch {}
+
 router.get('/version', (req, res) => {
   res.json({
-    version: '6.5.0',
+    version: packageVersion,
     buildTime: '2026-08-19 12:17',
     features: ['space-normalized-autocomplete', 'danbooru-universal-fallback', 'client-auth-forwarding', 'video-1080p-r34video']
   });
@@ -707,7 +713,7 @@ router.get('/posts', async (req, res) => {
         page: 1,
         count: 0,
         posts: [],
-        error: err.message
+        error: 'Ошибка при загрузке постов'
       });
     }
   }
@@ -722,15 +728,19 @@ router.get('/posts/album', async (req, res) => {
     const originalId = req.query.originalId || '';
     const postUrl = req.query.postUrl || '';
 
-    const albumCacheKey = `album_v1:${site}:${seriesKey}:${parentId}:${originalId}:${postUrl}`;
+    const clientAuth = parseClientAuth(req);
+    const serverSettings = getSettings();
+    const authKey = buildAuthCacheKey(clientAuth, serverSettings);
+
+    const albumCacheKey = `album_v1:${site}:${seriesKey}:${parentId}:${originalId}:${postUrl}:${authKey}`;
     const cachedAlbum = apiPostsCache.get(albumCacheKey);
     if (cachedAlbum) {
       return res.json(cachedAlbum);
     }
 
     const settings = {
-      ...getSettings(),
-      ...parseClientAuth(req)
+      ...serverSettings,
+      ...clientAuth
     };
     const aiTagsList = settings.aiTags || DEFAULT_AI_TAGS;
 
@@ -1070,11 +1080,20 @@ router.get('/tags/autocomplete', async (req, res) => {
 
   // Normalize: replace spaces with underscores (hu ta -> hu_ta)
   const query = rawQuery.replace(/\s+/g, '_');
-  const site = req.query.site || 'danbooru';
+  const clientAuth = parseClientAuth(req);
+  const serverSettings = getSettings();
+  const settings = { ...serverSettings, ...clientAuth };
 
-  const settings = { ...getSettings(), ...parseClientAuth(req) };
+  const authKey = crypto.createHash('md5').update(
+    JSON.stringify([
+      clientAuth.globalProxy || serverSettings.globalProxy || '',
+      clientAuth.danbooruProxy || serverSettings.danbooruProxy || '',
+      clientAuth.pawchiveSession || '',
+      clientAuth.kemonoSession || ''
+    ])
+  ).digest('hex').slice(0, 8);
 
-  const cacheKey = `${site}:${query.toLowerCase()}`;
+  const cacheKey = `${site}:${query.toLowerCase()}:${authKey}`;
   const cached = tagAutocompleteCache.get(cacheKey);
   if (cached && Array.isArray(cached) && cached.length > 0) {
     return res.json({ tags: cached });
