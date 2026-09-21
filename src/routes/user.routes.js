@@ -430,8 +430,10 @@ router.get('/cache-info', async (req, res) => {
   });
 });
 
-// POST /api/cache-clear - wipes the RAM cache and every cached file on disk
-router.post('/cache-clear', async (req, res) => {
+// POST /api/cache-clear - wipes the RAM cache and every cached file on disk.
+// Destructive and server-wide, so it is gated the same way as /tunnel below:
+// anyone on the LAN could otherwise drop the whole cache with one anonymous POST.
+router.post('/cache-clear', requireAuth, async (req, res) => {
   try {
     apiPostsCache.clear();
     tagAutocompleteCache.clear();

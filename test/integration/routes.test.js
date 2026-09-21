@@ -42,11 +42,11 @@ describe('Express API Integration & Route Tests', () => {
       assert.ok(data.diskCacheMB !== undefined);
     });
 
-    it('POST /api/cache-clear clears RAM and disk cache', async () => {
+    it('POST /api/cache-clear rejects anonymous callers (destructive server-side op)', async () => {
       const res = await fetch(`${baseUrl}/api/cache-clear`, { method: 'POST' });
-      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.status, 401);
       const data = await res.json();
-      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.success, false);
     });
 
     it('GET /non-existent SPA fallback serves index.html or 404 for API', async () => {
@@ -141,6 +141,18 @@ describe('Express API Integration & Route Tests', () => {
       const data = await res.json();
       assert.strictEqual(data.success, true);
       assert.strictEqual(data.settings.postsPerPage, 35);
+    });
+  });
+
+  describe('Cache Management (/api/cache-clear)', () => {
+    it('POST /api/cache-clear clears RAM and disk cache for a signed-in user', async () => {
+      const res = await fetch(`${baseUrl}/api/cache-clear`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, true);
     });
   });
 

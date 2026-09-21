@@ -710,7 +710,11 @@ export async function handleClearStorageCache() {
       statusEl.textContent = t('set.clearFailed', 'Ошибка очистки');
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
     }
-    showToast(t('set.cacheClearIncomplete', 'Не удалось полностью очистить кэш'));
+    // The server half of the clear needs a signed-in account (401) while the
+    // browser-side caches above are already gone, so surface the server's reason
+    // instead of a bare "could not clear" that reads like a half-success
+    const reason = err instanceof Error && err.message ? `: ${err.message}` : '';
+    showToast(t('set.cacheClearIncomplete', 'Не удалось полностью очистить кэш') + reason);
   } finally {
     if (btn) btn.disabled = false;
   }
