@@ -10,7 +10,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  width: 100vw;
+  /* No `width: 100vw`: it includes the scrollbar gutter, which shifted the modal and
+     clipped its right edge. `inset: 0` already covers the viewport. */
   height: 100%;
   height: 100dvh;
   z-index: 100000 !important;
@@ -581,17 +582,20 @@
   box-sizing: border-box;
 }
 
-/* Reserve space for the album or similar filmstrip */
+/* Reserve space for the album or similar filmstrip. Measured strip geometry: the similar
+   strip is 190px tall (200px when its row scrolls) sitting on the bottom edge, the album
+   strip is 82px tall sitting 20px above it, so the media area has to clear the top edge
+   of the highest strip. */
 .viewer-content.has-album:not(.ui-hidden) .viewer-media-wrapper {
-  padding-bottom: 96px;
+  padding-bottom: 108px;
 }
 
 .viewer-content.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-  padding-bottom: 184px;
+  padding-bottom: 206px;
 }
 
 .viewer-content.has-album.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-  padding-bottom: 275px;
+  padding-bottom: 292px;
 }
 
 /* Work in a frame: a thin shadow instead of a glow */
@@ -757,10 +761,12 @@
   color: var(--text-inverse);
 }
 
-/* Floating bottom-right YouTube-style video quality gear button & dropdown */
+/* YouTube-style quality gear & dropdown. It is the only quality control, so it sits
+   in the top-right corner of the media area: the video status banner (bottom-right)
+   and the unmute button (top-left) never collide with it. */
 .video-quality-overlay {
   position: absolute;
-  bottom: 24px;
+  top: 24px;
   right: 24px;
   z-index: 55;
   display: flex;
@@ -1182,30 +1188,6 @@
   padding: 8px 14px;
 }
 
-/* Quick archive badge button in viewer toolbar / media overlay */
-.viewer-archive-quick-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: rgba(249, 115, 22, 0.15);
-  border: 1px solid rgba(249, 115, 22, 0.4);
-  color: #fb923c;
-  border-radius: var(--radius-full);
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.viewer-archive-quick-btn:hover {
-  background: rgba(249, 115, 22, 0.28);
-  color: #ffffff;
-  transform: translateY(-1px);
-}
-
 /* Unsupported video fallback container */
 .video-unsupported-fallback {
   display: flex;
@@ -1364,27 +1346,6 @@
 }
 
 .btn-switch-source:hover {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: var(--text-inverse);
-}
-
-.btn-video-quality {
-  padding: 3px 9px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-secondary);
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: all var(--transition-fast);
-}
-
-.btn-video-quality:hover {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
   color: var(--text-inverse);
@@ -1571,8 +1532,8 @@
   font-size: 13px;
   line-height: 1.55;
   color: var(--text-primary);
-  max-height: 240px;
-  overflow-y: auto;
+  /* No own scroll box: the description lives inside the already scrollable sidebar
+     (and the mobile info sheet), where a nested scroller traps the gesture. */
   word-break: break-word;
   overflow-wrap: break-word;
   user-select: text;
@@ -1910,29 +1871,25 @@
     transition: padding-bottom 0.25s ease;
   }
 
+  /* Filmstrip geometry, measured at 390x844 and 360x640: the media area reserves the
+     room the strips below it take (header + 98px thumbs + paddings), plus a gap, so a
+     portrait image is never hidden under them. */
+  .viewer-content {
+    --similar-strip-h: 146px;
+    --album-strip-h: 58px;
+    --strip-gap: 8px;
+  }
+
   .viewer-content.has-album:not(.ui-hidden) .viewer-media-wrapper {
     padding-bottom: calc(62px + max(10px, env(safe-area-inset-bottom, 10px)));
   }
 
   .viewer-content.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-    padding-bottom: calc(130px + max(10px, env(safe-area-inset-bottom, 10px)));
+    padding-bottom: calc(var(--similar-strip-h) + max(10px, env(safe-area-inset-bottom, 10px)));
   }
 
   .viewer-content.has-album.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-    padding-bottom: calc(190px + max(12px, env(safe-area-inset-bottom, 12px)));
-  }
-
-  /* Compact padding for landscape orientation on tablets and phones */
-  @media (max-height: 600px) {
-    .viewer-content.has-album:not(.ui-hidden) .viewer-media-wrapper {
-      padding-bottom: 54px;
-    }
-    .viewer-content.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-      padding-bottom: 100px;
-    }
-    .viewer-content.has-album.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-      padding-bottom: 145px;
-    }
+    padding-bottom: calc(var(--strip-gap) + var(--album-strip-h) + var(--strip-gap) + var(--similar-strip-h) + max(12px, env(safe-area-inset-bottom, 12px)));
   }
 
   .viewer-album-filmstrip {
@@ -1943,7 +1900,7 @@
   }
 
   .viewer-content.has-album.has-similar .viewer-album-filmstrip {
-    bottom: calc(140px + max(8px, env(safe-area-inset-bottom, 8px)));
+    bottom: calc(var(--strip-gap) + var(--similar-strip-h) + max(8px, env(safe-area-inset-bottom, 8px)));
   }
 
   .viewer-similar-filmstrip {
@@ -2016,7 +1973,7 @@
   }
 
   .video-quality-overlay {
-    bottom: max(64px, env(safe-area-inset-bottom, 64px));
+    top: max(12px, env(safe-area-inset-top, 12px));
     right: 12px;
   }
 
@@ -2044,6 +2001,7 @@
     width: 100%;
     height: auto;
     max-height: 75vh;
+    max-height: 75dvh;
     border-left: none;
     border-top: 1px solid var(--border-medium);
     border-top-left-radius: var(--radius-xl);
@@ -2139,6 +2097,55 @@
 
   .viewer-content .viewer-header {
     transition: transform 0.25s ease-in;
+  }
+}
+
+/* Compact padding for short screens: landscape phones and tablets. This used to be nested
+   inside `@media (max-width: 800px)`, so a landscape tablet 801-1024px wide kept the full
+   desktop padding and squeezed the media into a sliver. The width guard keeps wide desktop
+   windows (where the similar strip is still ~190px tall) on the full padding. */
+@media (max-height: 600px) and (max-width: 1024px) {
+  .viewer-content.has-album:not(.ui-hidden) .viewer-media-wrapper {
+    padding-bottom: 54px;
+  }
+
+  .viewer-content.has-similar:not(.ui-hidden) .viewer-media-wrapper {
+    padding-bottom: 100px;
+  }
+
+  .viewer-content.has-album.has-similar:not(.ui-hidden) .viewer-media-wrapper {
+    padding-bottom: 145px;
+  }
+}
+
+/* Narrow desktop (801px - 1024px, e.g. tablets in portrait or snapped browser windows):
+   prevent viewer top bar from overflowing when sidebar is open and buttons collide.
+   Hide secondary header items that are already accessible in sidebar or not vital. */
+@media (min-width: 801px) and (max-width: 1024px) {
+  .viewer-header {
+    padding: 0 10px;
+  }
+
+  .viewer-top-actions {
+    gap: 5px;
+  }
+
+  .viewer-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .viewer-res,
+  .viewer-ext-badge {
+    display: none;
+  }
+
+  .viewer-author-badge {
+    max-width: 130px;
+  }
+
+  #btnCopyLink {
+    display: none;
   }
 }
 
@@ -2302,80 +2309,6 @@
 }
 
 
-/* Similar posts in viewer sidebar */
-.viewer-similar-container {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
-  min-height: 80px;
-}
-
-.viewer-similar-loading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 12px 4px;
-}
-
-.viewer-similar-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-}
-
-.viewer-similar-card {
-  position: relative;
-  aspect-ratio: 1 / 1;
-  border-radius: var(--radius-sm, 6px);
-  overflow: hidden;
-  background: var(--bg-surface-elevated, #232a36);
-  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-  cursor: pointer;
-  transition: transform var(--transition-fast, 0.15s ease), border-color var(--transition-fast, 0.15s ease), box-shadow var(--transition-fast, 0.15s ease);
-}
-
-.viewer-similar-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent-primary);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-}
-
-.viewer-similar-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.viewer-similar-score-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  background: rgba(12, 9, 6, 0.78);
-  backdrop-filter: blur(4px);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 4px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  pointer-events: none;
-}
-
-.viewer-similar-score-high {
-  border-color: rgba(16, 185, 129, 0.5);
-  color: #34d399;
-}
-
-.viewer-similar-empty {
-  color: var(--text-muted);
-  font-size: 12px;
-  padding: 8px 2px;
-}
-
 /* ==========================================================================
    Creator Resolver (Kemono & Pawchive Author Search)
    ========================================================================== */
@@ -2428,6 +2361,7 @@
   flex-direction: column;
   overflow: hidden;
   max-height: 85vh;
+  max-height: 85dvh;
 }
 
 .creator-resolver-header-text {

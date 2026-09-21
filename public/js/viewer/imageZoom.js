@@ -51,9 +51,11 @@ export function setupImageZoom(img, { showToast } = {}) {
     const curW = imgNaturalW * zoomLevel;
     const curH = imgNaturalH * zoomLevel;
 
-    // Maximum allowed panning (half of the visible overflow) + soft 40px margin
-    const maxPanX = Math.max(0, (curW - contRect.width) / 2) + 40;
-    const maxPanY = Math.max(0, (curH - contRect.height) / 2) + 40;
+    // Maximum allowed panning: half of the hidden overflow, so the image edge lands
+    // exactly on the container edge. Any extra margin leaves a visible gap of
+    // background once the pan gesture is released.
+    const maxPanX = Math.max(0, (curW - contRect.width) / 2);
+    const maxPanY = Math.max(0, (curH - contRect.height) / 2);
 
     panX = Math.max(-maxPanX, Math.min(maxPanX, panX));
     panY = Math.max(-maxPanY, Math.min(maxPanY, panY));

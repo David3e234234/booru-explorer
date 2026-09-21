@@ -9,6 +9,20 @@ export function haptic(pattern = 12) {
   }
 }
 
+/**
+ * Toasts and card badges interpolate tag names, author names and descriptions coming
+ * from the Booru APIs into innerHTML, so those strings have to be escaped first.
+ * Tags such as `*: <meta>` would otherwise break the markup.
+ */
+export function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 export function showToast(message) {
   const toastContainer = document.getElementById('toastContainer');
   if (!toastContainer) return;
@@ -16,7 +30,7 @@ export function showToast(message) {
   toast.className = 'toast';
   toast.innerHTML = `
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-    <span>${message}</span>
+    <span>${escapeHtml(message)}</span>
   `;
   toastContainer.appendChild(toast);
   setTimeout(() => {
@@ -33,8 +47,8 @@ export function showActionToast(message, actionLabel, onAction, duration = 6000)
   const toast = document.createElement('div');
   toast.className = 'toast';
   toast.innerHTML = `
-    <span>${message}</span>
-    <button type="button" class="toast-action-btn">${actionLabel}</button>
+    <span>${escapeHtml(message)}</span>
+    <button type="button" class="toast-action-btn">${escapeHtml(actionLabel)}</button>
   `;
   let dismissed = false;
   const dismiss = () => {
@@ -166,5 +180,26 @@ export function isVideoMediaUrl(url) {
   const clean = url.split('?')[0].toLowerCase();
   return clean.endsWith('.mp4') || clean.endsWith('.webm') ||
          clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
+}
+
+/**
+ * Card templates render the duration badge only when the duration is known at render
+ * time, so duration probes and metadata resolves have to upsert it afterwards.
+ * Styling lives in `.badge-format.badge-duration` to keep both paths identical.
+ */
+export function upsertCardDurationBadge(cardEl, durationText) {
+  if (!cardEl || !durationText) return;
+
+  let badge = cardEl.querySelector('.badge-duration');
+  if (!badge) {
+    const badgeRow = cardEl.querySelector('.badge-group-top > div');
+    if (!badgeRow) return;
+    badge = document.createElement('span');
+    badge.className = 'badge-format badge-duration';
+    badgeRow.appendChild(badge);
+  }
+
+  badge.textContent = durationText;
+  badge.setAttribute('title', t('gal.durationBadge.title', 'Длительность: {d}').replace('{d}', durationText));
 }
 

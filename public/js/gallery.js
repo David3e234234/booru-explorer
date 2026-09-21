@@ -11,7 +11,7 @@ import {
   restoreInterestTag
 } from './state.js';
 import { getProxiedUrl, getAuthHeaders, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
-import { showToast, showActionToast, haptic, isVideoMediaUrl } from './modules/uiUtils.js';
+import { showToast, showActionToast, haptic, isVideoMediaUrl, upsertCardDurationBadge, escapeHtml } from './modules/uiUtils.js';
 import { t } from './i18n.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onAuthorSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite, onFindSimilar }) {
@@ -20,7 +20,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   const emptyState = document.getElementById('emptyState');
   const resultsCount = document.getElementById('resultsCount');
   const currentSiteLabel = document.getElementById('currentSiteLabel');
-  const checkHoverPreview = document.getElementById('checkHoverPreview');
   const infiniteScrollTrigger = document.getElementById('infiniteScrollTrigger');
   const scrollLoader = document.getElementById('scrollLoader');
   const mainContent = document.querySelector('.main-content');
@@ -506,7 +505,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
               <span>${t('gal.emptyFollowingDesc', 'Добавляйте авторов в избранное на карточках постов или в профиле во вкладке «Подписки», чтобы видеть их новые публикации.')}</span>
               ${onAddAuthor ? `
                 <div style="margin-top: 14px;">
-                  <button type="button" class="btn-action-primary btn-add-author" id="btnEmptyAddAuthorFollowing" style="padding: 9px 18px; font-size: 13px;">
+                  <button type="button" class="btn-add-author" id="btnEmptyAddAuthorFollowing">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                     <span>${t('gal.addAuthorManually', 'Добавить автора вручную')}</span>
                   </button>
@@ -523,7 +522,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
               <span>${t('gal.emptyFollowingFilteredDesc', 'У ваших отслеживаемых авторов нет постов в выбранном источнике или под текущие фильтры.')}</span>
               ${(onSelectSite && state.currentSite !== 'all') ? `
                 <div style="margin-top: 14px;">
-                  <button type="button" class="btn-action-primary" id="btnEmptySwitchToAllSources" style="padding: 9px 18px; font-size: 13px;">
+                  <button type="button" class="btn-secondary" id="btnEmptySwitchToAllSources">
                     <span>${t('gal.allSources', 'Все источники')}</span>
                   </button>
                 </div>
@@ -547,7 +546,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
 
     emptyState.style.display = 'none';
-    resultsCount.textContent = t('gal.loadedCount', 'Загружено: {n} постов').replace('{n}', postsToDisplay.length);
+    resultsCount.textContent = t('gal.countPosts', '{n} постов').replace('{n}', postsToDisplay.length);
 
     // Show the "Load more" button
     if (loadMoreContainer) {
@@ -670,7 +669,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             authorChip.setAttribute('title', t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanA));
             const asstCount = Array.isArray(post.assistants) ? post.assistants.length : 0;
             const asstBadge = asstCount > 0 ? `<span class="card-author-assistants-badge">+${asstCount}</span>` : '';
-            authorChip.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-user"/></svg><span class="card-author-name">${cleanA}</span>${asstBadge}`;
+            authorChip.innerHTML = `<svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-user"/></svg><span class="card-author-name">${escapeHtml(cleanA)}</span>${asstBadge}`;
           }
         }
 
@@ -681,20 +680,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             card._post.duration = data.duration;
             card._post.durationText = data.durationText;
           }
-          let durBadge = card.querySelector('.badge-duration');
-          if (!durBadge) {
-            const topGroup = card.querySelector('.badge-group-top > div');
-            if (topGroup) {
-              durBadge = document.createElement('span');
-              durBadge.className = 'badge-format badge-duration';
-              durBadge.style.cssText = 'background-color: rgba(12, 9, 6, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
-              topGroup.appendChild(durBadge);
-            }
-          }
-          if (durBadge) {
-            durBadge.textContent = post.durationText;
-            durBadge.setAttribute('title', t('gal.durationBadge.title', 'Длительность: {d}').replace('{d}', post.durationText));
-          }
+          upsertCardDurationBadge(card, post.durationText);
         }
       })
       .catch(() => {
@@ -830,11 +816,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const assistantsCount = Array.isArray(post.assistants) ? post.assistants.length : 0;
     const assistantsTitle = assistantsCount > 0 ? (t('viewer.labelAssistants', 'Помощники:') + ' ' + post.assistants.join(', ')) : '';
     const assistantsBadge = assistantsCount > 0
-      ? `<span class="card-author-assistants-badge" title="${assistantsTitle}">+${assistantsCount}</span>`
+      ? `<span class="card-author-assistants-badge" title="${escapeHtml(assistantsTitle)}">+${assistantsCount}</span>`
       : '';
 
     const authorChip = cleanAuthor
-      ? `<div class="card-author-chip" data-author="${cleanAuthor}" title="${t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor)}"><svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-user"/></svg><span class="card-author-name">${cleanAuthor}</span>${assistantsBadge}</div>`
+      ? `<div class="card-author-chip" data-author="${escapeHtml(cleanAuthor)}" title="${escapeHtml(t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor))}"><svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-user"/></svg><span class="card-author-name">${escapeHtml(cleanAuthor)}</span>${assistantsBadge}</div>`
       : `<div class="card-author-spacer"></div>`;
 
     let durationBadge = '';
@@ -846,7 +832,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     let matchBadge = '';
     if (state.currentCategory === 'recommended' && post.matchPercent && post.matchPercent > 0) {
       const matchedInfo = (Array.isArray(post.matchedTags) && post.matchedTags.length > 0)
-        ? `&#10;${t('gal.matchTagsInfo', 'Совпало: {tags}').replace('{tags}', post.matchedTags.join(', '))}`
+        ? `&#10;${escapeHtml(t('gal.matchTagsInfo', 'Совпало: {tags}').replace('{tags}', post.matchedTags.join(', ')))}`
         : '';
       matchBadge = `<button type="button" class="badge-format match-percent btn-match-popover" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%. Нажмите для деталей').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%</button>`;
     }
@@ -876,7 +862,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     card.innerHTML = `
       <div class="media-thumb-container">
         <div class="badge-group-top">
-          <div style="display: flex; gap: 3px; align-items: center; flex-wrap: wrap; max-width: 68%;">
+          <div class="card-badge-row">
             ${siteBadge}
             ${albumBadge}
             ${formatBadge}
@@ -891,7 +877,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
         <img class="media-thumb" 
              src="${mainThumbSrc}" 
-             alt="Booru Media" 
+             alt="" 
              loading="lazy" 
              decoding="async"
              referrerpolicy="no-referrer"
@@ -972,17 +958,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             const mins = Math.floor(videoEl.duration / 60);
             const secs = Math.floor(videoEl.duration % 60);
             post.durationText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-            let durBadge = card.querySelector('.badge-duration');
-            if (!durBadge) {
-              const topGroup = card.querySelector('.badge-group-top > div');
-              if (topGroup) {
-                durBadge = document.createElement('span');
-                durBadge.className = 'badge-format badge-duration';
-                durBadge.style.cssText = 'background-color: rgba(12, 9, 6, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
-                topGroup.appendChild(durBadge);
-              }
-            }
-            if (durBadge) durBadge.textContent = post.durationText;
+            upsertCardDurationBadge(card, post.durationText);
           }
         }, { once: true });
 
@@ -1118,10 +1094,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         return `
           <div class="match-tag-row">
             <div class="match-tag-info">
-              <span class="match-tag-cat match-cat-${item.category || 'general'}">${catLabel}</span>
-              <span class="match-tag-name">${item.display || item.tag}</span>
+              <span class="match-tag-cat match-cat-${escapeHtml(item.category || 'general')}">${catLabel}</span>
+              <span class="match-tag-name">${escapeHtml(item.display || item.tag)}</span>
             </div>
-            <button type="button" class="btn-rec-tag-action ${isExcluded ? 'is-excluded' : ''}" data-tag="${item.tag}">
+            <button type="button" class="btn-rec-tag-action ${isExcluded ? 'is-excluded' : ''}" data-tag="${escapeHtml(item.tag)}">
               ${isExcluded ? t('gal.matchPopover.excluded', 'Исключен') : t('gal.matchPopover.exclude', 'Скрыть тег')}
             </button>
           </div>
@@ -1288,7 +1264,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
       return;
     }
-    const authorBadgeEl = e.target.closest('.card-author-chip, .badge-format.author');
+    const authorBadgeEl = e.target.closest('.card-author-chip');
     if (authorBadgeEl) {
       e.stopPropagation();
       const rawA = authorBadgeEl.getAttribute('data-author') || post.author || (post.tagDetails?.artist && post.tagDetails.artist[0]) || '';
@@ -1334,7 +1310,6 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const videoEl = card.querySelector('.hover-video-preview');
     if (!post || !post.isVideo || !videoEl) return;
     if (state.settings?.videoAutoplayHover === false) return;
-    if (checkHoverPreview && !checkHoverPreview.checked) return;
 
     // Smart delay (150 ms) to avoid hammering the network during fast scrolling
     hoverState = { card, timer: null, videoEl };
@@ -1487,7 +1462,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         stateDesc.innerHTML = `
           <span>${t('gal.noAuthorsHint', 'У вас пока нет любимых авторов.')}</span>
           <div style="margin-top: 14px;">
-            <button type="button" class="btn-action-primary btn-add-author" id="btnAddAuthorEmpty" style="padding: 9px 18px; font-size: 13px;">
+            <button type="button" class="btn-add-author" id="btnAddAuthorEmpty">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span>${t('gal.addAuthorManually', 'Добавить автора вручную')}</span>
             </button>

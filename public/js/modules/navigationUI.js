@@ -7,12 +7,16 @@ import { t } from '../i18n.js';
 
 let customSourcesCallbacks = null;
 
+// Built-in mix used when the user has not configured custom sources yet, and the target
+// of the "select all / reset" toggle in the custom sources modal.
+const DEFAULT_CUSTOM_SOURCES = ['danbooru', 'gelbooru', 'rule34', 'yandere'];
+
 export function getCustomSourcesList() {
   const custom = state.settings?.customSources;
   if (Array.isArray(custom) && custom.length > 0) {
     return custom;
   }
-  return ['danbooru', 'gelbooru', 'rule34', 'yandere'];
+  return [...DEFAULT_CUSTOM_SOURCES];
 }
 
 export function updateCurrentSiteLabel() {
@@ -52,7 +56,7 @@ export function renderSitesBar({ onSelectSite }) {
   customItem.innerHTML = `
     <div class="source-item-left">
       <span class="source-dot" style="background: linear-gradient(135deg, #f59e0b, #ec4899)"></span>
-      <span class="source-item-title">${t('navui.customChoice', 'Свой выбор')}</span>
+      <span>${t('navui.customChoice', 'Свой выбор')}</span>
       <span class="source-custom-badge">${customList.length}</span>
     </div>
     <button type="button" class="btn-source-gear" title="${t('navui.configureSources.title', 'Настроить выбранные сайты')}">
@@ -157,12 +161,25 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
 
 let tempCustomSources = [];
 
+// The toggle label always names the next action, so it has to be recomputed both after a
+// click and whenever the modal is reopened with a different selection.
+function updateToggleAllLabel() {
+  const btnToggleAll = document.getElementById('btnCustomSourcesToggleAll');
+  if (!btnToggleAll) return;
+  const allIds = (state.sites || []).map(s => s.id);
+  const isAllSelected = allIds.length > 0 && allIds.every(id => tempCustomSources.includes(id));
+  btnToggleAll.textContent = isAllSelected
+    ? t('customSources.resetAll', 'Сбросить все')
+    : t('customSources.selectAll', 'Выбрать все');
+}
+
 export function openCustomSourcesModal() {
   const modalBackdrop = document.getElementById('modalCustomSourcesBackdrop');
   const grid = document.getElementById('customSourcesCheckboxGrid');
   if (!modalBackdrop || !grid) return;
 
   tempCustomSources = [...getCustomSourcesList()];
+  updateToggleAllLabel();
   renderCustomSourcesCheckboxes();
 
   modalBackdrop.style.display = 'flex';
@@ -227,13 +244,13 @@ export function initCustomSourcesModal({ onApply }) {
   if (btnToggleAll) {
     btnToggleAll.addEventListener('click', () => {
       const allIds = (state.sites || []).map(s => s.id);
-      if (tempCustomSources.length === allIds.length) {
-        tempCustomSources = ['danbooru'];
-        btnToggleAll.textContent = t('navui.resetAll', 'Сбросить все');
+      const isAllSelected = allIds.length > 0 && allIds.every(id => tempCustomSources.includes(id));
+      if (isAllSelected) {
+        tempCustomSources = [...DEFAULT_CUSTOM_SOURCES];
       } else {
         tempCustomSources = [...allIds];
-        btnToggleAll.textContent = t('customSources.selectAll', 'Выбрать все');
       }
+      updateToggleAllLabel();
       renderCustomSourcesCheckboxes();
     });
   }

@@ -618,6 +618,7 @@ Object.assign(en, {
   'customSources.title': 'Custom source mix',
   'customSources.hint': 'Pick the Booru sites whose posts will be collected in parallel and shuffled into the feed.',
   'customSources.selectAll': 'Select all',
+  'customSources.resetAll': 'Reset to default list',
   'customSources.apply': 'Apply and search'
 });
 
@@ -729,7 +730,6 @@ Object.assign(en, {
   'navui.customChoice': 'Custom selection',
   'navui.configureSources.title': 'Configure selected sites',
   'navui.configureList.title': 'Configure list',
-  'navui.resetAll': 'Reset all',
   'navui.selectAtLeastOne': 'Select at least one source',
   'navui.selectedCount': 'Selected sources: {n}',
 

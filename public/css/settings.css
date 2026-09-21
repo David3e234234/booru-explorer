@@ -28,6 +28,7 @@
   width: 100%;
   max-width: 720px;
   max-height: 88vh;
+  max-height: 88dvh;
   box-shadow: var(--shadow-lg);
   overflow: hidden;
   display: flex;
@@ -114,6 +115,7 @@
   padding: 18px 20px;
   flex: 1 1 auto;
   max-height: 56vh;
+  max-height: 56dvh;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-medium) transparent;

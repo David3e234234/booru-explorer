@@ -1,14 +1,34 @@
 import { haptic } from '../modules/uiUtils.js';
 
+// Native browser video controls are drawn inside the <video> box and never exist in
+// the DOM, so the seek/volume bar can only be hit-tested by geometry. 64px covers the
+// bottom control bar of Chrome and Safari; a narrower band would keep the top part of
+// the seek bar swipeable and flip the post instead of scrubbing.
+const NATIVE_VIDEO_CONTROLS_BAND_PX = 64;
+
+function isVideoControlsTouch(target, touch) {
+  if (!touch) return false;
+  const videoEl = target.closest('.viewer-video');
+  if (!videoEl) return false;
+
+  const rect = videoEl.getBoundingClientRect();
+  const band = Math.min(NATIVE_VIDEO_CONTROLS_BAND_PX, rect.height);
+  return touch.clientY >= rect.bottom - band && touch.clientX >= rect.left && touch.clientX <= rect.right;
+}
+
 /**
  * Checks if the touch event originated from an interactive UI element
- * (e.g. video control, filmstrip, button, input, link, sidebar).
+ * (e.g. native video controls, filmstrip, button, input, link, sidebar).
+ * The rest of the video stays swipeable, otherwise a video post could not be
+ * navigated on mobile at all (the arrow buttons are desktop-only).
  * @param {EventTarget|null} target
+ * @param {Touch} [touch]
  * @returns {boolean}
  */
-export function isInteractiveTouchTarget(target) {
+export function isInteractiveTouchTarget(target, touch) {
   if (!target || typeof target.closest !== 'function') return false;
   return Boolean(
+    isVideoControlsTouch(target, touch) ||
     target.closest('.video-status-banner') ||
     target.closest('.viewer-album-filmstrip') ||
     target.closest('.viewer-similar-filmstrip') ||
@@ -63,7 +83,7 @@ export function setupViewerGestures({
   let lastTapTime = 0;
 
   const onTouchStart = (e) => {
-    if (isInteractiveTouchTarget(e.target)) {
+    if (isInteractiveTouchTarget(e.target, e.touches[0])) {
       isPinching = false;
       isDraggingDown = false;
       touchStartX = 0;
@@ -100,7 +120,7 @@ export function setupViewerGestures({
   };
 
   const onTouchMove = (e) => {
-    if (isInteractiveTouchTarget(e.target) || !touchStartY) {
+    if (isInteractiveTouchTarget(e.target, e.touches[0]) || !touchStartY) {
       return;
     }
 
@@ -144,7 +164,7 @@ export function setupViewerGestures({
   const onTouchEnd = (e) => {
     const zoom = getZoomInstance ? getZoomInstance() : null;
 
-    if (isInteractiveTouchTarget(e.target) && !isDraggingDown) {
+    if (isInteractiveTouchTarget(e.target, e.changedTouches[0]) && !isDraggingDown) {
       touchStartX = 0;
       touchStartY = 0;
       touchStartTime = 0;

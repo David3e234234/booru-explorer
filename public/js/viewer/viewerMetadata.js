@@ -1,6 +1,6 @@
 import { state, isAuthorFavorite, setFavoriteAuthors } from '../state.js';
 import { toggleFavoriteAuthor, updateFavoriteAuthorPreview, syncFavoriteAuthors, getAuthHeaders } from '../api.js';
-import { showToast, haptic } from '../modules/uiUtils.js';
+import { showToast, haptic, upsertCardDurationBadge } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 import { openCreatorResolverModal } from './viewerCreatorResolver.js';
 
@@ -71,49 +71,15 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
 
         const cardEl = document.querySelector(`.media-card[data-post-id="${targetPostId}"]`);
         if (cardEl) {
-          if (data.author) {
-            if (cardEl._post) cardEl._post.author = data.author;
-            let authorBadge = cardEl.querySelector('.badge-format.author');
-            const parts = data.author.split(',').map(s => s.trim()).filter(Boolean);
-            const mainAuthor = parts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || parts[0] || '';
-            const cleanA = mainAuthor.replace(/^@/, '').replace(/^pixiv:/, '').replace(/_?\((artist|creator|circle|studio|doujin|illustrator)\)$/i, '').trim();
-            if (cleanA && cleanA.length >= 2) {
-              if (authorBadge) {
-                authorBadge.textContent = cleanA;
-                authorBadge.setAttribute('data-author', cleanA);
-                authorBadge.setAttribute('title', `Автор: ${cleanA} (нажмите для поиска)`);
-              } else {
-                const bottomGroup = cardEl.querySelector('.badge-group-bottom');
-                if (bottomGroup) {
-                  const span = document.createElement('span');
-                  span.className = 'badge-format author';
-                  span.setAttribute('data-author', cleanA);
-                  span.setAttribute('title', `Автор: ${cleanA} (нажмите для поиска)`);
-                  span.textContent = cleanA;
-                  bottomGroup.appendChild(span);
-                }
-              }
-            }
-          }
+          // Only the stored post is refreshed here: the visible author chip lives on the
+          // gallery card (`.card-author-chip`) and is updated by the gallery resolver.
+          if (data.author && cardEl._post) cardEl._post.author = data.author;
           if (data.duration) {
             if (cardEl._post) {
               cardEl._post.duration = data.duration;
               cardEl._post.durationText = data.durationText;
             }
-            let durBadge = cardEl.querySelector('.badge-duration');
-            if (!durBadge) {
-              const topGroup = cardEl.querySelector('.badge-group-top > div');
-              if (topGroup) {
-                durBadge = document.createElement('span');
-                durBadge.className = 'badge-format badge-duration';
-                durBadge.style.cssText = 'background-color: rgba(12, 9, 6, 0.85); border: 1px solid rgba(255, 255, 255, 0.2);';
-                topGroup.appendChild(durBadge);
-              }
-            }
-            if (durBadge) {
-              durBadge.textContent = data.durationText;
-              durBadge.setAttribute('title', `Длительность: ${data.durationText}`);
-            }
+            upsertCardDurationBadge(cardEl, data.durationText);
           }
         }
         return data;
@@ -252,21 +218,6 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
             const card = document.querySelector(`.media-card[data-post-id="${currentPost.id}"]`);
             if (card) {
               card._post = currentPost;
-              const bottomGroup = card.querySelector('.badge-group-bottom');
-              if (bottomGroup && currentPost.author) {
-                let authorBadge = bottomGroup.querySelector('.badge-format.author');
-                const cleanA = currentPost.author.split(',')[0].trim().replace(/^@/, '').replace(/^pixiv:/i, '').trim();
-                if (cleanA && cleanA.length >= 2) {
-                  if (!authorBadge) {
-                    authorBadge = document.createElement('span');
-                    authorBadge.className = 'badge-format author';
-                    bottomGroup.appendChild(authorBadge);
-                  }
-                  authorBadge.setAttribute('data-author', cleanA);
-                  authorBadge.setAttribute('title', t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanA));
-                  authorBadge.textContent = cleanA;
-                }
-              }
             }
           }
           return data;

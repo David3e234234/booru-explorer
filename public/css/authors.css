@@ -150,7 +150,9 @@
   pointer-events: none;
 }
 
-.fav-authors-search-input {
+/* Matches the global `input[type="text"]` specificity from main.css so the left
+   padding reserved for the magnifier icon is not overridden to 12px. */
+input.fav-authors-search-input {
   background-color: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -427,6 +429,7 @@
 .modal-dialog-cover-picker {
   max-width: 660px;
   max-height: 85vh;
+  max-height: 85dvh;
   display: flex;
   flex-direction: column;
 }
@@ -449,6 +452,7 @@
   flex-direction: column;
   gap: 12px;
   max-height: calc(85vh - 75px);
+  max-height: calc(85dvh - 75px);
 }
 
 .cover-picker-toolbar {

@@ -58,6 +58,7 @@
   .gallery-grid.grid-1col .media-thumb-container {
     aspect-ratio: auto;
     max-height: 70vh;
+    max-height: 70dvh;
     min-height: 260px;
   }
 
@@ -140,6 +141,7 @@
   aspect-ratio: auto;
   min-height: 260px;
   max-height: 70vh;
+  max-height: 70dvh;
 }
 
 .media-thumb-container {
@@ -194,8 +196,14 @@
   pointer-events: none;
 }
 
-.badge-group-bottom {
-  display: none !important;
+/* Left badge cluster (site, format, duration, match); capped so it cannot run
+   into the rating badges on the right. */
+.card-badge-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: 68%;
 }
 
 .badge-format {
@@ -230,6 +238,13 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #d8cfc2;
   font-size: 9px;
+}
+
+/* Duration is resolved asynchronously, so the badge may appear later than the card:
+   one rule for both paths keeps its look from jumping when the value arrives. */
+.badge-format.badge-duration {
+  background-color: rgba(12, 9, 6, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .badge-format.video {
@@ -314,20 +329,6 @@
 .badge-site.site-tbib { border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; }
 .badge-site.site-pawchive { border-color: rgba(249, 115, 22, 0.45); color: #fdba74; }
 .badge-site.site-kemono { border-color: rgba(59, 130, 246, 0.45); color: #93c5fd; }
-
-.badge-ai {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
-  background-color: rgba(245, 158, 11, 0.9);
-  border-radius: var(--radius-sm);
-  font-size: 10px;
-  font-weight: 700;
-  color: #1c1204;
-  white-space: nowrap;
-  pointer-events: auto;
-}
 
 /* Bottom overlay with score and quick like */
 .card-overlay-bottom {
@@ -787,7 +788,9 @@
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 300;
+  /* Above every overlay (viewer modal 100000, archive/creator modals 100010):
+     confirmation and error toasts must stay readable inside the viewer. */
+  z-index: 100200;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1045,6 +1048,7 @@
   max-width: 580px;
   width: 92%;
   max-height: 85vh;
+  max-height: 85dvh;
   display: flex;
   flex-direction: column;
 }
@@ -1163,6 +1167,7 @@
   max-width: 860px;
   width: 95vw;
   height: 85vh;
+  height: 85dvh;
   max-height: 740px;
   display: flex;
   flex-direction: column;
@@ -1196,7 +1201,9 @@
   pointer-events: none;
 }
 
-.wiki-search-input {
+/* `input.wiki-search-input` matches the global `input[type="text"]` specificity
+   from main.css so this left padding (room for the magnifier icon) wins. */
+input.wiki-search-input {
   width: 100%;
   padding: 8px 36px 8px 36px;
   background-color: var(--bg-surface);

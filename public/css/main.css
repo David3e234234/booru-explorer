@@ -327,8 +327,11 @@ select option {
 /* ── Main layout with left sidebar ── */
 .app-layout {
   display: flex;
+  /* dvh keeps the layout inside the visible area while mobile browser chrome shows */
   height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
   max-height: calc(100vh - 56px);
+  max-height: calc(100dvh - 56px);
   width: 100%;
   max-width: 100vw;
   overflow: hidden;
@@ -1193,6 +1196,7 @@ input.search-input:focus,
   left: 0;
   right: 0;
   max-height: 82vh;
+  max-height: 82dvh;
   background: var(--bg-surface);
   border-top-left-radius: var(--radius-xl);
   border-top-right-radius: var(--radius-xl);
@@ -1262,6 +1266,7 @@ input.search-input:focus,
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   max-height: calc(85vh - 70px);
+  max-height: calc(85dvh - 70px);
 }
 
 /* Category grid inside the sheet */

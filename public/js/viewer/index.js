@@ -61,22 +61,32 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let currentVideoInstance = null;
   let activeResolvePromise = null;
 
+  // Posts opened directly (e.g. from the "similar" strip) have no feed neighbours, so
+  // the unavailable arrow is hidden instead of shown greyed out as a dead control.
+  function setDirectNavButton(btn, isAvailable) {
+    btn.style.display = isAvailable ? '' : 'none';
+    btn.disabled = !isAvailable;
+    btn.classList.toggle('is-disabled', !isAvailable);
+  }
+
   function updateNavButtons() {
     if (!btnPrev || !btnNext) return;
 
+    const hasAlbumPrev = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0);
+    const hasAlbumNext = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1);
+
     if (directPostRef) {
-      const hasAlbumPrev = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0);
-      const hasAlbumNext = Boolean(currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1);
-      btnPrev.disabled = !hasAlbumPrev;
-      btnPrev.classList.toggle('is-disabled', !hasAlbumPrev);
-      btnNext.disabled = !hasAlbumNext;
-      btnNext.classList.toggle('is-disabled', !hasAlbumNext);
+      setDirectNavButton(btnPrev, hasAlbumPrev);
+      setDirectNavButton(btnNext, hasAlbumNext);
       return;
     }
 
+    btnPrev.style.display = '';
+    btnNext.style.display = '';
+
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-    const canPrev = (currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0) || (state.currentViewerIndex > 0);
-    const canNext = (currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1) || (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length - 1);
+    const canPrev = hasAlbumPrev || (state.currentViewerIndex > 0);
+    const canNext = hasAlbumNext || (state.currentViewerIndex >= 0 && state.currentViewerIndex < list.length - 1);
 
     btnPrev.disabled = !canPrev;
     btnPrev.classList.toggle('is-disabled', !canPrev);

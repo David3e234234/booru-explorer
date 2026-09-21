@@ -279,10 +279,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       <div class="video-progress-fill" style="width: 0%;"></div>
     </div>
     <div class="video-status-actions">
-      <button class="btn-video-quality" title="${t('vp.qualityBtn.title', 'Качество видео (нажмите для переключения)')}">
-        <span>${t('vp.quality', 'Качество')}</span>
-        <span class="video-quality-val">Авто</span>
-      </button>
       <button class="btn-download-video" title="${t('vp.downloadBtn.title', 'Скачать исходный видео-файл на устройство')}">${t('vp.downloadBtn', 'Скачать видео')}</button>
       <button class="btn-cache-toggle" title="${t('vp.cacheBtn.title', 'Полностью закэшировать видео в память для просмотра без лагов')}">${t('vp.cacheBtn', 'Кэш в память')}</button>
       <button class="btn-switch-source" title="${t('vp.switchSourceBtn.title', 'Переключить между прямым источником и прокси')}">${t('vp.proxyBtn', 'Прокси')}</button>
@@ -840,10 +836,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   };
 
-  const qualityBtn = statusBanner.querySelector('.btn-video-quality');
-  const qualityValEl = statusBanner.querySelector('.video-quality-val');
-
-  // Floating YouTube-style quality menu & bottom-right button
+  // Floating YouTube-style quality menu: the only quality control, so it stays
+  // reachable after the status banner hides itself
   const qualityMenuWrapper = document.createElement('div');
   qualityMenuWrapper.className = 'video-quality-overlay';
 
@@ -939,11 +933,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   document.addEventListener('click', onDocClickCloseQuality);
 
   const updateQualityButtonLabel = () => {
-    const avail = getAvailableQualities();
-    const match = avail.find(a => a.key === activeQuality);
-    const labelText = match ? match.label : (activeQuality || 'Авто');
-    if (qualityValEl) qualityValEl.textContent = labelText;
-
     const overlayLabel = overlayQualityBtn.querySelector('.video-quality-overlay-label');
     if (overlayLabel) {
       // Short label for the YouTube-style gear icon badge (e.g. "480p", "720p", "1080p", "Ориг")
@@ -988,16 +977,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }, { once: true });
     safePlay();
   };
-
-  if (qualityBtn) {
-    qualityBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const avail = getAvailableQualities();
-      const currIdx = avail.findIndex(a => a.key === activeQuality);
-      const nextIdx = (currIdx + 1) % avail.length;
-      switchQuality(avail[nextIdx].key);
-    });
-  }
 
   if (switchBtn) {
     switchBtn.textContent = currentSource === 'proxy' ? t('vp.directCdn', 'Прямой CDN') : t('vp.proxyBtn', 'Прокси');

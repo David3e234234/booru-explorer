@@ -16,13 +16,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>.mobile-only{display:none!important;}</style>
   <link rel="stylesheet" href="css/variables.css?v=8.4">
-  <link rel="stylesheet" href="css/main.css?v=9.4">
-  <link rel="stylesheet" href="css/components.css?v=11.1">
-  <link rel="stylesheet" href="css/settings.css?v=1.1">
-  <link rel="stylesheet" href="css/authors.css?v=1.0">
+  <link rel="stylesheet" href="css/main.css?v=9.5">
+  <link rel="stylesheet" href="css/components.css?v=11.3">
+  <link rel="stylesheet" href="css/settings.css?v=1.2">
+  <link rel="stylesheet" href="css/authors.css?v=1.1">
   <link rel="stylesheet" href="css/profile.css?v=1.0">
-  <link rel="stylesheet" href="css/viewer.css?v=14.1">
-  <link rel="stylesheet" href="css/archive-inspect.css?v=1.1">
+  <link rel="stylesheet" href="css/viewer.css?v=14.4">
+  <link rel="stylesheet" href="css/archive-inspect.css?v=1.2">
   <script src="js/mp4box.all.min.js"></script>
 </head>
 <body>
@@ -34,7 +34,7 @@
     <symbol id="ic-heart-filled" viewBox="0 0 24 24"><path fill="currentColor" stroke="currentColor" stroke-width="2" d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></symbol>
     <symbol id="ic-bookmark" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></symbol>
     <symbol id="ic-bookmark-filled" viewBox="0 0 24 24"><path fill="currentColor" stroke="currentColor" stroke-width="2" d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></symbol>
-    <symbol id="ic-star-filled" viewBox="0 0 24 24"><polygon fill="currentColor" stroke="currentColor" points="12 2 15.09 8.26 22 9.27 17 14.14 28.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
+    <symbol id="ic-star-filled" viewBox="0 0 24 24"><polygon fill="currentColor" stroke="currentColor" points="12 2 15.09 8.26 22 9.27 17 14.14 22 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></symbol>
     <symbol id="ic-album" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.5"><rect width="16" height="16" x="2" y="2" rx="2"/><path d="M6 18v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2"/></g></symbol>
     <symbol id="ic-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
     <symbol id="ic-user" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2"/></symbol>
@@ -429,7 +429,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" id="profileAuthorsSearchInput" class="fav-authors-search-input" placeholder="Поиск среди подписок..." data-i18n-placeholder="profile.authorsSearch.placeholder" autocomplete="off">
             </div>
-            <button type="button" class="btn-action-primary btn-add-author" id="btnProfileAddAuthor" title="Добавить автора в любимые вручную" data-i18n-title="profile.addAuthor.title">
+            <button type="button" class="btn-add-author" id="btnProfileAddAuthor" title="Добавить автора в любимые вручную" data-i18n-title="profile.addAuthor.title">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span data-i18n="profile.addAuthor">Добавить автора</span>
             </button>
@@ -477,7 +477,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" id="favAuthorsSearchInput" class="fav-authors-search-input" placeholder="Поиск автора..." data-i18n-placeholder="favs.authorSearch.placeholder" autocomplete="off">
             </div>
-            <button class="btn-action-primary btn-add-author" id="btnAddAuthorModalOpen" title="Добавить автора в избранное" data-i18n-title="favs.addAuthor.title">
+            <button class="btn-add-author" id="btnAddAuthorModalOpen" title="Добавить автора в избранное" data-i18n-title="favs.addAuthor.title">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               <span data-i18n="favs.addAuthor">Добавить автора</span>
             </button>
@@ -660,7 +660,7 @@
             <span id="viewerAuthorText">Автор</span>
           </button>
           <button class="viewer-fav-author-btn" id="viewerFavAuthorBtn" style="display: none;" title="Добавить/удалить автора из избранных" data-i18n-title="viewer.favAuthor.title">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 22 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
           </button>
           <button class="viewer-fav-author-btn viewer-find-creator-btn" id="viewerFindCreatorBtn" style="display: none;" title="Найти оригинал или профиль автора на Kemono / Pawchive" data-i18n-title="viewer.findOnKemono.title">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -2645,6 +2645,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=21.17"></script>
+  <script type="module" src="js/app.js?v=21.19"></script>
 </body>
 </html>
