@@ -24,7 +24,7 @@ import { fetchSafebooruPostById } from '../parsers/safebooru.js';
 import { fetchMoebooruPostById } from '../parsers/moebooru.js';
 import { loadGlobalTagSummary, getTagCategory, META_KEYWORDS } from '../utils/tagClassifier.js';
 import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAuthorCompatible } from '../utils/albumHelper.js';
-import { fetchSafe, safeJsonParse, isSafeExternalUrl, normalizeProxyUrl } from '../utils/network.js';
+import { fetchSafe, safeJsonParse, isSafeExternalUrlResolved, normalizeProxyUrl } from '../utils/network.js';
 import { requireAuth } from '../services/userService.js';
 import { logInfo, logError } from '../utils/logger.js';
 import { getAliasesInfo, clearDiscoveredAliases, getAllAliasesForName, getAllKnownAliasesMap } from '../services/aliasService.js';
@@ -1019,7 +1019,7 @@ router.post('/download', requireAuth, async (req, res) => {
   try {
     const { url, isZip, site, id, ext } = req.body || {};
     if (!url || typeof url !== 'string') return res.json({ success: false, error: 'URL не указан' });
-    if (!isSafeExternalUrl(url)) return res.json({ success: false, error: 'Недопустимый URL' });
+    if (!(await isSafeExternalUrlResolved(url))) return res.json({ success: false, error: 'Недопустимый URL' });
 
     const downloadsDir = path.resolve(ROOT_DIR, 'downloads');
     if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });

@@ -4,7 +4,7 @@ import fs from 'fs';
 import { Readable } from 'stream';
 import { THUMBS_DIR, BROWSER_USER_AGENT, BOORU_USER_AGENT } from '../config/constants.js';
 import { getSettings } from './storageService.js';
-import { resolveSiteReferer, fetchSafe, isSafeExternalUrl, discardResponse } from '../utils/network.js';
+import { resolveSiteReferer, fetchSafe, isSafeExternalUrlResolved, discardResponse } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
 
 // Max image size that gets buffered into memory and written to the disk cache
@@ -402,8 +402,9 @@ export async function handleProxyRequest(req, res) {
   if (!targetUrl || typeof targetUrl !== 'string') return res.status(400).send('Требуется параметр url');
 
   // Without this the endpoint is an open proxy: anything on the LAN could read
-  // internal services and cloud metadata (169.254.169.254) through it.
-  if (!isSafeExternalUrl(targetUrl)) {
+  // internal services and cloud metadata (169.254.169.254) through it. The
+  // resolved check also covers hostnames whose records point inside the LAN.
+  if (!(await isSafeExternalUrlResolved(targetUrl))) {
     return res.status(403).send('URL не разрешён');
   }
 

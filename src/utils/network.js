@@ -1,4 +1,5 @@
 import os from 'os';
+import dns from 'node:dns';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { fetch as undiciFetch, ProxyAgent, Socks5ProxyAgent } from 'undici';
 import { BOORU_USER_AGENT, BROWSER_USER_AGENT } from '../config/constants.js';
@@ -140,8 +141,98 @@ export function getProxyForSite(site, settings) {
 // AI embeddings, downloads) must pass through here first. It rejects non-http(s)
 // schemes and any address that lands inside the local network or on a cloud
 // metadata endpoint (169.254.169.254).
-// Limitation: the hostname is checked literally, so a DNS name that resolves to
-// 127.0.0.1 (rebinding / attacker-controlled A record) is not caught here.
+// The host checks read the URL literally, so `isSafeExternalUrlResolved` adds the
+// name-based half for request-supplied URLs, and `fetchSafe` runs every redirect
+// hop through the same checks. Rebinding (a resolver that answers differently
+// between this check and the connect) stays out of reach either way.
+const IPV4_LITERAL = /^(\d{1,3}(?:\.\d{1,3}){3})$/;
+
+// `new URL` keeps the root dot of an FQDN, so "localhost." arrives with a trailing
+// dot and must not be compared against "localhost" as-is
+function normalizeHost(rawHost) {
+  let host = (rawHost || '').toLowerCase();
+  // Node strips IPv6 brackets already, but keep this defensive
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  while (host.endsWith('.')) host = host.slice(0, -1);
+  return host;
+}
+
+function isPrivateIpv4(octets) {
+  if (octets.length !== 4 || octets.some(o => !Number.isInteger(o) || o < 0 || o > 255)) return true;
+  const [a, b, c] = octets;
+  if (a === 0) return true;                          // 0.0.0.0/8
+  if (a === 10) return true;                         // private
+  if (a === 127) return true;                        // loopback
+  if (a === 169 && b === 254) return true;           // link-local / cloud metadata
+  if (a === 172 && b >= 16 && b <= 31) return true;  // private
+  if (a === 192 && b === 0 && c === 0) return true;  // 192.0.0.0/24
+  if (a === 192 && b === 168) return true;           // private
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+  if (a === 198 && (b === 18 || b === 19)) return true; // benchmarking
+  if (a >= 224) return true;                         // multicast + reserved
+  return false;
+}
+
+// IPv6 literal -> 16 bytes, or null when the text does not parse. WHATWG URL
+// prints IPv4-mapped addresses in hex (::ffff:7f00:1), but the dotted spelling
+// has to be understood as well
+function parseIpv6Bytes(text) {
+  let value = text;
+  const lastColon = value.lastIndexOf(':');
+  if (lastColon === -1) return null;
+
+  const tail = value.slice(lastColon + 1);
+  if (tail.includes('.')) {
+    const quad = tail.split('.').map(Number);
+    if (quad.length !== 4 || quad.some(o => !Number.isInteger(o) || o < 0 || o > 255)) return null;
+    value = `${value.slice(0, lastColon + 1)}${((quad[0] << 8) | quad[1]).toString(16)}:${((quad[2] << 8) | quad[3]).toString(16)}`;
+  }
+
+  const halves = value.split('::');
+  if (halves.length > 2) return null;
+  const readGroups = (part) => part ? part.split(':').map(g => (/^[0-9a-f]{1,4}$/.test(g) ? parseInt(g, 16) : NaN)) : [];
+  const head = readGroups(halves[0]);
+  const tailGroups = halves.length === 2 ? readGroups(halves[1]) : [];
+
+  let groups;
+  if (halves.length === 1) {
+    if (head.length !== 8) return null;
+    groups = head;
+  } else {
+    if (head.length + tailGroups.length > 7) return null;
+    groups = [...head, ...Array(8 - head.length - tailGroups.length).fill(0), ...tailGroups];
+  }
+  if (groups.some(g => Number.isNaN(g))) return null;
+
+  const bytes = [];
+  for (const g of groups) bytes.push(g >> 8, g & 0xff);
+  return bytes;
+}
+
+// Ranges and transition prefixes that hide an address this guard rejects. Worth
+// spelling out because the IPv4 target inside ::ffff:a.b.c.d, 64:ff9b::/96 (NAT64)
+// and 2002::/16 (6to4) is written in hex, which a literal string comparison misses
+function isUnsafeIpv6(host) {
+  const bytes = parseIpv6Bytes(host);
+  // Contains colons but does not parse: refuse rather than guess
+  if (!bytes) return true;
+
+  const zeroRange = (from, to) => bytes.slice(from, to).every(b => b === 0);
+  const embeddedV4 = (offset) => isPrivateIpv4(bytes.slice(offset, offset + 4));
+
+  if (zeroRange(0, 16)) return true;                                // ::
+  if (zeroRange(0, 15) && bytes[15] === 1) return true;             // ::1
+  if ((bytes[0] & 0xfe) === 0xfc) return true;                      // fc00::/7 unique-local
+  if (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80) return true; // fe80::/10 link-local
+  if (bytes[0] === 0xff) return true;                               // multicast
+  // ::ffff:0:0/96 (IPv4-mapped) and ::/96 (IPv4-compatible)
+  if (zeroRange(0, 10) && (bytes[10] === 0 || (bytes[10] === 0xff && bytes[11] === 0xff))) return embeddedV4(12);
+  if (bytes[0] === 0x00 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b) return embeddedV4(12);
+  if (bytes[0] === 0x20 && bytes[1] === 0x02) return embeddedV4(2);
+
+  return false;
+}
+
 export function isSafeExternalUrl(rawUrl) {
   if (!rawUrl || typeof rawUrl !== 'string') return false;
 
@@ -153,42 +244,92 @@ export function isSafeExternalUrl(rawUrl) {
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
 
-  let host = (parsed.hostname || '').toLowerCase();
-  // Node strips IPv6 brackets already, but keep this defensive
-  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  const host = normalizeHost(parsed.hostname);
   if (!host) return false;
 
   if (host === 'localhost' || host.endsWith('.localhost')) return false;
   if (host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.home.arpa')) return false;
 
-  // IPv6: loopback, unspecified, unique-local, link-local
-  if (host === '::1' || host === '::' || host === '0.0.0.0') return false;
-  if (/^f[cd][0-9a-f]{2}:/.test(host)) return false;
-  if (/^fe[89ab][0-9a-f]:/.test(host)) return false;
+  // IPv6 literal: the whole address space has to be classified, not only ::1 and
+  // the unique-local/link-local prefixes
+  if (host.includes(':')) return !isUnsafeIpv6(host);
 
   // WHATWG URL already normalizes decimal/hex/octal IPv4 (2130706433 -> 127.0.0.1)
-  const plainV4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  const mappedV4 = host.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
-  let octets = null;
-  if (plainV4) octets = [plainV4[1], plainV4[2], plainV4[3], plainV4[4]].map(Number);
-  else if (mappedV4) octets = mappedV4[1].split('.').map(Number);
+  const literalV4 = host.match(IPV4_LITERAL);
+  if (literalV4) return !isPrivateIpv4(literalV4[1].split('.').map(Number));
 
-  if (octets) {
-    if (octets.some(o => !Number.isInteger(o) || o < 0 || o > 255)) return false;
-    const [a, b, c] = octets;
-    if (a === 0) return false;                          // 0.0.0.0/8
-    if (a === 10) return false;                         // private
-    if (a === 127) return false;                        // loopback
-    if (a === 169 && b === 254) return false;           // link-local / cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return false;  // private
-    if (a === 192 && b === 0 && c === 0) return false;  // 192.0.0.0/24
-    if (a === 192 && b === 168) return false;           // private
-    if (a === 100 && b >= 64 && b <= 127) return false; // CGNAT
-    if (a === 198 && (b === 18 || b === 19)) return false; // benchmarking
-    if (a >= 224) return false;                         // multicast + reserved
+  // A single label is an intranet name ("router", "metadata"), never a public host
+  return host.includes('.');
+}
+
+// Name-based half of the guard. The literal checks above cannot see where a
+// hostname points, and an A record aimed at 127.0.0.1 or 169.254.169.254 passes
+// them. IP literals are classified without resolving, and a resolver error or a
+// timeout counts as unknown and lets the request through: the connection would
+// fail on its own, while blocking would take every hostname down whenever the
+// local resolver is briefly unavailable.
+const HOST_LOOKUP_TIMEOUT_MS = 1000;
+const HOST_VERDICT_TTL_MS = 60000;
+const HOST_VERDICT_UNKNOWN_TTL_MS = 15000;
+const HOST_VERDICT_CACHE_MAX = 500;
+const hostVerdictCache = new Map();
+
+function lookupHostAddresses(host) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(null), HOST_LOOKUP_TIMEOUT_MS);
+    dns.lookup(host, { all: true }, (err, addresses) => finish(err ? null : addresses));
+  });
+}
+
+function isPrivateAddress(address) {
+  if (address.includes(':')) return isUnsafeIpv6(normalizeHost(address));
+  const literalV4 = address.match(IPV4_LITERAL);
+  return literalV4 ? isPrivateIpv4(literalV4[1].split('.').map(Number)) : true;
+}
+
+// Cached per hostname. The promise itself is cached so a gallery's worth of
+// parallel thumbnail requests shares one resolver call instead of one per card.
+function hostVerdict(host) {
+  const cached = hostVerdictCache.get(host);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
+  const entry = { promise: null, expiresAt: Infinity };
+  entry.promise = lookupHostAddresses(host).then((addresses) => {
+    const resolved = Array.isArray(addresses);
+    entry.expiresAt = Date.now() + (resolved ? HOST_VERDICT_TTL_MS : HOST_VERDICT_UNKNOWN_TTL_MS);
+    if (!resolved) return null;
+    return addresses.some(a => isPrivateAddress(a.address)) ? 'private' : 'public';
+  });
+
+  if (hostVerdictCache.size >= HOST_VERDICT_CACHE_MAX) {
+    hostVerdictCache.delete(hostVerdictCache.keys().next().value);
   }
+  hostVerdictCache.set(host, entry);
+  return entry.promise;
+}
 
-  return true;
+/**
+ * `isSafeExternalUrl` plus the resolved addresses of the hostname, for the entry
+ * points that take a URL straight from the request (media proxy, ffmpeg routes,
+ * server-side download): the literal check alone accepts an attacker-controlled
+ * domain whose A record points into the local network.
+ * @returns {Promise<boolean>}
+ */
+export async function isSafeExternalUrlResolved(rawUrl) {
+  if (!isSafeExternalUrl(rawUrl)) return false;
+
+  const host = normalizeHost(new URL(rawUrl).hostname);
+  if (host.includes(':') || IPV4_LITERAL.test(host)) return true;
+
+  const verdict = await hostVerdict(host);
+  return verdict !== 'private';
 }
 
 export function safeJsonParse(text, fallback = null) {
@@ -248,6 +389,10 @@ export function runWithDeadlineSignal(signal, fn) {
 // Statuses that must not carry a body, so a wrapped Response would be rejected
 const BODYLESS_STATUS = new Set([101, 103, 204, 205, 304]);
 
+// Redirects are re-issued from here, so the chain needs its own bound
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 5;
+
 // fetchSafe returns as soon as the headers arrive, so a timeout that stops there
 // leaves the socket in undici's pool until the stalled body finally finishes -
 // or never does. Wrapping the stream keeps the timer alive until the last chunk.
@@ -298,6 +443,9 @@ function withBodyTimeout(response, timeoutMs, onSettled) {
  *   streamBody  - pass true for responses that are piped straight out (video
  *                 ranges, downloads): no body timer is armed for those
  *   settings / site / proxy - used to resolve the proxy dispatcher
+ *
+ * Redirects are followed here, hop by hop, instead of by undici (which follows
+ * them blindly): every Location goes through the SSRF guard before it is used.
  */
 export async function fetchSafe(url, options = {}) {
   const {
@@ -330,11 +478,6 @@ export async function fetchSafe(url, options = {}) {
   };
 
   try {
-    const isDanbooru = typeof url === 'string' && url.includes('donmai.us');
-    const isKemonoApi = typeof url === 'string' && (url.includes('kemono.cr/api/') || url.includes('kemono.su/api/') || url.includes('coomer.st/api/'));
-    const defaultUa = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
-    const defaultAccept = isKemonoApi ? 'text/css' : (isDanbooru ? 'application/json, text/xml, text/html, */*' : '*/*');
-
     // Resolve proxy dispatcher
     let dispatcher = externalDispatcher || null;
     if (!dispatcher) {
@@ -347,38 +490,104 @@ export async function fetchSafe(url, options = {}) {
       }
     }
 
-    const fetchOptions = {
-      ...requestOptions,
-      signal,
-      headers: {
-        'User-Agent': defaultUa,
-        'Accept': defaultAccept,
-        ...(requestOptions.headers || {})
+    // A caller that asked for 'manual' or 'error' keeps undici's own semantics
+    const followRedirects = requestOptions.redirect === undefined || requestOptions.redirect === 'follow';
+    let requestUrl = url;
+    let requestMethod = requestOptions.method ?? 'GET';
+    let requestBody = requestOptions.body;
+    let requestHeaders = { ...(requestOptions.headers || {}) };
+    const requestExtras = { ...requestOptions };
+    delete requestExtras.redirect;
+    delete requestExtras.method;
+    delete requestExtras.body;
+    delete requestExtras.headers;
+
+    for (let hop = 0; ; hop++) {
+      const isDanbooru = typeof requestUrl === 'string' && requestUrl.includes('donmai.us');
+      const isKemonoApi = typeof requestUrl === 'string' && (requestUrl.includes('kemono.cr/api/') || requestUrl.includes('kemono.su/api/') || requestUrl.includes('coomer.st/api/'));
+      const defaultUa = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
+      const defaultAccept = isKemonoApi ? 'text/css' : (isDanbooru ? 'application/json, text/xml, text/html, */*' : '*/*');
+
+      const fetchOptions = {
+        ...requestExtras,
+        method: requestMethod,
+        signal,
+        headers: {
+          'User-Agent': defaultUa,
+          'Accept': defaultAccept,
+          ...requestHeaders
+        }
+      };
+      if (followRedirects) fetchOptions.redirect = 'manual';
+      if (requestBody !== undefined) fetchOptions.body = requestBody;
+
+      // Kemono's DDoS-Guard scraper protection strictly requires Accept: text/css for all API endpoints.
+      // Overriding any composite Accept headers prevents HTTP 403 Forbidden.
+      if (isKemonoApi) {
+        fetchOptions.headers['Accept'] = 'text/css';
       }
-    };
 
-    // Kemono's DDoS-Guard scraper protection strictly requires Accept: text/css for all API endpoints.
-    // Overriding any composite Accept headers prevents HTTP 403 Forbidden.
-    if (isKemonoApi) {
-      fetchOptions.headers['Accept'] = 'text/css';
+      if (dispatcher) {
+        fetchOptions.dispatcher = dispatcher;
+      }
+
+      headerTimer = setTimeout(abort, timeout);
+      const response = await undiciFetch(requestUrl, fetchOptions);
+      stopTimers();
+
+      const location = followRedirects && REDIRECT_STATUSES.has(response.status)
+        ? response.headers.get('location')
+        : null;
+
+      if (location) {
+        const nextUrl = new URL(location, requestUrl).toString();
+        const bodyReplayable = requestBody === undefined || requestBody === null || typeof requestBody === 'string'
+          || Buffer.isBuffer(requestBody) || requestBody instanceof Uint8Array || requestBody instanceof URLSearchParams;
+        // 303 and the POST -> GET of 301/302 drop the body; 307/308 re-send it
+        const dropsBody = response.status === 303
+          || ((response.status === 301 || response.status === 302) && requestMethod !== 'GET' && requestMethod !== 'HEAD');
+
+        if (hop >= MAX_REDIRECTS) {
+          await discardResponse(response);
+          logError('Fetch', `Слишком много редиректов: ${url}`);
+          return new Response('Слишком много редиректов', { status: 502 });
+        }
+
+        if (!(await isSafeExternalUrlResolved(nextUrl))) {
+          await discardResponse(response);
+          logError('Fetch', `Редирект на внутренний адрес заблокирован: ${nextUrl}`);
+          return new Response('URL не разрешён', { status: 403 });
+        }
+
+        // Nothing left to follow with: a stream body cannot be sent twice, so the
+        // 3xx is handed back to the caller as the upstream's answer
+        if (!dropsBody && !bodyReplayable) return response;
+
+        // Credentials for the original host must not travel to another one
+        if (new URL(nextUrl).origin !== new URL(requestUrl).origin) {
+          for (const name of Object.keys(requestHeaders)) {
+            if (/^(authorization|cookie)$/i.test(name)) delete requestHeaders[name];
+          }
+        }
+        if (dropsBody) {
+          requestMethod = 'GET';
+          requestBody = undefined;
+        }
+        requestUrl = nextUrl;
+
+        await discardResponse(response);
+        continue;
+      }
+
+      if (streamBody) return response;
+
+      const bodyDeadline = bodyTimeout ?? timeout;
+      bodyTimer = setTimeout(abort, bodyDeadline);
+      return withBodyTimeout(response, bodyDeadline, () => {
+        if (bodyTimer) clearTimeout(bodyTimer);
+        bodyTimer = null;
+      });
     }
-
-    if (dispatcher) {
-      fetchOptions.dispatcher = dispatcher;
-    }
-
-    headerTimer = setTimeout(abort, timeout);
-    const response = await undiciFetch(url, fetchOptions);
-    stopTimers();
-
-    if (streamBody) return response;
-
-    const bodyDeadline = bodyTimeout ?? timeout;
-    bodyTimer = setTimeout(abort, bodyDeadline);
-    return withBodyTimeout(response, bodyDeadline, () => {
-      if (bodyTimer) clearTimeout(bodyTimer);
-      bodyTimer = null;
-    });
   } catch (err) {
     stopTimers();
     throw err;

@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
-import { getFfmpegHeaders, getProxyForSite, resolveSiteFromUrl, isSafeExternalUrl } from '../utils/network.js';
+import { getFfmpegHeaders, getProxyForSite, resolveSiteFromUrl, isSafeExternalUrl, isSafeExternalUrlResolved } from '../utils/network.js';
 import { getSettings } from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
 
@@ -56,7 +56,7 @@ export async function handleVideoThumbnailRequest(req, res) {
   if (Array.isArray(targetUrl)) targetUrl = targetUrl[0];
   const quality = req.query.quality || 'medium';
   if (!targetUrl || typeof targetUrl !== 'string') return res.status(400).send('Требуется параметр url');
-  if (!targetUrl.startsWith('/') && !isSafeExternalUrl(targetUrl)) {
+  if (!targetUrl.startsWith('/') && !(await isSafeExternalUrlResolved(targetUrl))) {
     return res.status(403).send('URL не разрешён');
   }
 
@@ -206,7 +206,7 @@ export async function handleTranscodeVideoRequest(req, res) {
   if (!targetUrl || typeof targetUrl !== 'string') {
     return res.status(400).send('Требуется параметр url');
   }
-  if (!targetUrl.startsWith('/') && !isSafeExternalUrl(targetUrl)) {
+  if (!targetUrl.startsWith('/') && !(await isSafeExternalUrlResolved(targetUrl))) {
     return res.status(403).send('URL не разрешён');
   }
 
