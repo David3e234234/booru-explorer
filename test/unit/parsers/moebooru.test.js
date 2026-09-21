@@ -165,4 +165,20 @@ test('Moebooru Parser Unit Tests (Yande.re & Konachan)', async (t) => {
     assert.equal(posts.length, 1);
     assert.equal(posts[0].originalId, '4006');
   });
+
+  await t.test('fetchMoebooru keeps healthy posts when one item has a non-string field', async () => {
+    const client = mockContext.agent.get('https://yande.re');
+    client.intercept({
+      path: (p) => p.includes('/post.json') && p.includes('brokentest'),
+      method: 'GET'
+    }).reply(200, [
+      { id: 4101, tags: 'solo smile', rating: 's', score: 10, file_url: 'https://files.yande.re/image/4101/f.jpg' },
+      { id: 4102, tags: 'solo smile', rating: 's', score: 10, file_url: 12345 }
+    ]);
+
+    // Malformed items used to reject the whole fetch through the outer await
+    const posts = await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', { tags: 'brokentest', limit: 5 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].originalId, '4101');
+  });
 });

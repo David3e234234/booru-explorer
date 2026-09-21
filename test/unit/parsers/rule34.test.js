@@ -45,6 +45,22 @@ test('Rule34 Parser Unit Tests (including Paheal integration)', async (t) => {
     assert.equal(post.thumbOriginal, 'https://us.rule34.xxx/images/6001/sample.jpg');
   });
 
+  await t.test('fetchRule34 keeps healthy posts when one DAPI item is malformed', async () => {
+    const client = mockContext.agent.get('https://api.rule34.xxx');
+    client.intercept({
+      path: (p) => p.includes('page=dapi') && p.includes('json=1') && p.includes('brokentest'),
+      method: 'GET'
+    }).reply(200, [
+      { id: 6101, directory: '6101', image: 'ok.jpg', tags: 'overwatch tracer', rating: 'explicit', score: 10 },
+      { id: 6102, directory: '6102', image: 'bad.jpg', tags: 'overwatch tracer', rating: 'explicit', score: 10, preview_url: 12345 }
+    ]);
+
+    const posts = await fetchRule34({ tags: 'brokentest', limit: 2 }, [], mockSettings);
+    assert.equal(posts.length, 1);
+    assertNormalizedPost(posts[0], 'rule34');
+    assert.equal(posts[0].originalId, '6101');
+  });
+
   await t.test('fetchRule34PostById resolves normal Rule34 post from DAPI', async () => {
     const client = mockContext.agent.get('https://api.rule34.xxx');
     client.intercept({

@@ -112,7 +112,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
         if (!text.includes('Missing authentication')) {
           const data = safeJsonParse(text, null);
           if (Array.isArray(data) && data.length > 0) {
-            const mappedPosts = await Promise.all(data.map(async item => {
+            // One malformed item must not blank the whole page: each post settles
+            // on its own and only the rejections are dropped
+            const settledPosts = await Promise.allSettled(data.map(async item => {
               const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
               let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
               const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
@@ -177,6 +179,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 isAi: checkIsAi(rawTags, aiTagsList)
               };
             }));
+            settledPosts.forEach(r => { if (r.status === 'rejected') logError('Rule34.xxx DAPI', 'Пропущен битый элемент апстрима', r.reason); });
+            const mappedPosts = settledPosts.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
             if ((category === 'top' || category === 'popular' || category === 'views' || category === 'recommended') && mappedPosts.length > 0) {
               mappedPosts.sort((a, b) => (b.score || 0) - (a.score || 0));
             }
@@ -311,7 +315,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
       }
 
       if (rawParsedItems.length > 0) {
-        posts = await Promise.all(rawParsedItems.map(async p => {
+        const settledParsed = await Promise.allSettled(rawParsedItems.map(async p => {
           const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false);
           const seriesKey = extractSeriesKey({
             source: p.source,
@@ -360,6 +364,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
             isAi: checkIsAi(p.rawTags, aiTagsList)
           };
         }));
+        settledParsed.forEach(r => { if (r.status === 'rejected') logError('Rule34.xxx HTML', 'Пропущен битый элемент апстрима', r.reason); });
+        posts = settledParsed.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
       }
 
       // Fallback: match <img title="..." id="p..."> tags when no span.thumb is found

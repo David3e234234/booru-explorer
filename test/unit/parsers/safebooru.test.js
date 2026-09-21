@@ -103,4 +103,19 @@ test('Safebooru Parser Unit Tests', async (t) => {
     assert.equal(posts.length, 1);
     assert.equal(posts[0].originalId, '3004');
   });
+
+  await t.test('fetchSafebooru keeps healthy posts when one item has a non-string media field', async () => {
+    const client = mockContext.agent.get('https://safebooru.org');
+    client.intercept({
+      path: (p) => p.includes('page=dapi') && p.includes('brokentest'),
+      method: 'GET'
+    }).reply(200, [
+      { id: 3101, directory: '3101', image: '3101.jpg', tags: 'cat solo', rating: 'safe' },
+      { id: 3102, directory: '3102', image: '3102.jpg', tags: 'cat solo', rating: 'safe', preview_url: 12345 }
+    ]);
+
+    const posts = await fetchSafebooru({ tags: 'brokentest', limit: 10 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].originalId, '3101');
+  });
 });

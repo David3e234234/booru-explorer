@@ -96,6 +96,24 @@ test('Gelbooru Parser Unit Tests', async (t) => {
     assert.equal(post.rating, 'g');
   });
 
+  await t.test('fetchGelbooru keeps healthy posts when one DAPI item is malformed', async () => {
+    // The malformed item used to reject the whole page and push the parser into the
+    // HTML fallback, losing every valid post of the batch
+    const client = mockContext.agent.get('https://gelbooru.com');
+    client.intercept({
+      path: (p) => p.includes('page=dapi'),
+      method: 'GET'
+    }).reply(200, [
+      { id: 201, image: '201.jpg', directory: '201', tags: 'touhou marisa', rating: 'general', score: 10, file_url: 'https://img3.gelbooru.com/images/201/201.jpg' },
+      { id: 202, image: '202.jpg', directory: '202', tags: 'touhou marisa', rating: 'general', score: 10, file_url: 'https://img3.gelbooru.com/images/202/202.jpg', preview_url: 12345 }
+    ]);
+
+    const posts = await fetchGelbooru({ tags: 'touhou', limit: 2 }, [], mockSettings);
+    assert.equal(posts.length, 1);
+    assertNormalizedPost(posts[0], 'gelbooru');
+    assert.equal(posts[0].originalId, '201');
+  });
+
   await t.test('fetchGelbooruPostById parses DAPI XML fallback and normalizes post', async () => {
     const client = mockContext.agent.get('https://gelbooru.com');
     const xml = `<posts count="1"><post id="8888" file_url="https://img3.gelbooru.com/images/ab/cd/8888.jpg" preview_url="https://img3.gelbooru.com/thumbnails/ab/cd/thumbnail_8888.jpg" sample_url="https://img3.gelbooru.com/samples/ab/cd/sample_8888.jpg" tags="solo 1girl" rating="questionable" score="55"/></posts>`;

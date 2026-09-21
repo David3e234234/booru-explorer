@@ -101,7 +101,9 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
 
     const validPosts = (Array.isArray(posts) ? posts : []).filter(item => item && typeof item === 'object');
 
-    return await Promise.all(validPosts.map(async item => {
+    // One malformed item must not blank the whole page: each post settles on its
+    // own and only the rejections are dropped
+    const settled = await Promise.allSettled(validPosts.map(async item => {
       const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
@@ -174,6 +176,8 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
         isAi
       };
     }));
+    settled.forEach(r => { if (r.status === 'rejected') logError('Safebooru', 'Пропущен битый элемент апстрима', r.reason); });
+    return settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
   } catch (err) {
     logError('Safebooru', 'Ошибка загрузки постов Safebooru', err);
     return [];

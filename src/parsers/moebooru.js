@@ -130,7 +130,9 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
 
   const validData = data.filter(item => item && typeof item === 'object');
 
-  return await Promise.all(validData.map(async item => {
+  // A malformed item must not reject the whole page: each post settles on its own
+  // and only the rejections are dropped
+  const settled = await Promise.allSettled(validData.map(async item => {
     const rawTags = (item.tags || '').split(' ').filter(Boolean);
     const fileUrl = item.file_url || item.jpeg_url || item.sample_url || item.preview_url || '';
     const sampleUrl = item.sample_url || item.jpeg_url || fileUrl || '';
@@ -191,6 +193,8 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
       isAi
     };
   }));
+  settled.forEach(r => { if (r.status === 'rejected') logError(siteName, 'Пропущен битый элемент апстрима', r.reason); });
+  return settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
 }
 
 export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTagsList = [], settings = {}, fallbackTags = []) {

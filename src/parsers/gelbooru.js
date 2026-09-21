@@ -108,7 +108,9 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
           posts = parseDapiXmlPosts(text);
         }
         if (Array.isArray(posts) && posts.length > 0) {
-          return await Promise.all(posts.map(async item => {
+          // One malformed item must not blank the whole page: each post settles
+          // on its own and only the rejections are dropped
+          const settled = await Promise.allSettled(posts.map(async item => {
             const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
             const fileUrl = item.file_url || (item.image && item.directory ? `https://img3.gelbooru.com/images/${item.directory}/${item.image}` : '');
             const sampleUrl = item.sample_url || fileUrl;
@@ -165,6 +167,8 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
               isAi: checkIsAi(rawTags, aiTagsList)
             };
           }));
+          settled.forEach(r => { if (r.status === 'rejected') logError('Gelbooru DAPI', 'Пропущен битый элемент апстрима', r.reason); });
+          return settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
         }
       } else {
         await discardResponse(res);

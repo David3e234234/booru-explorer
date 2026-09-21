@@ -103,6 +103,35 @@ test('DAPI Parsers Unit Tests (Xbooru, Hypnohub, TBIB)', async (t) => {
     assert.equal(post.thumb180, 'https://tbib.org/thumbnails/9001/thumbnail_safe.png');
   });
 
+  await t.test('DAPI parsers keep healthy posts when one item has a non-string media field', async () => {
+    // One malformed item used to reject the whole page through the shared catch
+    const brokenItem = (id) => ({
+      id,
+      directory: String(id),
+      image: 'img.jpg',
+      tags: 'cat solo',
+      rating: 'safe',
+      preview_url: 12345
+    });
+    const goodItem = (id) => ({ id, directory: String(id), image: 'img.jpg', tags: 'cat solo', rating: 'safe' });
+    const cases = [
+      ['https://xbooru.com', () => fetchXbooru({ tags: 'cat', limit: 2 }, [], {}), 'xbooru'],
+      ['https://hypnohub.net', () => fetchHypnohub({ tags: 'cat', limit: 2 }, [], {}), 'hypnohub'],
+      ['https://tbib.org', () => fetchTbib({ tags: 'cat', limit: 2 }, [], {}), 'tbib']
+    ];
+
+    for (const [host, run, expectedSite] of cases) {
+      mockContext.agent.get(host)
+        .intercept({ path: (p) => p.includes('index.php'), method: 'GET' })
+        .reply(200, [goodItem(5001), brokenItem(5002)]);
+
+      const posts = await run();
+      assert.equal(posts.length, 1, `${expectedSite} must skip only the malformed item`);
+      assertNormalizedPost(posts[0], expectedSite);
+      assert.equal(posts[0].originalId, '5001');
+    }
+  });
+
   await t.test('fetchXbooruPostById resolves post and respects fallbackTags', async () => {
     const client = mockContext.agent.get('https://xbooru.com');
     // DAPI fails

@@ -134,7 +134,7 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
       posts = data?.post || (Array.isArray(data) ? data : []);
     }
 
-    return await Promise.all(posts.map(async item => {
+    const settled = await Promise.allSettled(posts.map(async item => {
       const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
@@ -204,6 +204,10 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
         isAi: checkIsAi(rawTags, aiTagsList)
       };
     }));
+    // One malformed item (a numeric preview_url and the like) must not blank the
+    // whole page: the settled results keep every post that did parse
+    settled.forEach(r => { if (r.status === 'rejected') logError('Xbooru', 'Пропущен битый элемент апстрима', r.reason); });
+    return settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
   } catch (err) {
     logError('Xbooru', 'Ошибка загрузки постов', err);
     return [];
@@ -270,7 +274,7 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
       posts = data?.post || (Array.isArray(data) ? data : []);
     }
 
-    return await Promise.all(posts.map(async item => {
+    const settled = await Promise.allSettled(posts.map(async item => {
       const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
@@ -339,6 +343,8 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
         isAi: checkIsAi(rawTags, aiTagsList)
       };
     }));
+    settled.forEach(r => { if (r.status === 'rejected') logError('Hypnohub', 'Пропущен битый элемент апстрима', r.reason); });
+    return settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
   } catch (err) {
     logError('Hypnohub', 'Ошибка загрузки постов', err);
     return [];
@@ -407,7 +413,7 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
       posts = Array.isArray(data) ? data : (data?.post || []);
     }
 
-    return await Promise.all(posts.map(async item => {
+    const settled = await Promise.allSettled(posts.map(async item => {
       const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
       let fileUrl = item.file_url || '';
       if (!fileUrl && item.directory && item.image) {
@@ -475,6 +481,8 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
         isAi: checkIsAi(rawTags, aiTagsList)
       };
     }));
+    settled.forEach(r => { if (r.status === 'rejected') logError('TBIB', 'Пропущен битый элемент апстрима', r.reason); });
+    return settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
   } catch (err) {
     logError('TBIB', 'Ошибка загрузки постов', err);
     return [];
