@@ -61,6 +61,22 @@ router.get('/settings', (req, res) => {
   res.json({ success: true, settings: userId ? settings : stripSecretSettings(settings) });
 });
 
+// Server-level proxy settings: `globalProxy` and every `<site>Proxy`. They reroute
+// all outbound traffic of this process - including the Basic-auth credentials it
+// sends to Danbooru - so an anonymous LAN caller must not be able to write them.
+// Deliberately not part of SECRET_SETTING_FIELDS: that list also drives GET
+// responses and Telegram backups, where the owner's proxies must survive.
+function stripProxySettings(settings) {
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return settings;
+  const safe = { ...settings };
+  // Catches globalProxy and every `<site>Proxy`; the client-side proxyThumbnails /
+  // proxyVideos / proxyDownloads toggles do not match and stay writable anonymously
+  for (const key of Object.keys(safe)) {
+    if (key.endsWith('Proxy')) delete safe[key];
+  }
+  return safe;
+}
+
 // POST /api/settings
 router.post('/settings', (req, res) => {
   const userId = req.user?.id || null;
@@ -68,7 +84,9 @@ router.post('/settings', (req, res) => {
   // an anonymous caller let anyone on the network repoint telegramBotToken /
   // telegramChatId at their own bot and have the next scheduled backup deliver
   // the whole database to them.
-  const incoming = userId ? (req.body || {}) : stripSecretSettings(req.body || {});
+  const incoming = userId
+    ? (req.body || {})
+    : stripProxySettings(stripSecretSettings(req.body || {}));
   const updated = updateSettings(incoming, userId);
   if (req.body && req.body.maxServerCacheMb !== undefined) {
     cleanDiskCacheIfNeeded();
