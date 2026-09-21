@@ -51,10 +51,25 @@ function resolveFfmpegInput(targetUrl) {
   return isSafeExternalUrl(targetUrl) ? { input: targetUrl, isLocal: false } : { input: null, isLocal: false };
 }
 
+// `quality` is interpolated into the cache file name, so it may only take values
+// the handlers below have a branch for: `?quality=../../../../tmp/x` used to
+// normalize the file path out of the cache directory, for the file `ffmpeg -y`
+// writes and for the thumbnail served straight from disk.
+const THUMB_QUALITIES = new Set(['low', 'medium', 'high', 'original']);
+const TRANSCODE_QUALITIES = new Set(['360p', '480p', '720p']);
+
+function normalizeQuality(rawValue, allowed, fallback) {
+  // Repeated query parameters arrive as an array, and qs can hand over an object
+  const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof value !== 'string') return fallback;
+  const clean = value.trim().toLowerCase();
+  return allowed.has(clean) ? clean : fallback;
+}
+
 export async function handleVideoThumbnailRequest(req, res) {
   let targetUrl = req.query.url;
   if (Array.isArray(targetUrl)) targetUrl = targetUrl[0];
-  const quality = req.query.quality || 'medium';
+  const quality = normalizeQuality(req.query.quality, THUMB_QUALITIES, 'medium');
   if (!targetUrl || typeof targetUrl !== 'string') return res.status(400).send('Требуется параметр url');
   if (!targetUrl.startsWith('/') && !(await isSafeExternalUrlResolved(targetUrl))) {
     return res.status(403).send('URL не разрешён');
@@ -201,7 +216,7 @@ const activeTranscodes = new Map();
 export async function handleTranscodeVideoRequest(req, res) {
   let targetUrl = req.query.url;
   if (Array.isArray(targetUrl)) targetUrl = targetUrl[0];
-  const quality = req.query.quality || '480p';
+  const quality = normalizeQuality(req.query.quality, TRANSCODE_QUALITIES, '480p');
 
   if (!targetUrl || typeof targetUrl !== 'string') {
     return res.status(400).send('Требуется параметр url');
