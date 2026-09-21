@@ -166,13 +166,19 @@ describe('Module 2: Media type classification with archive exclusion', () => {
     }
   });
 
-  it('typeFilter === image strictly rejects archive posts (isArchive, fileExt, archiveUrls, URL regex)', () => {
+  it('typeFilter === image rejects archive-only posts but keeps mixed cover+archive posts', () => {
     const criteria = { typeFilter: 'image' };
-    assert.strictEqual(isPostMatchingFilters(createMockPost({ isArchive: true }), criteria), false);
-    assert.strictEqual(isPostMatchingFilters(createMockPost({ fileExt: 'zip' }), criteria), false);
-    assert.strictEqual(isPostMatchingFilters(createMockPost({ fileExt: 'rar' }), criteria), false);
-    assert.strictEqual(isPostMatchingFilters(createMockPost({ fileExt: '7z' }), criteria), false);
-    assert.strictEqual(isPostMatchingFilters(createMockPost({ archiveUrls: ['https://example.com/pack.zip'] }), criteria), false);
+
+    // Archive-only packs (pawchive.js/kemono.js emit empty media URLs for those)
+    const archiveOnly = { id: 'pawchive_pack_1', isArchive: true, previewUrl: '', fileUrl: '', sampleUrl: '', fileExt: 'zip' };
+    assert.strictEqual(isPostMatchingFilters(archiveOnly, criteria), false);
+    assert.strictEqual(isPostMatchingFilters(createMockPost({ isArchive: true, previewUrl: '', fileUrl: '', sampleUrl: '', fileExt: 'zip' }), criteria), false);
+
+    // Mixed posts (cover media + zips) stay visible - the parsers keep them on purpose
+    assert.strictEqual(isPostMatchingFilters(createMockPost({ isArchive: true }), criteria), true);
+    assert.strictEqual(isPostMatchingFilters(createMockPost({ archiveUrls: ['https://example.com/pack.zip'] }), criteria), true);
+
+    // An archive/video extension in the media URL is still not an image
     assert.strictEqual(isPostMatchingFilters(createMockPost({ fileUrl: 'https://kemono.su/data/file.zip' }), criteria), false);
     assert.strictEqual(isPostMatchingFilters(createMockPost({ sampleUrl: 'https://kemono.su/data/file.7z?download=1' }), criteria), false);
   });
@@ -791,8 +797,11 @@ describe('Module 10: Boundary value and stress combinations', () => {
     });
     assert.strictEqual(isPostMatchingFilters(goodPost, allActiveCriteria), true);
 
-    // Fails on type (archive)
-    assert.strictEqual(isPostMatchingFilters(createMockPost({ ...goodPost, isArchive: true }), allActiveCriteria), false);
+    // Fails on type (archive-only post carries no image under typeFilter=image)
+    assert.strictEqual(isPostMatchingFilters(
+      createMockPost({ ...goodPost, isArchive: true, previewUrl: '', fileUrl: '', sampleUrl: '', fileExt: 'zip' }),
+      allActiveCriteria
+    ), false);
     // Fails on rating (e)
     assert.strictEqual(isPostMatchingFilters(createMockPost({ ...goodPost, rating: 'e' }), allActiveCriteria), false);
     // Fails on AI
@@ -1035,10 +1044,12 @@ describe('Module 11: Challenger Adversarial Robustness & Vulnerability Regressio
     assert.strictEqual(isArchivePost({ sampleUrl: 'https://cdn.example.com/pack.rar#preview' }), true);
     assert.strictEqual(isArchivePost({ fileUrl: 'https://cdn.example.com/pack.7z?token=abc#section' }), true);
 
-    // Rejection under typeFilter=image
-    assert.strictEqual(isPostMatchingFilters({ previewUrl: 'p.jpg', fileExt: 'cbz' }, { typeFilter: 'image' }), false);
-    assert.strictEqual(isPostMatchingFilters({ previewUrl: 'p.jpg', fileExt: 'cbr' }, { typeFilter: 'image' }), false);
+    // Rejection under typeFilter=image: archive-only posts have nothing to render
+    assert.strictEqual(isPostMatchingFilters({ fileExt: 'cbz' }, { typeFilter: 'image' }), false);
+    assert.strictEqual(isPostMatchingFilters({ fileExt: 'cbr' }, { typeFilter: 'image' }), false);
     assert.strictEqual(isPostMatchingFilters({ previewUrl: 'p.jpg', fileUrl: 'https://cdn.example.com/art.zip#dl' }, { typeFilter: 'image' }), false);
+    // ... while a cbz/cbr post that carries a real cover preview stays visible
+    assert.strictEqual(isPostMatchingFilters({ previewUrl: 'p.jpg', fileExt: 'cbz' }, { typeFilter: 'image' }), true);
 
     // Clean images with fragments/queries are NOT falsely rejected
     assert.strictEqual(isPostMatchingFilters({ previewUrl: 'p.jpg', fileUrl: 'https://cdn.example.com/art.jpg?source=zip#section' }, { typeFilter: 'image' }), true);

@@ -230,7 +230,10 @@ export function isPostMatchingFilters(post, criteria = {}) {
     if (!post.isVideo && !post.isGif) return false;
   } else if (typeFilter === 'image') {
     if (post.isVideo || post.isGif || post.hasSound) return false;
-    if (isArchivePost(post)) return false;
+    // Archive-flagged posts may still carry a cover image (mixed posts from
+    // pawchive.js/kemono.js); only archive-only posts, which have nothing to
+    // render, are dropped here.
+    if (isArchivePost(post) && !post.previewUrl && !post.fileUrl && !post.sampleUrl) return false;
     const cleanFileUrl = typeof post.fileUrl === 'string' ? post.fileUrl.trim().split(/[?#]/)[0].toLowerCase() : '';
     const cleanSampleUrl = typeof post.sampleUrl === 'string' ? post.sampleUrl.trim().split(/[?#]/)[0].toLowerCase() : '';
     if (NON_IMAGE_REGEX.test(cleanFileUrl) || NON_IMAGE_REGEX.test(cleanSampleUrl)) {
