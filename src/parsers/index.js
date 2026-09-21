@@ -107,8 +107,12 @@ function withDeadline(work, ms = SITE_FETCH_DEADLINE_MS) {
 }
 
 export async function fetchPosts(site, params, aiTagsList, settings) {
+  // Danbooru runs its own cursor loop (danbooru.js:185, up to 8 pages of fetches
+  // with the default 25s timeout), so it needs the same site deadline as every
+  // other source - without it a single slow search could hold the response for
+  // minutes.
   if (site === 'danbooru') {
-    return await fetchDanbooru(params, aiTagsList, settings);
+    return await withDeadline(() => fetchDanbooru(params, aiTagsList, settings));
   }
 
   if (site === 'all' || site === 'custom' || site.includes(',')) {

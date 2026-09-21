@@ -196,6 +196,30 @@ test('Aggregator Unit Tests', async (t) => {
     }
   });
 
+  await t.test('fetchPosts single-site danbooru search goes through the deadline wrapper', async () => {
+    const danbooruClient = mockContext.agent.get('https://danbooru.donmai.us');
+    danbooruClient.intercept({
+      path: (p) => p.includes('/posts.json'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: 777,
+        tag_string: 'cat solo',
+        rating: 'g',
+        score: 3,
+        file_url: 'https://danbooru.donmai.us/data/777.jpg',
+        file_ext: 'jpg',
+        media_asset: { variants: [] }
+      }
+    ]).persist();
+
+    // The danbooru branch is wrapped in withDeadline() - a fast upstream must still
+    // deliver its posts (the 15s cut-off itself is verified manually, see F-13)
+    const posts = await fetchPosts('danbooru', { tags: 'solo', limit: 40, page: 1 }, [], { deepFetchPages: 1 });
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].id, 'danbooru_777');
+  });
+
   await t.test('all-sites mode pulls one remote page per site and honours an explicit depth', async () => {
     // Every upstream page returns 20 posts that the blacklist rejects, so the
     // deep-fetch loop cannot stop early and the request count is the depth itself
