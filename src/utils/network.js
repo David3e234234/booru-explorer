@@ -5,8 +5,26 @@ import { fetch as undiciFetch, ProxyAgent, Socks5ProxyAgent } from 'undici';
 import { BOORU_USER_AGENT, BROWSER_USER_AGENT } from '../config/constants.js';
 import { logError, logInfo } from './logger.js';
 
-// Cache for active Undici Dispatchers keyed by normalized proxy URL
+// Cache for active Undici Dispatchers keyed by normalized proxy URL.
+// Bounded on purpose: without a cap every proxy URL anyone tried pinned a
+// dispatcher (and its sockets) for the life of the process, and /api/proxy/test
+// is reachable without a token, so a LAN caller could mint entries at will.
+const PROXY_AGENT_CACHE_LIMIT = 16;
 const proxyAgentCache = new Map();
+
+// Inserts an agent as the most recently used one and closes the least recently
+// used entry once the cap is exceeded. Map iteration follows insertion order and
+// cache hits re-insert their key, so the first key is always the coldest.
+function rememberProxyAgent(cleanUrl, agent) {
+  proxyAgentCache.set(cleanUrl, agent);
+  if (proxyAgentCache.size <= PROXY_AGENT_CACHE_LIMIT) return;
+
+  const oldestKey = proxyAgentCache.keys().next().value;
+  const evicted = proxyAgentCache.get(oldestKey);
+  proxyAgentCache.delete(oldestKey);
+  // close() is graceful: requests already running on the agent keep their sockets
+  Promise.resolve(evicted.close()).catch(() => {});
+}
 
 /**
  * Normalizes user-entered proxy strings into valid WHATWG URLs.
@@ -61,8 +79,13 @@ export function getProxyAgent(proxyUrl) {
   const cleanUrl = normalizeProxyUrl(proxyUrl);
   if (!cleanUrl) return null;
 
-  if (proxyAgentCache.has(cleanUrl)) {
-    return proxyAgentCache.get(cleanUrl);
+  const cached = proxyAgentCache.get(cleanUrl);
+  if (cached) {
+    // Re-inserting moves the key to the end of the LRU order, so a cache hit can
+    // never be the entry the next insert evicts and closes
+    proxyAgentCache.delete(cleanUrl);
+    proxyAgentCache.set(cleanUrl, cached);
+    return cached;
   }
 
   try {
@@ -80,7 +103,7 @@ export function getProxyAgent(proxyUrl) {
       return null;
     }
 
-    proxyAgentCache.set(cleanUrl, agent);
+    rememberProxyAgent(cleanUrl, agent);
     return agent;
   } catch (err) {
     logError('Proxy', `Ошибка инициализации прокси ${cleanUrl}`, err);

@@ -533,20 +533,16 @@ router.post('/proxy/test', async (req, res) => {
       message: `Сервер ${targetName} ответил кодом HTTP ${response.status}`
     });
   } catch (err) {
-    logError('ProxyTest', 'Ошибка проверки прокси', err);
-    let detail = err.cause ? (err.cause.message || String(err.cause)) : (err.message || 'Таймаут или сбой соединения');
-    if (err.name === 'AbortError' || String(detail).includes('aborted')) {
-      detail = 'Превышено время ожидания ответа (таймаут)';
-    } else if (String(detail).includes('authentication timeout')) {
-      detail = 'Таймаут авторизации SOCKS5 (прокси не отвечает)';
-    } else if (String(detail).includes('ECONNREFUSED')) {
-      detail = 'Соединение отклонено (прокси выключен или неверный порт)';
-    } else if (String(detail).includes('ENOTFOUND')) {
-      detail = 'Хост прокси не найден (неверный адрес)';
-    }
+    // A single generic message for every failure mode. Saying "connection
+    // refused" versus "timed out" let any caller pick a host:port and read the
+    // verdict out of the response, which turned this route into a LAN port
+    // scanner run from the server. The real cause stays in the log.
+    // The body is re-read here because the destructuring above is scoped to the try.
+    const detail = err?.cause?.message || err?.message || String(err);
+    logError('ProxyTest', `Ошибка проверки прокси ${req.body?.proxyUrl}: ${detail}`, err);
     return res.json({
       success: false,
-      message: `Ошибка подключения через прокси: ${detail}`
+      message: 'Не удалось подключиться через прокси (проверьте адрес, порт и тип прокси)'
     });
   }
 });
