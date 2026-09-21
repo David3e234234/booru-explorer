@@ -195,4 +195,58 @@ test('Aggregator Unit Tests', async (t) => {
       assert.equal(posts.length, 1, `deepFetchPages=${JSON.stringify(depth)} must stay valid`);
     }
   });
+
+  await t.test('all-sites mode pulls one remote page per site and honours an explicit depth', async () => {
+    // Every upstream page returns 20 posts that the blacklist rejects, so the
+    // deep-fetch loop cannot stop early and the request count is the depth itself
+    const listRequests = { safebooru: [], xbooru: [] };
+    const dapiPage = (site, origin) => (opts) => {
+      const pid = parseInt((opts.path.match(/[?&]pid=(\d+)/) || [])[1] || '0', 10);
+      listRequests[site].push(pid);
+      return JSON.stringify(Array.from({ length: 20 }, (_, i) => ({
+        id: pid * 100 + i,
+        image: `img_${pid}_${i}.jpg`,
+        directory: String(pid * 100 + i),
+        tags: 'cute solo',
+        rating: 'safe',
+        score: 5
+      })));
+    };
+
+    mockContext.agent.get('https://safebooru.org')
+      .intercept({ path: (p) => p.includes('index.php'), method: 'GET' })
+      .reply(200, dapiPage('safebooru'), { headers: { 'content-type': 'application/json' } })
+      .persist();
+    mockContext.agent.get('https://xbooru.com')
+      .intercept({ path: (p) => p.includes('index.php'), method: 'GET' })
+      .reply(200, dapiPage('xbooru'), { headers: { 'content-type': 'application/json' } })
+      .persist();
+
+    const allSitesSettings = { deepFetchPages: 2, blacklist: ['cute'] };
+    await fetchPosts('custom', {
+      customSites: 'safebooru,xbooru',
+      tags: 'solo',
+      limit: 100,
+      aiFilter: 'no-ai'
+    }, [], allSitesSettings);
+
+    assert.equal(listRequests.safebooru.length, 1, `all-sites mode must fetch 1 page of safebooru, got ${listRequests.safebooru.length}`);
+    assert.equal(listRequests.xbooru.length, 1, `all-sites mode must fetch 1 page of xbooru, got ${listRequests.xbooru.length}`);
+
+    // Single-site: the shipped default keeps its material-gathering depth of six pages
+    listRequests.safebooru.length = 0;
+    await fetchPosts('safebooru', { tags: 'solo', limit: 40, page: 1, aiFilter: 'no-ai' }, [], allSitesSettings);
+    assert.equal(listRequests.safebooru.length, 6, 'default depth must not regress below the previous six pages');
+
+    // ...while an explicit depth from the UI (1-5) is what the search actually uses
+    for (const depth of [3, '3']) {
+      listRequests.safebooru.length = 0;
+      await fetchPosts('safebooru', { tags: 'solo', limit: 40, page: 1, aiFilter: 'no-ai' }, [], { deepFetchPages: depth, blacklist: ['cute'] });
+      assert.equal(listRequests.safebooru.length, 3, `deepFetchPages=${JSON.stringify(depth)} must mean three pages`);
+    }
+
+    listRequests.safebooru.length = 0;
+    await fetchPosts('safebooru', { tags: 'solo', limit: 40, page: 1, aiFilter: 'no-ai' }, [], { deepFetchPages: 1, blacklist: ['cute'] });
+    assert.equal(listRequests.safebooru.length, 1, 'deepFetchPages=1 must mean one page');
+  });
 });
