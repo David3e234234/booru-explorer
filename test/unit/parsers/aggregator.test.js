@@ -155,4 +155,44 @@ test('Aggregator Unit Tests', async (t) => {
     assert.equal(filtered[0].id, 'safebooru_101');
     assert.ok(!filtered.some(p => p.id === 'safebooru_102'));
   });
+
+  await t.test('fetchPosts falls back to the default depth for a non-numeric deepFetchPages', async () => {
+    const safebooruClient = mockContext.agent.get('https://safebooru.org');
+    safebooruClient.intercept({
+      path: (p) => p.includes('index.php'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: 201,
+        image: 'cat.jpg',
+        directory: '201',
+        tags: 'cat solo cute',
+        rating: 'safe'
+      }
+    ]).persist();
+
+    // "abc" parsed to NaN, which turned the deep-fetch loop bound into NaN and
+    // discarded every fetched post (strict filter forces the deep-fetch path)
+    for (const depth of ['abc', 'auto', 0, -3]) {
+      const posts = await fetchPosts('safebooru', {
+        tags: 'solo',
+        limit: 10,
+        aiFilter: 'no-ai'
+      }, [], { deepFetchPages: depth });
+
+      assert.equal(posts.length, 1, `deepFetchPages=${JSON.stringify(depth)} must fall back to the default`);
+      assert.equal(posts[0].id, 'safebooru_201');
+    }
+
+    // Valid numeric values keep working, as numbers and as strings
+    for (const depth of [3, '3']) {
+      const posts = await fetchPosts('safebooru', {
+        tags: 'solo',
+        limit: 10,
+        aiFilter: 'no-ai'
+      }, [], { deepFetchPages: depth });
+
+      assert.equal(posts.length, 1, `deepFetchPages=${JSON.stringify(depth)} must stay valid`);
+    }
+  });
 });

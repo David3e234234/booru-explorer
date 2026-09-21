@@ -72,6 +72,7 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
 }
 
 const SITE_FETCH_DEADLINE_MS = 15000;
+const DEFAULT_DEEP_FETCH_DEPTH = 2;
 
 // Races a site fetch against a deadline. Resolving early used to be all it did:
 // the losing site kept fetching in the background, still holding its sockets, so
@@ -189,7 +190,12 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
 
   const targetLimit = parseInt(params.limit, 10) || 40;
   const page = parseInt(params.page, 10) || 1;
-  const deepFetchPagesSetting = settings?.deepFetchPages ? parseInt(settings.deepFetchPages, 10) : 2;
+  // A non-numeric depth ("auto", "abc") used to reach the loop bound as NaN, and
+  // `i < NaN` never runs - the site fetched one page and then discarded it.
+  const parsedDeepFetchPages = parseInt(settings?.deepFetchPages, 10);
+  const deepFetchPagesSetting = Number.isFinite(parsedDeepFetchPages) && parsedDeepFetchPages > 0
+    ? parsedDeepFetchPages
+    : DEFAULT_DEEP_FETCH_DEPTH;
 
   const negativeTokens = (params.tags || '')
     .split(/\s+/)
