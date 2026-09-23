@@ -94,6 +94,8 @@ export const KNOWN_EXTRA_TAGS = {
   'dd_dd_(niku1112s)': 1,
   dd_dd: 1,
   niku1112s: 1,
+  mastapov: 1,
+  nsfw_sonia_va: 1,
 
   // Popular franchises, publishers, studios and series (copyright)
   mihoyo: 3,
@@ -274,6 +276,7 @@ export const GENERIC_NON_ARTIST_TAGS = new Set([
   'overwatch', 'pokemon', 'genshin_impact', 'honkai_star_rail', 'zenless_zone_zero', 'wuthering_waves', 'resident_evil', 
   'final_fantasy', 'cyberpunk', 'nier', 'nier_automata', 'league_of_legends', 'touhou', 'fate', 'naruto', 'one_piece', 'bleach',
   'artist_request', 'artist request', 'source_request', 'source request', 'character_request', 'character request', 'copyright_request', 'meta_request',
+  'drinking', 'eating', 'sleeping', 'reading', 'cooking', 'swimming', 'singing', 'dancing', 'walking', 'running',
   ...LOCATION_BY_NOUNS
 ]);
 
@@ -324,7 +327,8 @@ export const CHARACTER_VARIANT_WORDS = new Set([
 
 const ARTIST_SUFFIXES = [
   '_(artist)', '_(creator)', '_(circle)', '_(studio)', '_(animator)', '_(mangaka)', '_(illustrator)',
-  '_(voice_actor)', '_(voice)', '_(va)', '_(audio)', '_(sound)', '_(music)', '_(sfx)', '_(vocal)'
+  '_(voice_actor)', '_(voice)', '_(va)', '_(audio)', '_(sound)', '_(music)', '_(sfx)', '_(vocal)',
+  '_va', '_voice', '_sfx', '_sound', '_audio'
 ];
 const COPYRIGHT_SUFFIXES = ['_(series)', '_(game)', '_(anime)', '_(manga)', '_(vtuber)', '_(novel)', '_(comic)', '_(franchise)', '_(project)', '_(visual_novel)', '_(light_novel)', '_(web_novel)', '_(mobile_game)'];
 const META_SUFFIXES = ['_(medium)', '_(style)', '_(artwork)'];
@@ -347,6 +351,7 @@ export const COMMON_DESCRIPTOR_WORDS = new Set([
   'red', 'blue', 'green', 'black', 'white', 'blonde', 'brown', 'purple', 'pink', 'yellow', 'orange', 'silver', 'grey', 'gray',
   'long', 'short', 'big', 'small', 'huge', 'flat', 'thick', 'thin', 'tall',
   'standing', 'sitting', 'lying', 'kneeling', 'looking_at_viewer', 'smile', 'blush', 'holding', 'open_mouth', 'closed_eyes',
+  'drinking', 'eating', 'sleeping', 'reading', 'cooking', 'swimming', 'singing', 'dancing', 'walking', 'running',
   'cum', 'oral', 'anal', 'vaginal', 'handjob', 'blowjob', 'creampie', 'paizuri', 'fingering', 'masturbation', 'sex', 'nude', 'naked',
   'indoors', 'outdoors', 'simple_background', 'white_background', 'black_background', 'bed', 'room', 'couch', 'table',
   'censored', 'uncensored', 'mosaic_censoring', 'bar_censor',
@@ -366,7 +371,7 @@ const DESCRIPTOR_SUFFIXES = [
 const NON_ARTIST_SUBSTRINGS = [
   'cum', 'penis', 'pussy', 'cock', 'balls', 'oral', 'anal', 'vaginal', 'throat', 'handjob', 'blowjob',
   'licking', 'moaning', 'breathing', 'penetration', 'fellatio', 'grool', 'worship',
-  'longer_than', 'video', 'watermark', 'source', 'pov', 'clothed', 'nude', 'sub', 'polish', 'pupils',
+  'longer_than', 'video', 'watermark', 'source', 'clothed', 'nude', 'sub', 'polish', 'pupils',
   'foreskin', 'genitals', 'soles', 'toes', 'lips', 'mouth', 'nails'
 ];
 
@@ -378,6 +383,7 @@ export function isDescriptiveTag(tag) {
   if (/^\d+x\d+$/.test(t) || /^\d+/.test(t)) return true;
   if (COMMON_DESCRIPTOR_WORDS.has(t)) return true;
   if (DESCRIPTOR_SUFFIXES.some(s => t.endsWith(s))) return true;
+  if (t === 'pov' || t.startsWith('pov_') || t.endsWith('_pov') || t.includes('_pov_')) return true;
   if (NON_ARTIST_SUBSTRINGS.some(s => t.includes(s))) return true;
   const parts = t.split('_');
   if (parts.length > 2) return true;
@@ -936,10 +942,11 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   }
 
   // Sort artist array so that visual creators always come first and audio/VA contributors come last
+  const ASSISTANT_ROLE_REGEX = /(?:_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$|_(?:va|voice|sfx|sound|audio)$)/i;
   if (artist.length > 1) {
     artist.sort((a, b) => {
-      const aAudio = /_?\((audio|sfx|sound|voice|va|music|voice_actor|translator|typesetter|colorist|assistant)\)$/i.test(a) ? 1 : 0;
-      const bAudio = /_?\((audio|sfx|sound|voice|va|music|voice_actor|translator|typesetter|colorist|assistant)\)$/i.test(b) ? 1 : 0;
+      const aAudio = ASSISTANT_ROLE_REGEX.test(a) ? 1 : 0;
+      const bAudio = ASSISTANT_ROLE_REGEX.test(b) ? 1 : 0;
       return aAudio - bAudio;
     });
   }
@@ -947,7 +954,6 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   // 7. Author and assistants extraction and synchronization
   let author = '';
   let assistants = [];
-  const ASSISTANT_ROLE_REGEX = /_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$/i;
 
   const validInitialAuthors = (initialAuthor && typeof initialAuthor === 'string')
     ? initialAuthor.split(',').map(a => a.trim()).filter(a => a && !isInvalidArtist(a))
@@ -1019,7 +1025,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
  * @returns {{ author: string, assistants: string[] }}
  */
 export function separateAuthorAndAssistants(rawAuthor = '', artistTags = []) {
-  const ASSISTANT_ROLE_REGEX = /_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$/i;
+  const ASSISTANT_ROLE_REGEX = /(?:_?\((audio|sfx|sound|voice|va|music|voice[_\s]actor|translator|typesetter|colorist|assistant)\)$|_(?:va|voice|sfx|sound|audio)$)/i;
   let candidates = [];
 
   if (Array.isArray(rawAuthor)) {
