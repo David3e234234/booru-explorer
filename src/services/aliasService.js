@@ -540,8 +540,6 @@ export function resolveTagForSite(token, targetSite, customRules = [], settings 
     const entry = discoveredAliasMap.get(lookupKey);
     if (entry.sites && entry.sites[site]) {
       replacedTag = entry.sites[site];
-    } else if (entry.id) {
-      replacedTag = entry.id;
     }
   }
 

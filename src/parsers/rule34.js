@@ -213,7 +213,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         'User-Agent': BROWSER_USER_AGENT,
         'Referer': 'https://rule34.xxx/'
       },
-      timeout: 8000,
+      timeout: 14000,
       settings,
       site: 'rule34'
     });
@@ -826,7 +826,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
           'User-Agent': BROWSER_USER_AGENT,
           'Referer': 'https://rule34.xxx/'
         },
-        timeout: 6000,
+        timeout: 12000,
         settings,
         site: 'rule34'
       });
