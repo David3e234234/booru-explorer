@@ -334,4 +334,21 @@ describe('Express API Integration & Route Tests', () => {
       assert.strictEqual(data.success, false);
     });
   });
+
+  describe('Tag Autocomplete Routes (/api/tags/autocomplete)', () => {
+    it('GET /api/tags/autocomplete returns empty array for empty query', async () => {
+      const res = await fetch(`${baseUrl}/api/tags/autocomplete?q=`);
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.deepStrictEqual(data, { tags: [] });
+    });
+
+    it('GET /api/tags/autocomplete handles query with site without throwing', async () => {
+      const res = await fetch(`${baseUrl}/api/tags/autocomplete?q=test&site=danbooru`);
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.ok(Array.isArray(data.tags));
+    });
+  });
 });
+

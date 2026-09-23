@@ -1080,6 +1080,7 @@ router.get('/tags/autocomplete', async (req, res) => {
 
   // Normalize: replace spaces with underscores (hu ta -> hu_ta)
   const query = rawQuery.replace(/\s+/g, '_');
+  const site = req.query.site || 'danbooru';
   const clientAuth = parseClientAuth(req);
   const serverSettings = getSettings();
   const settings = { ...serverSettings, ...clientAuth };
