@@ -86,6 +86,18 @@ node server.js --no-open
 
 Приложение будет доступно по адресу: `http://localhost:3000` (порт автоматически переключается, если 3000 занят, либо задается через `--port=N`).
 
+### Проверка и тесты
+
+```bash
+npm test
+```
+
+Запускает unit-тесты, тесты парсеров (`test/unit/parsers/`) и интеграционные тесты API (`test/integration/`) через `node --test test/run-all.js`. Отдельный набор запускается так:
+
+```bash
+node --test test/unit/tagHelpers.test.js
+```
+
 ---
 
 ## Горячие клавиши
