@@ -91,6 +91,9 @@ export const KNOWN_EXTRA_TAGS = {
   lillst: 1,
   snooblue: 1,
   smudge_and_frank: 1,
+  'dd_dd_(niku1112s)': 1,
+  dd_dd: 1,
+  niku1112s: 1,
 
   // Popular franchises, publishers, studios and series (copyright)
   mihoyo: 3,
@@ -842,6 +845,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     // 5. Universal Booru parenthesized character heuristic: name_(series) or name_(variant)
     const parenMatch = lower.match(/^(.+?)_\(([^)]+)\)$/);
     if (parenMatch) {
+      const prefix = parenMatch[1].trim();
       const suffix = parenMatch[2].trim();
       const isReserved = RESERVED_PAREN_WORDS.has(suffix);
       const isVariant = CHARACTER_VARIANT_WORDS.has(suffix) || COMMON_DESCRIPTOR_WORDS.has(suffix);
@@ -852,6 +856,17 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
         const tLow = t.toLowerCase();
         return tLow !== lower && (tLow === suffix || tLow.includes(suffix));
       });
+
+      // Distinguish social handle / artist alias in parentheses: e.g. name_(handle) or name_(twitter)
+      const isSocialHandle = /^(?:twitter|pixiv|fanbox|patreon|fantia|coconala|skeb|deviantart|artstation)$/i.test(suffix) ||
+                             (/\d/.test(suffix) && /^[a-z0-9_]{3,20}$/i.test(suffix) && !isKnownFranchise && !matchesPostTag);
+      const matchesSource = sourceUrl && (sourceUrl.toLowerCase().includes(suffix) || sourceUrl.toLowerCase().includes(prefix));
+
+      if (matchesSource || isSocialHandle) {
+        // Tag is likely an artist with their handle/platform in parentheses
+        addUnique(artist, originalTag);
+        continue;
+      }
 
       if (isKnownFranchise || isVariant || (!isReserved && (matchesPostTag || suffix.length > 3))) {
         addUnique(character, originalTag);
