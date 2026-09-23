@@ -177,6 +177,60 @@ function extractHandleFromUrl(rawUrl) {
 }
 
 /**
+ * Checks a list of candidate tags against Rule34 autocomplete API to find the active tag on Rule34.
+ * Returns the exact tag value if found, or null.
+ * @param {string[]} candidates
+ * @param {object} [settings]
+ * @returns {Promise<string|null>}
+ */
+async function findRule34TagMatch(candidates = [], settings = {}) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+  const uniqueCandidates = Array.from(new Set(candidates.map(c => String(c).trim().toLowerCase()).filter(Boolean)));
+  if (uniqueCandidates.length === 0) return null;
+
+  try {
+    const checks = uniqueCandidates.map(async (cand) => {
+      const url = `https://api.rule34.xxx/autocomplete.php?q=${encodeURIComponent(cand)}`;
+      const res = await fetchSafe(url, {
+        timeout: 4000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://rule34.xxx/'
+        },
+        settings,
+        site: 'rule34'
+      });
+      if (!res || !res.ok) {
+        if (res) await discardResponse(res);
+        return null;
+      }
+      const list = await res.json().catch(() => []);
+      if (!Array.isArray(list) || list.length === 0) return null;
+
+      // Find an exact match for the candidate in autocomplete results
+      const exact = list.find(item => item?.value?.toLowerCase() === cand);
+      if (!exact) return null;
+
+      // Extract post count from label "tag (count)"
+      const match = exact.label?.match(/\((\d+)\)$/);
+      const postCount = match ? parseInt(match[1], 10) : 1;
+      return { tag: exact.value, postCount };
+    });
+
+    const results = (await Promise.allSettled(checks))
+      .filter(r => r.status === 'fulfilled' && r.value)
+      .map(r => r.value);
+
+    if (results.length === 0) return null;
+    // Pick match with highest post count
+    results.sort((a, b) => b.postCount - a.postCount);
+    return results[0].tag;
+  } catch (err) {
+    return null;
+  }
+}
+
+/**
  * Returns all known alias variants for a given name/tag across custom rules, discovered aliases, and built-in aliases.
  * @param {string} rawName
  * @param {Array|string} [customAliases]
@@ -271,7 +325,7 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
       ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
       : '';
 
-    const url = `https://danbooru.donmai.us/artists.json?search[name]=${encodeURIComponent(candidate)}&only=name,other_names,urls${danbooruAuth}`;
+    const url = `https://danbooru.donmai.us/artists.json?search[any_name_matches]=${encodeURIComponent(candidate)}&only=name,other_names,urls${danbooruAuth}`;
 
     const res = await fetchSafe(url, {
       timeout: 6000,
@@ -319,12 +373,19 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
     if (aliasSet.size > 1) {
       const aliases = Array.from(aliasSet);
       
-      // Determine site-specific mappings if names follow typical patterns (e.g. name3d vs namesfm)
       const sites = { danbooru: canonicalName };
-      const sfmName = aliases.find(a => a.endsWith('sfm'));
-      if (sfmName) {
-        sites.rule34 = sfmName;
-        sites.rule34video = sfmName;
+
+      // Dynamically discover valid tag variant on Rule34
+      const rule34Match = await findRule34TagMatch(aliases, settings);
+      if (rule34Match) {
+        sites.rule34 = rule34Match;
+        sites.rule34video = rule34Match;
+      } else {
+        const sfmName = aliases.find(a => a.endsWith('sfm'));
+        if (sfmName) {
+          sites.rule34 = sfmName;
+          sites.rule34video = sfmName;
+        }
       }
 
       // Check if entry already exists in discovered list
