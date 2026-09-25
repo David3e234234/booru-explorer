@@ -8,7 +8,9 @@ export const AUTH_CACHE_FIELDS = [
   'enablePaheal', 'siteSortTags', 'kemonoService', 'pawchiveService',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId',
   'danbooruApiKey', 'danbooruLogin', 'konachanLogin', 'konachanPassword',
-  'yandereLogin', 'yanderePassword', 'pawchiveSession', 'kemonoSession',
+  'yandereLogin', 'yanderePassword',
+  'pawchiveSession', 'pawchiveLogin', 'pawchivePassword',
+  'kemonoSession', 'kemonoLogin', 'kemonoPassword',
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy',
   'yandereProxy', 'konachanProxy', 'safebooruProxy', 'rule34videoProxy',
   'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy'

@@ -536,7 +536,11 @@ export async function fetchSafe(url, options = {}) {
           ...requestHeaders
         }
       };
-      if (followRedirects) fetchOptions.redirect = 'manual';
+      // 'manual' is required in both branches: fetchSafe re-issues redirects itself
+      // when following them, and a caller that asked not to follow must still see the
+      // 3xx itself. Leaving it unset makes undici follow on its own, which hides both
+      // the `Location` header and `Set-Cookie` (Pawchive returns its session there).
+      fetchOptions.redirect = 'manual';
       if (requestBody !== undefined) fetchOptions.body = requestBody;
 
       // Kemono's DDoS-Guard scraper protection strictly requires Accept: text/css for all API endpoints.

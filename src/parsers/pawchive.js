@@ -5,6 +5,7 @@ import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
 import { getAllAliasesForName, resolveTagForSite, parseCustomAliases } from '../services/aliasService.js';
+import { resolveSiteSession, invalidateSiteSession } from '../services/siteSessionService.js';
 import { CACHE_DIR } from '../config/constants.js';
 
 let creatorsCache = null;
@@ -57,21 +58,15 @@ function isPawchiveArchive(nameOrPath) {
   return PAWCHIVE_ARCHIVE_EXTS.has(ext);
 }
 
-export function getPawchiveAuthHeaders(settings = {}) {
+/**
+ * Builds the auth headers for a Pawchive request. Explicit session token first,
+ * otherwise the stored login/password is exchanged for a cached session.
+ */
+export async function getPawchiveAuthHeaders(settings = {}, options = {}) {
   const headers = {};
-  const rawSession = String(settings.pawchiveSession || '').trim();
-  if (rawSession) {
-    let token = rawSession;
-    const sessionMatch = token.match(/(?:^|;\s*)session=([^;]+)/i);
-    if (sessionMatch) {
-      token = sessionMatch[1];
-    } else {
-      token = token.replace(/^session=/i, '');
-    }
-    token = token.trim().replace(/^["']|["']$/g, '');
-    if (token) {
-      headers['Cookie'] = `session=${token}`;
-    }
+  const { token } = await resolveSiteSession('pawchive', settings, options);
+  if (token) {
+    headers['Cookie'] = `session=${token}`;
   }
   return headers;
 }
@@ -79,7 +74,7 @@ export function getPawchiveAuthHeaders(settings = {}) {
 export async function getPawchiveCreatorProfile(service, userId, settings = {}) {
   if (!service || !userId) return null;
   try {
-    const authHeaders = getPawchiveAuthHeaders(settings);
+    const authHeaders = await getPawchiveAuthHeaders(settings);
     const res = await fetchSafe(`https://pawchive.pw/api/v1/${service}/user/${userId}/profile`, {
       timeout: 8000,
       headers: authHeaders,
@@ -138,9 +133,12 @@ export async function getCreatorsDirectory(settings = {}) {
     } catch {}
   }
 
+  const authHeaders = await getPawchiveAuthHeaders(settings);
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetchSafe('https://pawchive.pw/api/v1/creators', { timeout: 30000, settings, site: 'pawchive' });
+      // The creator directory was fetched anonymously before, so a configured
+      // login never applied to the largest request the site serves.
+      const res = await fetchSafe('https://pawchive.pw/api/v1/creators', { timeout: 30000, headers: authHeaders, settings, site: 'pawchive' });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -583,7 +581,7 @@ export async function fetchPawchivePostById(postIdOrOptions, service, user, aiTa
         postId = parts.slice(2).join('_');
       }
     }
-    const authHeaders = getPawchiveAuthHeaders(settings);
+    const authHeaders = await getPawchiveAuthHeaders(settings);
 
     if (!targetService || !targetUser) {
       // If service or user missing, try searching by post ID in posts search
@@ -732,7 +730,7 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     effectiveKeywords.push(authorQuery);
   }
   const qPart = effectiveKeywords.length > 0 ? `q=${encodeURIComponent(effectiveKeywords.join(' '))}&` : '';
-  const authHeaders = getPawchiveAuthHeaders(settings);
+  const authHeaders = await getPawchiveAuthHeaders(settings);
 
   // First connect attempt after idle often times out on flaky links, so retry once
   const fetchJsonPage = async (apiUrl) => {
@@ -740,6 +738,14 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
       try {
         const res = await fetchSafe(apiUrl, { timeout: 20000, headers: authHeaders, settings, site: 'pawchive' });
         if (!res.ok) {
+          if (res.status === 401 && attempt === 0) {
+            await discardResponse(res);
+            invalidateSiteSession('pawchive', settings);
+            const fresh = await getPawchiveAuthHeaders(settings, { force: true });
+            authHeaders.Cookie = fresh.Cookie || '';
+            if (!authHeaders.Cookie) return null;
+            continue;
+          }
           await discardResponse(res);
           return null;
         }

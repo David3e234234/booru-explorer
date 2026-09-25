@@ -30,6 +30,7 @@ import { logInfo, logError } from '../utils/logger.js';
 import { getAliasesInfo, clearDiscoveredAliases, getAllKnownAliasesMap } from '../services/aliasService.js';
 import { resolveAuthorCreators } from '../services/creatorResolverService.js';
 import { parseRequestAuth, buildAuthCacheKey } from '../utils/settingsValidation.js';
+import { resolveSiteSession, extractSessionToken } from '../services/siteSessionService.js';
 
 const router = express.Router();
 
@@ -149,96 +150,76 @@ async function runAuthTest(site, creds, settings = {}) {
     return { success: false, message: `Rule34: ошибка сайта (HTTP ${res.status})` };
   }
 
-  if (site === 'pawchive') {
-    const rawSession = String(creds.session || settings.pawchiveSession || '').trim();
-    if (!rawSession) return { success: false, message: 'Введите Pawchive Session Token' };
-    let sessionToken = rawSession;
-    const sessionMatch = sessionToken.match(/(?:^|;\s*)session=([^;]+)/i);
-    if (sessionMatch) {
-      sessionToken = sessionMatch[1];
-    } else {
-      sessionToken = sessionToken.replace(/^session=/i, '');
+  if (site === 'pawchive' || site === 'kemono') {
+    const label = site === 'pawchive' ? 'Pawchive' : 'Kemono';
+    const credsLogin = String(creds.login || '').trim();
+    const credsPassword = String(creds.password || '');
+
+    // Login/password is exchanged for a session first; the typed session token
+    // stays supported as a fallback and keeps priority inside the resolver.
+    let sessionToken = '';
+    let username = '';
+    if (credsLogin && credsPassword) {
+      const result = await resolveSiteSession(site, {
+        [`${site}Login`]: credsLogin,
+        [`${site}Password`]: credsPassword
+      }, { force: true });
+      if (result.token) {
+        sessionToken = result.token;
+        username = result.username;
+      } else if (result.reason === 'credentials') {
+        return { success: false, message: `${label}: неверный логин или пароль` };
+      } else if (result.reason === 'network') {
+        return { success: false, message: `${label} недоступен (сеть)` };
+      }
     }
-    sessionToken = sessionToken.trim().replace(/^["']|["']$/g, '');
-    if (!sessionToken) return { success: false, message: 'Введите корректный Pawchive Session Token' };
+
+    if (!sessionToken) {
+      sessionToken = extractSessionToken(creds.session || settings[`${site}Session`]);
+    }
+    if (!sessionToken) {
+      return { success: false, message: `Введите логин и пароль или Session Token ${label}` };
+    }
+
+    const base = site === 'pawchive' ? 'https://pawchive.pw' : 'https://kemono.cr';
+    const headers = { 'Cookie': `session=${sessionToken}` };
+    if (site === 'kemono') headers.Accept = 'text/css';
 
     let res;
     try {
-      res = await fetchSafe('https://pawchive.pw/api/v1/account/favorites', { 
-        timeout: AUTH_TEST_TIMEOUT_MS, 
-        headers: {
-          'Cookie': `session=${sessionToken}`
-        },
-        settings, 
-        site: 'pawchive' 
+      res = await fetchSafe(`${base}/api/v1/account/favorites`, {
+        timeout: AUTH_TEST_TIMEOUT_MS,
+        headers,
+        settings,
+        site
       });
     } catch (err) {
-      return { success: false, message: `Pawchive недоступен (${err.message || 'сеть'})` };
+      return { success: false, message: `${label} недоступен (${err.message || 'сеть'})` };
     }
-    if (res.status === 401) return { success: false, message: 'Pawchive: неверный Session Token или сессия истекла' };
-    if (res.status === 403) return { success: false, message: 'Pawchive: доступ заблокирован (HTTP 403). Попробуйте прокси' };
-    if (res.ok) {
-      const data = await readJsonSafe(res);
-      const count = Array.isArray(data) ? data.length : 0;
-      return { success: true, message: `Pawchive: сессия активна (в избранном постов: ${count})` };
-    }
-    return { success: false, message: `Pawchive: ошибка сайта (HTTP ${res.status})` };
-  }
-
-  if (site === 'kemono') {
-    const rawSession = String(creds.session || settings.kemonoSession || '').trim();
-    if (!rawSession) return { success: false, message: 'Введите Kemono Session Token' };
-    let sessionToken = rawSession;
-    const sessionMatch = sessionToken.match(/(?:^|;\s*)session=([^;]+)/i);
-    if (sessionMatch) {
-      sessionToken = sessionMatch[1];
-    } else {
-      sessionToken = sessionToken.replace(/^session=/i, '');
-    }
-    sessionToken = sessionToken.trim().replace(/^["']|["']$/g, '');
-    if (!sessionToken) return { success: false, message: 'Введите корректный Kemono Session Token' };
-
-    let res;
-    try {
-      res = await fetchSafe('https://kemono.cr/api/v1/account/favorites', { 
-        timeout: AUTH_TEST_TIMEOUT_MS, 
-        headers: {
-          'Cookie': `session=${sessionToken}`,
-          'Accept': 'text/css'
-        },
-        settings, 
-        site: 'kemono' 
-      });
-    } catch (err) {
-      return { success: false, message: `Kemono недоступен (${err.message || 'сеть'})` };
-    }
-    if (res.status === 401) return { success: false, message: 'Kemono: неверный Session Token или сессия истекла' };
-    if (res.status === 403) return { success: false, message: 'Kemono: доступ заблокирован защитой сайта (HTTP 403). Попробуйте прокси' };
+    if (res.status === 401) return { success: false, message: `${label}: неверные данные входа или сессия истекла` };
+    if (res.status === 403) return { success: false, message: `${label}: доступ заблокирован (HTTP 403). Попробуйте прокси` };
     if (res.ok) {
       const data = await readJsonSafe(res);
       const count = Array.isArray(data) ? data.length : (Array.isArray(data?.posts) ? data.posts.length : 0);
-      return { success: true, message: `Kemono: сессия активна (в избранном постов: ${count})` };
+      return { success: true, message: username ? `${label}: вход выполнен как ${username}` : `${label}: сессия активна (в избранном постов: ${count})` };
     }
-    if (res.status === 404) {
+    if (res.status === 404 && site === 'kemono') {
       // Fallback check on account endpoint if favorites route structure varies
       try {
-        const accRes = await fetchSafe('https://kemono.cr/api/v1/account', {
+        const accRes = await fetchSafe(`${base}/api/v1/account`, {
           timeout: AUTH_TEST_TIMEOUT_MS,
-          headers: {
-            'Cookie': `session=${sessionToken}`,
-            'Accept': 'text/css'
-          },
+          headers,
           settings,
-          site: 'kemono'
+          site
         });
         if (accRes.ok) {
           const accData = await readJsonSafe(accRes);
           const name = accData?.username || accData?.name || '';
-          return { success: true, message: name ? `Kemono: сессия активна (${name})` : 'Kemono: сессия активна' };
+          return { success: true, message: name ? `${label}: вход выполнен как ${name}` : `${label}: сессия активна` };
         }
       } catch {}
     }
-    return { success: false, message: `Kemono: ошибка сайта (HTTP ${res.status})` };
+    return { success: false, message: `${label}: ошибка сайта (HTTP ${res.status})` };
   }
 
   return { success: false, message: 'Для этого сайта нет данных для проверки' };

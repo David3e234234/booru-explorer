@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import {
   buildAuthCacheKey,
   parseClientAuthValue,
-  sanitizeSettingsPatch
+  sanitizeSettingsPatch,
+  AUTH_CACHE_FIELDS
 } from '../../src/utils/settingsValidation.js';
+import { SECRET_SETTING_FIELDS } from '../../src/config/constants.js';
 
 describe('Settings validation', () => {
   it('parses only plain objects from the auth header', () => {
@@ -48,5 +50,35 @@ describe('Settings validation', () => {
     const inheritedServerValue = buildAuthCacheKey({}, { deepFetchPages: 5 });
     assert.strictEqual(explicitServerValue, inheritedServerValue);
     assert.notStrictEqual(buildAuthCacheKey({ deepFetchPages: 2 }, { deepFetchPages: 5 }), inheritedServerValue);
+  });
+
+  it('separates cached pages by the Kemono and Pawchive credentials', () => {
+    // A cached page fetched with one account must never be served to another,
+    // so every credential that changes the parser result has to be in the key.
+    const withoutLogin = buildAuthCacheKey({}, {});
+    assert.notStrictEqual(buildAuthCacheKey({ kemonoLogin: 'alice' }, {}), withoutLogin);
+    assert.notStrictEqual(buildAuthCacheKey({ kemonoPassword: 'one' }, {}), withoutLogin);
+    assert.notStrictEqual(buildAuthCacheKey({ pawchiveLogin: 'alice' }, {}), withoutLogin);
+    assert.notStrictEqual(buildAuthCacheKey({ pawchivePassword: 'one' }, {}), withoutLogin);
+    assert.notStrictEqual(
+      buildAuthCacheKey({ kemonoLogin: 'alice' }, { kemonoLogin: 'bob' }),
+      withoutLogin
+    );
+  });
+
+  it('treats board passwords as secrets in both the cache key and the field list', () => {
+    for (const field of ['kemonoLogin', 'kemonoPassword', 'pawchiveLogin', 'pawchivePassword']) {
+      assert.ok(AUTH_CACHE_FIELDS.includes(field), `${field} must be in AUTH_CACHE_FIELDS`);
+      assert.ok(SECRET_SETTING_FIELDS.includes(field), `${field} must be in SECRET_SETTING_FIELDS`);
+    }
+
+    const anonymous = sanitizeSettingsPatch({
+      kemonoLogin: 'alice',
+      kemonoPassword: 'secret',
+      pawchiveLogin: 'bob',
+      pawchivePassword: 'secret'
+    }, { anonymous: true });
+
+    assert.deepStrictEqual(anonymous, {});
   });
 });

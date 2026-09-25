@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockAgent, restoreDispatcher, assertNormalizedPost } from './harness.js';
-import { fetchKemono, fetchKemonoPostById } from '../../../src/parsers/kemono.js';
+import { fetchKemono, fetchKemonoPostById, getKemonoAuthHeaders } from '../../../src/parsers/kemono.js';
+import { clearSiteSessionCache } from '../../../src/services/siteSessionService.js';
 
 test('Kemono Parser Unit Tests', async (t) => {
   let mockContext = null;
 
   t.beforeEach(() => {
     mockContext = createMockAgent();
+    // The session cache is module-level and outlives the mock dispatcher
+    clearSiteSessionCache();
   });
 
   t.afterEach(() => {
@@ -79,5 +82,30 @@ test('Kemono Parser Unit Tests', async (t) => {
     assertNormalizedPost(post, 'kemono');
     assert.equal(post.originalId, '123456');
     assert.equal(post.author, 'TestArtist');
+  });
+
+  await t.test('auth headers prefer a pinned session over stored credentials', async () => {
+    // No login interceptor is registered: reaching the login route at all would throw.
+    const headers = await getKemonoAuthHeaders({
+      kemonoSession: 'pinned-token',
+      kemonoLogin: 'user',
+      kemonoPassword: 'pass'
+    });
+    assert.equal(headers.Cookie, 'session=pinned-token');
+    assert.equal(headers.Accept, 'text/css');
+  });
+
+  await t.test('auth headers exchange credentials for a session', async () => {
+    mockContext.agent.get('https://kemono.cr')
+      .intercept({ path: '/api/v1/authentication/login', method: 'POST' })
+      .reply(200, { username: 'tester' }, { headers: { 'set-cookie': 'session=issued-token; Path=/' } });
+
+    const headers = await getKemonoAuthHeaders({ kemonoLogin: 'tester', kemonoPassword: 'secret' });
+    assert.equal(headers.Cookie, 'session=issued-token');
+  });
+
+  await t.test('auth headers stay empty without any credentials', async () => {
+    const headers = await getKemonoAuthHeaders({});
+    assert.equal(headers.Cookie, undefined);
   });
 });

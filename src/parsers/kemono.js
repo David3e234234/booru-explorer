@@ -5,6 +5,7 @@ import { checkIsAi, normalizeDate, adaptTagsForSite } from '../utils/tagHelpers.
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
 import { getAllAliasesForName, resolveTagForSite, parseCustomAliases } from '../services/aliasService.js';
+import { resolveSiteSession, invalidateSiteSession } from '../services/siteSessionService.js';
 import { CACHE_DIR } from '../config/constants.js';
 
 let creatorsCache = null;
@@ -62,23 +63,17 @@ function isKemonoArchive(nameOrPath) {
   return KEMONO_ARCHIVE_EXTS.has(ext);
 }
 
-export function getKemonoAuthHeaders(settings = {}) {
+/**
+ * Builds the auth headers for a Kemono request. Explicit session token first,
+ * otherwise the stored login/password is exchanged for a cached session.
+ */
+export async function getKemonoAuthHeaders(settings = {}, options = {}) {
   const headers = {
     'Accept': 'text/css'
   };
-  const rawSession = String(settings.kemonoSession || '').trim();
-  if (rawSession) {
-    let token = rawSession;
-    const sessionMatch = token.match(/(?:^|;\s*)session=([^;]+)/i);
-    if (sessionMatch) {
-      token = sessionMatch[1];
-    } else {
-      token = token.replace(/^session=/i, '');
-    }
-    token = token.trim().replace(/^["']|["']$/g, '');
-    if (token) {
-      headers['Cookie'] = `session=${token}`;
-    }
+  const { token } = await resolveSiteSession('kemono', settings, options);
+  if (token) {
+    headers['Cookie'] = `session=${token}`;
   }
   return headers;
 }
@@ -86,7 +81,7 @@ export function getKemonoAuthHeaders(settings = {}) {
 export async function getKemonoCreatorProfile(service, userId, settings = {}) {
   if (!service || !userId) return null;
   try {
-    const authHeaders = getKemonoAuthHeaders(settings);
+    const authHeaders = await getKemonoAuthHeaders(settings);
     const res = await fetchSafe(`https://kemono.cr/api/v1/${service}/user/${userId}/profile`, {
       timeout: 8000,
       headers: authHeaders,
@@ -144,7 +139,7 @@ export async function getCreatorsDirectory(settings = {}) {
     } catch {}
   }
 
-  const authHeaders = getKemonoAuthHeaders(settings);
+  const authHeaders = await getKemonoAuthHeaders(settings);
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const res = await fetchSafe('https://kemono.cr/api/v1/creators', {
@@ -591,7 +586,7 @@ export async function fetchKemonoPostById(postIdOrOptions, service, user, aiTags
         postId = parts.slice(2).join('_');
       }
     }
-    const authHeaders = getKemonoAuthHeaders(settings);
+    const authHeaders = await getKemonoAuthHeaders(settings);
 
     if (!targetService || !targetUser) {
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -740,13 +735,23 @@ export async function fetchKemono(params, aiTagsList, settings = {}) {
     effectiveKeywords.push(authorQuery);
   }
   const qPart = effectiveKeywords.length > 0 ? `q=${encodeURIComponent(effectiveKeywords.join(' '))}&` : '';
-  const authHeaders = getKemonoAuthHeaders(settings);
+  const authHeaders = await getKemonoAuthHeaders(settings);
 
   const fetchJsonPage = async (apiUrl) => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const res = await fetchSafe(apiUrl, { timeout: 20000, headers: authHeaders, settings, site: 'kemono' });
         if (!res.ok) {
+          // A revoked session is indistinguishable from a bad password here, so
+          // the cached one is dropped and a single re-authenticated retry is made.
+          if (res.status === 401 && attempt === 0) {
+            await discardResponse(res);
+            invalidateSiteSession('kemono', settings);
+            const fresh = await getKemonoAuthHeaders(settings, { force: true });
+            authHeaders.Cookie = fresh.Cookie || '';
+            if (!authHeaders.Cookie) return null;
+            continue;
+          }
           if (res.status === 429 && attempt === 0) {
             await discardResponse(res);
             await new Promise(r => setTimeout(r, 1200));

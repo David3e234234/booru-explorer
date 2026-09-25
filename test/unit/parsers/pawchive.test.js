@@ -1,13 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockAgent, restoreDispatcher, assertNormalizedPost } from './harness.js';
-import { fetchPawchive, fetchPawchivePostById } from '../../../src/parsers/pawchive.js';
+import { fetchPawchive, fetchPawchivePostById, getPawchiveAuthHeaders } from '../../../src/parsers/pawchive.js';
+import { clearSiteSessionCache } from '../../../src/services/siteSessionService.js';
 
 test('Pawchive Parser Unit Tests', async (t) => {
   let mockContext = null;
 
   t.beforeEach(() => {
     mockContext = createMockAgent();
+    // The session cache is module-level and outlives the mock dispatcher
+    clearSiteSessionCache();
   });
 
   t.afterEach(() => {
@@ -128,5 +131,34 @@ test('Pawchive Parser Unit Tests', async (t) => {
     assert.equal(post.isArchive, true);
     assert.equal(post.fileExt, 'zip');
     assert.ok(post.archiveUrls.length > 0);
+  });
+
+  await t.test('auth headers prefer a pinned session over stored credentials', async () => {
+    // No login interceptor is registered: reaching the login route would throw.
+    const headers = await getPawchiveAuthHeaders({
+      pawchiveSession: 'pinned-token',
+      pawchiveLogin: 'user',
+      pawchivePassword: 'pass'
+    });
+    assert.equal(headers.Cookie, 'session=pinned-token');
+  });
+
+  await t.test('auth headers exchange credentials through the HTML form', async () => {
+    mockContext.agent.get('https://pawchive.pw')
+      .intercept({ path: '/account/login', method: 'POST' })
+      .reply(302, '', { headers: { location: '/artists', 'set-cookie': 'session=form-token; Path=/' } });
+
+    const headers = await getPawchiveAuthHeaders({ pawchiveLogin: 'tester', pawchivePassword: 'secret' });
+    assert.equal(headers.Cookie, 'session=form-token');
+  });
+
+  await t.test('a rejected form login yields no cookie header', async () => {
+    // Pawchive answers 302 back to the form when the credentials are wrong.
+    mockContext.agent.get('https://pawchive.pw')
+      .intercept({ path: '/account/login', method: 'POST' })
+      .reply(302, '', { headers: { location: '/account/login?location=/artists' } });
+
+    const headers = await getPawchiveAuthHeaders({ pawchiveLogin: 'tester', pawchivePassword: 'wrong' });
+    assert.equal(headers.Cookie, undefined);
   });
 });

@@ -14,6 +14,7 @@ import {
 } from '../config/constants.js';
 import { logInfo, logError } from '../utils/logger.js';
 import { fetchSafe, discardResponse } from '../utils/network.js';
+import { resolveSiteSession } from './siteSessionService.js';
 import { getUserDataDir } from './userService.js';
 import {
   readJsonFile,
@@ -248,10 +249,10 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
     }
     // 3. Pawchive
     else if (effectiveSite === 'pawchive') {
-      if (!settings.pawchiveSession) {
-        return { success: false, site: 'pawchive', message: 'Не указан Session Token Pawchive' };
+      const { token } = await resolveSiteSession('pawchive', settings);
+      if (!token) {
+        return { success: false, site: 'pawchive', message: 'Не указан Session Token или логин Pawchive' };
       }
-      const token = String(settings.pawchiveSession).replace(/^session=/i, '').trim();
       let service = postObj.service || null;
       let creatorId = postObj.user || null;
       let realPostId = cleanId.split('_')[0];
@@ -285,17 +286,10 @@ export async function sendBooruLike(site, postOrId, isLike, settings) {
 
     // 4. Kemono
     else if (effectiveSite === 'kemono') {
-      if (!settings.kemonoSession) {
-        return { success: false, site: 'kemono', message: 'Не указан Session Token Kemono' };
+      const { token } = await resolveSiteSession('kemono', settings);
+      if (!token) {
+        return { success: false, site: 'kemono', message: 'Не указан Session Token или логин Kemono' };
       }
-      let token = String(settings.kemonoSession).trim();
-      const sessionMatch = token.match(/(?:^|;\s*)session=([^;]+)/i);
-      if (sessionMatch) {
-        token = sessionMatch[1];
-      } else {
-        token = token.replace(/^session=/i, '');
-      }
-      token = token.trim().replace(/^["']|["']$/g, '');
 
       let service = postObj.service || null;
       let creatorId = postObj.user || null;
@@ -350,10 +344,10 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
     const targetSite = (typeof authorOrName === 'object' && authorOrName.site) ? authorOrName.site : (site || 'danbooru');
 
     if (targetSite === 'pawchive') {
-      if (!settings.pawchiveSession) {
-        return { success: false, site: 'pawchive', message: 'Не указан Session Token Pawchive' };
+      const { token } = await resolveSiteSession('pawchive', settings);
+      if (!token) {
+        return { success: false, site: 'pawchive', message: 'Не указан Session Token или логин Pawchive' };
       }
-      const token = String(settings.pawchiveSession).replace(/^session=/i, '').trim();
       let service = (typeof authorOrName === 'object' && authorOrName.service) || '';
       let creatorId = cleanName;
       if (cleanName.includes(':')) {
@@ -384,17 +378,10 @@ export async function sendBooruAuthorFollow(site, authorOrName, isFollow, settin
     }
 
     if (targetSite === 'kemono') {
-      if (!settings.kemonoSession) {
-        return { success: false, site: 'kemono', message: 'Не указан Session Token Kemono' };
+      const { token } = await resolveSiteSession('kemono', settings);
+      if (!token) {
+        return { success: false, site: 'kemono', message: 'Не указан Session Token или логин Kemono' };
       }
-      let token = String(settings.kemonoSession).trim();
-      const sessionMatch = token.match(/(?:^|;\s*)session=([^;]+)/i);
-      if (sessionMatch) {
-        token = sessionMatch[1];
-      } else {
-        token = token.replace(/^session=/i, '');
-      }
-      token = token.trim().replace(/^["']|["']$/g, '');
 
       let service = (typeof authorOrName === 'object' && authorOrName.service) || '';
       let creatorId = cleanName;
