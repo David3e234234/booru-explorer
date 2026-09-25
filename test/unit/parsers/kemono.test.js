@@ -84,24 +84,17 @@ test('Kemono Parser Unit Tests', async (t) => {
     assert.equal(post.author, 'TestArtist');
   });
 
-  await t.test('auth headers prefer a pinned session over stored credentials', async () => {
-    // No login interceptor is registered: reaching the login route at all would throw.
-    const headers = await getKemonoAuthHeaders({
-      kemonoSession: 'pinned-token',
-      kemonoLogin: 'user',
-      kemonoPassword: 'pass'
-    });
+  await t.test('auth headers use the configured session token', async () => {
+    // No interceptor is registered: any outbound request would throw, so a
+    // resolved header proves the token path performs no network call.
+    const headers = await getKemonoAuthHeaders({ kemonoSession: 'pinned-token' });
     assert.equal(headers.Cookie, 'session=pinned-token');
     assert.equal(headers.Accept, 'text/css');
   });
 
-  await t.test('auth headers exchange credentials for a session', async () => {
-    mockContext.agent.get('https://kemono.cr')
-      .intercept({ path: '/api/v1/authentication/login', method: 'POST' })
-      .reply(200, { username: 'tester' }, { headers: { 'set-cookie': 'session=issued-token; Path=/' } });
-
-    const headers = await getKemonoAuthHeaders({ kemonoLogin: 'tester', kemonoPassword: 'secret' });
-    assert.equal(headers.Cookie, 'session=issued-token');
+  await t.test('auth headers normalize a pasted session cookie', async () => {
+    const headers = await getKemonoAuthHeaders({ kemonoSession: 'theme=dark; session=jar-token; Path=/' });
+    assert.equal(headers.Cookie, 'session=jar-token');
   });
 
   await t.test('auth headers stay empty without any credentials', async () => {

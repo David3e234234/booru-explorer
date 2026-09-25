@@ -133,32 +133,20 @@ test('Pawchive Parser Unit Tests', async (t) => {
     assert.ok(post.archiveUrls.length > 0);
   });
 
-  await t.test('auth headers prefer a pinned session over stored credentials', async () => {
-    // No login interceptor is registered: reaching the login route would throw.
-    const headers = await getPawchiveAuthHeaders({
-      pawchiveSession: 'pinned-token',
-      pawchiveLogin: 'user',
-      pawchivePassword: 'pass'
-    });
+  await t.test('auth headers use the configured session token', async () => {
+    // No interceptor is registered: any outbound request would throw, so a
+    // resolved header proves the token path performs no network call.
+    const headers = await getPawchiveAuthHeaders({ pawchiveSession: 'pinned-token' });
     assert.equal(headers.Cookie, 'session=pinned-token');
   });
 
-  await t.test('auth headers exchange credentials through the HTML form', async () => {
-    mockContext.agent.get('https://pawchive.pw')
-      .intercept({ path: '/account/login', method: 'POST' })
-      .reply(302, '', { headers: { location: '/artists', 'set-cookie': 'session=form-token; Path=/' } });
-
-    const headers = await getPawchiveAuthHeaders({ pawchiveLogin: 'tester', pawchivePassword: 'secret' });
-    assert.equal(headers.Cookie, 'session=form-token');
+  await t.test('auth headers normalize a pasted session cookie', async () => {
+    const headers = await getPawchiveAuthHeaders({ pawchiveSession: 'session=jar-token; Path=/; HttpOnly' });
+    assert.equal(headers.Cookie, 'session=jar-token');
   });
 
-  await t.test('a rejected form login yields no cookie header', async () => {
-    // Pawchive answers 302 back to the form when the credentials are wrong.
-    mockContext.agent.get('https://pawchive.pw')
-      .intercept({ path: '/account/login', method: 'POST' })
-      .reply(302, '', { headers: { location: '/account/login?location=/artists' } });
-
-    const headers = await getPawchiveAuthHeaders({ pawchiveLogin: 'tester', pawchivePassword: 'wrong' });
+  await t.test('a blank token yields no cookie header', async () => {
+    const headers = await getPawchiveAuthHeaders({ pawchiveSession: '   ' });
     assert.equal(headers.Cookie, undefined);
   });
 });

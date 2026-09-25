@@ -200,6 +200,12 @@
   gap: 8px;
 }
 
+/* Token-only cards hold a single wide field; the second column would leave it
+   squeezed to half the card for no benefit. */
+.api-keys-grid-single {
+  grid-template-columns: 1fr;
+}
+
 .input-setting {
   background-color: var(--bg-surface-elevated);
   border: 1px solid var(--border-medium);

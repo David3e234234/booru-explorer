@@ -52,31 +52,34 @@ describe('Settings validation', () => {
     assert.notStrictEqual(buildAuthCacheKey({ deepFetchPages: 2 }, { deepFetchPages: 5 }), inheritedServerValue);
   });
 
-  it('separates cached pages by the Kemono and Pawchive credentials', () => {
+  it('separates cached pages by the Kemono and Pawchive session tokens', () => {
     // A cached page fetched with one account must never be served to another,
     // so every credential that changes the parser result has to be in the key.
-    const withoutLogin = buildAuthCacheKey({}, {});
-    assert.notStrictEqual(buildAuthCacheKey({ kemonoLogin: 'alice' }, {}), withoutLogin);
-    assert.notStrictEqual(buildAuthCacheKey({ kemonoPassword: 'one' }, {}), withoutLogin);
-    assert.notStrictEqual(buildAuthCacheKey({ pawchiveLogin: 'alice' }, {}), withoutLogin);
-    assert.notStrictEqual(buildAuthCacheKey({ pawchivePassword: 'one' }, {}), withoutLogin);
+    const withoutSession = buildAuthCacheKey({}, {});
+    assert.notStrictEqual(buildAuthCacheKey({ kemonoSession: 'alice-token' }, {}), withoutSession);
+    assert.notStrictEqual(buildAuthCacheKey({ pawchiveSession: 'alice-token' }, {}), withoutSession);
     assert.notStrictEqual(
-      buildAuthCacheKey({ kemonoLogin: 'alice' }, { kemonoLogin: 'bob' }),
-      withoutLogin
+      buildAuthCacheKey({ kemonoSession: 'alice' }, { kemonoSession: 'bob' }),
+      withoutSession
     );
   });
 
-  it('treats board passwords as secrets in both the cache key and the field list', () => {
-    for (const field of ['kemonoLogin', 'kemonoPassword', 'pawchiveLogin', 'pawchivePassword']) {
+  it('treats board session tokens as secrets in both the cache key and the field list', () => {
+    for (const field of ['kemonoSession', 'pawchiveSession']) {
       assert.ok(AUTH_CACHE_FIELDS.includes(field), `${field} must be in AUTH_CACHE_FIELDS`);
       assert.ok(SECRET_SETTING_FIELDS.includes(field), `${field} must be in SECRET_SETTING_FIELDS`);
     }
 
+    // The removed login/password fields must not linger in either list: a stale
+    // entry would keep a dead field in the cache key for no behavioural reason.
+    for (const field of ['kemonoLogin', 'kemonoPassword', 'pawchiveLogin', 'pawchivePassword']) {
+      assert.ok(!AUTH_CACHE_FIELDS.includes(field), `${field} must not be in AUTH_CACHE_FIELDS`);
+      assert.ok(!SECRET_SETTING_FIELDS.includes(field), `${field} must not be in SECRET_SETTING_FIELDS`);
+    }
+
     const anonymous = sanitizeSettingsPatch({
-      kemonoLogin: 'alice',
-      kemonoPassword: 'secret',
-      pawchiveLogin: 'bob',
-      pawchivePassword: 'secret'
+      kemonoSession: 'alice-token',
+      pawchiveSession: 'bob-token'
     }, { anonymous: true });
 
     assert.deepStrictEqual(anonymous, {});

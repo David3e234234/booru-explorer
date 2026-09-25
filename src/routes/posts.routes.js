@@ -30,7 +30,7 @@ import { logInfo, logError } from '../utils/logger.js';
 import { getAliasesInfo, clearDiscoveredAliases, getAllKnownAliasesMap } from '../services/aliasService.js';
 import { resolveAuthorCreators } from '../services/creatorResolverService.js';
 import { parseRequestAuth, buildAuthCacheKey } from '../utils/settingsValidation.js';
-import { resolveSiteSession, extractSessionToken } from '../services/siteSessionService.js';
+import { extractSessionToken } from '../services/siteSessionService.js';
 
 const router = express.Router();
 
@@ -152,33 +152,11 @@ async function runAuthTest(site, creds, settings = {}) {
 
   if (site === 'pawchive' || site === 'kemono') {
     const label = site === 'pawchive' ? 'Pawchive' : 'Kemono';
-    const credsLogin = String(creds.login || '').trim();
-    const credsPassword = String(creds.password || '');
-
-    // Login/password is exchanged for a session first; the typed session token
-    // stays supported as a fallback and keeps priority inside the resolver.
-    let sessionToken = '';
-    let username = '';
-    if (credsLogin && credsPassword) {
-      const result = await resolveSiteSession(site, {
-        [`${site}Login`]: credsLogin,
-        [`${site}Password`]: credsPassword
-      }, { force: true });
-      if (result.token) {
-        sessionToken = result.token;
-        username = result.username;
-      } else if (result.reason === 'credentials') {
-        return { success: false, message: `${label}: неверный логин или пароль` };
-      } else if (result.reason === 'network') {
-        return { success: false, message: `${label} недоступен (сеть)` };
-      }
-    }
-
+    // Access is token-only: the typed session token is normalized here, with the
+    // stored setting as the fallback when the request carried none.
+    const sessionToken = extractSessionToken(creds.session || settings[`${site}Session`]);
     if (!sessionToken) {
-      sessionToken = extractSessionToken(creds.session || settings[`${site}Session`]);
-    }
-    if (!sessionToken) {
-      return { success: false, message: `Введите логин и пароль или Session Token ${label}` };
+      return { success: false, message: `Введите Session Token ${label}` };
     }
 
     const base = site === 'pawchive' ? 'https://pawchive.pw' : 'https://kemono.cr';

@@ -235,10 +235,6 @@ export function applySettingsToUIAndState(s) {
   const inputYanderePassword = document.getElementById('inputYanderePassword');
   const inputPawchiveSession = document.getElementById('inputPawchiveSession');
   const inputKemonoSession = document.getElementById('inputKemonoSession');
-  const inputPawchiveLogin = document.getElementById('inputPawchiveLogin');
-  const inputPawchivePassword = document.getElementById('inputPawchivePassword');
-  const inputKemonoLogin = document.getElementById('inputKemonoLogin');
-  const inputKemonoPassword = document.getElementById('inputKemonoPassword');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const checkProxyThumbnails = document.getElementById('checkProxyThumbnails');
   const checkProxyFullImages = document.getElementById('checkProxyFullImages');
@@ -263,10 +259,6 @@ export function applySettingsToUIAndState(s) {
   if (inputYanderePassword && s.yanderePassword !== undefined) inputYanderePassword.value = s.yanderePassword || '';
   if (inputPawchiveSession && s.pawchiveSession !== undefined) inputPawchiveSession.value = s.pawchiveSession || '';
   if (inputKemonoSession && s.kemonoSession !== undefined) inputKemonoSession.value = s.kemonoSession || '';
-  if (inputPawchiveLogin && s.pawchiveLogin !== undefined) inputPawchiveLogin.value = s.pawchiveLogin || '';
-  if (inputPawchivePassword && s.pawchivePassword !== undefined) inputPawchivePassword.value = s.pawchivePassword || '';
-  if (inputKemonoLogin && s.kemonoLogin !== undefined) inputKemonoLogin.value = s.kemonoLogin || '';
-  if (inputKemonoPassword && s.kemonoPassword !== undefined) inputKemonoPassword.value = s.kemonoPassword || '';
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -759,10 +751,6 @@ export function openSettingsModal() {
   const inputYanderePassword = document.getElementById('inputYanderePassword');
   const inputPawchiveSession = document.getElementById('inputPawchiveSession');
   const inputKemonoSession = document.getElementById('inputKemonoSession');
-  const inputPawchiveLogin = document.getElementById('inputPawchiveLogin');
-  const inputPawchivePassword = document.getElementById('inputPawchivePassword');
-  const inputKemonoLogin = document.getElementById('inputKemonoLogin');
-  const inputKemonoPassword = document.getElementById('inputKemonoPassword');
   const selectItemsPerPage = document.getElementById('selectItemsPerPage');
   const selectPreviewQuality = document.getElementById('selectPreviewQuality');
   const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
@@ -827,10 +815,6 @@ export function openSettingsModal() {
   if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
   if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
   if (inputKemonoSession) inputKemonoSession.value = state.settings.kemonoSession || '';
-  if (inputPawchiveLogin) inputPawchiveLogin.value = state.settings.pawchiveLogin || '';
-  if (inputPawchivePassword) inputPawchivePassword.value = state.settings.pawchivePassword || '';
-  if (inputKemonoLogin) inputKemonoLogin.value = state.settings.kemonoLogin || '';
-  if (inputKemonoPassword) inputKemonoPassword.value = state.settings.kemonoPassword || '';
 
   const proxyInputs = [
     { key: 'globalProxy', id: 'inputGlobalProxy' },
@@ -1297,10 +1281,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         const inputYanderePassword = document.getElementById('inputYanderePassword');
         const inputPawchiveSession = document.getElementById('inputPawchiveSession');
         const inputKemonoSession = document.getElementById('inputKemonoSession');
-        const inputPawchiveLogin = document.getElementById('inputPawchiveLogin');
-        const inputPawchivePassword = document.getElementById('inputPawchivePassword');
-        const inputKemonoLogin = document.getElementById('inputKemonoLogin');
-        const inputKemonoPassword = document.getElementById('inputKemonoPassword');
 
         if (inputRule34ApiKey) inputRule34ApiKey.value = state.settings.rule34ApiKey || '';
         if (inputRule34UserId) inputRule34UserId.value = state.settings.rule34UserId || '';
@@ -1314,10 +1294,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
         if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
         if (inputKemonoSession) inputKemonoSession.value = state.settings.kemonoSession || '';
-        if (inputPawchiveLogin) inputPawchiveLogin.value = state.settings.pawchiveLogin || '';
-        if (inputPawchivePassword) inputPawchivePassword.value = state.settings.pawchivePassword || '';
-        if (inputKemonoLogin) inputKemonoLogin.value = state.settings.kemonoLogin || '';
-        if (inputKemonoPassword) inputKemonoPassword.value = state.settings.kemonoPassword || '';
         tempBlacklist = state.settings.blacklist || [];
         tempAiTags = state.settings.aiTags || [];
         tempCurvyTags = state.settings.curvyTags || [...DEFAULT_CURVY_TAGS];
@@ -1398,8 +1374,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
     { btnId: 'btnTestDanbooruAuth', site: 'danbooru', fields: { apiKey: 'inputDanbooruApiKey', login: 'inputDanbooruLogin' } },
     { btnId: 'btnTestKonachanAuth', site: 'konachan', fields: { login: 'inputKonachanLogin', password: 'inputKonachanPassword' } },
     { btnId: 'btnTestYandereAuth', site: 'yandere', fields: { login: 'inputYandereLogin', password: 'inputYanderePassword' } },
-    { btnId: 'btnTestPawchiveAuth', site: 'pawchive', fields: { login: 'inputPawchiveLogin', password: 'inputPawchivePassword', session: 'inputPawchiveSession' } },
-    { btnId: 'btnTestKemonoAuth', site: 'kemono', fields: { login: 'inputKemonoLogin', password: 'inputKemonoPassword', session: 'inputKemonoSession' } }
+    { btnId: 'btnTestPawchiveAuth', site: 'pawchive', fields: { session: 'inputPawchiveSession' } },
+    { btnId: 'btnTestKemonoAuth', site: 'kemono', fields: { session: 'inputKemonoSession' } }
   ];
   authTestConfigs.forEach(({ btnId, site, fields }) => {
     const btn = document.getElementById(btnId);
@@ -1471,10 +1447,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         const inputYanderePassword = document.getElementById('inputYanderePassword');
         const inputPawchiveSession = document.getElementById('inputPawchiveSession');
         const inputKemonoSession = document.getElementById('inputKemonoSession');
-        const inputPawchiveLogin = document.getElementById('inputPawchiveLogin');
-        const inputPawchivePassword = document.getElementById('inputPawchivePassword');
-        const inputKemonoLogin = document.getElementById('inputKemonoLogin');
-        const inputKemonoPassword = document.getElementById('inputKemonoPassword');
 
         const activeSettings = {
           ...(state.settings || {}),
@@ -1485,11 +1457,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
           yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : (state.settings?.yandereLogin || ''),
           yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : (state.settings?.yanderePassword || ''),
           pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : (state.settings?.pawchiveSession || ''),
-          pawchiveLogin: inputPawchiveLogin ? inputPawchiveLogin.value.trim() : (state.settings?.pawchiveLogin || ''),
-          pawchivePassword: inputPawchivePassword ? inputPawchivePassword.value : (state.settings?.pawchivePassword || ''),
           kemonoSession: inputKemonoSession ? inputKemonoSession.value.trim() : (state.settings?.kemonoSession || ''),
-          kemonoLogin: inputKemonoLogin ? inputKemonoLogin.value.trim() : (state.settings?.kemonoLogin || ''),
-          kemonoPassword: inputKemonoPassword ? inputKemonoPassword.value : (state.settings?.kemonoPassword || '')
         };
 
         const res = await syncExternalAccounts({ 
@@ -1727,10 +1695,6 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputYanderePassword = document.getElementById('inputYanderePassword');
       const inputPawchiveSession = document.getElementById('inputPawchiveSession');
       const inputKemonoSession = document.getElementById('inputKemonoSession');
-      const inputPawchiveLogin = document.getElementById('inputPawchiveLogin');
-      const inputPawchivePassword = document.getElementById('inputPawchivePassword');
-      const inputKemonoLogin = document.getElementById('inputKemonoLogin');
-      const inputKemonoPassword = document.getElementById('inputKemonoPassword');
 
       const checkTgEnabled = document.getElementById('checkTelegramBackupEnabled');
       const inputTgToken = document.getElementById('inputTelegramBotToken');
@@ -1774,11 +1738,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : '',
         yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : '',
         pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : '',
-        pawchiveLogin: inputPawchiveLogin ? inputPawchiveLogin.value.trim() : '',
-        pawchivePassword: inputPawchivePassword ? inputPawchivePassword.value : '',
         kemonoSession: inputKemonoSession ? inputKemonoSession.value.trim() : '',
-        kemonoLogin: inputKemonoLogin ? inputKemonoLogin.value.trim() : '',
-        kemonoPassword: inputKemonoPassword ? inputKemonoPassword.value : '',
         globalProxy: normalizeProxyString(document.getElementById('inputGlobalProxy')?.value.trim() || ''),
         danbooruProxy: normalizeProxyString(document.getElementById('inputDanbooruProxy')?.value.trim() || ''),
         gelbooruProxy: normalizeProxyString(document.getElementById('inputGelbooruProxy')?.value.trim() || ''),
@@ -1855,11 +1815,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const inputYandereLogin = document.getElementById('inputYandereLogin');
       const inputYanderePassword = document.getElementById('inputYanderePassword');
       const inputPawchiveSession = document.getElementById('inputPawchiveSession');
-      const inputPawchiveLogin = document.getElementById('inputPawchiveLogin');
-      const inputPawchivePassword = document.getElementById('inputPawchivePassword');
       const inputKemonoSession = document.getElementById('inputKemonoSession');
-      const inputKemonoLogin = document.getElementById('inputKemonoLogin');
-      const inputKemonoPassword = document.getElementById('inputKemonoPassword');
       const selectPreviewQuality = document.getElementById('selectPreviewQuality');
       const checkVideoAutoplayHover = document.getElementById('checkVideoAutoplayHover');
       const checkVideoAutoplayMobile = document.getElementById('checkVideoAutoplayMobile');
@@ -1886,11 +1842,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (inputYandereLogin) inputYandereLogin.value = '';
       if (inputYanderePassword) inputYanderePassword.value = '';
       if (inputPawchiveSession) inputPawchiveSession.value = '';
-      if (inputPawchiveLogin) inputPawchiveLogin.value = '';
-      if (inputPawchivePassword) inputPawchivePassword.value = '';
       if (inputKemonoSession) inputKemonoSession.value = '';
-      if (inputKemonoLogin) inputKemonoLogin.value = '';
-      if (inputKemonoPassword) inputKemonoPassword.value = '';
       const proxyInputIds = [
         'inputGlobalProxy', 'inputDanbooruProxy', 'inputGelbooruProxy', 'inputRule34Proxy',
         'inputYandereProxy', 'inputKonachanProxy', 'inputSafebooruProxy', 'inputRule34videoProxy',
@@ -1944,11 +1896,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         yandereLogin: '',
         yanderePassword: '',
         pawchiveSession: '',
-        pawchiveLogin: '',
-        pawchivePassword: '',
         kemonoSession: '',
-        kemonoLogin: '',
-        kemonoPassword: '',
         telegramBackupEnabled: false,
         telegramBotToken: '',
         telegramChatId: '',
