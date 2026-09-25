@@ -223,6 +223,7 @@ There is no linter. Do not claim verification for a check that was not executed.
 - Alwaysdata deploy runs `git reset --hard origin/main`, `npm install --omit=dev` and touches `tmp/restart.txt` for Passenger.
 - `tmp/restart.txt` is generated at deploy time and must not be tracked.
 - Vercel uses `vercel.json`; serverless data is ephemeral and multi-user persistence is not supported there.
+- Never add `engines` to `vercel.json`: its schema rejects unknown top-level properties and the whole build fails. Vercel resolves the Node version from `engines` in `package.json`.
 - Server logs are categorized through `utils/logger.js`.
 
 ## 10. Known Constraints
