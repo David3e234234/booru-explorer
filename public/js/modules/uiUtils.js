@@ -3,6 +3,13 @@ import { t } from '../i18n.js';
 export const isMyLiveDemoHost = false;
 export const isVercelHost = false;
 
+export function syncThemeColor() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--bg-main').trim();
+  if (color) meta.setAttribute('content', color);
+}
+
 export function haptic(pattern = 12) {
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     try { navigator.vibrate(pattern); } catch (e) {}
@@ -21,6 +28,36 @@ export function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+export function toSafeHttpUrl(value, { allowMailto = false } = {}) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  try {
+    const base = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost';
+    const parsed = new URL(value, base);
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.href;
+    if (allowMailto && parsed.protocol === 'mailto:') return parsed.href;
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+export function toSafeImageUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  const trimmed = value.trim();
+  if (/^data:image\/(?:png|jpe?g|gif|webp|avif);base64,[a-z0-9+/=]+$/i.test(trimmed)) return trimmed;
+  if (/^data:image\/svg\+xml(?:;charset=utf-8)?,/i.test(trimmed)) {
+    const markup = decodeURIComponent(trimmed.slice(trimmed.indexOf(',') + 1));
+    if (!/<\s*script|on[a-z]+\s*=|foreignObject|javascript:/i.test(markup)) return trimmed;
+  }
+  return toSafeHttpUrl(trimmed);
+}
+
+export function toSafeCssColor(value, fallback = 'var(--text-muted)') {
+  return typeof value === 'string' && /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|hsla?\([\d\s.,%deg]+\)|var\(--[a-z0-9-]+\))$/i.test(value.trim())
+    ? value.trim()
+    : fallback;
 }
 
 export function showToast(message) {
@@ -99,8 +136,8 @@ function fallbackCopyTextToClipboard(text) {
 
 export function getPostSiteUrl(post) {
   if (!post) return '';
-  if (post.postUrl) return post.postUrl;
-  if (post.pageUrl) return post.pageUrl;
+  if (post.postUrl) return toSafeHttpUrl(post.postUrl);
+  if (post.pageUrl) return toSafeHttpUrl(post.pageUrl);
 
   const site = (post.site || '').toLowerCase();
   const origId = post.originalId || (post.id ? String(post.id).replace(/^[a-z0-9]+_/, '') : '');
@@ -157,10 +194,10 @@ export function getPostSiteUrl(post) {
   }
 
   if (post.source && /^https?:\/\//i.test(post.source)) {
-    return post.source;
+    return toSafeHttpUrl(post.source);
   }
 
-  return post.fileUrl || post.sampleUrl || '';
+  return toSafeHttpUrl(post.fileUrl || post.sampleUrl || '');
 }
 
 export function formatBytes(bytes, decimals = 1) {

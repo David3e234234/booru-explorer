@@ -1,6 +1,6 @@
 import { state, clearLocalAuth, getUserInterestTags, excludeInterestTag, restoreInterestTag, resetExcludedInterestTags, saveLocalSettings, clearDislikesLocally } from '../state.js';
 import { apiLogout, saveSettings, clearDislikesApi } from '../api.js';
-import { showToast } from './uiUtils.js';
+import { showToast, escapeHtml } from './uiUtils.js';
 import { t } from '../i18n.js';
 
 export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
@@ -150,11 +150,11 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
         ${interestTags.map(item => {
           const displayScore = typeof item.score === 'number' ? item.score.toFixed(1) : (typeof item.weight === 'number' ? item.weight.toFixed(1) : '');
           return `
-            <div class="interest-tag-chip ${isEditingInterests ? 'editing' : ''}" data-tag="${item.tag}">
-              <span class="interest-tag-name">${item.tag}</span>
-              ${displayScore ? `<span class="interest-tag-weight">${displayScore}</span>` : ''}
+            <div class="interest-tag-chip ${isEditingInterests ? 'editing' : ''}" data-tag="${escapeHtml(item.tag)}">
+              <span class="interest-tag-name">${escapeHtml(item.tag)}</span>
+              ${displayScore ? `<span class="interest-tag-weight">${escapeHtml(displayScore)}</span>` : ''}
               ${isEditingInterests ? `
-                <button type="button" class="btn-chip-delete" data-tag="${item.tag}" title="${t('prof.removeTag.title', 'Удалить тег из интересов')}">
+                <button type="button" class="btn-chip-delete" data-tag="${escapeHtml(item.tag)}" title="${escapeHtml(t('prof.removeTag.title', 'Удалить тег из интересов'))}">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 </button>
               ` : ''}

@@ -14,7 +14,8 @@ import {
   PETITE_INCLUDE_TAGS,
   FURRY_TAGS,
   PREGNANT_TAGS,
-  LGBT_TAGS
+  LGBT_TAGS,
+  SITES
 } from '../config/constants.js';
 import { logInfo, logError } from '../utils/logger.js';
 import { learnAliasesFromPostMatches } from '../services/aliasService.js';
@@ -34,6 +35,8 @@ export {
   fetchKemono,
   fetchSingleSiteBatch
 };
+
+const ALL_SITE_IDS = Object.keys(SITES);
 
 async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
   try {
@@ -116,7 +119,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   }
 
   if (site === 'all' || site === 'custom' || site.includes(',')) {
-    let mainSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive', 'kemono'];
+    let mainSites = [...ALL_SITE_IDS];
 
     if (site === 'custom' || site.includes(',')) {
       let customList = [];
@@ -129,19 +132,17 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
       } else {
         customList = ['danbooru', 'gelbooru', 'rule34', 'yandere'];
       }
-      const availableSites = ['danbooru', 'yandere', 'safebooru', 'konachan', 'rule34', 'gelbooru', 'rule34video', 'xbooru', 'hypnohub', 'tbib', 'pawchive', 'kemono'];
-      mainSites = customList.filter(s => availableSites.includes(s));
+      mainSites = customList.filter(s => ALL_SITE_IDS.includes(s));
       if (mainSites.length === 0) mainSites = ['danbooru', 'gelbooru'];
     }
 
     if (params.typeFilter === 'video' || params.typeFilter === 'audio' || params.typeFilter === 'sound') {
-      const videoSupported = ['rule34video', 'danbooru', 'rule34', 'gelbooru', 'xbooru', 'hypnohub', 'pawchive', 'kemono'];
-      mainSites = mainSites.filter(s => videoSupported.includes(s));
+      mainSites = mainSites.filter(s => SITES[s]?.supportsVideo);
       if (mainSites.length === 0) mainSites = ['rule34video', 'danbooru'];
     } else if (params.typeFilter === 'image') {
-      mainSites = mainSites.filter(s => s !== 'rule34video');
+      mainSites = mainSites.filter(s => SITES[s]?.supportsImages);
     } else if (params.typeFilter === 'zip' || params.typeFilter === 'archive') {
-      mainSites = mainSites.filter(s => s === 'pawchive' || s === 'kemono');
+      mainSites = mainSites.filter(s => SITES[s]?.supportsArchives);
       if (mainSites.length === 0) mainSites = ['pawchive', 'kemono'];
     }
 
@@ -163,6 +164,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
       const excluded = params.excludeSites.split(',').map(s => s.trim().toLowerCase());
       mainSites = mainSites.filter(s => !excluded.includes(s));
     }
+    mainSites = [...new Set(mainSites)];
 
     const perSiteLimit = Math.max(25, Math.ceil((params.limit || 100) / Math.max(1, mainSites.length)));
     // In all-sites mode, 1 remote page per site (25-100 items) is more than enough.
@@ -188,8 +190,10 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
         }
       }
     }
-    learnAliasesFromPostMatches(combined);
-    return combined;
+    const targetLimit = parseInt(params.limit, 10) || 100;
+    const limited = combined.slice(0, Math.max(1, targetLimit));
+    learnAliasesFromPostMatches(limited);
+    return limited;
   }
 
   const targetLimit = parseInt(params.limit, 10) || 40;

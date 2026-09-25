@@ -408,7 +408,7 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onAuth
  * @param {Object} [params]
  * @param {Function} [params.onFavoriteAuthorToggle]
  */
-export async function handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggle } = {}) {
+export async function handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggle, isCurrentPost = () => true } = {}) {
   if (!currentPost) return;
   const rawAuthor = currentPost.author || (currentPost.tagDetails?.artist && currentPost.tagDetails.artist.length > 0 ? currentPost.tagDetails.artist.join(', ') : '');
   const authorName = typeof rawAuthor === 'string' ? rawAuthor : (rawAuthor ? String(rawAuthor) : '');
@@ -449,8 +449,13 @@ export async function handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggl
         state.favoriteAuthors = state.favoriteAuthors.filter(a => (a.name || '').toLowerCase() !== cleanAuthorTag.toLowerCase());
         showToast(t('vw.authorRemoved', 'Автор {name} удален из любимых').replace('{name}', authorName));
       }
+      setFavoriteAuthors(state.favoriteAuthors);
 
       const isFavAuthor = res.isFavorite;
+      if (!isCurrentPost()) {
+        if (onFavoriteAuthorToggle) onFavoriteAuthorToggle();
+        return;
+      }
       const viewerFavAuthorBtn = document.getElementById('viewerFavAuthorBtn');
       const btnFavAuthorSidebar = document.getElementById('btnFavAuthorSidebar');
       const btnFavAuthorSidebarText = document.getElementById('btnFavAuthorSidebarText');

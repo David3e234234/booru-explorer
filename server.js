@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import compression from 'compression';
 import fs from 'fs';
 import path from 'path';
@@ -17,12 +16,14 @@ import {
   ROOT_DIR 
 } from './src/config/constants.js';
 import postsRoutes from './src/routes/posts.routes.js';
+import tagAutocompleteRoutes from './src/routes/tagAutocomplete.routes.js';
 import mediaRoutes from './src/routes/media.routes.js';
-import userRoutes from './src/routes/user.routes.js';
+import userRoutes, { stopActiveTunnel } from './src/routes/user.routes.js';
 import authRoutes from './src/routes/auth.routes.js';
 import archiveRoutes from './src/routes/archive.routes.js';
 import { initBackupScheduler } from './src/services/backupService.js';
-import { flushPendingWrites } from './src/services/storageService.js';
+import { flushPendingWrites, flushPendingWritesSync } from './src/services/storageService.js';
+import { setRuntimePort } from './src/utils/runtimeState.js';
 
 // Force IPv4 first for reliable network requests to overseas Booru sites
 if (dns.setDefaultResultOrder) {
@@ -37,29 +38,44 @@ process.on('uncaughtException', (err) => {
     return;
   }
   console.error('[Process UncaughtException]', err);
+  void handleShutdown('uncaughtException');
 });
 
 process.on('unhandledRejection', (reason) => {
   console.error('[Process UnhandledRejection]', reason);
 });
 
-// Debounced JSON writes (favourites, likes, settings) sit in a 150 ms timer. Without
-// this the last change before Ctrl+C or a service restart is silently lost
 let shuttingDown = false;
-function handleShutdown(signal) {
+let httpServer = null;
+
+async function handleShutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   try {
-    flushPendingWrites();
+    stopActiveTunnel();
+    await flushPendingWrites();
   } catch (err) {
     console.error('[Shutdown] Не удалось сбросить отложенные записи:', err);
   }
-  if (signal) process.exit(0);
+  if (httpServer) {
+    await new Promise((resolve) => {
+      const forcedExit = setTimeout(() => {
+        httpServer.closeAllConnections?.();
+        resolve();
+      }, 3000);
+      httpServer.close(() => {
+        clearTimeout(forcedExit);
+        resolve();
+      });
+      httpServer.closeAllConnections?.();
+    });
+  }
+  if (signal) process.exit(signal === 'uncaughtException' ? 1 : 0);
 }
 
-process.on('SIGINT', () => handleShutdown('SIGINT'));
-process.on('SIGTERM', () => handleShutdown('SIGTERM'));
-process.on('exit', () => handleShutdown(null));
+process.on('SIGINT', () => { void handleShutdown('SIGINT'); });
+process.on('SIGTERM', () => { void handleShutdown('SIGTERM'); });
+process.on('exit', () => { flushPendingWritesSync(); });
 
 // Initialize storage and cache directories
 [DATA_DIR, CACHE_DIR, THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR].forEach(dir => {
@@ -74,8 +90,31 @@ process.on('exit', () => handleShutdown(null));
 
 // Global middleware
 app.use(compression());
-app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+  );
+
+  const origin = req.headers.origin;
+  if (origin) {
+    try {
+      const originHost = new URL(origin).host;
+      if (originHost !== req.headers.host) {
+        return res.status(403).json({ success: false, message: 'Cross-origin request blocked' });
+      }
+    } catch {
+      return res.status(403).json({ success: false, message: 'Cross-origin request blocked' });
+    }
+  }
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  next();
+});
 
 // Disable caching for the API only (static assets are cached by the browser)
 app.use('/api', (req, res, next) => {
@@ -102,8 +141,17 @@ app.use(express.static(publicDir, {
 app.use('/api/auth', authRoutes);
 app.use('/api/archive', archiveRoutes);
 app.use('/api', postsRoutes);
+app.use('/api', tagAutocompleteRoutes);
 app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  const status = Number(err?.statusCode || err?.status);
+  const safeStatus = status >= 400 && status < 600 ? status : 500;
+  console.error('[API Error]', req.method, req.originalUrl, err);
+  res.status(safeStatus).json({ success: false, message: safeStatus >= 500 ? 'Внутренняя ошибка сервера' : err.message });
+});
 
 // SPA fallback: serve index.html for all non-API routes
 let spaIndexPath = null;
@@ -129,7 +177,8 @@ app.get('*', (req, res) => {
 
 // Start the HTTP server for local runs
 function startServer(port) {
-  const srv = app.listen(port, async () => {
+  httpServer = app.listen(port, async () => {
+    setRuntimePort(port);
     const url = `http://localhost:${port}`;
     console.log(`\n======================================================`);
     console.log(`🚀 Booru Explorer запущен на ${url}`);
@@ -145,7 +194,7 @@ function startServer(port) {
     }
   });
 
-  srv.on('error', (err) => {
+  httpServer.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.log(`[!] Порт ${port} занят, пробуем порт ${port + 1}...`);
       startServer(port + 1);

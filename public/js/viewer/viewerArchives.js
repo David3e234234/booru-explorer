@@ -325,7 +325,7 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
     summaryEl.innerHTML = `
       <div class="sidebar-archive-summary-header">
         <span class="sidebar-archive-summary-icon">${iconHtml}</span>
-        <span class="sidebar-archive-summary-text">${descText}</span>
+        <span class="sidebar-archive-summary-text">${escapeHtml(descText)}</span>
       </div>
       <div class="sidebar-archive-summary-actions">
         ${canOpen ? `<button type="button" class="btn-archive-summary-action btn-summary-open">${t('viewer.viewArchive', 'Просмотр')}</button>` : ''}
@@ -762,8 +762,8 @@ export function renderArchivePostCard(targetPost, mediaWrapper) {
       </svg>
     </div>
     <div class="archive-card-header">
-      <div class="archive-card-title">${titleText}</div>
-      <div class="archive-card-desc">${descText}</div>
+      <div class="archive-card-title">${escapeHtml(titleText)}</div>
+      <div class="archive-card-desc">${escapeHtml(descText)}</div>
     </div>
     <div class="archive-card-buttons"></div>
   `;

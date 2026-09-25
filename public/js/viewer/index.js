@@ -58,6 +58,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   let activeAbortController = null;
   let activeBlobUrl = null;
   let currentZoomInstance = null;
+  const pendingViewerMutations = new Set();
   let currentVideoInstance = null;
   let activeResolvePromise = null;
 
@@ -381,6 +382,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   async function handleDislikeToggle() {
     if (!currentPost) return;
+    const key = `dislike:${currentPost.id}`;
+    if (pendingViewerMutations.has(key)) return;
+    pendingViewerMutations.add(key);
     haptic(20);
     const targetPost = currentPost;
     const isDislikedNow = toggleDislikeLocally(targetPost);
@@ -399,12 +403,26 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     try {
-      await toggleDislikeApi(targetPost);
-    } catch (e) {}
+      const result = await toggleDislikeApi(targetPost, isDislikedNow);
+      if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить скрытие');
+    } catch (e) {
+      toggleDislikeLocally(targetPost);
+      if (currentPost?.id === targetPost.id) {
+        btnDislikeModal?.classList.toggle('active', !isDislikedNow);
+        btnDislikeSidebar?.classList.toggle('active', !isDislikedNow);
+      }
+      if (isDislikedNow && !state.posts.some(p => p.id === targetPost.id)) state.posts.unshift(targetPost);
+      showToast(t('vw.hideFailed', 'Не удалось скрыть пост'), 'error');
+    } finally {
+      pendingViewerMutations.delete(key);
+    }
   }
 
   async function handleLikeToggle() {
     if (!currentPost) return;
+    const key = `like:${currentPost.id}`;
+    if (pendingViewerMutations.has(key)) return;
+    pendingViewerMutations.add(key);
     const targetPost = currentPost;
     haptic([15, 20]);
     const isLikedNow = toggleLikeLocally(targetPost);
@@ -414,17 +432,30 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
     showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
     try {
-      await toggleLikePost(targetPost);
-    } catch (e) {}
+      const result = await toggleLikePost(targetPost, isLikedNow);
+      if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить лайк');
+    } catch (e) {
+      toggleLikeLocally(targetPost);
+      if (currentPost?.id === targetPost.id) {
+        btnLikeModal?.classList.toggle('active', !isLikedNow);
+        btnLikeModal?.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'none' : 'currentColor');
+      }
+      showToast(t('vw.likeFailed', 'Не удалось сохранить лайк'), 'error');
+    } finally {
+      pendingViewerMutations.delete(key);
+    }
     if (onFavoriteToggle) onFavoriteToggle();
   }
 
   async function handleFavToggle() {
     if (!currentPost) return;
+    const key = `favorite:${currentPost.id}`;
+    if (pendingViewerMutations.has(key)) return;
+    pendingViewerMutations.add(key);
     const targetPost = currentPost;
     haptic([15, 25, 15]);
     try {
-      const res = await toggleFavoritePost(targetPost);
+      const res = await toggleFavoritePost(targetPost, !isPostFavorite(targetPost.id));
       if (res?.success) {
         if (res.isFavorite) {
           state.favoriteIds.add(targetPost.id);
@@ -446,7 +477,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         if (onFavoriteToggle) onFavoriteToggle();
       }
     } catch (err) {
+      showToast(t('vw.favoriteFailed', 'Не удалось изменить закладки'), 'error');
       console.error(err);
+    } finally {
+      pendingViewerMutations.delete(key);
     }
   }
 
@@ -549,12 +583,14 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   viewerFavAuthorBtn?.addEventListener('click', (e) => {
     e.stopPropagation();
-    handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggle });
+    const targetPostId = currentPost?.id;
+    handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggle, isCurrentPost: () => currentPost?.id === targetPostId });
   });
 
   btnFavAuthorSidebar?.addEventListener('click', (e) => {
     e.stopPropagation();
-    handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggle });
+    const targetPostId = currentPost?.id;
+    handleAuthorFavToggle(currentPost, { onFavoriteAuthorToggle, isCurrentPost: () => currentPost?.id === targetPostId });
   });
 
   btnFetchFullAlbum?.addEventListener('click', (e) => {

@@ -24,7 +24,9 @@ export class MemoryCache {
   }
 
   set(key, value, ttlMs = this.defaultTtlMs) {
-    if (this.cache.size >= this.maxItems) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxItems) {
       const oldestKey = this.cache.keys().next().value;
       this.cache.delete(oldestKey);
     }
@@ -59,16 +61,24 @@ export async function getDirectoryStats(dirPath) {
   const fileList = [];
   try {
     const files = await fs.promises.readdir(dirPath).catch(() => []);
-    await Promise.all(files.map(async (file) => {
-      const fullPath = path.join(dirPath, file);
-      try {
-        const stats = await fs.promises.stat(fullPath);
-        if (stats.isFile()) {
-          totalBytes += stats.size;
-          fileList.push({ path: fullPath, size: stats.size, mtime: stats.mtimeMs });
+    const concurrency = 100;
+    for (let offset = 0; offset < files.length; offset += concurrency) {
+      const batch = files.slice(offset, offset + concurrency);
+      const stats = await Promise.all(batch.map(async (file) => {
+        const fullPath = path.join(dirPath, file);
+        try {
+          const itemStats = await fs.promises.stat(fullPath);
+          return { path: fullPath, size: itemStats.size, mtime: itemStats.mtimeMs };
+        } catch {
+          return null;
         }
-      } catch {}
-    }));
+      }));
+      for (const item of stats) {
+        if (!item || !item.size) continue;
+        totalBytes += item.size;
+        fileList.push(item);
+      }
+    }
   } catch {}
   return { totalBytes, fileList };
 }
@@ -104,7 +114,8 @@ export async function cleanDiskCacheIfNeeded(explicitMaxBytes = null) {
 
     if (totalBytes > maxBytes) {
       logInfo('Cache', `Превышен лимит кэша (${(totalBytes / 1024 / 1024).toFixed(1)} MB / ${(maxBytes / 1024 / 1024).toFixed(1)} MB). Автоочистка LRU...`);
-      const allFiles = [...thumbs.fileList, ...videos.fileList, ...archives.fileList];
+      const allFiles = [...thumbs.fileList, ...videos.fileList, ...archives.fileList]
+        .filter(file => !file.path.endsWith('.tmp') && !file.path.endsWith('.downloading'));
       allFiles.sort((a, b) => a.mtime - b.mtime);
 
       for (const f of allFiles) {

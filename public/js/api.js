@@ -1,6 +1,40 @@
-import { state } from './state.js';
+import { state, STORAGE_KEYS } from './state.js';
 
 export const isMyLiveDemoHost = false;
+
+export class ApiError extends Error {
+  constructor(message, status = 0) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+async function readJsonOrThrow(res) {
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new ApiError(data.message || data.error || `HTTP ${res.status}`, res.status);
+  }
+  return data;
+}
+
+export const ADMIN_TOKEN_STORAGE_KEY = STORAGE_KEYS.ADMIN_TOKEN;
+
+export function getAdminToken() {
+  try {
+    return localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+export function setAdminToken(value) {
+  try {
+    const token = String(value || '').trim();
+    if (token) localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+    else localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+  } catch (e) {}
+}
 
 export function getAuthHeaders(includeJson = false) {
   const headers = {};
@@ -9,6 +43,12 @@ export function getAuthHeaders(includeJson = false) {
   }
   if (state && state.authToken) {
     headers['Authorization'] = `Bearer ${state.authToken}`;
+  }
+  // Server-wide operations (cache clear, tunnel, backup) can be unlocked with the
+  // operator token instead of the owner session, see BOORU_ADMIN_TOKEN.
+  const adminToken = getAdminToken();
+  if (adminToken) {
+    headers['x-booru-admin-token'] = adminToken;
   }
   if (state && state.settings) {
     const authData = {
@@ -45,6 +85,13 @@ export function getAuthHeaders(includeJson = false) {
       aiTags: state.settings.aiTags || [],
       blacklist: state.settings.blacklist || [],
       groupAlbums: state.settings.groupAlbums !== false,
+      prioritizeUserTags: state.settings.prioritizeUserTags === true,
+      deepFetchPages: state.settings.deepFetchPages || 2,
+      enablePaheal: state.settings.enablePaheal !== false,
+      customAliases: state.settings.customAliases || {},
+      siteSortTags: state.settings.siteSortTags || {},
+      pawchiveService: state.settings.pawchiveService || 'all',
+      kemonoService: state.settings.kemonoService || 'all',
       hideZipPosts: state.settings.hideZipPosts || false
     };
     headers['x-booru-auth'] = encodeURIComponent(JSON.stringify(authData));
@@ -76,8 +123,8 @@ export async function apiGetMe() {
   const res = await fetch('/api/auth/me', {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return null;
-  return await res.json();
+  if (res.status === 401 || res.status === 403) return null;
+  return readJsonOrThrow(res);
 }
 
 export async function apiLogout() {
@@ -97,11 +144,11 @@ export async function apiExportAccount() {
   }
 }
 
-export async function apiRestoreAccount(account) {
+export async function apiRestoreAccount(account, password) {
   const res = await fetch('/api/auth/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ account })
+    body: JSON.stringify({ account, password })
   });
   return await res.json();
 }
@@ -203,8 +250,7 @@ export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', paren
   const res = await fetch(`/api/posts/album?${params.toString()}`, {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { success: false, albumItems: [], albumCount: 0 };
-  return await res.json();
+  return readJsonOrThrow(res);
 }
 
 export async function fetchArchiveList(zipUrl, options = {}) {
@@ -212,8 +258,7 @@ export async function fetchArchiveList(zipUrl, options = {}) {
   const res = await fetch(`/api/archive/list?url=${encodeURIComponent(zipUrl)}&threads=${threads}`, {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { success: false, albumItems: [], albumCount: 0 };
-  return await res.json();
+  return readJsonOrThrow(res);
 }
 
 export async function fetchArchiveStatus(zipUrl) {
@@ -249,23 +294,21 @@ export async function fetchTagAutocomplete(query, site = 'danbooru') {
   const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`, {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { tags: [] };
-  return await res.json();
+  return readJsonOrThrow(res);
 }
 
 export async function fetchFavorites() {
   const res = await fetch('/api/favorites', {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { favorites: [] };
-  return await res.json();
+  return readJsonOrThrow(res);
 }
 
-export async function toggleFavoritePost(post) {
+export async function toggleFavoritePost(post, desiredState = null) {
   const res = await fetch('/api/favorites', {
     method: 'POST',
     headers: getAuthHeaders(true),
-    body: JSON.stringify(post)
+    body: JSON.stringify({ ...post, desiredState })
   });
   return await res.json();
 }
@@ -291,15 +334,14 @@ export async function fetchLikes() {
   const res = await fetch('/api/likes', {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { likes: [] };
-  return await res.json();
+  return readJsonOrThrow(res);
 }
 
-export async function toggleLikePost(post) {
+export async function toggleLikePost(post, desiredState = null) {
   const res = await fetch('/api/like', {
     method: 'POST',
     headers: getAuthHeaders(true),
-    body: JSON.stringify(post)
+    body: JSON.stringify({ ...post, desiredState })
   });
   return await res.json();
 }
@@ -317,15 +359,14 @@ export async function fetchDislikes() {
   const res = await fetch('/api/dislikes', {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { dislikes: [] };
-  return await res.json();
+  return readJsonOrThrow(res);
 }
 
-export async function toggleDislikeApi(post) {
+export async function toggleDislikeApi(post, desiredState = null) {
   const res = await fetch('/api/dislike', {
     method: 'POST',
     headers: getAuthHeaders(true),
-    body: JSON.stringify(post)
+    body: JSON.stringify({ ...post, desiredState })
   });
   return await res.json();
 }
@@ -351,8 +392,7 @@ export async function fetchFavoriteAuthors() {
   const res = await fetch('/api/favorite-authors', {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { authors: [] };
-  return await res.json();
+  return readJsonOrThrow(res);
 }
 
 export async function toggleFavoriteAuthor(authorData) {
@@ -403,8 +443,7 @@ export async function fetchSettings() {
   const res = await fetch('/api/settings', {
     headers: getAuthHeaders()
   });
-  if (!res.ok) return { settings: {} };
-  return await res.json();
+  return readJsonOrThrow(res);
 }
 
 export async function saveSettings(settings) {

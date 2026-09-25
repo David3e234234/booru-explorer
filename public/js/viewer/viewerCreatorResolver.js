@@ -1,5 +1,5 @@
 import { t } from '../i18n.js';
-import { haptic } from '../modules/uiUtils.js';
+import { haptic, toSafeHttpUrl } from '../modules/uiUtils.js';
 import { getAuthHeaders } from '../api.js';
 
 let activeAbortController = null;
@@ -19,6 +19,10 @@ function escapeAttr(str) {
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function safeUrlAttr(value) {
+  return escapeAttr(toSafeHttpUrl(value));
 }
 
 function getConfidenceBadge(confidence, matchReason) {
@@ -178,7 +182,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
       <div class="cr-sources-bar">
         <span class="cr-sources-label">${t('viewer.detectedSource', 'Источник автора:')}</span>
         ${detectedSources.map(s => `
-          <a href="${escapeAttr(s.url)}" target="_blank" rel="noopener noreferrer" class="cr-source-chip" title="${escapeAttr(s.url)}">
+          <a href="${safeUrlAttr(s.url)}" target="_blank" rel="noopener noreferrer" class="cr-source-chip" title="${escapeAttr(s.url)}">
             <span class="cr-service-badge ${getServiceClass(s.service)}">${escapeHtml(s.service)}</span>
             <span>${escapeHtml(s.slug || s.id || 'Ссылка')}</span>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
@@ -216,7 +220,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
           <span>Kemono</span>
           <span class="cr-section-badge">${kemono.length}</span>
         </div>
-        <a href="${escapeAttr(fallbackSearch.kemonoWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-text" style="font-size: 11px;">
+        <a href="${safeUrlAttr(fallbackSearch.kemonoWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-text" style="font-size: 11px;">
           ${t('viewer.openExternal', 'Открыть kemono.cr')} ↗
         </a>
       </div>
@@ -236,7 +240,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
             </div>
             <div class="cr-card-meta">
               <span>ID: ${escapeHtml(k.id)}</span>
-              ${favFormatted ? `<span class="cr-fav-count" title="${k.favorited} избранных">♥ ${favFormatted}</span>` : ''}
+              ${favFormatted ? `<span class="cr-fav-count" title="${escapeAttr(String(k.favorited ?? 0))} избранных">♥ ${favFormatted}</span>` : ''}
             </div>
           </div>
           <div class="cr-card-actions">
@@ -244,7 +248,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <span>${t('viewer.openInApp', 'В приложении')}</span>
             </button>
-            <a href="${escapeAttr(k.url)}" target="_blank" rel="noopener noreferrer" class="btn-cr-action btn-cr-secondary" title="${escapeAttr(t('viewer.openExternal.title', 'Открыть страницу автора в новой вкладке'))}">
+            <a href="${safeUrlAttr(k.url)}" target="_blank" rel="noopener noreferrer" class="btn-cr-action btn-cr-secondary" title="${escapeAttr(t('viewer.openExternal.title', 'Открыть страницу автора в новой вкладке'))}">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               <span>${t('viewer.openExternal', 'На сайте')}</span>
             </a>
@@ -262,7 +266,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <span>${escapeHtml(t('viewer.searchFallback', 'Искать "{author}" в Kemono').replace('{site}', 'Kemono').replace('{author}', authorDisplay))}</span>
           </button>
-          <a href="${escapeAttr(fallbackSearch.kemonoWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-cr-fallback">
+          <a href="${safeUrlAttr(fallbackSearch.kemonoWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-cr-fallback">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             <span>На kemono.cr</span>
           </a>
@@ -280,7 +284,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
           <span>Pawchive</span>
           <span class="cr-section-badge">${pawchive.length}</span>
         </div>
-        <a href="${escapeAttr(fallbackSearch.pawchiveWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-text" style="font-size: 11px;">
+        <a href="${safeUrlAttr(fallbackSearch.pawchiveWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-text" style="font-size: 11px;">
           ${t('viewer.openExternal', 'Открыть pawchive.pw')} ↗
         </a>
       </div>
@@ -300,7 +304,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
             </div>
             <div class="cr-card-meta">
               <span>ID: ${escapeHtml(p.id)}</span>
-              ${favFormatted ? `<span class="cr-fav-count" title="${p.favorited} избранных">♥ ${favFormatted}</span>` : ''}
+              ${favFormatted ? `<span class="cr-fav-count" title="${escapeAttr(String(p.favorited ?? 0))} избранных">♥ ${favFormatted}</span>` : ''}
             </div>
           </div>
           <div class="cr-card-actions">
@@ -308,7 +312,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <span>${t('viewer.openInApp', 'В приложении')}</span>
             </button>
-            <a href="${escapeAttr(p.url)}" target="_blank" rel="noopener noreferrer" class="btn-cr-action btn-cr-secondary" title="${escapeAttr(t('viewer.openExternal.title', 'Открыть страницу автора в новой вкладке'))}">
+            <a href="${safeUrlAttr(p.url)}" target="_blank" rel="noopener noreferrer" class="btn-cr-action btn-cr-secondary" title="${escapeAttr(t('viewer.openExternal.title', 'Открыть страницу автора в новой вкладке'))}">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
               <span>${t('viewer.openExternal', 'На сайте')}</span>
             </a>
@@ -326,7 +330,7 @@ function renderResolverResults(data, currentPost, { onSwitchSiteAndSearch, close
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <span>${escapeHtml(t('viewer.searchFallback', 'Искать "{author}" в Pawchive').replace('{site}', 'Pawchive').replace('{author}', authorDisplay))}</span>
           </button>
-          <a href="${escapeAttr(fallbackSearch.pawchiveWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-cr-fallback">
+          <a href="${safeUrlAttr(fallbackSearch.pawchiveWebUrl)}" target="_blank" rel="noopener noreferrer" class="btn-cr-fallback">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
             <span>На pawchive.pw</span>
           </a>

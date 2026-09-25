@@ -3,12 +3,14 @@ import { subscribeArchiveJob, notifyArchiveJob, startArchivePolling, stopArchive
 import { renderSidebarCloudLinks, renderSidebarContent } from './viewerCloudLinks.js';
 import { downloadManager } from '../modules/downloadManager.js';
 import { openSettingsModal, switchSettingsTab } from '../modules/settingsModal.js';
-import { showToast, haptic, copyToClipboard, escapeHtml } from '../modules/uiUtils.js';
+import { showToast, haptic, copyToClipboard, escapeHtml, toSafeHttpUrl } from '../modules/uiUtils.js';
 import { state } from '../state.js';
 import { t } from '../i18n.js';
 
 let archiveInspectContext = null;
 let currentInspectUnsubscribers = [];
+let currentInspectUrl = '';
+let inspectSession = 0;
 
 /**
  * Configure shared viewer context for archive unpacking and metadata updates.
@@ -32,6 +34,9 @@ export function isArchiveInspectModalOpen() {
  */
 export function closeArchiveInspectModal() {
   const modal = document.getElementById('archiveInspectModal');
+  inspectSession += 1;
+  if (currentInspectUrl) stopArchivePolling(currentInspectUrl);
+  currentInspectUrl = '';
   if (modal) modal.style.display = 'none';
   if (currentInspectUnsubscribers.length > 0) {
     currentInspectUnsubscribers.forEach(u => { try { u(); } catch {} });
@@ -420,6 +425,8 @@ export async function openArchiveInspectModal(url, name) {
   if (!modal || !bodyEl) return;
 
   const cleanName = name || (url.split('?')[0].split('/').pop()) || 'archive.zip';
+  const session = ++inspectSession;
+  currentInspectUrl = url;
   modal.style.display = 'flex';
   haptic(10);
 
@@ -436,7 +443,7 @@ export async function openArchiveInspectModal(url, name) {
           <span id="archiveInspectProgressBytes">${t('vw.inspectingPhase', 'Инициализация...')}</span>
         </div>
       </div>
-      <div class="archive-inspect-loading-sub">${cleanName}</div>
+      <div class="archive-inspect-loading-sub">${escapeHtml(cleanName)}</div>
     </div>
   `;
 
@@ -485,6 +492,7 @@ export async function openArchiveInspectModal(url, name) {
 
   try {
     const result = await fetchArchiveInspect(url);
+    if (session !== inspectSession) return;
     stopArchivePolling(url);
     unsubscribe();
     notifyArchiveJob(url, { active: false, action: 'inspect', completed: true, phase: 'inspected', summary: result });
@@ -492,16 +500,17 @@ export async function openArchiveInspectModal(url, name) {
     function renderInspectError(errMsg) {
       const isKemonoBlocked = (url.includes('kemono.cr') || url.includes('kemono.su')) &&
         (errMsg.includes('Сервер архивов недоступен') || errMsg.includes('прокси') || errMsg.includes('fetch failed'));
+      const safeUrl = toSafeHttpUrl(url);
 
       bodyEl.innerHTML = `
         <div class="archive-inspect-error" style="text-align: center; padding: 20px 14px;">
-          <div class="archive-inspect-error-msg" style="margin-bottom: 16px; line-height: 1.5;">${errMsg}</div>
+          <div class="archive-inspect-error-msg" style="margin-bottom: 16px; line-height: 1.5;">${escapeHtml(errMsg)}</div>
           <div class="archive-inspect-error-actions" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
             <button type="button" class="btn-secondary btn-sm" id="btnRetryArchiveInspect">${t('vw.retry', 'Повторить попытку')}</button>
-            <a href="${url}" download="${cleanName}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-sm" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
+            ${safeUrl ? `<a href="${escapeHtml(safeUrl)}" download="${escapeHtml(cleanName)}" target="_blank" rel="noopener noreferrer" class="btn-primary btn-sm" style="text-decoration: none; display: inline-flex; align-items: center; gap: 6px;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              ${t('vw.downloadDirectly', 'Скачать напрямую')}
-            </a>
+              ${escapeHtml(t('vw.downloadDirectly', 'Скачать напрямую'))}
+            </a>` : ''}
             ${isKemonoBlocked ? `
               <button type="button" class="btn-secondary btn-sm" id="btnOpenProxySettings" style="display: inline-flex; align-items: center; gap: 6px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -562,6 +571,7 @@ export async function openArchiveInspectModal(url, name) {
       renderSidebarContent(currentPost, (updatedCloud || []).map(l => l.url));
     }
   } catch (err) {
+    if (session !== inspectSession) return;
     stopArchivePolling(url);
     unsubscribe();
     notifyArchiveJob(url, { active: false, action: 'inspect', error: err.message, phase: 'inspected' });
@@ -569,7 +579,7 @@ export async function openArchiveInspectModal(url, name) {
     if (modalStillOpen) {
       bodyEl.innerHTML = `
         <div class="archive-inspect-error" style="text-align: center; padding: 20px 14px;">
-          <div class="archive-inspect-error-msg" style="margin-bottom: 16px; line-height: 1.5;">${err.message || t('vw.inspectFailed', 'Не удалось проанализировать архив')}</div>
+          <div class="archive-inspect-error-msg" style="margin-bottom: 16px; line-height: 1.5;">${escapeHtml(err.message || t('vw.inspectFailed', 'Не удалось проанализировать архив'))}</div>
           <button type="button" class="btn-secondary btn-sm" id="btnRetryArchiveInspect">${t('vw.retry', 'Повторить попытку')}</button>
         </div>
       `;

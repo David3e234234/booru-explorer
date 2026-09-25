@@ -1,6 +1,6 @@
 import { state, getSimilarPostPlan, calculatePostSimilarityScore } from '../state.js';
 import { fetchPosts, getProxiedUrl } from '../api.js';
-import { haptic } from '../modules/uiUtils.js';
+import { haptic, toSafeHttpUrl } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 
 let similarFetchSeq = 0;
@@ -196,12 +196,12 @@ export function appendSimilarItems(targetPost, count = 18, options = {}) {
     const needsProxyThumb = (item.site === 'danbooru' || (typeof rawThumb === 'string' && rawThumb.includes('donmai.us')))
       ? true
       : (state.settings?.proxyThumbnails !== false);
-    const thumbSrc = rawThumb ? (rawThumb.startsWith('/api/') ? rawThumb : (needsProxyThumb ? getProxiedUrl(rawThumb) : rawThumb)) : '';
+    const thumbSrc = toSafeHttpUrl(rawThumb ? (rawThumb.startsWith('/api/') ? rawThumb : (needsProxyThumb ? getProxiedUrl(rawThumb) : rawThumb)) : '');
     const isHighMatch = score >= 65;
 
     itemDiv.title = `${t('vw.similarity', 'Сходство:')} ${score}%${item.author ? `\n@${item.author}` : ''}`;
     itemDiv.innerHTML = `
-      <img class="similar-filmstrip-img" src="${thumbSrc}" alt="Similar post" loading="lazy" referrerpolicy="no-referrer">
+      <img class="similar-filmstrip-img" src="${thumbSrc}" alt="" loading="lazy" referrerpolicy="no-referrer">
       <span class="similar-filmstrip-score ${isHighMatch ? 'score-high' : ''}">${score}%</span>
     `;
 

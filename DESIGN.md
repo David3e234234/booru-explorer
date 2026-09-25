@@ -11,9 +11,9 @@ The artwork is the collectible; the chrome is the cabinet that holds it.
 - Personality: warm, deliberate, archival, quietly confident. Not flashy, not sterile.
 - What it is NOT: neon cyberpunk, minimal white gallery, terminal utility.
 
-## Palette (R-29 compliant)
+## Palette
 
-Core: warm dark browns (`#0e0d0c` base, `#171513`/`#211e1a` surfaces).
+Core kotobox values: warm dark browns (`#14110d` base, `#1c1813` surface, `#262019` elevated surface).
 Accent: **amber `#e5a968`** — the single accent, the color of lamp light over the collection.
 Amber is used sparingly at key moments: active states, focus, primary actions, favorites.
 Semantic colors (danger/warning/success) exist only for real statuses, never decoration.
@@ -43,13 +43,21 @@ legible; mono numerals read like catalog entries.
 
 ## Themes
 
-Keep all three, restyled to the same cabinet logic:
+All three shipped themes follow the same cabinet logic:
 
 1. `kotobox` (default): warm dark brown + amber (the canonical identity above).
 2. `tokyo-night`: violet-black night variant, rose accent.
 3. `warm-paper`: daylight variant — paper surface + ink, amber becomes ochre.
 
-Every theme must be fully functional (R-34); the toggle stays.
+Every theme must be fully functional. The toggle stays and all three must render every component without missing tokens or broken layout.
+
+## Accessibility
+
+- Text meets WCAG AA contrast in every theme: 4.5:1 for normal text and 3:1 for large text.
+- Interactive targets are at least 44 by 44 px on touch layouts.
+- Keyboard focus is always visible.
+- `prefers-reduced-motion` disables non-essential motion.
+- Semantic colors are reserved for real status and never become decoration.
 
 ## Focal point rule
 

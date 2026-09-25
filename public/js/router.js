@@ -126,30 +126,30 @@ export function applyUrlToState(p) {
     state.searchTags = [...p.tags];
     changed = true;
   }
-  if (p.site && p.site !== state.currentSite) {
-    state.currentSite = p.site;
+  if (p.site !== state.currentSite) {
+    state.currentSite = p.site || 'danbooru';
     changed = true;
   }
-  if (p.sort && p.sort !== state.postSort) {
-    state.postSort = p.sort;
+  if ((p.sort || 'new') !== state.postSort) {
+    state.postSort = p.sort || 'new';
     changed = true;
   }
-  if (p.cat && p.cat !== state.currentCategory) {
-    state.currentCategory = p.cat;
+  if ((p.cat || 'feed') !== state.currentCategory) {
+    state.currentCategory = p.cat || 'feed';
     changed = true;
   }
-  if (p.cat === 'favorites' && p.favtab && p.favtab !== state.favoritesSubTab) {
-    state.favoritesSubTab = p.favtab;
+  if (p.cat === 'favorites' && (p.favtab || 'posts') !== state.favoritesSubTab) {
+    state.favoritesSubTab = p.favtab || 'posts';
     changed = true;
   }
-  if (p.cat === 'profile' && p.ptab && p.ptab !== state.profileSubTab) {
-    state.profileSubTab = p.ptab;
+  if (p.cat === 'profile' && (p.ptab || 'likes') !== state.profileSubTab) {
+    state.profileSubTab = p.ptab || 'likes';
     changed = true;
   }
-  if (p.ai && p.ai !== state.aiFilter) { state.aiFilter = p.ai; changed = true; }
-  if (p.rating && p.rating !== state.ratingFilter) { state.ratingFilter = p.rating; changed = true; }
-  if (p.type && p.type !== state.typeFilter) { state.typeFilter = p.type; changed = true; }
-  if (p.age && p.age !== state.ageFilter) { state.ageFilter = p.age; changed = true; }
+  if ((p.ai || 'no-ai') !== state.aiFilter) { state.aiFilter = p.ai || 'no-ai'; changed = true; }
+  if ((p.rating || 'all') !== state.ratingFilter) { state.ratingFilter = p.rating || 'all'; changed = true; }
+  if ((p.type || 'all') !== state.typeFilter) { state.typeFilter = p.type || 'all'; changed = true; }
+  if ((p.age || 'all') !== state.ageFilter) { state.ageFilter = p.age || 'all'; changed = true; }
 
   return changed;
 }
@@ -188,10 +188,13 @@ export function consumeInitialUrl() {
 // Mirrors current state into the address bar.
 // mode: 'push' creates a history entry (new search), 'replace' rewrites it (load-more).
 export function syncSearchUrl(mode = 'push') {
-  didFirstSync = true;
   const target = buildUrl();
-  if (target === currentUrl()) return;
-  const usePush = !applyingPopState && mode === 'push';
+  if (target === currentUrl()) {
+    didFirstSync = true;
+    return;
+  }
+  const usePush = didFirstSync && !applyingPopState && mode === 'push';
+  didFirstSync = true;
   if (usePush) {
     history.pushState(history.state, '', target);
   } else {

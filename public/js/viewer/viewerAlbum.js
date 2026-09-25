@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { fetchAlbumPosts, getProxiedUrl } from '../api.js';
 import { downloadManager } from '../modules/downloadManager.js';
-import { showToast, haptic } from '../modules/uiUtils.js';
+import { showToast, haptic, toSafeHttpUrl, escapeHtml } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 
 const preloadedUrls = new Set();
@@ -170,10 +170,10 @@ export function renderAlbumFilmstrip(post, albumIndex, options = {}) {
       const needsThumbProxy = (item.site === 'danbooru' || (typeof thumbUrl === 'string' && thumbUrl.includes('donmai.us')))
         ? true
         : (state.settings?.proxyThumbnails !== false);
-      const thumbSrc = thumbUrl ? (thumbUrl.startsWith('/api/') || !needsThumbProxy ? thumbUrl : getProxiedUrl(thumbUrl)) : '';
+      const thumbSrc = toSafeHttpUrl(thumbUrl ? (thumbUrl.startsWith('/api/') || !needsThumbProxy ? thumbUrl : getProxiedUrl(thumbUrl)) : '');
 
       itemDiv.innerHTML = `
-        <img class="album-filmstrip-img" src="${thumbSrc}" alt="${t('vw.slideAlt', 'Слайд {n}').replace('{n}', idx + 1)}" loading="lazy" referrerpolicy="no-referrer">
+        <img class="album-filmstrip-img" src="${escapeHtml(thumbSrc)}" alt="${escapeHtml(t('vw.slideAlt', 'Слайд {n}').replace('{n}', idx + 1))}" loading="lazy" referrerpolicy="no-referrer">
         <span class="album-filmstrip-page">${idx + 1}</span>
       `;
 

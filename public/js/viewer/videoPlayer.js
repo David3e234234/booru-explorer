@@ -220,6 +220,21 @@ export function makeBannerDraggable(bannerEl) {
   };
 }
 
+let mp4BoxLoader = null;
+
+function ensureMp4Box() {
+  if (window.MP4Box) return Promise.resolve(window.MP4Box);
+  if (mp4BoxLoader) return mp4BoxLoader;
+  mp4BoxLoader = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '/js/mp4box.all.min.js';
+    script.onload = () => window.MP4Box ? resolve(window.MP4Box) : reject(new Error('MP4Box load failed'));
+    script.onerror = () => reject(new Error('MP4Box load failed'));
+    document.head.appendChild(script);
+  });
+  return mp4BoxLoader;
+}
+
 export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef, blobRef, resolvedVideoPromise = null }) {
   const defaultPrefQuality = state.settings?.videoDefaultQuality || 'original';
   let activeQuality = defaultPrefQuality; // 'original', '720p', '480p'
@@ -587,9 +602,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
     let internalAbortReason = null;
     try {
-      if (!window.MediaSource || !window.MP4Box) {
-        throw new Error('MediaSource или MP4Box не поддерживается');
+      if (!window.MediaSource) {
+        throw new Error('MediaSource не поддерживается');
       }
+      await ensureMp4Box();
 
       if (mediaSourceInstance && mediaSourceInstance.readyState === 'open') {
         try { mediaSourceInstance.endOfStream(); } catch {}
@@ -737,7 +753,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     iosWaitDone = true;
     isPreCaching = true; // prevent other errors from firing
     setProgress(0, t('vp.iosTranscoding', 'Apple устройства не поддерживают стриминг. Ожидание завершения конвертации...'), true);
-    if (switchBtn) switchBtn.textContent = 'Конвертация...';
+    if (switchBtn) switchBtn.textContent = t('vp.transcoding', 'Конвертация...');
     
     showIosWaitOverlay();
 

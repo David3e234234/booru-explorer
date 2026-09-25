@@ -1,7 +1,8 @@
-const CACHE_NAME = 'booru-explorer-v8.21';
-const MEDIA_CACHE = 'booru-media-v1';
+const CACHE_NAME = 'booru-explorer-v8.22';
+const MEDIA_CACHE = 'booru-media-v2';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
+const MAX_TOTAL_MEDIA_BYTES = 64 * 1024 * 1024;
 
 // Placeholder for respondWith: without it a network or stream abort crashes the SW with "unexpected error"
 const offlineResponse = () => new Response(null, { status: 504, statusText: 'Gateway Timeout' });
@@ -49,6 +50,7 @@ const STATIC_ASSETS = [
   '/js/autocomplete.js',
   '/js/mp4box.all.min.js',
   '/js/modules/uiUtils.js',
+  '/js/modules/modalAccessibility.js',
   '/js/modules/filtersUI.js',
   '/js/modules/navigationUI.js',
   '/js/modules/drawers.js',
@@ -111,20 +113,28 @@ self.addEventListener('activate', (event) => {
 async function trimMediaCache() {
   const cache = await caches.open(MEDIA_CACHE);
   const keys = await cache.keys();
-  if (keys.length > MAX_MEDIA_ENTRIES) {
-    await Promise.all(keys.slice(0, keys.length - MAX_MEDIA_ENTRIES).map(k => cache.delete(k)));
+  const entries = [];
+  for (const key of keys) {
+    const response = await cache.match(key);
+    const length = Number(response?.headers.get('content-length') || 0);
+    entries.push({ key, length: Number.isFinite(length) ? length : 0 });
+  }
+  let total = entries.reduce((sum, entry) => sum + entry.length, 0);
+  let index = 0;
+  while ((entries.length - index > MAX_MEDIA_ENTRIES || total > MAX_TOTAL_MEDIA_BYTES) && index < entries.length) {
+    total -= entries[index].length;
+    await cache.delete(entries[index].key);
+    index += 1;
   }
 }
 
 function isCacheableMediaResponse(response) {
   const type = response.headers.get('content-type') || '';
-  if (!type.startsWith('image/')) return false;
+  if (!type.startsWith('image/') || type.includes('svg+xml')) return false;
   const cl = response.headers.get('content-length');
-  if (cl !== null) {
-    const len = parseInt(cl, 10);
-    if (isNaN(len) || len <= 0 || len > MAX_CACHED_MEDIA_BYTES) return false;
-  }
-  return true;
+  if (cl === null) return false;
+  const len = parseInt(cl, 10);
+  return Number.isFinite(len) && len > 0 && len <= MAX_CACHED_MEDIA_BYTES;
 }
 
 // Cache put that never rejects (body may already be consumed on abort)
@@ -199,16 +209,18 @@ self.addEventListener('fetch', (event) => {
      url.pathname.endsWith('.json'))
   ) {
     event.respondWith(safeRespond(event.request, async () => {
+      const cleanRequest = new Request(url.origin + url.pathname);
       try {
         const networkResponse = await fetch(event.request);
         if (networkResponse && networkResponse.ok && networkResponse.status === 200) {
           const cache = await caches.open(CACHE_NAME);
           putSafe(cache, event.request, networkResponse);
+          putSafe(cache, cleanRequest, networkResponse);
         }
         return networkResponse;
       } catch (networkErr) {
         if (networkErr && networkErr.name === 'AbortError') throw networkErr;
-        const cached = await caches.match(event.request, { ignoreSearch: true });
+        const cached = await caches.match(event.request) || await caches.match(cleanRequest);
         return cached || offlineResponse();
       }
     }));

@@ -51,7 +51,6 @@ input[type="email"]::placeholder,
 input[type="url"]::placeholder,
 textarea::placeholder {
   color: var(--text-muted);
-  opacity: 0.85;
 }
 
 input[type="text"]:focus,
@@ -1641,5 +1640,25 @@ input.search-input:focus,
   .main-content {
     height: auto;
     padding: 10px 10px calc(65px + max(16px, env(safe-area-inset-bottom, 20px))) 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .media-card,
+  .author-card,
+  .settings-dialog,
+  .modal-dialog {
+    border: 1px solid CanvasText;
   }
 }

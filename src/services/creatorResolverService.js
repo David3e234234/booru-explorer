@@ -2,10 +2,10 @@ import { getCreatorsDirectory as getKemonoCreators } from '../parsers/kemono.js'
 import { getCreatorsDirectory as getPawchiveCreators } from '../parsers/pawchive.js';
 import { fetchSafe, safeJsonParse, discardResponse } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
+import { MemoryCache } from './cacheService.js';
 
-// Cache for booru artist API responses (TTL: 1 hour)
-const artistApiCache = new Map();
-const ARTIST_CACHE_TTL = 3600 * 1000;
+const artistApiCache = new MemoryCache(300, 3600 * 1000);
+const artistInflight = new Map();
 
 function cleanString(str) {
   return String(str || '').trim();
@@ -138,7 +138,7 @@ export function extractPlatformInfoFromUrl(sourceUrl) {
  * @param {Object} settings
  * @returns {Promise<{ aliases: string[], urls: string[] }>}
  */
-export async function fetchBooruArtistInfo(rawAuthor, booruSite = 'danbooru', settings = {}) {
+async function fetchBooruArtistInfoUncached(rawAuthor, booruSite = 'danbooru', settings = {}) {
   const cleanAuthor = cleanString(rawAuthor)
     .replace(/^(?:@|pixiv:)+/i, '')
     .replace(/_?\((artist|creator|circle|studio|doujin|illustrator|mangaka|animator)\)$/i, '')
@@ -147,12 +147,6 @@ export async function fetchBooruArtistInfo(rawAuthor, booruSite = 'danbooru', se
 
   if (!cleanAuthor || cleanAuthor.length < 2) {
     return { aliases: [], urls: [] };
-  }
-
-  const cacheKey = `${booruSite}:${cleanAuthor}`;
-  const cached = artistApiCache.get(cacheKey);
-  if (cached && (Date.now() - cached.time) < ARTIST_CACHE_TTL) {
-    return cached.data;
   }
 
   const aliases = new Set();
@@ -222,8 +216,31 @@ export async function fetchBooruArtistInfo(rawAuthor, booruSite = 'danbooru', se
     urls: Array.from(urls)
   };
 
-  artistApiCache.set(cacheKey, { data: result, time: Date.now() });
+  if (aliases.size > 0 || urls.size > 0) {
+    artistApiCache.set(`${booruSite}:${cleanAuthor}`, result);
+  }
   return result;
+}
+
+export async function fetchBooruArtistInfo(rawAuthor, booruSite = 'danbooru', settings = {}) {
+  const cleanAuthor = cleanString(rawAuthor)
+    .replace(/^(?:@|pixiv:)+/i, '')
+    .replace(/_?\((artist|creator|circle|studio|doujin|illustrator|mangaka|animator)\)$/i, '')
+    .replace(/\s+/g, '_')
+    .toLowerCase();
+  if (!cleanAuthor || cleanAuthor.length < 2) return { aliases: [], urls: [] };
+
+  const cacheKey = `${booruSite}:${cleanAuthor}`;
+  const cached = artistApiCache.get(cacheKey);
+  if (cached) return cached;
+  const inflight = artistInflight.get(cacheKey);
+  if (inflight) return inflight;
+
+  const task = fetchBooruArtistInfoUncached(rawAuthor, booruSite, settings).finally(() => {
+    artistInflight.delete(cacheKey);
+  });
+  artistInflight.set(cacheKey, task);
+  return task;
 }
 
 /**

@@ -57,6 +57,12 @@ export function initWikiModal({ onSelectTag, onSwitchSite }) {
     if (e.target === modalBackdrop) closeWiki();
   });
 
+  document.getElementById('wikiOpenSettingsLink')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    closeWiki();
+    document.getElementById('btnSettings')?.click();
+  });
+
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modalBackdrop?.style.display === 'flex') {
       closeWiki();

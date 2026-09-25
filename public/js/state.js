@@ -130,6 +130,9 @@ export const SECRET_SETTING_FIELDS = [
   'konachanLogin', 'konachanPassword',
   'yandereLogin', 'yanderePassword',
   'pawchiveSession', 'kemonoSession',
+  'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy',
+  'konachanProxy', 'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy',
+  'tbibProxy', 'pawchiveProxy', 'kemonoProxy',
   'telegramBotToken', 'telegramChatId'
 ];
 
@@ -142,6 +145,7 @@ export const STORAGE_KEYS = {
   DISLIKES: 'booru_dislikes_v1',
   VIEWED: 'booru_viewed_v1',
   AUTH_TOKEN: 'booru_auth_token_v1',
+  ADMIN_TOKEN: 'booru_admin_token_v1',
   CURRENT_USER: 'booru_current_user_v1'
 };
 
@@ -261,7 +265,25 @@ export function saveLocalAuth(token, user) {
 
 export function clearLocalAuth() {
   saveLocalAuth(null, null);
+  // The operator token grants server-wide rights, so it must not survive a logout
+  // on a shared machine.
+  try { localStorage.removeItem(STORAGE_KEYS.ADMIN_TOKEN); } catch (e) {}
+  if (viewedWriteTimer) {
+    clearTimeout(viewedWriteTimer);
+    viewedWriteTimer = null;
+  }
+  state.favorites = [];
+  state.favoriteIds = new Set();
+  state.likes = [];
+  state.likedIds = new Set();
+  state.dislikes = [];
+  state.dislikedIds = new Set();
+  state.favoriteAuthors = [];
+  state.favoriteAuthorNames = new Set();
+  state.viewedIds = new Set();
+  clearSessionInterests();
   try {
+    localStorage.removeItem(STORAGE_KEYS.VIEWED);
     localStorage.removeItem(STORAGE_KEYS.FAVORITES);
     localStorage.removeItem(STORAGE_KEYS.LIKES);
     localStorage.removeItem(STORAGE_KEYS.DISLIKES);
@@ -488,23 +510,53 @@ export function saveLocalLikes(likesList) {
 // 📦 Export all user data (settings, favorites, likes, dislikes, authors, account) into a JSON object.
 // `account` comes from GET /api/auth/export and is included only when logged in.
 export function exportUserData(account = null) {
+  const settings = sanitizeImportedValue(loadLocalSettings() || state.settings || {}) || {};
+  for (const field of SECRET_SETTING_FIELDS) delete settings[field];
   const exportObject = {
     version: 2,
     exportedAt: new Date().toISOString(),
-    settings: loadLocalSettings() || state.settings || {},
+    settings,
     presets: loadLocalPresets() || state.searchPresets || [],
     favorites: loadLocalFavorites() || state.favorites || [],
     favoriteAuthors: loadLocalFavoriteAuthors() || state.favoriteAuthors || [],
     likes: loadLocalLikes() || state.likes || [],
     dislikes: loadLocalDislikes() || state.dislikes || []
   };
-  if (account && typeof account === 'object' && account.username && account.passwordHash) {
-    exportObject.account = account;
+  if (account && typeof account === 'object' && account.username) {
+    exportObject.account = { id: account.id, username: account.username, createdAt: account.createdAt || null };
   }
   return exportObject;
 }
 
 // Accept both flat v1/v2 files and nested Telegram backups ({ data: {...} })
+function sanitizeImportedValue(value, depth = 0) {
+  if (value === null) return null;
+  if (typeof value === 'string') return value.slice(0, 10000);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value === 'boolean') return value;
+  if (depth >= 3) return null;
+  if (Array.isArray(value)) {
+    return value.slice(0, 500).map(item => sanitizeImportedValue(item, depth + 1)).filter(item => item !== null);
+  }
+  if (typeof value === 'object') {
+    const clean = {};
+    for (const [key, item] of Object.entries(value).slice(0, 500)) {
+      const cleanValue = sanitizeImportedValue(item, depth + 1);
+      if (cleanValue !== null) clean[String(key).slice(0, 200)] = cleanValue;
+    }
+    return clean;
+  }
+  return null;
+}
+
+function normalizeImportedList(value, key, maxItems = 5000) {
+  if (!Array.isArray(value)) return null;
+  return value
+    .filter(item => item && typeof item === 'object' && item[key])
+    .slice(0, maxItems)
+    .map(item => sanitizeImportedValue(item));
+}
+
 function normalizeImportPayload(data) {
   const nested = data && typeof data.data === 'object' && !Array.isArray(data.data)
     ? data.data
@@ -531,53 +583,57 @@ export function importUserData(data, { replace = false } = {}) {
   const importedCounts = { settings: false, favorites: 0, favoriteAuthors: 0, likes: 0, dislikes: 0, account: normalized.account };
 
   // 1. Settings
-  if (normalized.settings && typeof normalized.settings === 'object') {
-    saveLocalSettings(normalized.settings);
-    state.settings = { ...state.settings, ...normalized.settings };
+  if (normalized.settings && typeof normalized.settings === 'object' && !Array.isArray(normalized.settings)) {
+    const cleanSettings = sanitizeImportedValue(normalized.settings) || {};
+    for (const field of SECRET_SETTING_FIELDS) delete cleanSettings[field];
+    saveLocalSettings(cleanSettings);
+    state.settings = { ...state.settings, ...cleanSettings };
     importedCounts.settings = true;
   }
 
   // 2. Favorites
-  if (Array.isArray(normalized.favorites)) {
+  const importedFavorites = normalizeImportedList(normalized.favorites, 'id');
+  if (importedFavorites) {
     const existing = replace ? [] : (loadLocalFavorites() || []);
     const mergedMap = new Map();
     existing.forEach(p => mergedMap.set(p.id, p));
-    normalized.favorites.forEach(p => { if (p && p.id) mergedMap.set(p.id, p); });
+    importedFavorites.forEach(p => mergedMap.set(p.id, p));
     const mergedList = Array.from(mergedMap.values());
     setFavorites(mergedList);
     importedCounts.favorites = mergedList.length;
   }
 
   // 3. Favorite authors
-  if (Array.isArray(normalized.favoriteAuthors)) {
+  const importedAuthors = normalizeImportedList(normalized.favoriteAuthors, 'name', 1000);
+  if (importedAuthors) {
     const existing = replace ? [] : (loadLocalFavoriteAuthors() || []);
     const mergedMap = new Map();
     existing.forEach(a => mergedMap.set((a.name || '').toLowerCase(), a));
-    normalized.favoriteAuthors.forEach(a => {
-      if (a && a.name) mergedMap.set((a.name || '').toLowerCase(), a);
-    });
+    importedAuthors.forEach(a => mergedMap.set((a.name || '').toLowerCase(), a));
     const mergedList = Array.from(mergedMap.values());
     setFavoriteAuthors(mergedList);
     importedCounts.favoriteAuthors = mergedList.length;
   }
 
   // 4. Likes
-  if (Array.isArray(normalized.likes)) {
+  const importedLikes = normalizeImportedList(normalized.likes, 'id');
+  if (importedLikes) {
     const existing = replace ? [] : (loadLocalLikes() || []);
     const mergedMap = new Map();
     existing.forEach(l => mergedMap.set(l.id, l));
-    normalized.likes.forEach(l => { if (l && l.id) mergedMap.set(l.id, l); });
+    importedLikes.forEach(l => mergedMap.set(l.id, l));
     const mergedList = Array.from(mergedMap.values());
     setLikes(mergedList);
     importedCounts.likes = mergedList.length;
   }
 
   // 5. Dislikes
-  if (Array.isArray(normalized.dislikes)) {
+  const importedDislikes = normalizeImportedList(normalized.dislikes, 'id');
+  if (importedDislikes) {
     const existing = replace ? [] : (loadLocalDislikes() || []);
     const mergedMap = new Map();
     existing.forEach(d => mergedMap.set(d.id, d));
-    normalized.dislikes.forEach(d => { if (d && d.id) mergedMap.set(d.id, d); });
+    importedDislikes.forEach(d => mergedMap.set(d.id, d));
     const mergedList = Array.from(mergedMap.values());
     setDislikes(mergedList);
     importedCounts.dislikes = mergedList.length;
@@ -591,7 +647,13 @@ export function importUserData(data, { replace = false } = {}) {
     const existing = replace ? [] : (loadLocalPresets() || []);
     const mergedMap = new Map();
     existing.forEach(p => mergedMap.set(p.id || p.name, p));
-    incomingPresets.forEach(p => { if (p && (p.id || p.name)) mergedMap.set(p.id || p.name, p); });
+    incomingPresets
+      .filter(p => p && typeof p === 'object' && (p.id || p.name))
+      .slice(0, 100)
+      .forEach(p => {
+        const cleanPreset = sanitizeImportedValue(p);
+        if (cleanPreset) mergedMap.set(cleanPreset.id || cleanPreset.name, cleanPreset);
+      });
     const mergedList = Array.from(mergedMap.values());
     setPresets(mergedList);
     importedCounts.presets = mergedList.length;

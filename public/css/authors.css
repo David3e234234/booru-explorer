@@ -371,7 +371,8 @@ input.fav-authors-search-input {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
+  min-height: 44px;
+  padding: 6px 12px;
   background: rgba(12, 9, 6, 0.75);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(255, 255, 255, 0.16);

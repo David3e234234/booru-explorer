@@ -1,17 +1,32 @@
-process.env.NODE_ENV = 'test';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { after } from 'node:test';
 
-// Central test runner importing all unit, parser, and integration suites
-import './unit/tagHelpers.test.js';
-import './unit/networkSecurity.test.js';
-import './unit/albumHelper.test.js';
-import './unit/parsers/danbooru.test.js';
-import './unit/parsers/dapi.test.js';
-import './unit/parsers/gelbooru.test.js';
-import './unit/parsers/kemono.test.js';
-import './unit/parsers/moebooru.test.js';
-import './unit/parsers/pawchive.test.js';
-import './unit/parsers/rule34.test.js';
-import './unit/parsers/rule34video.test.js';
-import './unit/parsers/safebooru.test.js';
-import './unit/parsers/aggregator.test.js';
-import './integration/routes.test.js';
+const testDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'booru-explorer-test-'));
+
+process.env.NODE_ENV = 'test';
+process.env.BOORU_DATA_DIR = testDataDir;
+
+after(async () => {
+  await fs.rm(testDataDir, { recursive: true, force: true });
+});
+
+// Discovery instead of a hardcoded list: a hand-maintained registry silently skips
+// newly added suites, which is how regressions reach main unnoticed. Unit suites
+// run first, integration last, both sorted so the order stays deterministic.
+async function discoverSuites(dir) {
+  const entries = await fs.readdir(dir, { recursive: true, withFileTypes: true });
+  return entries
+    .filter(entry => entry.isFile() && entry.name.endsWith('.test.js'))
+    .map(entry => path.join(entry.parentPath || entry.path, entry.name).replace(/\\/g, '/'))
+    .sort();
+}
+
+const unitSuites = await discoverSuites(fileURLToPath(new URL('./unit/', import.meta.url)));
+const integrationSuites = await discoverSuites(fileURLToPath(new URL('./integration/', import.meta.url)));
+
+for (const suite of [...unitSuites, ...integrationSuites]) {
+  await import(pathToFileURL(suite).href);
+}

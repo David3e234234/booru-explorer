@@ -14,6 +14,14 @@
 
   /* Utility aliases (used by components) */
   --bg-base: var(--bg-main);
+  --bg-page: var(--bg-main);
+  --bg-card: var(--bg-surface);
+  --bg-secondary: var(--bg-surface);
+  --bg-surface-raised: var(--bg-surface-elevated);
+  --bg-hover: var(--bg-surface-hover);
+  --border-light: var(--border-subtle);
+  --accent: var(--accent-primary);
+  --accent-contrast: var(--text-inverse);
   --font-sans: var(--font-main);
 
   --border-subtle: rgba(229, 169, 104, 0.09);

@@ -1,4 +1,4 @@
-import { copyToClipboard, haptic, showToast, escapeHtml } from '../modules/uiUtils.js';
+import { copyToClipboard, haptic, showToast, escapeHtml, toSafeHttpUrl } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 
 export const CLOUD_PROVIDERS = [
@@ -51,10 +51,11 @@ export function extractCloudLinks(post) {
   // Inspected links from downloaded/analyzed archive
   if (Array.isArray(post?.inspectedLinks)) {
     for (const l of post.inspectedLinks) {
-      if (l && l.url && !seen.has(l.url)) {
-        seen.add(l.url);
+      const safeUrl = toSafeHttpUrl(l?.url);
+      if (l && safeUrl && !seen.has(safeUrl)) {
+        seen.add(safeUrl);
         links.push({
-          url: l.url,
+          url: safeUrl,
           name: l.service || 'Облако',
           id: l.serviceId || 'cloud',
           password: l.password || globalPassword || null,
@@ -67,10 +68,11 @@ export function extractCloudLinks(post) {
   // Pre-parsed cloud links
   if (Array.isArray(post?.cloudLinks)) {
     for (const l of post.cloudLinks) {
-      if (l && l.url && !seen.has(l.url)) {
-        seen.add(l.url);
+      const safeUrl = toSafeHttpUrl(l?.url);
+      if (l && safeUrl && !seen.has(safeUrl)) {
+        seen.add(safeUrl);
         links.push({
-          url: l.url,
+          url: safeUrl,
           name: l.name || 'Облако',
           id: l.id || 'cloud',
           password: l.password || globalPassword || null,
@@ -84,8 +86,8 @@ export function extractCloudLinks(post) {
   if (rawText) {
     const urlMatches = rawText.match(/https?:\/\/[^\s<>"']+/gi) || [];
     for (const url of urlMatches) {
-      const cleanUrl = url.replace(/[,;.)>]+$/, '');
-      const svc = classifyCloudUrl(cleanUrl);
+      const cleanUrl = toSafeHttpUrl(url.replace(/[,;.)>]+$/, ''));
+      const svc = cleanUrl ? classifyCloudUrl(cleanUrl) : null;
       if (svc && !seen.has(cleanUrl)) {
         seen.add(cleanUrl);
         links.push({

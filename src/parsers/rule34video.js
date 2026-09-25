@@ -4,9 +4,10 @@ import { fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.
 import { checkIsAi, classifyTags, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
+import { CACHE_DIR } from '../config/constants.js';
 
 // Persistent disk cache for Rule34Video authors and videos
-const R34V_CACHE_FILE = path.join(path.resolve('data/cache'), 'r34v_authors.json');
+const R34V_CACHE_FILE = path.join(CACHE_DIR, 'r34v_authors.json');
 const R34V_MAX_ENTRIES = 2000;
 let r34vAuthorsCache = null;
 let r34vSaveTimer = null;
@@ -776,9 +777,19 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, 
     return resolvedVideoCache.get(cacheKey);
   }
 
-  const targetUrl = sourceUrl 
-    ? (sourceUrl.startsWith('http') ? sourceUrl : `https://rule34video.com${sourceUrl.startsWith('/') ? '' : '/'}${sourceUrl}`) 
-    : `https://rule34video.com/video/${id}/`;
+  let videoId = /^\d+$/.test(String(id || '').trim()) ? String(id || '').trim() : '';
+  if (!videoId && typeof sourceUrl === 'string') {
+    try {
+      const parsed = new URL(sourceUrl, 'https://rule34video.com');
+      if (parsed.hostname === 'rule34video.com' || parsed.hostname === 'www.rule34video.com') {
+        const match = parsed.pathname.match(/\/(?:video|videos)\/(\d+)/i);
+        if (match) videoId = match[1];
+      }
+    } catch {}
+  }
+  if (!videoId) return null;
+
+  const targetUrl = `https://rule34video.com/video/${videoId}/`;
 
   try {
     const res = await fetchSafe(targetUrl, {

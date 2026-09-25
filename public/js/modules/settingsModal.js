@@ -29,7 +29,7 @@ import {
   fetchAliasesInfo,
   clearDiscoveredAliasesApi
 } from '../api.js';
-import { showToast, formatBytes } from './uiUtils.js';
+import { showToast, formatBytes, escapeHtml, syncThemeColor } from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updatePawchiveServiceUI, updateKemonoServiceUI } from './filtersUI.js';
 import { updateHeaderAuthUI } from './authModal.js';
@@ -174,6 +174,7 @@ export function applySettingsToUIAndState(s) {
   s.theme = theme;
   state.settings = { ...state.settings, ...s, theme };
   document.documentElement.setAttribute('data-theme', theme);
+  syncThemeColor();
   const savedSite = s.defaultSite || localStorage.getItem('booru_selected_site');
   if (savedSite) {
     state.currentSite = savedSite;
@@ -420,7 +421,7 @@ function renderChipsForGroup(wrapperEl, inputEl, tagList, onRemove) {
     const chip = document.createElement('div');
     chip.className = 'tag-chip';
     chip.innerHTML = `
-      <span>${tag}</span>
+      <span>${escapeHtml(tag)}</span>
       <span class="tag-chip-remove">×</span>
     `;
     chip.querySelector('.tag-chip-remove').addEventListener('click', (e) => {
@@ -501,10 +502,10 @@ export function renderTasteProfileUI() {
         const catClass = item.category === 'artist' ? 'chip-artist' : item.category === 'character' ? 'chip-char' : item.category === 'copyright' ? 'chip-cp' : 'chip-general';
         const displayTag = item.category === 'artist' ? `@${item.tag}` : item.tag;
         return `
-          <div class="rec-interest-chip ${catClass}" title="${t('settings.interestWeight', 'Вес интереса: {s}').replace('{s}', item.score.toFixed(1))}">
-            <span class="rec-chip-label">${displayTag}</span>
-            <span class="rec-chip-score">${item.score.toFixed(1)}</span>
-            <button type="button" class="btn-rec-chip-remove" data-tag="${item.tag}" title="${t('settings.excludeTagBtn', 'Исключить из рекомендаций')}">×</button>
+          <div class="rec-interest-chip ${catClass}" title="${escapeHtml(t('settings.interestWeight', 'Вес интереса: {s}').replace('{s}', item.score.toFixed(1)))}">
+            <span class="rec-chip-label">${escapeHtml(displayTag)}</span>
+            <span class="rec-chip-score">${escapeHtml(item.score.toFixed(1))}</span>
+            <button type="button" class="btn-rec-chip-remove" data-tag="${escapeHtml(item.tag)}" title="${escapeHtml(t('settings.excludeTagBtn', 'Исключить из рекомендаций'))}">×</button>
           </div>
         `;
       }).join('');
@@ -531,8 +532,8 @@ export function renderTasteProfileUI() {
       excludedContainer.innerHTML = excludedTags.map(tag => {
         return `
           <div class="rec-excluded-chip">
-            <span class="rec-chip-label">${tag}</span>
-            <button type="button" class="btn-rec-chip-restore" data-tag="${tag}" title="${t('settings.restoreTagBtn', 'Восстановить в рекомендациях')}">✕</button>
+            <span class="rec-chip-label">${escapeHtml(tag)}</span>
+            <button type="button" class="btn-rec-chip-restore" data-tag="${escapeHtml(tag)}" title="${escapeHtml(t('settings.restoreTagBtn', 'Восстановить в рекомендациях'))}">✕</button>
           </div>
         `;
       }).join('');
@@ -1196,6 +1197,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (!file) return;
 
       try {
+        if (file.size > 25 * 1024 * 1024) {
+          throw new Error(t('set.importTooLarge', 'Файл слишком большой'));
+        }
         const text = await file.text();
         let parsed = JSON.parse(text);
 
@@ -1211,25 +1215,32 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         // so all server syncs below land under that account)
         let switchedAccount = false;
         const fileAccount = parsed.account;
-        if (fileAccount && fileAccount.username && fileAccount.passwordHash) {
+        if (fileAccount && fileAccount.username) {
           const sameAccount = state.currentUser &&
             String(state.currentUser.username).toLowerCase() === String(fileAccount.username).toLowerCase();
           if (!sameAccount) {
             const wantLogin = confirm(t('set.accountFound',
               'В файле найден аккаунт «{name}». Войти в него и загрузить его данные?').replace('{name}', fileAccount.username));
             if (wantLogin) {
-              try {
-                const res = await apiRestoreAccount(fileAccount);
-                if (res.success && res.token && res.user) {
-                  saveLocalAuth(res.token, res.user);
-                  updateHeaderAuthUI();
-                  switchedAccount = true;
-                  showToast(t('set.accountRestored', 'Вы вошли как @{name}').replace('{name}', res.user.username), 'success');
-                } else {
-                  showToast(res.message || t('set.accountRestoreFailed', 'Не удалось войти в аккаунт из файла'), 'error');
+              const password = prompt(t('set.accountPasswordPrompt', 'Введите пароль аккаунта {name}').replace('{name}', fileAccount.username));
+              if (password === null) {
+                showToast(t('set.accountRestoreCancelled', 'Вход в аккаунт отменен'), 'error');
+              } else if (!password) {
+                showToast(t('set.accountPasswordRequired', 'Введите пароль аккаунта'), 'error');
+              } else {
+                try {
+                  const res = await apiRestoreAccount(fileAccount, password);
+                  if (res.success && res.token && res.user) {
+                    saveLocalAuth(res.token, res.user);
+                    updateHeaderAuthUI();
+                    switchedAccount = true;
+                    showToast(t('set.accountRestored', 'Вы вошли как @{name}').replace('{name}', res.user.username), 'success');
+                  } else {
+                    showToast(res.message || t('set.accountRestoreFailed', 'Не удалось войти в аккаунт из файла'), 'error');
+                  }
+                } catch (err) {
+                  showToast(t('set.accountRestoreFailed', 'Не удалось войти в аккаунт из файла'), 'error');
                 }
-              } catch (err) {
-                showToast(t('set.accountRestoreFailed', 'Не удалось войти в аккаунт из файла'), 'error');
               }
             }
           }
@@ -1293,7 +1304,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
           .replace('{favs}', counts.favorites).replace('{authors}', counts.favoriteAuthors));
         if (onDataImported) onDataImported();
       } catch (err) {
-        showToast(t('set.importFailed', 'Ошибка импорта: неверный JSON файл'));
+        showToast(`${t('set.importFailed', 'Ошибка импорта')}: ${err.message || 'неверный JSON'}`);
       }
     });
   }
@@ -1588,6 +1599,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       btn.classList.add('active');
       const themeVal = btn.dataset.themeVal || 'kotobox';
       document.documentElement.setAttribute('data-theme', themeVal);
+      syncThemeColor();
       state.settings.theme = themeVal;
       saveLocalSettings(state.settings);
     });

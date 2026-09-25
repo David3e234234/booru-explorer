@@ -6,7 +6,7 @@ import StreamZip from 'node-stream-zip';
 import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import { ARCHIVES_DIR } from '../config/constants.js';
-import { fetchSafe, resolveSiteReferer } from '../utils/network.js';
+import { fetchSafe, resolveSiteReferer, discardResponse } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
 import { getSettings } from './storageService.js';
 
@@ -49,14 +49,16 @@ function isAllowedArchiveHost(hostname) {
   );
 }
 
-const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp', 'svg']);
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp']);
 const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts']);
 
 // Zip-bomb and runaway-extraction guards. Entries are streamed to disk, so the
 // caps bound disk usage only - RAM stays flat even for multi-hundred-MB videos
 const MAX_FILES = 500;
 const MAX_TOTAL_BYTES = 1024 * 1024 * 1024; // 1 GB uncompressed per archive
-const MAX_ENTRY_BYTES = 1024 * 1024 * 1024; // 1 GB per file
+const MAX_ENTRY_BYTES = 1024 * 1024 * 1024; // 1 GB per file, streamed to disk
+const MAX_INFLATE_BYTES = 64 * 1024 * 1024; // in-RAM inflate ceiling for document scans
+const MAX_COMPRESSED_BYTES = 2 * 1024 * 1024 * 1024;
 
 const DOWNLOAD_TIMEOUT_MS = 120000;
 
@@ -405,6 +407,9 @@ async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer,
           await writeSafe(value, writeOffset);
           writeOffset += value.length;
           totalReceived += value.length;
+          if (totalReceived > MAX_COMPRESSED_BYTES) {
+            throw new Error('Архив превышает допустимый размер');
+          }
 
           const now = Date.now();
           if (now - lastProgressUpdate >= 150) {
@@ -464,13 +469,23 @@ async function downloadSingleStream(zipUrl, destPath, referer, options = {}) {
   }
 
   const totalBytesHeader = parseInt(response.headers.get('content-length'), 10) || 0;
+  if (totalBytesHeader > MAX_COMPRESSED_BYTES) {
+    await discardResponse(response);
+    throw new Error('Архив превышает допустимый размер');
+  }
   jobStatus.set(zipUrl, { phase: 'download', received: 0, total: totalBytesHeader, percent: 0, threads: 1 });
+  let receivedBytes = 0;
   let lastProgressTime = 0;
   const progressCounter = new Transform({
     transform(chunk, enc, cb) {
+      receivedBytes += chunk.length;
+      if (receivedBytes > MAX_COMPRESSED_BYTES) {
+        cb(new Error('Архив превышает допустимый размер'));
+        return;
+      }
       const st = jobStatus.get(zipUrl);
       if (st) {
-        st.received += chunk.length;
+        st.received = receivedBytes;
         const now = Date.now();
         if (now - lastProgressTime >= 150) {
           lastProgressTime = now;
@@ -496,8 +511,9 @@ async function downloadArchiveFromUrl(targetUrl, tmpPath, options, referer) {
   let totalBytes = 0;
   let supportsRange = false;
 
+  let probeRes = null;
   try {
-    const probeRes = await fetchSafe(targetUrl, {
+    probeRes = await fetchSafe(targetUrl, {
       method: 'GET',
       headers: {
         'User-Agent': 'Mozilla/5.0',
@@ -519,8 +535,14 @@ async function downloadArchiveFromUrl(targetUrl, tmpPath, options, referer) {
       const cl = probeRes.headers.get('content-length');
       if (cl) totalBytes = parseInt(cl, 10) || 0;
     }
+    await discardResponse(probeRes);
   } catch (probeErr) {
+    await discardResponse(probeRes);
     logInfo('Archive', `Range-проба не удалась (${probeErr.message}), переключаемся на один поток`);
+  }
+
+  if (totalBytes > MAX_COMPRESSED_BYTES) {
+    throw new Error('Архив превышает допустимый размер');
   }
 
   const minSegmentSize = 5 * 1024 * 1024;
@@ -1009,7 +1031,7 @@ async function inspectArchiveRemoteSingle(zipUrl, key, options = {}) {
             decompressedBuf = compressedData;
           } else if (doc.method === 8) {
             try {
-              decompressedBuf = zlib.inflateRawSync(compressedData);
+              decompressedBuf = zlib.inflateRawSync(compressedData, { maxOutputLength: MAX_INFLATE_BYTES });
             } catch {}
           }
 
@@ -1187,6 +1209,7 @@ export async function inspectArchive(zipUrl, options = {}) {
     const scannedLinks = [];
     const passwords = new Set();
     let totalBytes = 0;
+    let totalDocBytesScanned = 0;
     let isEncrypted = false;
 
     for (let idx = 0; idx < rawEntries.length; idx++) {
@@ -1219,7 +1242,8 @@ export async function inspectArchive(zipUrl, options = {}) {
       let foundEntryPass = [];
 
       // Scan documents under 100MB for links and passwords
-      if (isDoc && size > 0 && size < 100 * 1024 * 1024 && !entry.isEncrypted) {
+      if (isDoc && size > 0 && size < 100 * 1024 * 1024 && !entry.isEncrypted && totalDocBytesScanned + size <= 100 * 1024 * 1024) {
+        totalDocBytesScanned += size;
         try {
           const buf = await zip.entryData(entry.name);
           const scanned = scanBufferForLinksAndPasswords(buf, base);

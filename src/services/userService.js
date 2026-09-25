@@ -11,7 +11,7 @@ export const USERS_INDEX_FILE = path.join(DATA_DIR, 'users.json');
 // Ensure the users directory exists
 if (!fs.existsSync(USERS_DIR)) {
   try {
-    fs.mkdirSync(USERS_DIR, { recursive: true });
+    fs.mkdirSync(USERS_DIR, { recursive: true, mode: 0o700 });
   } catch (err) {
     logError('UserService', 'Не удалось создать директорию users', err);
   }
@@ -27,7 +27,7 @@ function getSessionSecret() {
       if (secret) return secret;
     }
     const newSecret = crypto.randomBytes(32).toString('hex');
-    fs.writeFileSync(secretFile, newSecret, 'utf-8');
+    fs.writeFileSync(secretFile, newSecret, { encoding: 'utf-8', mode: 0o600 });
     return newSecret;
   } catch (err) {
     return crypto.randomBytes(32).toString('hex');
@@ -38,20 +38,25 @@ const JWT_SECRET = getSessionSecret();
 /**
  * Hash a password via crypto.scryptSync
  */
-export function hashPassword(password, salt = null) {
+export async function hashPassword(password, salt = null) {
   const generatedSalt = salt || crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, generatedSalt, 64).toString('hex');
-  return { hash, salt: generatedSalt };
+  const derived = await new Promise((resolve, reject) => {
+    crypto.scrypt(password, generatedSalt, 64, (err, key) => {
+      if (err) reject(err);
+      else resolve(key);
+    });
+  });
+  return { hash: derived.toString('hex'), salt: generatedSalt };
 }
 
-/**
- * Verify a password
- */
-export function verifyPassword(password, hash, salt) {
+export async function verifyPassword(password, hash, salt) {
   try {
-    const checkHash = crypto.scryptSync(password, salt, 64).toString('hex');
-    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(checkHash, 'hex'));
-  } catch (err) {
+    const checkHash = await hashPassword(password, salt);
+    const stored = Buffer.from(hash, 'hex');
+    const computed = Buffer.from(checkHash.hash, 'hex');
+    if (stored.length !== computed.length) return false;
+    return crypto.timingSafeEqual(stored, computed);
+  } catch {
     return false;
   }
 }
@@ -64,38 +69,37 @@ export function generateToken(payload, expiresInDays = 30) {
   const exp = Math.floor(Date.now() / 1000) + (expiresInDays * 24 * 60 * 60);
   const fullPayload = { ...payload, exp };
   const payloadB64 = Buffer.from(JSON.stringify(fullPayload)).toString('base64url');
-  
+
   const signature = crypto
     .createHmac('sha256', JWT_SECRET)
     .update(`${header}.${payloadB64}`)
     .digest('base64url');
-    
+
   return `${header}.${payloadB64}.${signature}`;
 }
 
-/**
- * Validate and decode a token
- */
 export function verifyToken(token) {
   try {
     if (!token || typeof token !== 'string') return null;
     const parts = token.split('.');
     if (parts.length !== 3) return null;
-    
+
     const [header, payloadB64, signature] = parts;
     const expectedSignature = crypto
       .createHmac('sha256', JWT_SECRET)
       .update(`${header}.${payloadB64}`)
       .digest('base64url');
-      
-    if (signature !== expectedSignature) return null;
-    
+
+    const received = Buffer.from(signature);
+    const expected = Buffer.from(expectedSignature);
+    if (received.length !== expected.length || !crypto.timingSafeEqual(received, expected)) return null;
+
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8'));
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-      return null; // expired
+      return null;
     }
     return payload;
-  } catch (err) {
+  } catch {
     return null;
   }
 }
@@ -122,7 +126,7 @@ export function getUserDataDir(userId) {
   const userDir = path.join(USERS_DIR, userId);
   if (!fs.existsSync(userDir)) {
     try {
-      fs.mkdirSync(userDir, { recursive: true });
+      fs.mkdirSync(userDir, { recursive: true, mode: 0o700 });
     } catch {}
   }
   return userDir;
@@ -150,7 +154,7 @@ export function findUserById(userId) {
 /**
  * Register a new user
  */
-export function registerUser(username, password, initialData = {}) {
+export async function registerUser(username, password, initialData = {}) {
   const cleanUsername = (username || '').trim();
   if (cleanUsername.length < 3 || cleanUsername.length > 30) {
     throw new Error('Имя пользователя должно быть от 3 до 30 символов');
@@ -158,15 +162,15 @@ export function registerUser(username, password, initialData = {}) {
   if (!/^[a-zA-Z0-9_\u0400-\u04FF-]+$/.test(cleanUsername)) {
     throw new Error('Имя пользователя может содержать буквы, цифры, дефис и подчеркивание');
   }
-  if (!password || password.length < 4) {
-    throw new Error('Пароль должен быть не менее 4 символов');
+  if (!password || password.length < 8 || password.length > 128) {
+    throw new Error('Пароль должен быть от 8 до 128 символов');
   }
   if (findUserByUsername(cleanUsername)) {
     throw new Error('Пользователь с таким логином уже существует');
   }
 
   const userId = 'u_' + crypto.randomBytes(6).toString('hex');
-  const { hash, salt } = hashPassword(password);
+  const { hash, salt } = await hashPassword(password);
   const now = new Date().toISOString();
 
   const user = {
@@ -175,15 +179,15 @@ export function registerUser(username, password, initialData = {}) {
     passwordHash: hash,
     salt: salt,
     avatar: '',
+    tokenVersion: 0,
     createdAt: now,
     lastLoginAt: now
   };
 
   const users = getUsersList();
   users.push(user);
-  saveUsersList(users);
+  await saveUsersList(users);
 
-  // Create isolated data files for the new user
   const userDir = getUserDataDir(userId);
   const userSettings = { ...DEFAULT_SETTINGS, ...(initialData.settings || {}) };
   const userFavorites = Array.isArray(initialData.favorites) ? initialData.favorites : [];
@@ -191,53 +195,40 @@ export function registerUser(username, password, initialData = {}) {
   const userDislikes = Array.isArray(initialData.dislikes) ? initialData.dislikes : [];
   const userFavoriteAuthors = Array.isArray(initialData.favoriteAuthors) ? initialData.favoriteAuthors : [];
 
-  writeJsonFile(path.join(userDir, 'settings.json'), userSettings);
-  writeJsonFile(path.join(userDir, 'favorites.json'), userFavorites);
-  writeJsonFile(path.join(userDir, 'likes.json'), userLikes);
-  writeJsonFile(path.join(userDir, 'dislikes.json'), userDislikes);
-  writeJsonFile(path.join(userDir, 'favorite_authors.json'), userFavoriteAuthors);
-  writeJsonFile(path.join(userDir, 'author_feed_state.json'), {});
+  await Promise.all([
+    writeJsonFile(path.join(userDir, 'settings.json'), userSettings),
+    writeJsonFile(path.join(userDir, 'favorites.json'), userFavorites),
+    writeJsonFile(path.join(userDir, 'likes.json'), userLikes),
+    writeJsonFile(path.join(userDir, 'dislikes.json'), userDislikes),
+    writeJsonFile(path.join(userDir, 'favorite_authors.json'), userFavoriteAuthors),
+    writeJsonFile(path.join(userDir, 'author_feed_state.json'), {})
+  ]);
   logInfo('Auth', `Зарегистрирован новый пользователь: ${cleanUsername} (ID: ${userId})`);
 
-  const token = generateToken({ id: userId, username: cleanUsername });
-  const { passwordHash, salt: _, ...safeUser } = user;
+  const token = generateToken({ id: userId, username: cleanUsername, tokenVersion: 0 });
+  const { passwordHash, salt: _, tokenVersion: __, ...safeUser } = user;
   return { user: safeUser, token };
 }
 
-/**
- * Return the full account record (including passwordHash/salt) for backup/export files.
- * Never expose this outside authenticated, user-owned flows.
- */
 export function exportAccountRecord(userId) {
   const user = findUserById(userId);
   if (!user) return null;
   return {
     id: user.id,
     username: user.username,
-    passwordHash: user.passwordHash,
-    salt: user.salt,
     avatar: user.avatar || '',
     createdAt: user.createdAt || null
   };
 }
 
-const ACCOUNT_HASH_RE = /^[a-f0-9]{128}$/i; // scryptSync(password, salt, 64) -> 64 bytes -> 128 hex chars
-const ACCOUNT_SALT_RE = /^[a-f0-9]{32}$/i;
-const ACCOUNT_ID_RE = /^u_[a-f0-9]{12}$/;
-
-/**
- * Recreate an account from an exported/backup file (hash+salt based, no plaintext
- * password needed) and issue a fresh auth token for it.
- */
-export function restoreUser(account = {}) {
+export async function restoreUser(account = {}, password = '') {
   const cleanUsername = String(account.username || '').trim();
   if (cleanUsername.length < 3 || cleanUsername.length > 30 ||
       !/^[a-zA-Z0-9_\u0400-\u04FF-]+$/.test(cleanUsername)) {
     throw new Error('Некорректное имя пользователя в файле');
   }
-  if (!ACCOUNT_HASH_RE.test(String(account.passwordHash || '')) ||
-      !ACCOUNT_SALT_RE.test(String(account.salt || ''))) {
-    throw new Error('В файле отсутствуют корректные данные аккаунта');
+  if (!password || password.length < 8 || password.length > 128) {
+    throw new Error('Введите пароль аккаунта из файла');
   }
 
   const users = getUsersList();
@@ -245,63 +236,64 @@ export function restoreUser(account = {}) {
 
   if (idx !== -1) {
     const existing = users[idx];
-    if (existing.passwordHash === account.passwordHash && existing.salt === account.salt) {
-      // Same credentials: nothing to restore, just re-login
-      const token = generateToken({ id: existing.id, username: existing.username });
-      const { passwordHash, salt: _, ...safeUser } = existing;
-      return { user: safeUser, token, restored: false };
+    if (!(await verifyPassword(password, existing.passwordHash, existing.salt))) {
+      const err = new Error('Неверный пароль для существующего аккаунта');
+      err.statusCode = 401;
+      throw err;
     }
-    const err = new Error('Пользователь с таким логином уже существует с другим паролем');
-    err.statusCode = 409;
-    throw err;
+    const token = generateToken({
+      id: existing.id,
+      username: existing.username,
+      tokenVersion: existing.tokenVersion || 0
+    });
+    const { passwordHash, salt: _, tokenVersion: __, ...safeUser } = existing;
+    return { user: safeUser, token, restored: false };
   }
 
-  // Keep the original id when free so per-user data continuity survives moves
-  let userId = ACCOUNT_ID_RE.test(String(account.id || '')) && !users.some(u => u.id === account.id)
-    ? account.id
-    : 'u_' + crypto.randomBytes(6).toString('hex');
-
+  const { hash, salt } = await hashPassword(password);
+  const userId = 'u_' + crypto.randomBytes(6).toString('hex');
   const now = new Date().toISOString();
   const user = {
     id: userId,
     username: cleanUsername,
-    passwordHash: account.passwordHash,
-    salt: account.salt,
+    passwordHash: hash,
+    salt,
     avatar: typeof account.avatar === 'string' ? account.avatar : '',
+    tokenVersion: 0,
     createdAt: account.createdAt || now,
     lastLoginAt: now
   };
 
   users.push(user);
-  saveUsersList(users);
+  await saveUsersList(users);
 
-  // Create isolated data files like registerUser does
   const userDir = getUserDataDir(userId);
-  writeJsonFile(path.join(userDir, 'settings.json'), { ...DEFAULT_SETTINGS });
-  writeJsonFile(path.join(userDir, 'favorites.json'), []);
-  writeJsonFile(path.join(userDir, 'likes.json'), []);
-  writeJsonFile(path.join(userDir, 'dislikes.json'), []);
-  writeJsonFile(path.join(userDir, 'favorite_authors.json'), []);
-  writeJsonFile(path.join(userDir, 'author_feed_state.json'), {});
+  await Promise.all([
+    writeJsonFile(path.join(userDir, 'settings.json'), { ...DEFAULT_SETTINGS }),
+    writeJsonFile(path.join(userDir, 'favorites.json'), []),
+    writeJsonFile(path.join(userDir, 'likes.json'), []),
+    writeJsonFile(path.join(userDir, 'dislikes.json'), []),
+    writeJsonFile(path.join(userDir, 'favorite_authors.json'), []),
+    writeJsonFile(path.join(userDir, 'author_feed_state.json'), {})
+  ]);
   logInfo('Auth', `Аккаунт восстановлен из бэкапа: ${cleanUsername} (ID: ${userId})`);
 
-  const token = generateToken({ id: userId, username: cleanUsername });
-  const { passwordHash, salt: _, ...safeUser } = user;
+  const token = generateToken({ id: userId, username: cleanUsername, tokenVersion: 0 });
+  const { passwordHash, salt: _, tokenVersion: __, ...safeUser } = user;
   return { user: safeUser, token, restored: true };
 }
 
 /**
  * Log a user in
  */
-export function loginUser(username, password, initialData = null) {
+export async function loginUser(username, password, initialData = null) {
   const cleanUsername = (username || '').trim();
   const user = findUserByUsername(cleanUsername);
   if (!user) {
     throw new Error('Неверный логин или пароль');
   }
 
-  const isValid = verifyPassword(password, user.passwordHash, user.salt);
-  if (!isValid) {
+  if (!(await verifyPassword(password, user.passwordHash, user.salt))) {
     throw new Error('Неверный логин или пароль');
   }
 
@@ -310,16 +302,13 @@ export function loginUser(username, password, initialData = null) {
   const idx = users.findIndex(u => u.id === user.id);
   if (idx !== -1) {
     users[idx] = user;
-    saveUsersList(users);
+    await saveUsersList(users);
   }
 
-  // Read the user's saved settings on disk
   const userDir = getUserDataDir(user.id);
   const settingsFile = path.join(userDir, 'settings.json');
   const userSettings = { ...DEFAULT_SETTINGS, ...readJsonFile(settingsFile, {}) };
 
-  // If client provided local settings on login, carry over any non-empty API keys / credentials
-  // that are currently missing or empty in the account on the server
   if (initialData?.settings && typeof initialData.settings === 'object') {
     let changed = false;
     for (const field of SECRET_SETTING_FIELDS) {
@@ -331,14 +320,27 @@ export function loginUser(username, password, initialData = null) {
       }
     }
     if (changed) {
-      writeJsonFile(settingsFile, userSettings);
+      await writeJsonFile(settingsFile, userSettings);
       logInfo('Auth', `Локальные API-ключи перенесены в аккаунт: ${cleanUsername}`);
     }
   }
 
-  const token = generateToken({ id: user.id, username: user.username });
-  const { passwordHash, salt: _, ...safeUser } = user;
+  const token = generateToken({
+    id: user.id,
+    username: user.username,
+    tokenVersion: user.tokenVersion || 0
+  });
+  const { passwordHash, salt: _, tokenVersion: __, ...safeUser } = user;
   return { user: safeUser, token, settings: userSettings };
+}
+
+export async function revokeUserTokens(userId) {
+  const users = getUsersList();
+  const idx = users.findIndex(u => u.id === userId);
+  if (idx === -1) return false;
+  users[idx].tokenVersion = (users[idx].tokenVersion || 0) + 1;
+  await saveUsersList(users);
+  return true;
 }
 
 /**
@@ -347,49 +349,63 @@ export function loginUser(username, password, initialData = null) {
 export function getUserProfile(userId) {
   const user = findUserById(userId);
   if (!user) return null;
-  const { passwordHash, salt: _, ...safeUser } = user;
+  const { passwordHash, salt: _, tokenVersion: __, ...safeUser } = user;
   return safeUser;
 }
 
-/**
- * Soft auth: attaches req.user when a valid token is present and passes the
- * request through either way.
- *
- * The app is local-first - a logged-out user keeps their data in the browser and
- * ships their own API keys in the x-booru-auth header - so these routes must keep
- * answering anonymous callers. Anything that must not be reachable anonymously
- * (credentials, backups, destructive actions) has to sit behind requireAuth.
- */
-export function authMiddleware(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7).trim();
-    const payload = verifyToken(token);
-    if (payload && payload.id) {
-      req.user = payload;
-    }
-  }
-  next();
-}
-
-/**
- * Hard auth: rejects with 401 unless a valid, unexpired token is present.
- *
- * Put this on any route that reads or writes credentials, triggers a backup, or
- * can otherwise be abused from the LAN - the server binds 0.0.0.0 and start_phone.js
- * hands out a QR code for it, so "local" is not the same as "trusted".
- */
-export function requireAuth(req, res, next) {
+function resolveRequestUser(req) {
   const authHeader = req.headers['authorization'];
   const token = (authHeader && authHeader.startsWith('Bearer '))
     ? authHeader.substring(7).trim()
     : '';
   const payload = verifyToken(token);
+  if (!payload?.id) return null;
+  const user = findUserById(payload.id);
+  if (!user) return null;
+  if ((payload.tokenVersion || 0) !== (user.tokenVersion || 0)) return null;
+  return payload;
+}
 
-  if (!payload || !payload.id) {
+export function authMiddleware(req, res, next) {
+  const user = resolveRequestUser(req);
+  if (user) req.user = user;
+  next();
+}
+
+export function requireAuth(req, res, next) {
+  const user = resolveRequestUser(req);
+  if (!user) {
     return res.status(401).json({ success: false, message: 'Не авторизован' });
   }
+  req.user = user;
+  next();
+}
 
-  req.user = payload;
+export function requireOwner(req, res, next) {
+  const user = resolveRequestUser(req);
+  const adminToken = String(process.env.BOORU_ADMIN_TOKEN || '').trim();
+  if (adminToken) {
+    const provided = String(req.headers['x-booru-admin-token'] || '');
+    const providedBuffer = Buffer.from(provided);
+    const expectedBuffer = Buffer.from(adminToken);
+    if (providedBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(providedBuffer, expectedBuffer)) {
+      // The token is the credential on its own. Requiring a session here would make
+      // every server-wide operation unreachable for a token-only operator.
+      if (user) req.user = user;
+      return next();
+    }
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Не авторизован' });
+    }
+    return res.status(403).json({ success: false, message: 'Требуется прав владельца' });
+  }
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'Не авторизован' });
+  }
+  const owner = getUsersList()[0];
+  if (!owner || owner.id !== user.id) {
+    return res.status(403).json({ success: false, message: 'Операция доступна только владельцу' });
+  }
+  req.user = user;
   next();
 }

@@ -1,8 +1,19 @@
 process.env.NODE_ENV = 'test';
+
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import app from '../../server.js';
-import { flushPendingWrites } from '../../src/services/storageService.js';
+
+const ownsDataDir = !process.env.BOORU_DATA_DIR;
+const testDataDir = ownsDataDir
+  ? await fs.mkdtemp(path.join(os.tmpdir(), 'booru-explorer-integration-'))
+  : process.env.BOORU_DATA_DIR;
+if (ownsDataDir) process.env.BOORU_DATA_DIR = testDataDir;
+
+let app;
+let flushPendingWrites;
 
 describe('Express API Integration & Route Tests', () => {
   let server;
@@ -12,6 +23,10 @@ describe('Express API Integration & Route Tests', () => {
   const testPassword = 'Password123!';
 
   before(async () => {
+    const serverModule = await import('../../server.js');
+    const storageModule = await import('../../src/services/storageService.js');
+    app = serverModule.default;
+    flushPendingWrites = storageModule.flushPendingWrites;
     await new Promise((resolve) => {
       server = app.listen(0, '127.0.0.1', () => {
         const address = server.address();
@@ -23,12 +38,15 @@ describe('Express API Integration & Route Tests', () => {
 
   after(async () => {
     try {
-      flushPendingWrites();
+      await flushPendingWrites();
     } catch {}
     if (server) {
       server.closeAllConnections?.();
       await new Promise((resolve) => server.close(resolve));
       server.unref();
+    }
+    if (ownsDataDir) {
+      await fs.rm(testDataDir, { recursive: true, force: true });
     }
   });
 
@@ -118,11 +136,47 @@ describe('Express API Integration & Route Tests', () => {
       assert.strictEqual(authData.user.username, testUsername);
     });
 
-    it('POST /api/auth/logout succeeds', async () => {
-      const res = await fetch(`${baseUrl}/api/auth/logout`, { method: 'POST' });
+    it('account export never contains a reusable password verifier', async () => {
+      const res = await fetch(`${baseUrl}/api/auth/export`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.strictEqual(data.success, true);
+      assert.strictEqual(data.account.username, testUsername);
+      assert.strictEqual(data.account.passwordHash, undefined);
+      assert.strictEqual(data.account.salt, undefined);
+
+      const restoreRes = await fetch(`${baseUrl}/api/auth/restore`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account: data.account })
+      });
+      assert.strictEqual(restoreRes.status, 400);
+    });
+
+    it('POST /api/auth/logout revokes the issued token', async () => {
+      const res = await fetch(`${baseUrl}/api/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, true);
+
+      const revokedRes = await fetch(`${baseUrl}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      assert.strictEqual(revokedRes.status, 401);
+
+      const loginRes = await fetch(`${baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: testUsername, password: testPassword })
+      });
+      const loginData = await loginRes.json();
+      assert.strictEqual(loginData.success, true);
+      authToken = loginData.token;
     });
   });
 
@@ -152,14 +206,29 @@ describe('Express API Integration & Route Tests', () => {
   });
 
   describe('Cache Management (/api/cache-clear)', () => {
-    it('POST /api/cache-clear clears RAM and disk cache for a signed-in user', async () => {
+    it('POST /api/cache-clear is rejected without owner rights', async () => {
       const res = await fetch(`${baseUrl}/api/cache-clear`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${authToken}` }
       });
-      assert.strictEqual(res.status, 200);
-      const data = await res.json();
-      assert.strictEqual(data.success, true);
+      assert.strictEqual(res.status, 403);
+    });
+
+    it('POST /api/cache-clear clears RAM and disk cache for the operator token', async () => {
+      const previousToken = process.env.BOORU_ADMIN_TOKEN;
+      process.env.BOORU_ADMIN_TOKEN = 'integration-admin-token';
+      try {
+        const res = await fetch(`${baseUrl}/api/cache-clear`, {
+          method: 'POST',
+          headers: { 'x-booru-admin-token': 'integration-admin-token' }
+        });
+        assert.strictEqual(res.status, 200);
+        const data = await res.json();
+        assert.strictEqual(data.success, true);
+      } finally {
+        if (previousToken === undefined) delete process.env.BOORU_ADMIN_TOKEN;
+        else process.env.BOORU_ADMIN_TOKEN = previousToken;
+      }
     });
   });
 
@@ -343,8 +412,10 @@ describe('Express API Integration & Route Tests', () => {
       assert.deepStrictEqual(data, { tags: [] });
     });
 
-    it('GET /api/tags/autocomplete handles query with site without throwing', async () => {
-      const res = await fetch(`${baseUrl}/api/tags/autocomplete?q=test&site=danbooru`);
+    it('GET /api/tags/autocomplete normalizes repeated query values and malformed auth', async () => {
+      const res = await fetch(`${baseUrl}/api/tags/autocomplete?q=test&q=other&site=unknown`, {
+        headers: { 'x-booru-auth': 'null' }
+      });
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.ok(Array.isArray(data.tags));

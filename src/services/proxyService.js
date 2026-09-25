@@ -1,74 +1,28 @@
-import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { Readable } from 'stream';
-import { THUMBS_DIR, BROWSER_USER_AGENT, BOORU_USER_AGENT } from '../config/constants.js';
+import { BROWSER_USER_AGENT, BOORU_USER_AGENT } from '../config/constants.js';
 import { getSettings } from './storageService.js';
 import { resolveSiteReferer, fetchSafe, isSafeExternalUrlResolved, discardResponse } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
+import { isDanbooruCredentialHost, sanitizeLogUrl } from '../utils/hostPolicy.js';
+import { parseRequestAuth, resolveRequestSettings } from '../utils/settingsValidation.js';
+import {
+  detectImageType,
+  imageCachePath,
+  isValidImageBuffer,
+  readCacheFileMime,
+  touchCacheFile,
+  writeCacheFileAtomic
+} from './imageCacheService.js';
+
+export { isValidImageBuffer } from './imageCacheService.js';
 
 // Max image size that gets buffered into memory and written to the disk cache
 const MAX_CACHED_IMAGE_BYTES = 30 * 1024 * 1024;
 
 // Upstream timeout with headroom for retries while the source throttles
 const PROXY_ABORT_MS = 35000;
-
-const IMAGE_EXTS = [
-  ['.png', 'png'],
-  ['.webp', 'webp'],
-  ['.gif', 'gif']
-];
-
-function detectImageExt(cleanPath) {
-  for (const [suffix, ext] of IMAGE_EXTS) {
-    if (cleanPath.endsWith(suffix)) return ext;
-  }
-  return 'jpg';
-}
-
-// Cache file name is derived from the requested URL only - never from the URL a 404
-// fallback resolved to. Keying the write off the effective URL made the reader and
-// the writer disagree whenever the fallback changed the extension, so the entry was
-// written once and never hit again
-function imageCachePath(url) {
-  const hash = crypto.createHash('md5').update(url).digest('hex');
-  return path.join(THUMBS_DIR, `${hash}.${detectImageExt(url.split('?')[0].toLowerCase())}`);
-}
-
-// A cache entry is only usable if its first bytes are a real image signature.
-// Otherwise we would happily serve a cached HTML error page forever
-async function hasValidCacheFile(cacheFilePath) {
-  let head = null;
-  try {
-    const stats = await fs.promises.stat(cacheFilePath);
-    if (stats.size <= 0) return false;
-    const handle = await fs.promises.open(cacheFilePath, 'r');
-    try {
-      head = await handle.read(Buffer.alloc(32), 0, 32, 0);
-    } finally {
-      await handle.close().catch(() => {});
-    }
-    head = head.buffer.subarray(0, head.bytesRead);
-  } catch {
-    return false;
-  }
-  if (isValidImageBuffer(head)) return true;
-  // Garbage on disk (truncated write, error page) - drop it so the next request refetches
-  fs.promises.unlink(cacheFilePath).catch(() => {});
-  return false;
-}
-
-// Write via a temp file + rename: a crash or a concurrent reader must never see a half-written image
-async function writeCacheFileAtomic(cacheFilePath, buf) {
-  const tmpPath = `${cacheFilePath}.${process.pid}.tmp`;
-  try {
-    await fs.promises.writeFile(tmpPath, buf);
-    await fs.promises.rename(tmpPath, cacheFilePath);
-  } catch (err) {
-    fs.promises.unlink(tmpPath).catch(() => {});
-    throw err;
-  }
-}
 
 // Deduplicate concurrent requests for the same image (thundering herd)
 const inflightImages = new Map();
@@ -87,7 +41,7 @@ function buildUpstreamHeaders(targetUrl, isImage, currentSettings) {
 
   try {
     const parsed = new URL(targetUrl);
-    if (parsed.hostname.includes('donmai.us') && currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
+    if (isDanbooruCredentialHost(parsed.hostname) && currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
       headers['Authorization'] = 'Basic ' + Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64');
     }
   } catch {}
@@ -192,32 +146,59 @@ function build404FallbackCandidates(targetUrl) {
   return candidates;
 }
 
-function fixContentType(res, targetUrl) {
-  const fullLower = targetUrl.toLowerCase();
-  const normalizedPath = fullLower.split('?')[0].replace(/\/+$/, '');
-  let currentType = (res.getHeader('content-type') || '').toLowerCase();
+const EXTENSION_MEDIA_TYPES = {
+  '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+  '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif', '.bmp': 'image/bmp',
+  '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.webm': 'video/webm',
+  '.mov': 'video/quicktime', '.mkv': 'video/x-matroska'
+};
 
-  // Strip charset from media content types (Safari WebKit rejects video MIME types with charset)
-  if (currentType.startsWith('video/') && currentType.includes(';')) {
-    currentType = currentType.split(';')[0].trim();
-    res.setHeader('Content-Type', currentType);
+function isAllowedMediaType(contentType) {
+  const type = String(contentType || '').split(';')[0].trim().toLowerCase();
+  if (!type || type === 'application/octet-stream') return false;
+  if (type.startsWith('image/')) return type !== 'image/svg+xml';
+  return type.startsWith('video/') || type.startsWith('audio/');
+}
+
+function resolveSafeMediaType(response, targetUrl) {
+  const upstreamType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (upstreamType.startsWith('text/') || upstreamType === 'application/javascript' || upstreamType === 'application/xhtml+xml') {
+    return null;
   }
+  if (isAllowedMediaType(upstreamType)) return upstreamType;
+  const cleanPath = String(targetUrl || '').split('?')[0].split('#')[0].toLowerCase();
+  return EXTENSION_MEDIA_TYPES[path.extname(cleanPath)] || null;
+}
 
-  if (!currentType || currentType.includes('octet-stream') || currentType.includes('text/plain') || currentType.includes('text/html') || currentType === 'application/unknown') {
-    if (normalizedPath.includes('.mp4') || normalizedPath.includes('.m4v') || fullLower.includes('.mp4') || fullLower.includes('.m4v')) {
-      res.setHeader('Content-Type', 'video/mp4');
-    } else if (normalizedPath.includes('.webm') || fullLower.includes('.webm')) {
-      res.setHeader('Content-Type', 'video/webm');
-    } else if (normalizedPath.endsWith('.gif') || fullLower.includes('.gif')) {
-      res.setHeader('Content-Type', 'image/gif');
-    } else if (normalizedPath.endsWith('.png') || fullLower.includes('.png')) {
-      res.setHeader('Content-Type', 'image/png');
-    } else if (normalizedPath.endsWith('.webp') || fullLower.includes('.webp')) {
-      res.setHeader('Content-Type', 'image/webp');
-    } else if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg') || fullLower.includes('.jpg') || fullLower.includes('.jpeg')) {
-      res.setHeader('Content-Type', 'image/jpeg');
+async function readBodyWithLimit(response, maxBytes) {
+  const declaredLength = parseInt(response.headers.get('content-length') || '0', 10);
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    await discardResponse(response);
+    const err = new Error('Медиафайл превышает допустимый размер');
+    err.statusCode = 413;
+    throw err;
+  }
+  if (!response.body) return Buffer.alloc(0);
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        const err = new Error('Медиафайл превышает допустимый размер');
+        err.statusCode = 413;
+        throw err;
+      }
+      chunks.push(Buffer.from(value));
     }
+  } finally {
+    reader.releaseLock?.();
   }
+  return Buffer.concat(chunks, total);
 }
 
 async function tryFetch(url, headers, signal, settings) {
@@ -252,7 +233,7 @@ function pruneUpstreamCooldown() {
 // undici keeps the socket checked out until the body is consumed or cancelled,
 // so a leaking fallback loop exhausts the pool during gallery scroll
 async function fetchWith404Fallback(url, headers, signal, settings, options = {}) {
-  const { headersFor = null, shouldFallback = (r) => !r || !r.ok || r.status === 404 } = options;
+  const { headersFor = null, shouldFallback = (r) => r && r.status === 404 } = options;
 
   let response = null;
   let initialError = null;
@@ -303,8 +284,16 @@ async function fetchUpstreamWithRetry(targetUrl, headers, signal, settings, maxR
     if (upstreamCooldown.size > 200) pruneUpstreamCooldown();
     upstreamCooldown.set(targetUrl, Date.now() + UPSTREAM_COOLDOWN_MS);
 
-    const retryAfterSec = parseInt(response.headers.get('retry-after') || '', 10);
-    const delayMs = Math.min(5000, retryAfterSec > 0 ? retryAfterSec * 1000 : 1000 * (attempt + 1));
+    const retryAfterRaw = response.headers.get('retry-after') || '';
+    const retryAfterSec = Number.parseInt(retryAfterRaw, 10);
+    const retryAfterDate = Number.isNaN(retryAfterSec) ? Date.parse(retryAfterRaw) : NaN;
+    const retryDelayMs = Number.isFinite(retryAfterDate) ? retryAfterDate - Date.now() : NaN;
+    const delayMs = Math.min(
+      10000,
+      Number.isFinite(retryDelayMs) && retryDelayMs > 0
+        ? retryDelayMs
+        : (Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : 1000 * (attempt + 1))
+    );
     logInfo('Proxy', `Источник ответил ${response.status}, повтор ${attempt + 1}/${maxRetries} через ${delayMs} мс: ${targetUrl.split('?')[0]}`);
     await new Promise(resolve => setTimeout(resolve, delayMs));
   }
@@ -326,55 +315,36 @@ async function downloadAndCacheImage(req, res, originalUrl, headers, settings) {
     clearTimeout(abortTimeout);
   }
   const response = fetched.response;
-  const effectiveUrl = fetched.effectiveUrl;
 
-  res.status(response.status);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Accept-Ranges', 'bytes');
-
-  const forwardHeaders = ['content-type', 'content-length', 'cache-control', 'last-modified', 'etag'];
-  forwardHeaders.forEach(h => {
-    const val = response.headers.get(h);
-    if (val && h !== 'content-range') {
-      res.setHeader(h, h === 'content-type' && val.includes(',') ? val.split(',')[0].trim() : val);
-    }
-  });
-  fixContentType(res, effectiveUrl);
-  if (!res.getHeader('cache-control')) {
-    res.setHeader('Cache-Control', 'public, max-age=604800');
+  if (!response.ok) {
+    await discardResponse(response);
+    return res.status(response.status).send('Медиафайл недоступен');
   }
 
-  if (!response.ok || req.headers.range) {
-    if (response.body) {
-      pipeUpstream(req, res, response.body);
-    } else {
-      res.end();
-    }
-    return;
+  let buffer;
+  try {
+    buffer = await readBodyWithLimit(response, MAX_CACHED_IMAGE_BYTES);
+  } catch (err) {
+    if (res.headersSent) return res.end();
+    return res.status(err.statusCode || 502).send(err.message);
   }
 
-  // Stream large files without caching
-  const declaredLength = parseInt(response.headers.get('content-length') || '0', 10);
-  if (declaredLength > MAX_CACHED_IMAGE_BYTES) {
-    if (response.body) {
-      pipeUpstream(req, res, response.body);
-    } else {
-      res.end();
-    }
-    return;
+  const imageType = detectImageType(buffer);
+  if (!imageType) {
+    return res.status(415).send('Поддерживается только растровая графика');
   }
 
-  const arrayBuf = await response.arrayBuffer();
-  const buf = Buffer.from(arrayBuf);
+  res.status(200);
+  res.setHeader('Accept-Ranges', 'none');
+  res.setHeader('Content-Type', imageType.mime);
+  res.setHeader('Content-Length', buffer.length);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  res.setHeader('Cache-Control', 'public, max-age=604800');
 
-  if (buf.length > MAX_CACHED_IMAGE_BYTES) {
-    return res.send(buf);
-  }
-
-  // Keyed off the requested URL, not the fallback one, so the reader finds it again
   const cacheFilePath = imageCachePath(originalUrl);
-  writeCacheFileAtomic(cacheFilePath, buf).catch(() => {});
-  res.send(buf);
+  await writeCacheFileAtomic(cacheFilePath, buffer).catch(() => {});
+  res.send(buffer);
 }
 
 function pipeUpstream(req, res, webStream) {
@@ -412,30 +382,31 @@ export async function handleProxyRequest(req, res) {
     const cleanPath = targetUrl.split('?')[0].toLowerCase();
     const isImage = cleanPath.endsWith('.jpg') || cleanPath.endsWith('.jpeg') || cleanPath.endsWith('.png') || cleanPath.endsWith('.webp') || cleanPath.endsWith('.gif');
     const isRangeReq = Boolean(req.headers.range);
-    let clientAuth = {};
-    if (req.headers['x-booru-auth']) {
-      try {
-        clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
-      } catch {
-        try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
-      }
-    }
-    const currentSettings = { ...getSettings(), ...clientAuth };
+    const currentSettings = resolveRequestSettings(getSettings(), parseRequestAuth(req));
 
     // Disk cache for images (non-blocking)
     if (isImage && !isRangeReq) {
       const cacheFilePath = imageCachePath(targetUrl);
 
-      if (await hasValidCacheFile(cacheFilePath)) {
+      const cachedMime = await readCacheFileMime(cacheFilePath);
+      if (cachedMime) {
+        touchCacheFile(cacheFilePath);
+        res.setHeader('Content-Type', cachedMime);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
         res.setHeader('Cache-Control', 'public, max-age=604800');
         return res.sendFile(cacheFilePath);
       }
 
-      // The same file is already downloading - wait for it, then re-check the cache
       const inflightJob = inflightImages.get(targetUrl);
       if (inflightJob) {
         await inflightJob.catch(() => {});
-        if (await hasValidCacheFile(cacheFilePath)) {
+        const readyMime = await readCacheFileMime(cacheFilePath);
+        if (readyMime) {
+          touchCacheFile(cacheFilePath);
+          res.setHeader('Content-Type', readyMime);
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+          res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
           res.setHeader('Cache-Control', 'public, max-age=604800');
           return res.sendFile(cacheFilePath);
         }
@@ -467,18 +438,28 @@ export async function handleProxyRequest(req, res) {
     const { response, effectiveUrl } = await fetchWith404Fallback(targetUrl, headers, controller.signal, currentSettings);
     clearTimeout(abortTimeout);
 
-    res.status(response.status);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Accept-Ranges', 'bytes');
+    if (!response.ok) {
+      await discardResponse(response);
+      return res.status(response.status).send('Медиафайл недоступен');
+    }
 
-    const forwardHeaders = ['content-type', 'content-length', 'content-range', 'cache-control', 'last-modified', 'etag'];
+    const mediaType = resolveSafeMediaType(response, effectiveUrl);
+    if (!mediaType) {
+      await discardResponse(response);
+      return res.status(415).send('Недопустимый тип медиафайла');
+    }
+
+    res.status(response.status);
+      res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Type', mediaType);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+
+    const forwardHeaders = ['content-length', 'content-range', 'cache-control', 'last-modified', 'etag'];
     forwardHeaders.forEach(h => {
       const val = response.headers.get(h);
-      if (val) {
-        res.setHeader(h, h === 'content-type' && val.includes(',') ? val.split(',')[0].trim() : val);
-      }
+      if (val) res.setHeader(h, val);
     });
-    fixContentType(res, effectiveUrl);
     if (!res.getHeader('cache-control')) {
       res.setHeader('Cache-Control', 'public, max-age=604800');
     }
@@ -492,7 +473,7 @@ export async function handleProxyRequest(req, res) {
     if (err.name === 'AbortError' || err.code === 'ABORT_ERR' || err.message?.includes('aborted')) {
       return;
     }
-    logError('Proxy', `Не удалось проксировать ${targetUrl}`, err);
+    logError('Proxy', `Не удалось проксировать ${sanitizeLogUrl(targetUrl)}`, err);
     if (!res.headersSent) {
       res.status(502).send('Ошибка загрузки медиа');
     }
@@ -502,24 +483,6 @@ export async function handleProxyRequest(req, res) {
 /**
  * Validates binary image signatures (JPEG, PNG, GIF, WebP, AVIF/HEIC, BMP)
  */
-export function isValidImageBuffer(buf) {
-  if (!buf || !Buffer.isBuffer(buf) || buf.length < 12) return false;
-  // JPEG: FF D8 FF
-  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return true;
-  // PNG: 89 50 4E 47 0D 0A 1A 0A
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true;
-  // GIF: 47 49 46 38
-  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return true;
-  // WebP: RIFF....WEBP
-  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
-      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true;
-  // AVIF / HEIC (ftyp)
-  if (buf[4] === 0x66 && buf[5] === 0x74 && buf[6] === 0x79 && buf[7] === 0x70) return true;
-  // BMP: 42 4D
-  if (buf[0] === 0x42 && buf[1] === 0x4D) return true;
-  return false;
-}
-
 /**
  * Retrieve or safely download an image buffer with disk caching, Referer/User-Agent, and fallback hosts
  */
@@ -533,6 +496,7 @@ export async function getOrFetchImageBuffer(imageUrl, currentSettings = null) {
   try {
     const cachedBuf = await fs.promises.readFile(cacheFilePath);
     if (isValidImageBuffer(cachedBuf)) {
+      touchCacheFile(cacheFilePath);
       return { buffer: cachedBuf, fromDisk: true };
     }
     // Not an image - a stale or truncated entry, drop it
@@ -547,7 +511,7 @@ export async function getOrFetchImageBuffer(imageUrl, currentSettings = null) {
   try {
     const { response } = await fetchWith404Fallback(imageUrl, headers, controller.signal, settings, {
       headersFor: (altUrl) => buildUpstreamHeaders(altUrl, true, settings),
-      shouldFallback: (r) => r.status === 404 || !r.ok
+      shouldFallback: (r) => r && r.status === 404
     });
 
     if (!response || !response.ok) {
@@ -555,20 +519,11 @@ export async function getOrFetchImageBuffer(imageUrl, currentSettings = null) {
       return null;
     }
 
-    const cType = (response.headers.get('content-type') || '').toLowerCase();
-    if (cType.includes('text/html') || cType.includes('text/plain')) {
-      await discardResponse(response);
+    const buf = await readBodyWithLimit(response, MAX_CACHED_IMAGE_BYTES);
+    if (!detectImageType(buf)) {
       return null;
     }
 
-    const arrayBuf = await response.arrayBuffer();
-    const buf = Buffer.from(arrayBuf);
-
-    if (!isValidImageBuffer(buf)) {
-      return null;
-    }
-
-    // Save to disk cache
     if (buf.length <= MAX_CACHED_IMAGE_BYTES) {
       writeCacheFileAtomic(cacheFilePath, buf).catch(() => {});
     }

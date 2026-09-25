@@ -90,6 +90,7 @@ import {
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
+import { initModalAccessibility } from './modules/modalAccessibility.js';
 import { initWikiModal } from './modules/wikiModal.js';
 import { initProfileUI } from './modules/profileUI.js';
 import { initDownloadManager } from './modules/downloadManager.js';
@@ -109,6 +110,7 @@ let lastLoadMoreTime = 0;
 
 // Monotonic token: responses from superseded searches are discarded on arrival
 let searchSeq = 0;
+let accountGeneration = 0;
 
 async function init() {
   if ('scrollRestoration' in history) {
@@ -117,6 +119,7 @@ async function init() {
 
   // Apply the saved language to all static markup before anything renders
   applyStaticTranslations();
+  initModalAccessibility();
 
   setDrawerCallbacks({
     onCategoryUIUpdate: updateCategoryTabsUI,
@@ -135,19 +138,25 @@ async function init() {
         clearLocalAuth();
       }
     } catch (e) {
-      clearLocalAuth();
+      if (e?.status === 401 || e?.status === 403) {
+        clearLocalAuth();
+      } else {
+        showToast(t('auth.serverUnavailable', 'Сервер авторизации недоступен. Вход в аккаунт временно не подтвержден.'), 'error');
+      }
     }
   }
   updateHeaderAuthUI();
 
   authModalInstance = initAuthModal({
     onAuthSuccess: async (user) => {
+      accountGeneration += 1;
       updateHeaderAuthUI();
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
       selectCategory('profile');
     },
     onLogout: async () => {
+      accountGeneration += 1;
       updateHeaderAuthUI();
       await refreshAllUserData();
       if (profileUIInstance) profileUIInstance.renderProfile();
@@ -177,6 +186,7 @@ async function init() {
       }
     },
     onReloadState: async () => {
+      accountGeneration += 1;
       updateHeaderAuthUI();
       await refreshAllUserData();
       renderPresetsList();
@@ -281,6 +291,14 @@ async function init() {
     onAddAuthor: openAddAuthorModal,
     onSelectSite: (siteId) => selectSite(siteId),
     onFindSimilar: (post) => handleFindSimilarPost(post)
+  });
+
+  document.addEventListener('booru:langchange', () => {
+    galleryInstance?.renderGallery(false, { preserveScroll: true });
+    renderSitesBar({ onSelectSite: selectSite });
+    renderMobileSourcesSheet({ onSelectSite: selectSite });
+    renderPresetsList();
+    profileUIInstance?.renderProfile();
   });
 
   viewerInstance = initViewer({
@@ -475,8 +493,14 @@ function refreshSearchUiFromState() {
 async function openPostById(postId) {
   if (!postId || !viewerInstance) return;
 
+  const rawPostId = String(postId);
+  const prefixedSite = (state.sites || []).find(site => rawPostId.startsWith(`${site.id}_`));
+  const colonSite = rawPostId.includes(':') ? rawPostId.split(':')[0] : '';
+  const targetSite = prefixedSite?.id || ((state.sites || []).some(site => site.id === colonSite) ? colonSite : state.currentSite);
+  const originalId = prefixedSite ? rawPostId.slice(prefixedSite.id.length + 1) : rawPostId;
+
   const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
-  const idx = list.findIndex(p => p && String(p.originalId) === String(postId));
+  const idx = list.findIndex(p => p && (String(p.id) === rawPostId || String(p.originalId) === originalId));
   if (idx >= 0) {
     viewerInstance.openViewer(idx);
     return;
@@ -484,10 +508,10 @@ async function openPostById(postId) {
 
   try {
     const res = await fetchPosts({
-      site: state.currentSite,
-      tags: `id:${postId}`,
+      site: targetSite,
+      tags: `id:${originalId}`,
       page: 1,
-      limit: 1,
+      limit: 5,
       category: 'new',
       aiFilter: 'all',
       ratingFilter: 'all',
@@ -498,7 +522,7 @@ async function openPostById(postId) {
       hideLgbt: false
     });
     const posts = res && res.success && Array.isArray(res.posts) ? res.posts : [];
-    const post = posts.find(p => String(p.originalId) === String(postId)) || posts[0];
+    const post = posts.find(p => String(p.id) === rawPostId || String(p.originalId) === originalId);
     if (post) {
       viewerInstance.openViewer(-1, { directPost: post });
     } else {
@@ -742,13 +766,14 @@ function handleFindSimilarPost(post) {
   }
 }
 
-async function loadUserSettings() {
+async function loadUserSettings(generation = accountGeneration) {
   try {
     const local = loadLocalSettings() || {};
     if (Object.keys(local).length > 0) {
       applySettingsToUIAndState(local);
     }
     const data = await fetchSettings();
+    if (generation !== accountGeneration) return;
     const serverSettings = data?.settings || {};
 
     let merged;
@@ -825,10 +850,11 @@ async function loadUserSettings() {
   }
 }
 
-async function loadFavorites() {
+async function loadFavorites(generation = accountGeneration) {
   try {
     if (state.currentUser) {
       const data = await fetchFavorites();
+      if (generation !== accountGeneration) return;
       const serverFavs = Array.isArray(data?.favorites) ? data.favorites : [];
       setFavorites(serverFavs);
       updateFavoritesBadge();
@@ -839,6 +865,7 @@ async function loadFavorites() {
         updateFavoritesBadge();
       }
       const data = await fetchFavorites();
+      if (generation !== accountGeneration) return;
       const serverFavs = data?.favorites || [];
       const map = new Map();
       serverFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
@@ -857,7 +884,7 @@ async function loadFavorites() {
   }
 }
 
-async function loadFavoriteAuthors() {
+async function loadFavoriteAuthors(generation = accountGeneration) {
   try {
     const localAuthors = loadLocalFavoriteAuthors() || [];
     if (localAuthors.length > 0) {
@@ -866,6 +893,7 @@ async function loadFavoriteAuthors() {
     }
 
     const data = await fetchFavoriteAuthors();
+    if (generation !== accountGeneration) return;
     const serverAuthors = Array.isArray(data?.authors) ? data.authors : [];
 
     const map = new Map();
@@ -903,10 +931,11 @@ async function loadAuthorAliasesMap() {
   }
 }
 
-async function loadLikes() {
+async function loadLikes(generation = accountGeneration) {
   try {
     if (state.currentUser) {
       const data = await fetchLikes();
+      if (generation !== accountGeneration) return;
       const serverLikes = Array.isArray(data?.likes) ? data.likes : [];
       setLikes(serverLikes);
     } else {
@@ -915,6 +944,7 @@ async function loadLikes() {
         setLikes(localLikes);
       }
       const data = await fetchLikes();
+      if (generation !== accountGeneration) return;
       const serverLikes = data?.likes || [];
       const map = new Map();
       serverLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
@@ -932,10 +962,11 @@ async function loadLikes() {
   }
 }
 
-async function loadDislikes() {
+async function loadDislikes(generation = accountGeneration) {
   try {
     if (state.currentUser) {
       const data = await fetchDislikes();
+      if (generation !== accountGeneration) return;
       const serverDislikes = Array.isArray(data?.dislikes) ? data.dislikes : [];
       setDislikes(serverDislikes);
     } else {
@@ -944,6 +975,7 @@ async function loadDislikes() {
         setDislikes(localDislikes);
       }
       const data = await fetchDislikes();
+      if (generation !== accountGeneration) return;
       const serverDislikes = data?.dislikes || [];
       const map = new Map();
       serverDislikes.forEach(d => { if (d && d.id) map.set(d.id, d); });
@@ -962,12 +994,13 @@ async function loadDislikes() {
 }
 
 async function refreshAllUserData() {
+  const generation = accountGeneration;
   await Promise.allSettled([
-    loadUserSettings(),
-    loadFavorites(),
-    loadFavoriteAuthors(),
-    loadLikes(),
-    loadDislikes()
+    loadUserSettings(generation),
+    loadFavorites(generation),
+    loadFavoriteAuthors(generation),
+    loadLikes(generation),
+    loadDislikes(generation)
   ]);
   updateFavoritesBadge();
   renderPresetsList();
@@ -1827,9 +1860,11 @@ async function performSearch(reset = false, options = {}) {
     if (state.hasMore && state.currentCategory !== 'random' && state.currentCategory !== 'favorites' && state.currentCategory !== 'following') {
       scheduleNextPagePrefetch();
     }
+    return { success: true };
   } catch (err) {
     console.error('Ошибка поиска:', err);
-    if (seq !== searchSeq) return;
+    if (seq !== searchSeq) return { success: false, superseded: true };
+    state.lastSearchFailed = true;
     if (reset) {
       state.posts = [];
       state.lastSearchFailed = true;
@@ -1839,6 +1874,7 @@ async function performSearch(reset = false, options = {}) {
       state.hasMore = true;
     }
     galleryInstance.renderGallery(false);
+    return { success: false, error: err };
   } finally {
     if (seq === searchSeq) {
       state.isLoading = false;
@@ -2188,8 +2224,12 @@ function setupEventListeners() {
       btnRefreshSearch.classList.add('refreshing');
       try {
         window.scrollTo({ top: 0, behavior: 'smooth' });
-        await performSearch(true, { bustCache: true });
-        showToast(t('app.searchRefreshed', 'Поиск обновлен'));
+        const result = await performSearch(true, { bustCache: true });
+        if (result?.success) {
+          showToast(t('app.searchRefreshed', 'Поиск обновлен'));
+        } else if (!result?.superseded) {
+          showToast(t('app.searchRefreshFailed', 'Ошибка при обновлении поиска'), 'error');
+        }
       } catch (e) {
         showToast(t('app.searchRefreshFailed', 'Ошибка при обновлении поиска'));
       } finally {

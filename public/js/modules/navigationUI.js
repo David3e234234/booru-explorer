@@ -2,7 +2,7 @@ import { state } from '../state.js';
 import { closeAllDrawers } from './drawers.js';
 import { fetchSites } from '../api.js';
 import { persistSettings } from './settingsModal.js';
-import { showToast } from './uiUtils.js';
+import { showToast, escapeHtml, toSafeCssColor } from './uiUtils.js';
 import { t } from '../i18n.js';
 
 let customSourcesCallbacks = null;
@@ -80,8 +80,8 @@ export function renderSitesBar({ onSelectSite }) {
     const item = document.createElement('div');
     item.className = `source-item ${state.currentSite === site.id ? 'active' : ''}`;
     item.innerHTML = `
-      <span class="source-dot" style="background-color: ${site.accentColor || 'var(--text-muted)'}"></span>
-      <span>${site.name}</span>
+      <span class="source-dot" style="background-color: ${toSafeCssColor(site.accentColor)}"></span>
+      <span>${escapeHtml(site.name)}</span>
     `;
     item.addEventListener('click', () => {
       onSelectSite(site.id);
@@ -146,10 +146,10 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
     card.className = `source-mobile-card ${state.currentSite === site.id ? 'active' : ''}`;
     card.innerHTML = `
       <div class="source-mobile-title-wrap">
-        <span class="source-dot" style="background-color: ${site.accentColor || 'var(--text-muted)'}"></span>
-        <span class="source-mobile-name" title="${site.name}">${site.name}</span>
+        <span class="source-dot" style="background-color: ${toSafeCssColor(site.accentColor)}"></span>
+        <span class="source-mobile-name" title="${escapeHtml(site.name)}">${escapeHtml(site.name)}</span>
       </div>
-      <span class="source-mobile-badge">${(site.id || '').toUpperCase()}</span>
+      <span class="source-mobile-badge">${escapeHtml((site.id || '').toUpperCase())}</span>
     `;
     card.addEventListener('click', () => {
       onSelectSite(site.id);
@@ -201,14 +201,14 @@ function renderCustomSourcesCheckboxes() {
     const card = document.createElement('label');
     card.className = `custom-source-choice ${isChecked ? 'selected' : ''}`;
     card.innerHTML = `
-      <input type="checkbox" class="custom-source-checkbox" data-site="${site.id}" ${isChecked ? 'checked' : ''}>
+      <input type="checkbox" class="custom-source-checkbox" data-site="${escapeHtml(site.id)}" ${isChecked ? 'checked' : ''}>
       <div class="custom-source-choice-content">
         <div class="custom-source-choice-head">
-          <span class="source-dot" style="background-color: ${site.accentColor || 'var(--text-muted)'}"></span>
-          <span class="custom-source-name">${site.name}</span>
-          <span class="custom-source-badge">${(site.rating === 'nsfw' ? '18+' : (site.rating === 'safe' ? 'SFW' : 'MIX'))}</span>
+          <span class="source-dot" style="background-color: ${toSafeCssColor(site.accentColor)}"></span>
+          <span class="custom-source-name">${escapeHtml(site.name)}</span>
+          <span class="custom-source-badge">${escapeHtml(site.rating === 'nsfw' ? '18+' : (site.rating === 'safe' ? 'SFW' : 'MIX'))}</span>
         </div>
-        <p class="custom-source-desc">${site.description || ''}</p>
+        <p class="custom-source-desc">${escapeHtml(site.description || '')}</p>
       </div>
     `;
 

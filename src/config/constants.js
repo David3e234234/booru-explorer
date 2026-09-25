@@ -18,7 +18,9 @@ export const PORT = getPort();
 export const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
 
 // Storage and cache directories
-export const DATA_DIR = isServerless ? path.join(os.tmpdir(), 'booru_data') : path.join(ROOT_DIR, 'data');
+export const DATA_DIR = process.env.BOORU_DATA_DIR
+  ? path.resolve(process.env.BOORU_DATA_DIR)
+  : (isServerless ? path.join(os.tmpdir(), 'booru_data') : path.join(ROOT_DIR, 'data'));
 export const CACHE_DIR = path.join(DATA_DIR, 'cache');
 export const THUMBS_DIR = path.join(CACHE_DIR, 'thumbnails');
 export const VIDEOS_DIR = path.join(CACHE_DIR, 'videos');
@@ -287,6 +289,9 @@ export const SECRET_SETTING_FIELDS = [
   'konachanLogin', 'konachanPassword',
   'yandereLogin', 'yanderePassword',
   'pawchiveSession', 'kemonoSession',
+  'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy',
+  'konachanProxy', 'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy',
+  'tbibProxy', 'pawchiveProxy', 'kemonoProxy',
   'telegramBotToken', 'telegramChatId'
 ];
 

@@ -3,6 +3,7 @@ import path from 'path';
 import { fetchSafe, discardResponse } from './network.js';
 import { extractAuthor as extractAuthorFromSource, decodeHtmlEntities } from './tagHelpers.js';
 import { getSettings } from '../services/storageService.js';
+import { CACHE_DIR } from '../config/constants.js';
 
 // Cache of the global tag map (1 = artist, 3 = copyright, 4 = character, 0 = general, 6 = meta)
 let globalTagMap = null;
@@ -10,7 +11,6 @@ let isLoadingMap = null;
 let lastFetchedTime = 0;
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const CACHE_DIR = path.resolve('data/cache');
 const TAGS_SUMMARY_CACHE_FILE = path.join(CACHE_DIR, 'tags_summary.json');
 
 export const KNOWN_EXTRA_TAGS = {

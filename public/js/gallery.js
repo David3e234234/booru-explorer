@@ -11,7 +11,7 @@ import {
   restoreInterestTag
 } from './state.js';
 import { getProxiedUrl, getAuthHeaders, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
-import { showToast, showActionToast, haptic, isVideoMediaUrl, upsertCardDurationBadge, escapeHtml } from './modules/uiUtils.js';
+import { showToast, showActionToast, haptic, isVideoMediaUrl, upsertCardDurationBadge, escapeHtml, toSafeImageUrl, toSafeHttpUrl } from './modules/uiUtils.js';
 import { t } from './i18n.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onAuthorSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite, onFindSimilar }) {
@@ -693,6 +693,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     card.className = 'media-card';
     card.dataset.index = index;
     card.dataset.postId = post.id;
+    card.setAttribute('role', 'button');
+    card.setAttribute('tabindex', '0');
+    card.setAttribute('aria-label', t('gal.openPost', 'Открыть пост'));
     card._post = post;
 
     const isVideoExt = isVideoMediaUrl;
@@ -769,15 +772,16 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us')))
       ? true
       : (state.settings?.proxyThumbnails !== false);
-    let mainThumbSrc = directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '';
+    let mainThumbSrc = toSafeImageUrl(directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '');
 
     // Archive-only posts have no source preview - show a generated ZIP placeholder
     if (!mainThumbSrc && post.isArchive) {
       mainThumbSrc = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="14" fill="#232a36"/><path d="M38 26h30l16 16v50a8 8 0 0 1-8 8H38a8 8 0 0 1-8-8V34a8 8 0 0 1 8-8z" fill="#f97316" opacity="0.92"/><path d="M68 26v16h16" fill="#c2410c"/><text x="60" y="88" font-family="Arial,sans-serif" font-size="17" font-weight="bold" fill="#fff" text-anchor="middle">ZIP</text></svg>');
     }
 
-    const siteName = post.siteName || (post.site ? post.site.toUpperCase() : '');
-    const siteBadge = siteName ? `<span class="badge-site site-${post.site}">${siteName}</span>` : '';
+    const siteName = escapeHtml(post.siteName || (post.site ? post.site.toUpperCase() : ''));
+    const safeSiteClass = escapeHtml(/^[a-z0-9_-]+$/i.test(String(post.site || '')) ? `site-${post.site}` : 'site-unknown');
+    const siteBadge = siteName ? `<span class="badge-site ${safeSiteClass}">${siteName}</span>` : '';
 
     let formatBadge = '';
     if (post.isVideo) {
@@ -820,13 +824,13 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       : '';
 
     const authorChip = cleanAuthor
-      ? `<div class="card-author-chip" data-author="${escapeHtml(cleanAuthor)}" title="${escapeHtml(t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor))}"><svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-user"/></svg><span class="card-author-name">${escapeHtml(cleanAuthor)}</span>${assistantsBadge}</div>`
+      ? `<button type="button" class="card-author-chip" data-author="${escapeHtml(cleanAuthor)}" title="${escapeHtml(t('gal.authorBadge.title', 'Автор: {name} (нажмите для поиска)').replace('{name}', cleanAuthor))}"><svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-user"/></svg><span class="card-author-name">${escapeHtml(cleanAuthor)}</span>${assistantsBadge}</button>`
       : `<div class="card-author-spacer"></div>`;
 
     let durationBadge = '';
     if (post.isVideo && (post.durationText || post.duration > 0)) {
-      const durLabel = post.durationText || `${Math.floor(post.duration / 60)}:${Math.floor(post.duration % 60) < 10 ? '0' : ''}${Math.floor(post.duration % 60)}`;
-      durationBadge = `<span class="badge-format badge-duration" title="${t('gal.durationBadge.title', 'Длительность: {d}').replace('{d}', durLabel)}">${durLabel}</span>`;
+      const durLabel = escapeHtml(post.durationText || `${Math.floor(post.duration / 60)}:${Math.floor(post.duration % 60) < 10 ? '0' : ''}${Math.floor(post.duration % 60)}`);
+      durationBadge = `<span class="badge-format badge-duration" title="${escapeHtml(t('gal.durationBadge.title', 'Длительность: {d}').replace('{d}', durLabel))}">${durLabel}</span>`;
     }
 
     let matchBadge = '';
@@ -834,7 +838,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       const matchedInfo = (Array.isArray(post.matchedTags) && post.matchedTags.length > 0)
         ? `&#10;${escapeHtml(t('gal.matchTagsInfo', 'Совпало: {tags}').replace('{tags}', post.matchedTags.join(', ')))}`
         : '';
-      matchBadge = `<button type="button" class="badge-format match-percent btn-match-popover" title="${t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%. Нажмите для деталей').replace('{p}', post.matchPercent)}${matchedInfo}">${post.matchPercent}%</button>`;
+      matchBadge = `<button type="button" class="badge-format match-percent btn-match-popover" title="${escapeHtml(t('gal.matchBadge.title', 'Совпадение со вкусами: {p}%. Нажмите для деталей').replace('{p}', String(Number(post.matchPercent) || 0)))}${matchedInfo}">${escapeHtml(String(Number(post.matchPercent) || 0))}%</button>`;
     }
 
     let albumBadge = '';
@@ -858,6 +862,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     const isFav = isPostFavorite(post.id);
     const isLiked = isPostLiked(post.id);
+    const safePostId = escapeHtml(post.id || '');
+    const safeMainThumbSrc = escapeHtml(mainThumbSrc);
+    const safeDirectThumb = escapeHtml(toSafeImageUrl(directThumb));
+    const safeScore = escapeHtml(String(Number(post.score) || 0));
+    const safeViews = escapeHtml(String(post.viewsText || formatCompactNumber(post.views) || 0));
+    const safeFavCount = escapeHtml(String(Number(post.favCount) || 0));
 
     card.innerHTML = `
       <div class="media-thumb-container">
@@ -875,46 +885,46 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           </div>
         </div>
 
-        <img class="media-thumb" 
-             src="${mainThumbSrc}" 
-             alt="" 
-             loading="lazy" 
+        <img class="media-thumb"
+             src="${safeMainThumbSrc}"
+             alt=""
+             loading="lazy"
              decoding="async"
              referrerpolicy="no-referrer"
-             data-fallback="${directThumb}">
+             data-fallback="${safeDirectThumb}">
         
         ${post.isVideo ? `<video class="hover-video-preview" loop muted playsinline preload="none" referrerpolicy="no-referrer"></video>` : ''}
 
         <div class="card-overlay-bottom">
           <div class="card-overlay-row-top">
             ${authorChip}
-            <div class="card-score" title="${t('gal.scoreBadge.title', 'Оценка / Рейтинг: {n}').replace('{n}', post.score || 0)}">
+            <div class="card-score" title="${escapeHtml(t('gal.scoreBadge.title', 'Оценка / Рейтинг: {n}').replace('{n}', safeScore))}">
               <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-star-filled"/></svg>
-              <span>${post.score || 0}</span>
+              <span>${safeScore}</span>
             </div>
           </div>
           <div class="card-overlay-row-bottom">
             <div class="card-meta-indicators">
               ${(post.views > 0 || post.viewsText) ? `
-                <div class="card-views" title="${t('gal.viewsBadge.title', 'Просмотры: {n}').replace('{n}', post.viewsText || post.views)}">
+                <div class="card-views" title="${escapeHtml(t('gal.viewsBadge.title', 'Просмотры: {n}').replace('{n}', safeViews))}">
                   <svg width="12" height="12" viewBox="0 0 24 24"><use href="#ic-eye"/></svg>
-                  <span>${post.viewsText || formatCompactNumber(post.views)}</span>
+                  <span>${safeViews}</span>
                 </div>
               ` : (post.favCount > 0 ? `
-                <div class="card-views card-favs" title="${t('gal.favsBadge.title', 'В закладках: {n}').replace('{n}', post.favCount)}">
+                <div class="card-views card-favs" title="${escapeHtml(t('gal.favsBadge.title', 'В закладках: {n}').replace('{n}', safeFavCount))}">
                   <svg width="11" height="11" viewBox="0 0 24 24"><use href="#ic-bookmark-filled"/></svg>
-                  <span>${formatCompactNumber(post.favCount)}</span>
+                  <span>${safeFavCount}</span>
                 </div>
               ` : '')}
             </div>
             <div class="card-action-btns">
-              <button class="btn-card-action btn-card-dislike" data-post-id="${post.id}" title="${t('viewer.dislike.title', 'Не интересно (скрыть и меньше рекомендовать)')}">
+              <button class="btn-card-action btn-card-dislike" data-post-id="${safePostId}" title="${t('viewer.dislike.title', 'Не интересно (скрыть и меньше рекомендовать)')}">
                 <svg width="13" height="13" viewBox="0 0 24 24"><use href="#ic-dislike"/></svg>
               </button>
-              <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${post.id}" title="${isLiked ? t('gal.unlike.title', 'Убрать лайк') : t('gal.like.title', 'Нравится')}">
+              <button class="btn-card-action btn-card-like ${isLiked ? 'active' : ''}" data-post-id="${safePostId}" title="${isLiked ? t('gal.unlike.title', 'Убрать лайк') : t('gal.like.title', 'Нравится')}">
                 <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isLiked ? '#ic-heart-filled' : '#ic-heart'}"/></svg>
               </button>
-              <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${post.id}" title="${isFav ? t('gal.unfav.title', 'Удалить из закладок') : t('gal.fav.title', 'Сохранить в закладки')}">
+              <button class="btn-card-action btn-card-fav ${isFav ? 'active' : ''}" data-post-id="${safePostId}" title="${isFav ? t('gal.unfav.title', 'Удалить из закладок') : t('gal.fav.title', 'Сохранить в закладки')}">
                 <svg width="13" height="13" viewBox="0 0 24 24"><use href="${isFav ? '#ic-bookmark-filled' : '#ic-bookmark'}"/></svg>
               </button>
             </div>
@@ -926,16 +936,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const imgEl = card.querySelector('.media-thumb');
     if (imgEl) {
       imgEl.addEventListener('error', function () {
-        const fallback = this.dataset.fallback;
+        const fallback = toSafeImageUrl(this.dataset.fallback || '');
         const shouldProxy = state.settings?.proxyThumbnails !== false;
-        const proxyFallback = fallback ? (fallback.startsWith('/api/') ? fallback : (shouldProxy ? getProxiedUrl(fallback) : fallback)) : '';
+        const proxyFallback = fallback ? toSafeImageUrl(fallback.startsWith('/api/') ? fallback : (shouldProxy ? getProxiedUrl(fallback) : fallback)) : '';
 
         if (fallback && this.src !== fallback && !this.src.includes(fallback) && !this.src.includes(encodeURIComponent(fallback))) {
           this.src = fallback;
         } else if (proxyFallback && this.src !== proxyFallback && !this.src.includes('/api/proxy') && shouldProxy) {
           this.src = proxyFallback;
         } else if (post.previewUrl && !isVideoExt(post.previewUrl) && !this.src.includes(post.previewUrl) && !this.src.includes(encodeURIComponent(post.previewUrl))) {
-          this.src = shouldProxy ? getProxiedUrl(post.previewUrl) : post.previewUrl;
+          const previewFallback = toSafeImageUrl(shouldProxy ? getProxiedUrl(post.previewUrl) : post.previewUrl);
+          if (previewFallback) this.src = previewFallback;
         } else if (post.isVideo && !this.src.includes('/api/video-thumbnail')) {
           this.src = `/api/video-thumbnail?url=${encodeURIComponent(post.sampleUrl || post.fileUrl)}&quality=low`;
         } else {
@@ -1283,6 +1294,15 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     onOpenViewer(parseInt(card.dataset.index, 10));
   });
 
+  galleryGrid.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const card = e.target.closest('.media-card');
+    if (!card || e.target !== card) return;
+    e.preventDefault();
+    card._hasInteracted = true;
+    onOpenViewer(parseInt(card.dataset.index, 10));
+  });
+
   // Hover video previews via mouseover/mouseout delegation
   let hoverState = { card: null, timer: null, videoEl: null };
 
@@ -1344,6 +1364,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   });
 
   const HIDE_UNDO_WINDOW_MS = 6000;
+  const pendingMutations = new Map();
 
   function updateResultsCount() {
     const resultsCountEl = document.getElementById('resultsCount');
@@ -1351,6 +1372,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   }
 
   async function handleDislikeClick(post, card) {
+    const mutationKey = `dislike:${post.id}`;
+    if (pendingMutations.has(mutationKey)) return;
+    pendingMutations.set(mutationKey, true);
     toggleDislikeLocally(post);
 
     // Fade out smoothly and remove from DOM after the transition (280ms)
@@ -1379,22 +1403,37 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         }
         showToast(t('gal.hideUndone', 'Скрытие отменено'));
         try {
-          await toggleDislikeApi(post);
+          const result = await toggleDislikeApi(post, false);
+          if (!result?.success) throw new Error(result?.message || 'Не удалось отменить скрытие');
         } catch (err) {
           console.error('Ошибка отмены скрытого поста:', err);
+        } finally {
+          pendingMutations.delete(mutationKey);
         }
       },
       HIDE_UNDO_WINDOW_MS
     );
 
     try {
-      await toggleDislikeApi(post);
+      const result = await toggleDislikeApi(post, true);
+      if (!result?.success) throw new Error(result?.message || 'Не удалось скрыть пост');
     } catch (err) {
+      clearTimeout(removalTimer);
+      toggleDislikeLocally(post);
+      if (!state.posts.some(p => p.id === post.id)) state.posts.unshift(post);
+      card.classList.remove('card-hiding');
+      renderGallery(false, { preserveScroll: true });
+      showToast(t('gal.hideFailed', 'Не удалось скрыть пост'), 'error');
       console.error('Ошибка сохранения скрытого поста:', err);
+    } finally {
+      pendingMutations.delete(mutationKey);
     }
   }
 
   async function handleLikeClick(post, btn) {
+    const mutationKey = `like:${post.id}`;
+    if (pendingMutations.has(mutationKey)) return;
+    pendingMutations.set(mutationKey, true);
     const isLikedNow = toggleLikeLocally(post);
     const useEl = btn.querySelector('use');
     if (isLikedNow) {
@@ -1410,15 +1449,29 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
     if (onFavoriteToggle) onFavoriteToggle();
     try {
-      await toggleLikePost(post);
+      const result = await toggleLikePost(post, isLikedNow);
+      if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить лайк');
     } catch (err) {
+      toggleLikeLocally(post);
+      btn.classList.toggle('active', !isLikedNow);
+      if (useEl) useEl.setAttribute('href', isLikedNow ? '#ic-heart' : '#ic-heart-filled');
+      if (!isLikedNow && state.currentCategory === 'profile' && state.profileSubTab === 'likes' && !state.posts.some(p => p.id === post.id)) {
+        state.posts.unshift(post);
+        renderGallery(false, { preserveScroll: true });
+      }
+      showToast(t('gal.likeFailed', 'Не удалось сохранить лайк'), 'error');
       console.error('Ошибка лайка:', err);
+    } finally {
+      pendingMutations.delete(mutationKey);
     }
   }
 
   async function handleFavoriteClick(post, btn) {
+    const mutationKey = `favorite:${post.id}`;
+    if (pendingMutations.has(mutationKey)) return;
+    pendingMutations.set(mutationKey, true);
     try {
-      const res = await toggleFavoritePost(post);
+      const res = await toggleFavoritePost(post, !isPostFavorite(post.id));
       if (res.success) {
         const useEl = btn.querySelector('use');
         if (res.isFavorite) {
@@ -1439,7 +1492,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         if (onFavoriteToggle) onFavoriteToggle();
       }
     } catch (err) {
+      showToast(t('gal.favoriteFailed', 'Не удалось изменить закладки'), 'error');
       console.error('Ошибка избранного:', err);
+    } finally {
+      pendingMutations.delete(mutationKey);
     }
   }
 
@@ -1558,7 +1614,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const siteName = siteObj ? siteObj.name : (author.site ? author.site.toUpperCase() : 'Danbooru');
     const rawPreview = getAuthorPreviewByQuality(author);
     const shouldUseThumbProxy = (author.site === 'danbooru' || (rawPreview && rawPreview.includes('donmai.us'))) ? true : (state.settings?.proxyThumbnails !== false);
-    const preview = rawPreview ? (rawPreview.startsWith('/api/') ? rawPreview : (shouldUseThumbProxy ? getProxiedUrl(rawPreview) : rawPreview)) : '';
+    const preview = toSafeImageUrl(rawPreview ? (rawPreview.startsWith('/api/') ? rawPreview : (shouldUseThumbProxy ? getProxiedUrl(rawPreview) : rawPreview)) : '');
 
     let formattedDate = '';
     if (author.createdAt) {

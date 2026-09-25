@@ -182,7 +182,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
 
   if (shouldDeepFetch) {
     const minDesiredPosts = Math.min(limit || 100, 200);
-    const maxIterations = shouldDeepFetch ? Math.max(deepFetchPagesSetting * 2, 8) : 1;
+    const maxIterations = Math.min(6, Math.max(1, deepFetchPagesSetting));
     let currentCursor = '';
     let matchedCount = 0;
     

@@ -4,21 +4,26 @@
   "description": "Легковесный и современный Booru медиа-клиент с поддержкой видео, системы тегов и рекомендациями",
   "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/run-all.js"
+    "test": "node --test test/run-all.js",
+    "test:unit": "node --test test/unit",
+    "test:integration": "node --test test/integration/routes.test.js",
+    "verify": "npm test"
   },
   "dependencies": {
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "compression": "^1.8.1",
-    "cors": "^2.8.5",
-    "express": "^4.19.2",
+    "express": "^4.22.3",
     "https-proxy-agent": "^9.1.0",
     "node-stream-zip": "^1.16.0",
     "open": "^10.1.0",
     "qrcode-terminal": "^0.12.0",
     "socks-proxy-agent": "^10.1.0",
-    "undici": "^8.10.0"
+    "undici": "^8.11.2"
   },
   "keywords": [
     "booru",

@@ -8,6 +8,7 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
   const btnClear = document.getElementById('btnClearSearch');
 
   let debounceTimer = null;
+  let requestSeq = 0;
   let activeIndex = -1;
   let currentSuggestions = [];
   const suggestionsCache = new Map(); // Fast client-side suggestion cache
@@ -53,6 +54,7 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
 
     clearTimeout(debounceTimer);
     if (!val) {
+      requestSeq += 1;
       hideDropdown();
       return;
     }
@@ -69,8 +71,10 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
     }
 
     debounceTimer = setTimeout(async () => {
+      const seq = ++requestSeq;
       try {
         const data = await fetchTagAutocomplete(normalizedVal, state.currentSite);
+        if (seq !== requestSeq || normalizedVal !== searchInput.value.trim().replace(/\s+/g, '_')) return;
         currentSuggestions = data.tags || [];
         if (currentSuggestions.length > 0) {
           if (suggestionsCache.size > 200) {

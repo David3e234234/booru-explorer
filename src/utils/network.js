@@ -4,6 +4,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { fetch as undiciFetch, ProxyAgent, Socks5ProxyAgent } from 'undici';
 import { BOORU_USER_AGENT, BROWSER_USER_AGENT } from '../config/constants.js';
 import { logError, logInfo } from './logger.js';
+import { hostnameMatches, sanitizeLogUrl, siteFromHostname } from './hostPolicy.js';
 
 // Cache for active Undici Dispatchers keyed by normalized proxy URL.
 // Bounded on purpose: without a cap every proxy URL anyone tried pinned a
@@ -99,15 +100,14 @@ export function getProxyAgent(proxyUrl) {
     } else if (proto === 'http:' || proto === 'https:') {
       agent = new ProxyAgent(cleanUrl);
     } else {
-      logError('Proxy', `Неподдерживаемый протокол прокси: ${proto}`);
-      return null;
+      throw new Error(`Неподдерживаемый протокол прокси: ${proto}`);
     }
 
     rememberProxyAgent(cleanUrl, agent);
     return agent;
   } catch (err) {
-    logError('Proxy', `Ошибка инициализации прокси ${cleanUrl}`, err);
-    return null;
+    logError('Proxy', `Ошибка инициализации прокси ${sanitizeLogUrl(cleanUrl)}`, err);
+    throw err;
   }
 }
 
@@ -119,20 +119,8 @@ export function getProxyAgent(proxyUrl) {
 export function resolveSiteFromUrl(targetUrl) {
   if (!targetUrl || typeof targetUrl !== 'string') return null;
   try {
-    const h = (targetUrl.includes('://') ? new URL(targetUrl).hostname : targetUrl).toLowerCase();
-    if (h.includes('donmai.us')) return 'danbooru';
-    if (h.includes('gelbooru.com')) return 'gelbooru';
-    if (h.includes('rule34.xxx') || h.includes('paheal.net') || h.includes('paheal-cdn.net')) return 'rule34';
-    if (h.includes('rule34video.com') || h.includes('boomio-cdn.com')) return 'rule34video';
-    if (h.includes('yande.re')) return 'yandere';
-    if (h.includes('konachan')) return 'konachan';
-    if (h.includes('safebooru.org')) return 'safebooru';
-    if (h.includes('xbooru.com')) return 'xbooru';
-    if (h.includes('hypnohub.net')) return 'hypnohub';
-    if (h.includes('tbib.org')) return 'tbib';
-    if (h.includes('pawchive.pw') || h.includes('pawchive.st')) return 'pawchive';
-    if (h.includes('kemono.cr') || h.includes('kemono.su') || h.includes('kemono.party')) return 'kemono';
-    return null;
+    const hostname = targetUrl.includes('://') ? new URL(targetUrl).hostname : targetUrl;
+    return siteFromHostname(hostname);
   } catch {
     return null;
   }
@@ -161,13 +149,9 @@ export function getProxyForSite(site, settings) {
 
 // ── SSRF guard ──────────────────────────────────────────────────────────────
 // Every user-controlled URL that leaves this process (media proxy, ffmpeg input,
-// AI embeddings, downloads) must pass through here first. It rejects non-http(s)
-// schemes and any address that lands inside the local network or on a cloud
-// metadata endpoint (169.254.169.254).
-// The host checks read the URL literally, so `isSafeExternalUrlResolved` adds the
-// name-based half for request-supplied URLs, and `fetchSafe` runs every redirect
-// hop through the same checks. Rebinding (a resolver that answers differently
-// between this check and the connect) stays out of reach either way.
+// server-side download) must pass through here. Literal checks reject non-http(s)
+// schemes and local names, while `isSafeExternalUrlResolved` also rejects hostnames
+// whose DNS records point into the local network. Every redirect hop is re-checked.
 const IPV4_LITERAL = /^(\d{1,3}(?:\.\d{1,3}){3})$/;
 
 // `new URL` keeps the root dot of an FQDN, so "localhost." arrives with a trailing
@@ -285,12 +269,9 @@ export function isSafeExternalUrl(rawUrl) {
   return host.includes('.');
 }
 
-// Name-based half of the guard. The literal checks above cannot see where a
-// hostname points, and an A record aimed at 127.0.0.1 or 169.254.169.254 passes
-// them. IP literals are classified without resolving, and a resolver error or a
-// timeout counts as unknown and lets the request through: the connection would
-// fail on its own, while blocking would take every hostname down whenever the
-// local resolver is briefly unavailable.
+// Name-based half of the guard. Literal checks cannot see where a hostname points.
+// A resolver error or timeout is treated as blocked: failing open turns a DNS
+// outage into an SSRF bypass on the next resolution attempt.
 const HOST_LOOKUP_TIMEOUT_MS = 1000;
 const HOST_VERDICT_TTL_MS = 60000;
 const HOST_VERDICT_UNKNOWN_TTL_MS = 15000;
@@ -352,7 +333,7 @@ export async function isSafeExternalUrlResolved(rawUrl) {
   if (host.includes(':') || IPV4_LITERAL.test(host)) return true;
 
   const verdict = await hostVerdict(host);
-  return verdict !== 'private';
+  return verdict === 'public';
 }
 
 export function safeJsonParse(text, fallback = null) {
@@ -501,6 +482,13 @@ export async function fetchSafe(url, options = {}) {
   };
 
   try {
+    // Literal check only: it is deterministic and never touches DNS, which keeps
+    // MockAgent-based tests offline. Every caller that accepts a user-supplied URL
+    // must run isSafeExternalUrlResolved() first (proxy, video, download routes).
+    if (!isSafeExternalUrl(url)) {
+      return new Response('URL не разрешён', { status: 403 });
+    }
+
     // Resolve proxy dispatcher
     let dispatcher = externalDispatcher || null;
     if (!dispatcher) {
@@ -526,8 +514,15 @@ export async function fetchSafe(url, options = {}) {
     delete requestExtras.headers;
 
     for (let hop = 0; ; hop++) {
-      const isDanbooru = typeof requestUrl === 'string' && requestUrl.includes('donmai.us');
-      const isKemonoApi = typeof requestUrl === 'string' && (requestUrl.includes('kemono.cr/api/') || requestUrl.includes('kemono.su/api/') || requestUrl.includes('coomer.st/api/'));
+      let hopSite = null;
+      let hopPath = '';
+      try {
+        const hopUrl = new URL(requestUrl);
+        hopSite = siteFromHostname(hopUrl.hostname);
+        hopPath = hopUrl.pathname;
+      } catch {}
+      const isDanbooru = hopSite === 'danbooru';
+      const isKemonoApi = hopSite === 'kemono' && (hopPath.startsWith('/api/') || hopPath.startsWith('/api'));
       const defaultUa = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
       const defaultAccept = isKemonoApi ? 'text/css' : (isDanbooru ? 'application/json, text/xml, text/html, */*' : '*/*');
 
@@ -633,37 +628,23 @@ export function resolveSiteReferer(targetUrl) {
   try {
     const parsed = new URL(targetUrl);
     const h = parsed.hostname;
-    if (h.includes('rule34video.com') || h.includes('boomio-cdn.com')) return 'https://rule34video.com/';
-    if (h.includes('paheal.net') || h.includes('paheal-cdn.net')) return 'https://rule34.paheal.net/';
-    if (h.includes('rule34.xxx')) return 'https://rule34.xxx/';
-    if (h.includes('donmai.us')) return 'https://danbooru.donmai.us/';
-    if (h.includes('yande.re')) return 'https://yande.re/';
-    if (h.includes('konachan')) return 'https://konachan.com/';
-    if (h.includes('gelbooru.com')) return 'https://gelbooru.com/';
-    if (h.includes('safebooru.org')) return 'https://safebooru.org/';
-    if (h.includes('xbooru.com')) return 'https://xbooru.com/';
-    if (h.includes('hypnohub.net')) return 'https://hypnohub.net/';
-    if (h.includes('tbib.org')) return 'https://tbib.org/';
-    if (h.includes('pawchive.pw') || h.includes('pawchive.st')) return 'https://pawchive.pw/';
-    if (h.includes('kemono.cr') || h.includes('kemono.su') || h.includes('kemono.party')) return 'https://kemono.cr/';
+    if (hostnameMatches(h, 'rule34video.com') || hostnameMatches(h, 'boomio-cdn.com')) return 'https://rule34video.com/';
+    if (hostnameMatches(h, 'paheal.net') || hostnameMatches(h, 'paheal-cdn.net')) return 'https://rule34.paheal.net/';
+    if (hostnameMatches(h, 'rule34.xxx')) return 'https://rule34.xxx/';
+    if (hostnameMatches(h, 'donmai.us')) return 'https://danbooru.donmai.us/';
+    if (hostnameMatches(h, 'yande.re')) return 'https://yande.re/';
+    if (hostnameMatches(h, 'konachan.net') || hostnameMatches(h, 'konachan.com')) return 'https://konachan.com/';
+    if (hostnameMatches(h, 'gelbooru.com')) return 'https://gelbooru.com/';
+    if (hostnameMatches(h, 'safebooru.org')) return 'https://safebooru.org/';
+    if (hostnameMatches(h, 'xbooru.com')) return 'https://xbooru.com/';
+    if (hostnameMatches(h, 'hypnohub.net')) return 'https://hypnohub.net/';
+    if (hostnameMatches(h, 'tbib.org')) return 'https://tbib.org/';
+    if (hostnameMatches(h, 'pawchive.pw') || hostnameMatches(h, 'pawchive.st')) return 'https://pawchive.pw/';
+    if (hostnameMatches(h, 'kemono.cr') || hostnameMatches(h, 'kemono.su') || hostnameMatches(h, 'kemono.party')) return 'https://kemono.cr/';
     return `${parsed.protocol}//${parsed.host}/`;
   } catch {
     return 'https://danbooru.donmai.us/';
   }
-}
-
-export function getFfmpegHeaders(targetUrl, currentSettings = {}) {
-  let authHeader = '';
-  let isDanbooru = false;
-  try {
-    const parsed = new URL(targetUrl);
-    isDanbooru = parsed.hostname.includes('donmai.us');
-    if (isDanbooru && currentSettings.danbooruLogin && currentSettings.danbooruApiKey) {
-      authHeader = `Authorization: Basic ${Buffer.from(`${currentSettings.danbooruLogin}:${currentSettings.danbooruApiKey}`).toString('base64')}\r\n`;
-    }
-  } catch {}
-  const ua = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
-  return `User-Agent: ${ua}\r\nReferer: ${resolveSiteReferer(targetUrl)}\r\n${authHeader}`;
 }
 
 export function resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo) {

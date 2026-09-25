@@ -22,6 +22,25 @@ function stripAccountSecrets(account) {
   return safe;
 }
 
+function stripBackupPost(post) {
+  if (!post || typeof post !== 'object') return post;
+  const clean = { ...post };
+  delete clean.password;
+  delete clean.archivePassword;
+  if (Array.isArray(clean.inspectedLinks)) {
+    clean.inspectedLinks = clean.inspectedLinks.map((link) => {
+      if (!link || typeof link !== 'object') return link;
+      const { password: _password, ...safeLink } = link;
+      return safeLink;
+    });
+  }
+  return clean;
+}
+
+function stripBackupPosts(posts) {
+  return Array.isArray(posts) ? posts.map(stripBackupPost) : posts;
+}
+
 /**
  * Check connectivity to the Telegram bot and send a test message
  */
@@ -163,9 +182,9 @@ export function buildBackupPayload(userId = null) {
     },
     data: {
       settings: stripSecretSettings(settings),
-      favorites,
-      likes,
-      dislikes,
+      favorites: stripBackupPosts(favorites),
+      likes: stripBackupPosts(likes),
+      dislikes: stripBackupPosts(dislikes),
       favoriteAuthors
     }
   };
@@ -174,7 +193,21 @@ export function buildBackupPayload(userId = null) {
 /**
  * Run the backup and send it to Telegram
  */
+const backupInFlight = new Map();
+
 export async function performTelegramBackup(userId = null, isManual = false) {
+  const key = userId || 'default';
+  if (backupInFlight.has(key)) return backupInFlight.get(key);
+  const task = performTelegramBackupInternal(userId, isManual);
+  backupInFlight.set(key, task);
+  try {
+    return await task;
+  } finally {
+    if (backupInFlight.get(key) === task) backupInFlight.delete(key);
+  }
+}
+
+async function performTelegramBackupInternal(userId, isManual) {
   const settings = getSettings(userId);
   const token = (settings.telegramBotToken || '').trim();
   const chatId = (settings.telegramChatId || '').trim();
@@ -258,38 +291,37 @@ async function checkAndRunBackupForUser(userId = null) {
  * Initialize the background backup scheduler
  */
 let schedulerIntervalId = null;
+let schedulerCheckRunning = false;
 
 export function initBackupScheduler() {
   if (schedulerIntervalId) return;
 
   logInfo('Backup', 'Фоновый сервис автобэкапа в Telegram инициализирован');
 
-  // First check 1 minute after server startup
-  setTimeout(async () => {
-    await runSchedulerCheck();
-  }, 60 * 1000);
+  setTimeout(() => { void runSchedulerCheck(); }, 60 * 1000);
 
-  // Recurring check every 30 minutes
-  schedulerIntervalId = setInterval(async () => {
-    await runSchedulerCheck();
-  }, 30 * 60 * 1000);
+  schedulerIntervalId = setInterval(() => { void runSchedulerCheck(); }, 30 * 60 * 1000);
 }
 
 async function runSchedulerCheck() {
-  // 1. Check the global user (single-user)
-  await checkAndRunBackupForUser(null);
-
-  // 2. Check registered users
+  if (schedulerCheckRunning) return;
+  schedulerCheckRunning = true;
   try {
-    const users = getUsersList();
-    if (Array.isArray(users)) {
-      for (const u of users) {
-        if (u && u.id) {
-          await checkAndRunBackupForUser(u.id);
+    await checkAndRunBackupForUser(null);
+
+    try {
+      const users = getUsersList();
+      if (Array.isArray(users)) {
+        for (const u of users) {
+          if (u && u.id) {
+            await checkAndRunBackupForUser(u.id);
+          }
         }
       }
+    } catch (err) {
+      logError('Backup', 'Ошибка проверки списка пользователей для автобэкапа:', err);
     }
-  } catch (err) {
-    logError('Backup', 'Ошибка проверки списка пользователей для автобэкапа:', err);
+  } finally {
+    schedulerCheckRunning = false;
   }
 }

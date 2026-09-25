@@ -1,7 +1,8 @@
 import express from 'express';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR, PORT } from '../config/constants.js';
+import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
+import { getRuntimePort } from '../utils/runtimeState.js';
 import { 
   getSettings, 
   updateSettings, 
@@ -27,8 +28,9 @@ import {
 } from '../services/cacheService.js';
 import { getLocalIpAddress } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
-import { authMiddleware, requireAuth } from '../services/userService.js';
+import { authMiddleware, requireAuth, requireOwner } from '../services/userService.js';
 import { testTelegramBot, performTelegramBackup } from '../services/backupService.js';
+import { sanitizeSettingsPatch, parseRequestAuth, resolveRequestSettings } from '../utils/settingsValidation.js';
 
 const router = express.Router();
 
@@ -47,6 +49,7 @@ function sanitizeStoredPost(post) {
   delete clean._archiveUnpacked;
   delete clean._archivePromise;
   delete clean._unpackedZips;
+  delete clean.desiredState;
   return clean;
 }
 
@@ -61,34 +64,12 @@ router.get('/settings', (req, res) => {
   res.json({ success: true, settings: userId ? settings : stripSecretSettings(settings) });
 });
 
-// Server-level proxy settings: `globalProxy` and every `<site>Proxy`. They reroute
-// all outbound traffic of this process - including the Basic-auth credentials it
-// sends to Danbooru - so an anonymous LAN caller must not be able to write them.
-// Deliberately not part of SECRET_SETTING_FIELDS: that list also drives GET
-// responses and Telegram backups, where the owner's proxies must survive.
-function stripProxySettings(settings) {
-  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return settings;
-  const safe = { ...settings };
-  // Catches globalProxy and every `<site>Proxy`; the client-side proxyThumbnails /
-  // proxyVideos / proxyDownloads toggles do not match and stay writable anonymously
-  for (const key of Object.keys(safe)) {
-    if (key.endsWith('Proxy')) delete safe[key];
-  }
-  return safe;
-}
-
 // POST /api/settings
 router.post('/settings', (req, res) => {
   const userId = req.user?.id || null;
-  // Credentials are only persisted for a signed-in account. Accepting them from
-  // an anonymous caller let anyone on the network repoint telegramBotToken /
-  // telegramChatId at their own bot and have the next scheduled backup deliver
-  // the whole database to them.
-  const incoming = userId
-    ? (req.body || {})
-    : stripProxySettings(stripSecretSettings(req.body || {}));
+  const incoming = sanitizeSettingsPatch(req.body || {}, { anonymous: !userId });
   const updated = updateSettings(incoming, userId);
-  if (req.body && req.body.maxServerCacheMb !== undefined) {
+  if (incoming.maxServerCacheMb !== undefined) {
     cleanDiskCacheIfNeeded();
   }
   res.json({ success: true, settings: userId ? updated : stripSecretSettings(updated) });
@@ -109,18 +90,21 @@ router.post('/favorites', (req, res) => {
   const userId = req.user?.id || null;
   const favorites = getFavorites(userId);
   const existsIndex = favorites.findIndex(f => f.id === post.id);
-  const clientAuth = parseClientAuth(req);
-  const settings = { ...getSettings(userId), ...clientAuth, ...(req.body?.settings || {}) };
-  let isFavorite = false;
+  const clientAuth = parseRequestAuth(req);
+  const settings = resolveRequestSettings(getSettings(userId), clientAuth);
+  const desiredState = typeof post.desiredState === 'boolean' ? post.desiredState : null;
+  let isFavorite;
 
-  if (existsIndex >= 0) {
+  if (existsIndex >= 0 && (desiredState === false || desiredState === null)) {
     favorites.splice(existsIndex, 1);
     saveFavorites(favorites, userId);
     isFavorite = false;
-  } else {
+  } else if (existsIndex === -1 && (desiredState === true || desiredState === null)) {
     favorites.unshift({ ...sanitizeStoredPost(post), savedAt: new Date().toISOString() });
     saveFavorites(favorites, userId);
     isFavorite = true;
+  } else {
+    isFavorite = existsIndex !== -1;
   }
 
   // Background push to the Booru API
@@ -158,7 +142,7 @@ router.delete('/favorites/:id', (req, res) => {
   saveFavorites(filtered, userId);
 
   if (target) {
-    const clientAuth = parseClientAuth(req);
+    const clientAuth = parseRequestAuth(req);
     const settings = { ...getSettings(userId), ...clientAuth };
     sendBooruFavorite(target.site || 'danbooru', target, false, settings).catch(() => {});
   }
@@ -191,7 +175,7 @@ router.post('/favorite-authors', (req, res) => {
   const userId = req.user?.id || null;
   const authors = getFavoriteAuthors(userId);
   const existsIndex = authors.findIndex(a => (a.name || '').toLowerCase() === cleanName);
-  const clientAuth = parseClientAuth(req);
+  const clientAuth = parseRequestAuth(req);
   const settings = { ...getSettings(userId), ...clientAuth, ...(req.body?.settings || {}) };
 
   if (existsIndex >= 0) {
@@ -244,7 +228,7 @@ router.delete('/favorite-authors/:name', (req, res) => {
   const filtered = authors.filter(a => (a.name || '').toLowerCase() !== rawName);
   saveFavoriteAuthors(filtered, userId);
 
-  const clientAuth = parseClientAuth(req);
+  const clientAuth = parseRequestAuth(req);
   const settings = { ...getSettings(userId), ...clientAuth };
   sendBooruAuthorFollow(target?.site || 'danbooru', target || rawName, false, settings).catch(() => {});
 
@@ -318,18 +302,21 @@ router.post('/like', async (req, res) => {
   const userId = req.user?.id || null;
   const likes = getLikes(userId);
   const existsIndex = likes.findIndex(l => l.id === post.id);
-  const clientAuth = parseClientAuth(req);
-  const settings = { ...getSettings(userId), ...clientAuth, ...(req.body?.settings || {}) };
-  let isLiked = false;
+  const clientAuth = parseRequestAuth(req);
+  const settings = resolveRequestSettings(getSettings(userId), clientAuth);
+  const desiredState = typeof post.desiredState === 'boolean' ? post.desiredState : null;
+  let isLiked;
 
-  if (existsIndex >= 0) {
+  if (existsIndex >= 0 && (desiredState === false || desiredState === null)) {
     likes.splice(existsIndex, 1);
     saveLikes(likes, userId);
     isLiked = false;
-  } else {
+  } else if (existsIndex === -1 && (desiredState === true || desiredState === null)) {
     likes.unshift({ ...sanitizeStoredPost(post), likedAt: new Date().toISOString() });
     saveLikes(likes, userId);
     isLiked = true;
+  } else {
+    isLiked = existsIndex !== -1;
   }
 
   // Background push to the Booru API
@@ -370,16 +357,19 @@ router.post('/dislike', async (req, res) => {
   const userId = req.user?.id || null;
   const dislikes = getDislikes(userId);
   const existsIndex = dislikes.findIndex(d => d.id === post.id);
-  let isDisliked = false;
+  const desiredState = typeof post.desiredState === 'boolean' ? post.desiredState : null;
+  let isDisliked;
 
-  if (existsIndex >= 0) {
+  if (existsIndex >= 0 && (desiredState === false || desiredState === null)) {
     dislikes.splice(existsIndex, 1);
     saveDislikes(dislikes, userId);
     isDisliked = false;
-  } else {
+  } else if (existsIndex === -1 && (desiredState === true || desiredState === null)) {
     dislikes.unshift({ ...sanitizeStoredPost(post), dislikedAt: new Date().toISOString() });
     saveDislikes(dislikes, userId);
     isDisliked = true;
+  } else {
+    isDisliked = existsIndex !== -1;
   }
 
   return res.json({ success: true, isDisliked, count: dislikes.length });
@@ -435,7 +425,7 @@ router.get('/cache-info', async (req, res) => {
 // POST /api/cache-clear - wipes the RAM cache and every cached file on disk.
 // Destructive and server-wide, so it is gated the same way as /tunnel below:
 // anyone on the LAN could otherwise drop the whole cache with one anonymous POST.
-router.post('/cache-clear', requireAuth, async (req, res) => {
+router.post('/cache-clear', requireOwner, async (req, res) => {
   try {
     apiPostsCache.clear();
     tagAutocompleteCache.clear();
@@ -461,12 +451,24 @@ router.post('/cache-clear', requireAuth, async (req, res) => {
 let tunnelProcess = null;
 let tunnelUrl = '';
 
+export function stopActiveTunnel() {
+  if (!tunnelProcess) return;
+  try { tunnelProcess.kill('SIGTERM'); } catch {}
+  tunnelProcess = null;
+  tunnelUrl = '';
+}
+
 // Publishing the server to the public internet is not something an anonymous
 // LAN peer gets to trigger
-router.get('/tunnel', requireAuth, (req, res) => {
-  const port = Number(PORT);
+router.get('/tunnel', requireOwner, (req, res) => {
+  const port = getRuntimePort() || Number(process.env.PORT || process.env.SERVER_PORT || 3000);
   const localIp = getLocalIpAddress();
   const localUrl = `http://${localIp}:${port}`;
+
+  if (req.query.action === 'stop') {
+    stopActiveTunnel();
+    return res.json({ success: true, localUrl, tunnelUrl: null, isStartingTunnel: false });
+  }
 
   if (req.query.action === 'start' && !tunnelProcess && !tunnelUrl) {
     logInfo('Tunnel', `Запуск Localtunnel для http://localhost:${port}...`);
@@ -511,7 +513,7 @@ router.get('/tunnel', requireAuth, (req, res) => {
 });
 
 // POST /api/backup/telegram/test - check bot connectivity
-router.post('/backup/telegram/test', requireAuth, async (req, res) => {
+router.post('/backup/telegram/test', requireOwner, async (req, res) => {
   try {
     const { token, chatId } = req.body || {};
     const userId = req.user?.id || null;
@@ -535,7 +537,7 @@ router.post('/backup/telegram/test', requireAuth, async (req, res) => {
 });
 
 // POST /api/backup/telegram/send - send a backup to Telegram
-router.post('/backup/telegram/send', requireAuth, async (req, res) => {
+router.post('/backup/telegram/send', requireOwner, async (req, res) => {
   try {
     const userId = req.user?.id || null;
     const result = await performTelegramBackup(userId, true);
@@ -564,23 +566,11 @@ router.get('/backup/telegram/status', (req, res) => {
   });
 });
 
-function parseClientAuth(req) {
-  let clientAuth = {};
-  if (req.headers['x-booru-auth']) {
-    try {
-      clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
-    } catch {
-      try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
-    }
-  }
-  return clientAuth;
-}
-
 // POST /api/sync-external - Batch sync existing likes, favorites, and favorite authors to remote services
 router.post('/sync-external', requireAuth, async (req, res) => {
   try {
     const userId = req.user?.id || null;
-    const clientAuth = parseClientAuth(req);
+    const clientAuth = parseRequestAuth(req);
     const bodySettings = (req.body && typeof req.body.settings === 'object') ? req.body.settings : {};
     const settings = { ...getSettings(userId), ...clientAuth, ...bodySettings };
     const { targetSite = 'all', syncLikes = true, syncFavorites = true, syncAuthors = true } = req.body || {};

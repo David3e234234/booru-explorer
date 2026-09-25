@@ -45,6 +45,7 @@ export function applyStaticTranslations(root = document) {
   document.documentElement.dataset.lang = currentLang;
 
   root.querySelectorAll('[data-i18n]').forEach(el => {
+    if (el.children.length > 0) return;
     if (!el.dataset.i18nRu) el.dataset.i18nRu = el.textContent;
     el.textContent = currentLang === 'en' ? t(el.dataset.i18n, el.dataset.i18nRu) : el.dataset.i18nRu;
   });
@@ -1102,6 +1103,7 @@ Object.assign(en, {
   'vw.downloadCancelled': 'Download cancelled',
   'settings.siteSortReset': 'Site tags reset to default',
   'vp.iosTranscoding': 'Apple devices do not support streaming. Waiting for conversion to complete...',
+  'vp.transcoding': 'Converting...',
   'vp.iosTranscodeDone': 'Conversion complete!',
   'vp.qualityBtn.title': 'Video quality',
   'vp.quality': 'Quality',

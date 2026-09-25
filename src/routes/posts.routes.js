@@ -2,7 +2,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { Readable } from 'stream';
+import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
 import AdmZip from 'adm-zip';
 import {
@@ -11,62 +11,31 @@ import {
   ROOT_DIR,
   BROWSER_USER_AGENT
 } from '../config/constants.js';
-import { apiPostsCache, tagAutocompleteCache } from '../services/cacheService.js';
+import { apiPostsCache } from '../services/cacheService.js';
 import { getSettings } from '../services/storageService.js';
 import { fetchPosts } from '../parsers/index.js';
-import { getCreatorsDirectory, fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
-import { getCreatorsDirectory as getKemonoCreatorsDirectory, fetchKemonoPostById, getKemonoServices } from '../parsers/kemono.js';
+import { fetchPawchivePostById, getPawchiveServices } from '../parsers/pawchive.js';
+import { fetchKemonoPostById, getKemonoServices } from '../parsers/kemono.js';
 import { fetchRule34PostById } from '../parsers/rule34.js';
 import { fetchXbooruPostById, fetchHypnohubPostById, fetchTbibPostById } from '../parsers/dapi.js';
 import { fetchDanbooruPostById } from '../parsers/danbooru.js';
 import { fetchGelbooruPostById } from '../parsers/gelbooru.js';
 import { fetchSafebooruPostById } from '../parsers/safebooru.js';
 import { fetchMoebooruPostById } from '../parsers/moebooru.js';
-import { loadGlobalTagSummary, getTagCategory, META_KEYWORDS } from '../utils/tagClassifier.js';
 import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAuthorCompatible } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse, isSafeExternalUrlResolved, normalizeProxyUrl } from '../utils/network.js';
-import { requireAuth } from '../services/userService.js';
+import { requireOwner } from '../services/userService.js';
+import { sanitizeLogUrl } from '../utils/hostPolicy.js';
 import { logInfo, logError } from '../utils/logger.js';
-import { getAliasesInfo, clearDiscoveredAliases, getAllAliasesForName, getAllKnownAliasesMap } from '../services/aliasService.js';
+import { getAliasesInfo, clearDiscoveredAliases, getAllKnownAliasesMap } from '../services/aliasService.js';
 import { resolveAuthorCreators } from '../services/creatorResolverService.js';
+import { parseRequestAuth, buildAuthCacheKey } from '../utils/settingsValidation.js';
 
 const router = express.Router();
 
 // Hard ceiling for /api/posts?limit=. The frontend asks for 40; anything above this
 // is either a mistake or an attempt to make the server fan out on purpose
 const MAX_POSTS_LIMIT = 200;
-
-// Client settings fields that affect filtering results - they are part of the cache key
-const AUTH_CACHE_FIELDS = [
-  'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
-  'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant', 'hideLgbt', 'hideZipPosts', 'groupAlbums', 'customSources',
-  'customAliases',
-  // Switches the Paheal fallback in the rule34 parser on and off - without it in the
-  // key, toggling the setting kept serving a cached page built for the other value
-  'enablePaheal',
-  'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId', 'danbooruApiKey', 'danbooruLogin',
-  'konachanLogin', 'konachanPassword', 'yandereLogin', 'yanderePassword', 'pawchiveSession', 'kemonoSession',
-  'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy', 'konachanProxy',
-  'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy',
-  'siteSortTags', 'kemonoService', 'pawchiveService'
-];
-
-function parseClientAuth(req) {
-  let clientAuth = {};
-  if (req.headers['x-booru-auth']) {
-    try {
-      clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
-    } catch {
-      try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
-    }
-  }
-  return clientAuth;
-}
-
-function buildAuthCacheKey(clientAuth, settings) {
-  const parts = AUTH_CACHE_FIELDS.map(f => JSON.stringify(clientAuth[f] ?? settings[f] ?? null));
-  return crypto.createHash('md5').update(parts.join('|')).digest('hex').slice(0, 10);
-}
 
 // POST /api/sites/auth-test - validate board credentials typed in the settings modal
 const AUTH_TEST_TIMEOUT_MS = 8000;
@@ -279,7 +248,7 @@ async function runAuthTest(site, creds, settings = {}) {
 router.get('/resolve-post', async (req, res) => {
   try {
     const { site, id, postId, service, user, seriesKey, postUrl } = req.query;
-    const clientAuth = parseClientAuth(req);
+    const clientAuth = parseRequestAuth(req);
     const settings = { ...getSettings(), ...clientAuth };
     const targetSite = site || 'pawchive';
 
@@ -462,7 +431,7 @@ router.get('/resolve-post', async (req, res) => {
 router.get('/resolve-author-creators', async (req, res) => {
   try {
     const { author, source, site, originalId } = req.query;
-    const clientAuth = parseClientAuth(req);
+    const clientAuth = parseRequestAuth(req);
     const settings = { ...getSettings(), ...clientAuth };
 
     const data = await resolveAuthorCreators({
@@ -486,7 +455,7 @@ router.post('/sites/auth-test', async (req, res) => {
     if (!site || !SITES[site]) {
       return res.status(400).json({ success: false, message: 'Неизвестный сайт' });
     }
-    const settings = { ...getSettings(), ...parseClientAuth(req) };
+    const settings = { ...getSettings(), ...parseRequestAuth(req) };
     const result = await runAuthTest(site, req.body || {}, settings);
     res.json(result);
   } catch (err) {
@@ -496,7 +465,7 @@ router.post('/sites/auth-test', async (req, res) => {
 });
 
 // POST /api/proxy/test - test a proxy connection for a specific board or globally
-router.post('/proxy/test', async (req, res) => {
+router.post('/proxy/test', requireOwner, async (req, res) => {
   try {
     const { site, proxyUrl } = req.body || {};
     if (!proxyUrl || typeof proxyUrl !== 'string' || !proxyUrl.trim()) {
@@ -508,7 +477,7 @@ router.post('/proxy/test', async (req, res) => {
     const testTargetUrl = siteConfig ? `${siteConfig.baseUrl}/` : 'https://danbooru.donmai.us/';
     const targetName = siteConfig ? siteConfig.name : 'интернет';
 
-    logInfo('ProxyTest', `Проверка прокси ${cleanProxy} для ${site || 'общий'}: ${testTargetUrl}`);
+    logInfo('ProxyTest', `Проверка прокси ${sanitizeLogUrl(cleanProxy)} для ${site || 'общий'}: ${testTargetUrl}`);
 
     const response = await fetchSafe(testTargetUrl, {
       proxy: cleanProxy,
@@ -539,7 +508,7 @@ router.post('/proxy/test', async (req, res) => {
     // scanner run from the server. The real cause stays in the log.
     // The body is re-read here because the destructuring above is scoped to the try.
     const detail = err?.cause?.message || err?.message || String(err);
-    logError('ProxyTest', `Ошибка проверки прокси ${req.body?.proxyUrl}: ${detail}`, err);
+    logError('ProxyTest', `Ошибка проверки прокси ${sanitizeLogUrl(req.body?.proxyUrl || '')}: ${detail}`, err);
     return res.json({
       success: false,
       message: 'Не удалось подключиться через прокси (проверьте адрес, порт и тип прокси)'
@@ -600,7 +569,7 @@ router.get('/aliases/map', (req, res) => {
 });
 
 // POST /api/aliases/clear-discovered
-router.post('/aliases/clear-discovered', (req, res) => {
+router.post('/aliases/clear-discovered', requireOwner, (req, res) => {
   clearDiscoveredAliases();
   res.json({ success: true });
 });
@@ -633,7 +602,7 @@ router.get('/posts', async (req, res) => {
     const kemonoService = /^[a-z0-9_-]+$/.test(kemonoServiceRaw) ? kemonoServiceRaw : '';
 
     // Check the in-memory cache (for everything except random)
-    let clientAuth = parseClientAuth(req);
+    let clientAuth = parseRequestAuth(req);
     const baseSettings = getSettings();
     const settings = {
       ...baseSettings,
@@ -728,7 +697,7 @@ router.get('/posts/album', async (req, res) => {
     const originalId = req.query.originalId || '';
     const postUrl = req.query.postUrl || '';
 
-    const clientAuth = parseClientAuth(req);
+    const clientAuth = parseRequestAuth(req);
     const serverSettings = getSettings();
     const authKey = buildAuthCacheKey(clientAuth, serverSettings);
 
@@ -1021,7 +990,8 @@ function buildDownloadName(site, id, ext, isZip) {
 // POST /api/download - save a remote file to the server's downloads folder.
 // Nothing in the web UI calls this (browser downloads stream straight to the
 // device), so it stays behind a token.
-router.post('/download', requireAuth, async (req, res) => {
+router.post('/download', requireOwner, async (req, res) => {
+  let partialPath = null;
   try {
     const { url, isZip, site, id, ext } = req.body || {};
     if (!url || typeof url !== 'string') return res.json({ success: false, error: 'URL не указан' });
@@ -1037,8 +1007,9 @@ router.post('/download', requireAuth, async (req, res) => {
     if (path.dirname(filePath) !== downloadsDir) {
       return res.json({ success: false, error: 'Некорректное имя файла' });
     }
+    partialPath = filePath;
 
-    logInfo('Download', `Скачивание: ${url}`);
+    logInfo('Download', `Скачивание: ${sanitizeLogUrl(url)}`);
     const currentSettings = getSettings();
     // Streamed straight to disk: a large archive takes as long as it takes, so
     // only the headers get a deadline
@@ -1056,339 +1027,56 @@ router.post('/download', requireAuth, async (req, res) => {
     if (!response.body) throw new Error('Пустой ответ от источника');
 
     // Stream straight to disk - buffering the whole file in RAM and writing it
-    // synchronously used to stall the entire event loop on big archives
-    await pipeline(Readable.fromWeb(response.body), fs.createWriteStream(filePath));
+    // synchronously used to stall the entire event loop on big archives.
+    // The transform caps the compressed size so a hostile source cannot fill
+    // the disk; the partial file is removed when the limit trips.
+    const maxBytes = 2 * 1024 * 1024 * 1024;
+    let received = 0;
+    const limiter = new Transform({
+      transform(chunk, _enc, cb) {
+        received += chunk.length;
+        if (received > maxBytes) {
+          cb(new Error('Файл превышает допустимый размер'));
+          return;
+        }
+        cb(null, chunk);
+      }
+    });
+    await pipeline(Readable.fromWeb(response.body), limiter, fs.createWriteStream(filePath));
 
     if (isZip) {
       logInfo('Download', `Распаковка ZIP: ${filePath}`);
       const zip = new AdmZip(filePath);
+      const entries = zip.getEntries().filter(entry => !entry.isDirectory);
+      const MAX_ZIP_ENTRIES = 500;
+      const MAX_ZIP_TOTAL_BYTES = 1024 * 1024 * 1024;
+      const MAX_ZIP_ENTRY_BYTES = 512 * 1024 * 1024;
+      if (entries.length > MAX_ZIP_ENTRIES) throw new Error('Слишком много файлов в архиве');
+      let uncompressed = 0;
+      for (const entry of entries) {
+        const size = entry.header?.size || 0;
+        if (size > MAX_ZIP_ENTRY_BYTES) throw new Error('Файл в архиве превышает допустимый размер');
+        uncompressed += size;
+        if (uncompressed > MAX_ZIP_TOTAL_BYTES) throw new Error('Распакованный архив слишком большой');
+      }
       const extractPath = path.join(downloadsDir, filename.replace(/\.[^.]+$/, '') + '_unzipped');
+      for (const entry of entries) {
+        const target = path.resolve(extractPath, entry.entryName);
+        if (target !== path.resolve(extractPath) && !target.startsWith(path.resolve(extractPath) + path.sep)) {
+          throw new Error('Архив содержит недопустимый путь');
+        }
+      }
       zip.extractAllTo(extractPath, true);
     }
 
+    partialPath = null;
     res.json({ success: true, path: filePath });
   } catch (err) {
+    if (partialPath) {
+      try { await fs.promises.unlink(partialPath); } catch {}
+    }
     logError('Download', 'Ошибка скачивания', err);
     res.json({ success: false, error: err.message });
-  }
-});
-
-// GET /api/tags/autocomplete
-router.get('/tags/autocomplete', async (req, res) => {
-  const rawQuery = (req.query.q || req.query.query || '').trim();
-  if (!rawQuery) return res.json({ tags: [] });
-
-  // Normalize: replace spaces with underscores (hu ta -> hu_ta)
-  const query = rawQuery.replace(/\s+/g, '_');
-  const site = req.query.site || 'danbooru';
-  const clientAuth = parseClientAuth(req);
-  const serverSettings = getSettings();
-  const settings = { ...serverSettings, ...clientAuth };
-
-  const authKey = crypto.createHash('md5').update(
-    JSON.stringify([
-      clientAuth.globalProxy || serverSettings.globalProxy || '',
-      clientAuth.danbooruProxy || serverSettings.danbooruProxy || '',
-      clientAuth.pawchiveSession || '',
-      clientAuth.kemonoSession || ''
-    ])
-  ).digest('hex').slice(0, 8);
-
-  const cacheKey = `${site}:${query.toLowerCase()}:${authKey}`;
-  const cached = tagAutocompleteCache.get(cacheKey);
-  if (cached && Array.isArray(cached) && cached.length > 0) {
-    return res.json({ tags: cached });
-  }
-
-  // Universal query against Danbooru as the tag reference
-  const fetchDanbooruTags = async (q) => {
-    try {
-      const url = `https://danbooru.donmai.us/tags.json?search[name_matches]=*${encodeURIComponent(q)}*&limit=15&search[order]=count`;
-      const resp = await fetchSafe(url, { timeout: 3500, settings, site: 'danbooru' });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (Array.isArray(data)) {
-          return data.map(item => ({
-            value: item.name,
-            label: item.name.replace(/_/g, ' '),
-            count: item.post_count || 0,
-            category: item.category === 1 ? 'artist' : item.category === 3 ? 'copyright' : item.category === 4 ? 'character' : item.category === 5 ? 'meta' : 'general'
-          }));
-        }
-      }
-    } catch {}
-    return [];
-  };
-
-  try {
-    let tagsResult = [];
-
-    if (site === 'danbooru') {
-      tagsResult = await fetchDanbooruTags(query);
-    } else if (site === 'rule34') {
-      const authQuery = (settings?.rule34ApiKey && settings?.rule34UserId)
-        ? `&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`
-        : '';
-      try {
-        const url = `https://api.rule34.xxx/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}${authQuery}`;
-        const resp = await fetchSafe(url, { 
-          headers: { 'Referer': 'https://rule34.xxx/' },
-          timeout: 3000,
-          settings,
-          site: 'rule34'
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (Array.isArray(data) && data.length > 0) {
-            tagsResult = data.map(item => {
-              const val = typeof item === 'string' ? item : (item.value || item.label || '');
-              const total = typeof item === 'object' ? (parseInt(item.total || item.count, 10) || 0) : 0;
-              const type = typeof item === 'object' ? (item.type || 'general') : 'general';
-              return {
-                value: val,
-                label: val.replace(/_/g, ' '),
-                count: total,
-                category: type === 'tag' ? 'general' : type
-              };
-            });
-          }
-        }
-      } catch {}
-
-      if (tagsResult.length === 0) {
-        tagsResult = await fetchDanbooruTags(query);
-      }
-    } else if (site === 'gelbooru') {
-      try {
-        const url = `https://gelbooru.com/index.php?page=autocomplete2&term=${encodeURIComponent(query.toLowerCase())}&type=tag_query&limit=15`;
-        const resp = await fetchSafe(url, {
-          headers: { 'Referer': 'https://gelbooru.com/' },
-          timeout: 3000,
-          settings,
-          site: 'gelbooru'
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (Array.isArray(data) && data.length > 0) {
-            tagsResult = data.map(item => {
-              let cat = 'general';
-              const rawCat = String(item.category || '').toLowerCase();
-              if (rawCat === '1' || rawCat === 'artist') cat = 'artist';
-              else if (rawCat === '3' || rawCat === 'copyright') cat = 'copyright';
-              else if (rawCat === '4' || rawCat === 'character') cat = 'character';
-              else if (rawCat === '5' || rawCat === '6' || rawCat === 'metadata' || rawCat === 'meta') cat = 'meta';
-
-              return {
-                value: item.value || item.label,
-                label: (item.label || item.value || '').replace(/_/g, ' '),
-                count: parseInt(item.post_count || item.count, 10) || 0,
-                category: cat
-              };
-            });
-          }
-        }
-      } catch {}
-    } else if (site === 'xbooru') {
-      try {
-        const url = `https://xbooru.com/public/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
-        const resp = await fetchSafe(url, {
-          headers: { 'Referer': 'https://xbooru.com/' },
-          timeout: 3000,
-          settings,
-          site: 'xbooru'
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (Array.isArray(data) && data.length > 0) {
-            tagsResult = data.map(item => {
-              const matchCount = String(item.label || '').match(/\((\d+)\)$/);
-              const count = matchCount ? parseInt(matchCount[1], 10) : (parseInt(item.total || item.count, 10) || 0);
-              const val = item.value || (item.label ? item.label.replace(/\s*\(\d+\)$/, '').trim() : '');
-              let cat = 'general';
-              const tLow = String(item.type || '').toLowerCase();
-              if (tLow === 'artist' || tLow === '1') cat = 'artist';
-              else if (tLow === 'copyright' || tLow === '3') cat = 'copyright';
-              else if (tLow === 'character' || tLow === '4') cat = 'character';
-              else if (tLow === 'metadata' || tLow === 'meta' || tLow === '6') cat = 'meta';
-
-              return {
-                value: val,
-                label: val.replace(/_/g, ' '),
-                count,
-                category: cat
-              };
-            });
-          }
-        }
-      } catch {}
-    } else if (site === 'tbib' || site === 'hypnohub') {
-      const host = site === 'tbib' ? 'https://tbib.org' : 'https://hypnohub.net';
-      try {
-        const url = `${host}/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
-        const resp = await fetchSafe(url, {
-          headers: { 'Referer': `${host}/` },
-          timeout: 3000,
-          settings,
-          site
-        });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const tagMap = await loadGlobalTagSummary(settings);
-            tagsResult = data.map(item => {
-              const matchCount = String(item.label || '').match(/\((\d+)\)$/);
-              const count = matchCount ? parseInt(matchCount[1], 10) : (parseInt(item.total || item.count, 10) || 0);
-              const val = item.value || (item.label ? item.label.replace(/\s*\(\d+\)$/, '').trim() : '');
-              return {
-                value: val,
-                label: val.replace(/_/g, ' '),
-                count,
-                category: getTagCategory(val, tagMap)
-              };
-            });
-          }
-        }
-      } catch {}
-    } else if (site === 'yandere' || site === 'konachan') {
-      const base = site === 'yandere' ? 'https://yande.re' : 'https://konachan.com';
-      try {
-        const url = `${base}/tag.json?name=${encodeURIComponent(query)}&limit=15&order=count`;
-        const resp = await fetchSafe(url, { timeout: 3000, settings, site });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (Array.isArray(data) && data.length > 0) {
-            tagsResult = data.map(item => ({
-              value: item.name,
-              label: item.name.replace(/_/g, ' '),
-              count: item.count || 0,
-              category: item.type === 1 ? 'artist' : (item.type === 3 || item.type === 6) ? 'copyright' : item.type === 4 ? 'character' : (item.type === 5 || META_KEYWORDS.has(item.name.toLowerCase())) ? 'meta' : 'general'
-            }));
-          }
-        }
-      } catch {}
-
-      if (tagsResult.length === 0) {
-        tagsResult = await fetchDanbooruTags(query);
-      }
-    } else if (site === 'rule34video') {
-      try {
-        const modelJsonUrl = `https://rule34video.com/models_json.php?advanced_search=true&q=${encodeURIComponent(query)}`;
-        const resModels = await fetchSafe(modelJsonUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          timeout: 4000,
-          settings,
-          site: 'rule34video'
-        });
-        if (resModels.ok) {
-          const data = await resModels.json();
-          if (data && Array.isArray(data.items) && data.items.length > 0) {
-            const seen = new Set();
-            for (const item of data.items) {
-              const name = (item.title || '').trim();
-              if (name && !seen.has(name.toLowerCase())) {
-                seen.add(name.toLowerCase());
-                const totalCount = parseInt(item.total, 10) || 0;
-                tagsResult.push({
-                  value: `artist:${name.toLowerCase().replace(/\s+/g, '_')}`,
-                  label: `🎨 ${name} (${totalCount} видео)`,
-                  count: totalCount,
-                  category: 'artist'
-                });
-              }
-            }
-          }
-        }
-      } catch {}
-      const danbooruTags = await fetchDanbooruTags(query);
-      tagsResult = [...tagsResult, ...danbooruTags];
-    } else if (site === 'safebooru') {
-      try {
-        const url = `https://safebooru.org/autocomplete.php?q=${encodeURIComponent(query.toLowerCase())}`;
-        const resp = await fetchSafe(url, { timeout: 3000, settings, site: 'safebooru' });
-        if (resp.ok) {
-          const data = await resp.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const tagMap = await loadGlobalTagSummary(settings);
-            tagsResult = data.map(item => {
-              const val = item.value || item.label || '';
-              return {
-                value: val,
-                label: (item.label || item.value || '').replace(/_/g, ' '),
-                count: parseInt(item.total || item.count, 10) || 0,
-                category: getTagCategory(val, tagMap)
-              };
-            });
-          }
-        }
-      } catch {}
-
-      if (tagsResult.length === 0) {
-        tagsResult = await fetchDanbooruTags(query);
-      }
-    } else if (site === 'pawchive') {
-      try {
-        const { list } = await getCreatorsDirectory(settings);
-        if (Array.isArray(list) && list.length > 0) {
-          const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
-          const queryAliases = getAllAliasesForName(query, settings?.customAliases).map(a => a.toLowerCase().replace(/[\s_.-]+/g, ''));
-          const aliasSet = new Set(queryAliases);
-
-          const matches = list.filter(c => {
-            const nameClean = (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '');
-            if (nameClean.includes(cleanQ) || (c.service && c.service.toLowerCase().includes(cleanQ))) return true;
-            for (const al of aliasSet) {
-              if (al.length >= 2 && (nameClean === al || nameClean.includes(al))) return true;
-            }
-            return false;
-          }).slice(0, 15);
-
-          tagsResult = matches.map(c => ({
-            value: `artist:${(c.name || '').toLowerCase().replace(/[\s_.-]+/g, '_')}`,
-            label: `🎨 ${c.name} (${c.service})`,
-            count: 0,
-            category: 'artist'
-          }));
-        }
-      } catch {}
-    } else if (site === 'kemono') {
-      try {
-        const { list } = await getKemonoCreatorsDirectory(settings);
-        if (Array.isArray(list) && list.length > 0) {
-          const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
-          const queryAliases = getAllAliasesForName(query, settings?.customAliases).map(a => a.toLowerCase().replace(/[\s_.-]+/g, ''));
-          const aliasSet = new Set(queryAliases);
-
-          const matches = list.filter(c => {
-            const nameClean = (c.name || '').toLowerCase().replace(/[\s_.-]+/g, '');
-            if (nameClean.includes(cleanQ) || (c.service && c.service.toLowerCase().includes(cleanQ))) return true;
-            for (const al of aliasSet) {
-              if (al.length >= 2 && (nameClean === al || nameClean.includes(al))) return true;
-            }
-            return false;
-          }).slice(0, 15);
-
-          tagsResult = matches.map(c => ({
-            value: `artist:${(c.name || '').toLowerCase().replace(/[\s_.-]+/g, '_')}`,
-            label: `🎨 ${c.name} (${c.service})`,
-            count: 0,
-            category: 'artist'
-          }));
-        }
-      } catch {}
-    } else {
-      tagsResult = await fetchDanbooruTags(query);
-    }
-
-    if (tagsResult.length > 0) {
-      tagAutocompleteCache.set(cacheKey, tagsResult);
-    }
-
-    res.json({ tags: tagsResult });
-  } catch (err) {
-    res.json({ tags: [] });
   }
 });
 

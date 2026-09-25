@@ -1,9 +1,10 @@
 import { state, addSearchTag, setFavoriteAuthors } from '../state.js';
 import { deleteFavoriteAuthor, toggleFavoriteAuthor, fetchFavoriteAuthors, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchPosts, getProxiedUrl } from '../api.js';
-import { showToast, haptic } from './uiUtils.js';
+import { showToast, haptic, toSafeHttpUrl, escapeHtml } from './uiUtils.js';
 import { t } from '../i18n.js';
 
 let currentPickerAuthor = null;
+let coverPickerSeq = 0;
 let onCoverUpdatedCallback = null;
 
 export function switchFavoritesSubTab(tab, { onSearch, onRenderAuthors }) {
@@ -75,12 +76,14 @@ export function openCoverPickerModal(author) {
 }
 
 export function closeCoverPickerModal() {
+  coverPickerSeq += 1;
   const modalBackdrop = document.getElementById('modalPickAuthorCoverBackdrop');
   if (modalBackdrop) modalBackdrop.style.display = 'none';
   currentPickerAuthor = null;
 }
 
 async function loadAuthorPostsForCover(author, site) {
+  const seq = ++coverPickerSeq;
   const statusBox = document.getElementById('coverPickerStatus');
   const emptyBox = document.getElementById('coverPickerEmpty');
   const grid = document.getElementById('coverPickerGrid');
@@ -105,6 +108,7 @@ async function loadAuthorPostsForCover(author, site) {
       category: 'new'
     });
 
+    if (seq !== coverPickerSeq || currentPickerAuthor !== author) return;
     if (statusBox) statusBox.style.display = 'none';
 
     if (res.success && Array.isArray(res.posts) && res.posts.length > 0) {
@@ -150,7 +154,8 @@ function renderCoverPickerPosts(posts, author, site) {
     if (!displayThumb) return;
 
     const shouldUseProxy = (post.site === 'danbooru' || displayThumb.includes('donmai.us')) ? true : shouldUseThumbProxy;
-    const finalThumbUrl = displayThumb.startsWith('/api/') ? displayThumb : (shouldUseProxy ? getProxiedUrl(displayThumb) : displayThumb);
+    const finalThumbUrl = toSafeHttpUrl(displayThumb.startsWith('/api/') ? displayThumb : (shouldUseProxy ? getProxiedUrl(displayThumb) : displayThumb));
+    if (!finalThumbUrl) return;
 
     const isCurrent = author.previewUrl && (author.previewUrl === post.previewUrl || author.previewUrl === post.sampleUrl || author.previewUrl === finalThumbUrl);
 
@@ -159,7 +164,7 @@ function renderCoverPickerPosts(posts, author, site) {
     item.title = post.isVideo ? t('fav.coverVideoTitle', 'Сделать видеопревью обложкой автора') : t('fav.coverImageTitle', 'Сделать этот арт обложкой автора');
 
     item.innerHTML = `
-      <img class="cover-picker-thumb" src="${finalThumbUrl}" alt="" loading="lazy" decoding="async">
+      <img class="cover-picker-thumb" src="${escapeHtml(finalThumbUrl)}" alt="" loading="lazy" decoding="async">
       <div class="cover-picker-overlay">${post.isVideo ? t('fav.coverOverlayVideo', 'Видеообложка') : t('viewer.makeCover', 'Сделать обложкой')}</div>
       ${isCurrent ? `<span class="cover-picker-badge-current">${t('fav.coverCurrent', 'Текущая')}</span>` : ''}
     `;

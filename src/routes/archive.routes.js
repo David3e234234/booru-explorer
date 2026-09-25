@@ -4,19 +4,15 @@ import path from 'path';
 import { ARCHIVES_DIR } from '../config/constants.js';
 import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive, getArchiveKey, readManifest, downloadArchiveEntry, downloadFullArchive } from '../services/archiveService.js';
 import { logError } from '../utils/logger.js';
+import { sanitizeLogUrl } from '../utils/hostPolicy.js';
+import { parseRequestAuth } from '../utils/settingsValidation.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
+router.use(createRateLimiter({ windowMs: 60000, max: 120 }));
 
 function getRequestSettings(req) {
-  let clientAuth = null;
-  if (req.headers['x-booru-auth']) {
-    try {
-      clientAuth = JSON.parse(decodeURIComponent(req.headers['x-booru-auth']));
-    } catch {
-      try { clientAuth = JSON.parse(req.headers['x-booru-auth']); } catch {}
-    }
-  }
-  return clientAuth || {};
+  return parseRequestAuth(req);
 }
 
 // GET /api/archive/inspect?url=<zip-url> - inspect zip file structure, list all files, and scan for cloud links/passwords
@@ -125,7 +121,9 @@ router.get('/file', async (req, res) => {
 
     // Key and extension come from the manifest entry, never from user input
     const filePath = path.join(ARCHIVES_DIR, `${key}_${item.n}.${item.ext}`);
-    res.setHeader('Cache-Control', 'public, max-age=604800');
+    res.setHeader('Cache-Control', 'private, max-age=604800');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     const isDownload = req.query.download === '1' || req.query.download === 'true';
     if (isDownload) {
       const downloadName = item.name || `file_${item.n}.${item.ext}`;
@@ -176,7 +174,7 @@ router.get('/download-archive', async (req, res) => {
   try {
     await downloadFullArchive(zipUrl, res, { threads, name, settings });
   } catch (err) {
-    logError('Archive', `Ошибка скачивания архива ${zipUrl}`, err);
+    logError('Archive', `Ошибка скачивания архива ${sanitizeLogUrl(zipUrl)}`, err);
     if (!res.headersSent) {
       res.status(500).send('Не удалось скачать архив');
     }

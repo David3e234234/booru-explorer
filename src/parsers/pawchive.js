@@ -5,11 +5,12 @@ import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
 import { getAllAliasesForName, resolveTagForSite, parseCustomAliases } from '../services/aliasService.js';
+import { CACHE_DIR } from '../config/constants.js';
 
 let creatorsCache = null;
 let creatorsCacheTime = 0;
 const CREATORS_CACHE_TTL = 3600 * 1000; // 1 hour
-const DISK_CREATORS_PATH = path.join(process.cwd(), 'data', 'cache', 'pawchive_creators.json');
+const DISK_CREATORS_PATH = path.join(CACHE_DIR, 'pawchive_creators.json');
 
 const PAWCHIVE_IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif', 'bmp']);
 const PAWCHIVE_VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v', 'mkv', 'avi', 'wmv', 'flv', 'ts']);
@@ -271,7 +272,7 @@ export async function resolvePawchiveCreators(authorQuery, preferredService = nu
   // Sort matches by favorited count descending
   matches.sort((a, b) => (b.favorited || 0) - (a.favorited || 0));
 
-  return matches.map(m => ({
+  return matches.slice(0, 8).map(m => ({
     service: m.service,
     user: m.id,
     name: m.name
@@ -804,12 +805,12 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
 
     const { map: creatorMap } = await getCreatorsDirectory(settings);
 
-    const results = await Promise.all(items.map(async item => {
+    const settled = await Promise.allSettled(items.map(async item => {
       const creatorForPost = resolvedCreators.find(c => c.service === item.service && String(c.user) === String(item.user)) || null;
       return await normalizePawchivePost(item, creatorMap, creatorForPost, aiTagsList, settings);
     }));
 
-    let validPosts = results.filter(Boolean);
+    let validPosts = settled.filter(result => result.status === 'fulfilled' && result.value).map(result => result.value);
 
     if (settings?.hideZipPosts) {
       // Hide only archive-only posts; mixed posts (cover media + zips) stay visible
