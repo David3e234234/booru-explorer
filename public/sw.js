@@ -1,4 +1,4 @@
-const CACHE_NAME = 'booru-explorer-v8.23';
+const CACHE_NAME = 'booru-explorer-v8.24';
 const MEDIA_CACHE = 'booru-media-v2';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
@@ -57,6 +57,7 @@ const STATIC_ASSETS = [
   '/js/modules/settingsConstants.js',
   '/js/modules/settingsModal.js',
   '/js/modules/sidebarTags.js',
+  '/js/modules/sidebarCollapse.js',
   '/js/modules/authModal.js',
   '/js/modules/profileUI.js',
   '/js/modules/favoriteAuthorsUI.js',

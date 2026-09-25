@@ -89,6 +89,7 @@ import {
 } from './modules/settingsModal.js';
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js';
+import { initSidebarCollapse } from './modules/sidebarCollapse.js';
 import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initModalAccessibility } from './modules/modalAccessibility.js';
 import { initWikiModal } from './modules/wikiModal.js';
@@ -120,6 +121,7 @@ async function init() {
   // Apply the saved language to all static markup before anything renders
   applyStaticTranslations();
   initModalAccessibility();
+  initSidebarCollapse();
 
   setDrawerCallbacks({
     onCategoryUIUpdate: updateCategoryTabsUI,

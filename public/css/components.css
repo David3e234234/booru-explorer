@@ -2248,6 +2248,15 @@ input.wiki-search-input {
 
 .sidebar-title-row .sidebar-title {
   margin-bottom: 0;
+  min-width: 0;
+}
+
+/* Long block titles truncate instead of pushing the action button out of the panel */
+.sidebar-title-row .sidebar-title > span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .btn-preset-header-add {
@@ -2263,6 +2272,8 @@ input.wiki-search-input {
   padding: 3px 8px;
   cursor: pointer;
   transition: all var(--transition-fast);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .btn-preset-header-add:hover {
@@ -2274,7 +2285,7 @@ input.wiki-search-input {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 220px;
+  max-height: 260px;
   overflow-y: auto;
   padding-right: 2px;
 }
@@ -2291,7 +2302,7 @@ input.wiki-search-input {
 .preset-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 4px;
   background: var(--bg-surface);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
@@ -2312,8 +2323,9 @@ input.wiki-search-input {
 .preset-main-btn {
   flex: 1;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
   padding: 6px 8px;
   background: none;
   border: none;
@@ -2333,17 +2345,42 @@ input.wiki-search-input {
   color: var(--accent-primary);
 }
 
+/* Row 1 is a flex line so the mono count can sit at the right edge while the
+   name takes what is left and wraps to a second line. In a 280px panel a single
+   ellipsized line left about 70px, which cut most preset names to a stub. */
+.preset-name-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
 .preset-name {
   font-size: 12px;
   font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .preset-item.active .preset-name {
   color: var(--accent-primary);
+}
+
+/* Badges get their own row, so a bound source no longer eats the name's width */
+.preset-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  /* Aligns the badges under the name, past the bookmark icon */
+  padding-left: 19px;
 }
 
 .preset-site-badge {
@@ -2357,6 +2394,10 @@ input.wiki-search-input {
   text-transform: uppercase;
   letter-spacing: 0.4px;
   flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .preset-count {
@@ -2374,6 +2415,7 @@ input.wiki-search-input {
   align-items: center;
   gap: 2px;
   padding-right: 4px;
+  flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -2390,8 +2432,8 @@ input.wiki-search-input {
 }
 
 .btn-preset-action-item {
-  width: 44px;
-  height: 44px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2406,6 +2448,15 @@ input.wiki-search-input {
 
 .btn-preset-action-item:hover {
   background: var(--bg-surface-hover);
+}
+
+/* Touch layouts keep the 44x44 target from DESIGN.md; a mouse does not need it,
+   and the smaller box leaves the preset name ~32px more room in a 280px panel. */
+@media (hover: none) {
+  .btn-preset-action-item {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .btn-preset-edit:hover {

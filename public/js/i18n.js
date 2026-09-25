@@ -95,6 +95,8 @@ Object.assign(en, {
 
   'sidebar.filters': 'Search & filters',
   'sidebar.close': 'Close',
+  'sidebar.collapse': 'Collapse search & filters panel (Ctrl+B)',
+  'sidebar.expand': 'Expand search & filters panel (Ctrl+B)',
   'sidebar.postSort': 'Sorting',
   'sidebar.searchTags': 'Tag search',
   'sidebar.search.placeholder': 'Enter a tag (1girl, video)...',

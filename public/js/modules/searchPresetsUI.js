@@ -165,14 +165,21 @@ export function renderPresetsList() {
       ? `<span class="preset-filters-badge" title="${escapeHtml(t('presets.saveFilters', 'Фильтры и ползунки:'))} ${escapeHtml(filtersSummary)}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></span>`
       : '';
 
+    // Only presets bound to a source or carrying filters get the second row, so
+    // plain tag presets stay a single compact line.
+    const metaRow = (siteBadge || filtersBadge)
+      ? `<span class="preset-meta">${siteBadge}${filtersBadge}</span>`
+      : '';
+
     return `
       <div class="preset-item${isMatching ? ' active' : ''}" data-id="${escapeHtml(preset.id)}">
         <button type="button" class="preset-main-btn" title="${escapeHtml(tagsPreview)}${filtersSummary ? `\n${filtersSummary}` : ''}">
-          <svg class="preset-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
-          <span class="preset-name">${escapeHtml(preset.name || tags[0] || t('presets.unnamed', 'Пресет'))}</span>
-          ${siteBadge}
-          ${filtersBadge}
-          <span class="preset-count" title="${escapeHtml(tagsPreview)}">${tags.length}</span>
+          <span class="preset-name-row">
+            <svg class="preset-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+            <span class="preset-name">${escapeHtml(preset.name || tags[0] || t('presets.unnamed', 'Пресет'))}</span>
+            <span class="preset-count" title="${escapeHtml(tagsPreview)}">${tags.length}</span>
+          </span>
+          ${metaRow}
         </button>
         <div class="preset-actions">
           <button type="button" class="btn-preset-action-item btn-preset-edit" title="${escapeHtml(t('presets.editTitle', 'Редактировать'))}" data-id="${escapeHtml(preset.id)}">

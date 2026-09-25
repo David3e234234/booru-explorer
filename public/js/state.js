@@ -151,7 +151,8 @@ export const STORAGE_KEYS = {
   VIEWED: 'booru_viewed_v1',
   AUTH_TOKEN: 'booru_auth_token_v1',
   ADMIN_TOKEN: 'booru_admin_token_v1',
-  CURRENT_USER: 'booru_current_user_v1'
+  CURRENT_USER: 'booru_current_user_v1',
+  SIDEBAR_COLLAPSED: 'booru_sidebar_collapsed_v1'
 };
 
 export function getInitialSettings() {
@@ -465,6 +466,22 @@ export function saveLocalPresets(presetsList) {
 export function setPresets(presetsList) {
   state.searchPresets = Array.isArray(presetsList) ? presetsList : [];
   saveLocalPresets(state.searchPresets);
+}
+
+// Desktop sidebar collapse is a local view preference, not a synced setting:
+// it must not travel to the server or into an account export.
+export function loadSidebarCollapsed() {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.SIDEBAR_COLLAPSED) === '1';
+  } catch (e) {
+    return false;
+  }
+}
+
+export function saveSidebarCollapsed(collapsed) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.SIDEBAR_COLLAPSED, collapsed ? '1' : '0');
+  } catch (e) {}
 }
 
 export function loadLocalFavorites() {

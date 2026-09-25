@@ -197,6 +197,10 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - Untrusted text is escaped. Untrusted URLs pass through `toSafeHttpUrl()` or `toSafeImageUrl()`. Never interpolate raw upstream fields into `innerHTML`.
 - Every modal has dialog semantics, focus containment, Escape behavior and focus restoration through `modalAccessibility.js` where applicable.
 - Primary touch targets are at least 44 by 44 px. Zoom must not be disabled in the viewport meta tag.
+- The search sidebar collapses on desktop only (`min-width: 801px`, see `modules/sidebarCollapse.js`). Below that breakpoint the same element is the mobile drawer driven by the `open` class, and the collapse class must stay inert.
+- The collapse animates `margin-left`, not `width`: a width transition re-wraps the panel's blocks mid-slide. The collapsed panel is `visibility: hidden` so it leaves the tab order and the accessibility tree, and the toggle moves focus to itself when the panel it lived in is hidden.
+- Preset names wrap to two lines (`-webkit-line-clamp: 2`) instead of being ellipsized. The sidebar is 280px, and a single line left roughly 70px for a typical tag; the full text stays in the `title` attribute. Source and filter badges get their own row and only render when present.
+- Pointer-only affordances stay 28px and grow to 44px under `@media (hover: none)`. Anything that reveals on hover needs a touch equivalent, and its opacity must not change the reserved layout space.
 - Client-side mutations send `desiredState` so retries and double clicks are idempotent. Failed mutations roll back optimistic state.
 - Reads must not convert HTTP failures into successful empty lists. Preserve last-known-good state on 5xx or network errors.
 - Account loaders use a generation guard so responses from a previous session cannot commit into the next account.

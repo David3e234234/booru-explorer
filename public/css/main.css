@@ -350,6 +350,26 @@ select option {
   flex-shrink: 0;
 }
 
+/* Desktop collapse (see modules/sidebarCollapse.js).
+   The panel slides out on margin-left, not width: its blocks keep their 280px
+   during the transition instead of re-wrapping, and .main-content takes the
+   freed space at once because the sidebar is a flex sibling with flex: 1 next
+   to it. The class is scoped to min-width: 801px on purpose — below that the
+   same element is the mobile drawer driven by the `open` class. */
+@media (min-width: 801px) {
+  .sidebar-search {
+    transition: margin-left var(--transition-normal), visibility 0s linear 0s;
+  }
+
+  .app-layout.sidebar-collapsed .sidebar-search {
+    margin-left: -280px;
+    /* visibility, not just clip: a zero-width panel must stay out of the tab
+       order and out of the accessibility tree. */
+    visibility: hidden;
+    transition: margin-left var(--transition-normal), visibility 0s linear var(--transition-normal);
+  }
+}
+
 .sidebar-block {
   display: flex;
   flex-direction: column;
