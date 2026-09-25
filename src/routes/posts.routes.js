@@ -179,7 +179,7 @@ async function runAuthTest(site, creds, settings = {}) {
     if (res.ok) {
       const data = await readJsonSafe(res);
       const count = Array.isArray(data) ? data.length : (Array.isArray(data?.posts) ? data.posts.length : 0);
-      return { success: true, message: username ? `${label}: вход выполнен как ${username}` : `${label}: сессия активна (в избранном постов: ${count})` };
+      return { success: true, message: `${label}: сессия активна (в избранном постов: ${count})` };
     }
     if (res.status === 404 && site === 'kemono') {
       // Fallback check on account endpoint if favorites route structure varies

@@ -85,6 +85,54 @@ describe('Express API Integration & Route Tests', () => {
     });
   });
 
+  describe('Board auth test (/api/sites/auth-test)', () => {
+    // Regression: runAuthTest() is token-only now, but its success branch still
+    // interpolated a `username` local that the credential exchange used to
+    // define. The ReferenceError was thrown at runtime only, so nothing caught
+    // it until an operator pressed the button and saw
+    // "Ошибка: username is not defined". These cases exercise the branches the
+    // unit suites cannot reach: they need the assembled Express app.
+    const callAuthTest = (payload) => fetch(`${baseUrl}/api/sites/auth-test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then((res) => res.json());
+
+    it('demands a session token when neither field is provided', async () => {
+      const data = await callAuthTest({ site: 'kemono' });
+      assert.strictEqual(data.success, false);
+      assert.match(data.message, /Введите Session Token Kemono/);
+    });
+
+    it('no longer accepts a login and password', async () => {
+      const data = await callAuthTest({ site: 'kemono', login: 'user', password: 'secret' });
+      assert.strictEqual(data.success, false);
+      assert.match(data.message, /Введите Session Token Kemono/);
+      assert.doesNotMatch(data.message, /пароль/i);
+    });
+
+    it('reports a rejected token without a ReferenceError', async () => {
+      // The upstream is unreachable from CI, so this lands on the network or
+      // HTTP failure branch. Either way the route must answer with a message
+      // instead of leaking a variable error to the operator.
+      const data = await callAuthTest({ site: 'pawchive', session: 'definitely-not-valid' });
+      assert.strictEqual(data.success, false);
+      assert.ok(data.message, 'expected a human-readable message');
+      assert.doesNotMatch(data.message, /is not defined/);
+    });
+
+    it('keeps the route free of removed credential fields', async () => {
+      const source = await fs.readFile(
+        new URL('../../src/routes/posts.routes.js', import.meta.url),
+        'utf8'
+      );
+      // Guards the whole class of bug: a value the route can no longer produce
+      // must not be referenced inside the board branch.
+      const boardBranch = source.slice(source.indexOf("site === 'pawchive'"), source.indexOf('runAuthTest', source.indexOf("site === 'pawchive'") + 1) + 400);
+      assert.doesNotMatch(boardBranch, /\$\{\s*username\s*\}/);
+    });
+  });
+
   describe('Auth Routes (/api/auth)', () => {
     it('POST /api/auth/register successfully registers a new user', async () => {
       const res = await fetch(`${baseUrl}/api/auth/register`, {
