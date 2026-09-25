@@ -126,7 +126,11 @@ export function applyUrlToState(p) {
     state.searchTags = [...p.tags];
     changed = true;
   }
-  if (p.site !== state.currentSite) {
+  // Compare canonical values, not param presence: buildQuery() omits the default
+  // site, so a URL without `site` still means danbooru. Comparing `p.site`
+  // directly reported a false change on every Back from the viewer, which
+  // re-ran the search and reset the gallery scroll to the top.
+  if ((p.site || 'danbooru') !== state.currentSite) {
     state.currentSite = p.site || 'danbooru';
     changed = true;
   }

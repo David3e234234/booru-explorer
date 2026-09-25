@@ -97,7 +97,7 @@ Large files must be split by responsibility when touched. Preferred existing bou
 - `hostPolicy.js`: hostname boundaries, credential hosts, log redaction
 - `imageCacheService.js`: image signatures and disk cache
 - `mediaJobSupervisor.js`: FFmpeg concurrency and queue limits
-- `siteSessionService.js`: credential-to-session exchange, session cache and login pacing
+- `siteSessionService.js`: session-token normalization for the Kemono-family boards
 - `tagAutocomplete.routes.js`: autocomplete endpoint, independent from search routes
 - `rateLimit.js`: per-instance fixed-window limiter; every limiter gets its own budget
 - `public/js/modules/*`: UI subsystems loaded by `app.js`
@@ -140,8 +140,8 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - Danbooru Basic credentials are sent only to `danbooru.donmai.us`.
 - A configured proxy that cannot be created is an error, never a silent direct connection.
 - Never log proxy userinfo, signed query strings or full CDN URLs; use `sanitizeLogUrl()`.
-- Board logins are hardcoded per site in `siteSessionService.js` and must stay that way. Kemono takes a JSON `POST /api/v1/authentication/login`; Pawchive has no login API route (404) and takes the HTML form at `/account/login`, which answers 302 in both the success and the rejection case. The rejection is recognised by a `Location` pointing back at the form.
-- `fetchSafe()` must keep `redirect: 'manual'` for every hop. Leaving it unset lets undici follow redirects on its own, which hides the `Location` and `Set-Cookie` a form login depends on. A caller asking not to follow has to receive the 3xx itself.
+- Board access is token-only. `siteSessionService.js` no longer exchanges credentials: it normalizes the operator's pasted `session` cookie and nothing else. Do not reintroduce a login/password exchange, an upstream login request, or a server-side session cache. Kemono's JSON login API and the Pawchive HTML form are intentionally unused; a gallery page issues many parallel requests, so any per-request credential exchange would trip the upstream anti-flood.
+- `fetchSafe()` must keep `redirect: 'manual'` for every hop. Leaving it unset lets undici follow redirects on its own, which hides the `Location` and `Set-Cookie` headers a caller needs to inspect. A caller asking not to follow has to receive the 3xx itself.
 - Never log board credentials, session tokens or a raw login response body. Log the site and the HTTP status only.
 - A gallery page issues many parallel requests. Every login path must stay single-flighted, cached and paced; a login per request trips the upstream anti-flood and gets the deployment blocked.
 
@@ -168,7 +168,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - Writes are atomic, serialized per file, revision-aware and flushed on shutdown.
 - Never call `fs.writeFile` directly for user data.
 - Stored posts pass through `sanitizeStoredPost()`; keep heavy fields such as album items and unpacked state out of persisted payloads.
-- Secret settings are listed in `SECRET_SETTING_FIELDS`, which now includes proxy URLs and the Kemono and Pawchive board logins. Do not return those fields to anonymous clients or include them in backups.
+- Secret settings are listed in `SECRET_SETTING_FIELDS`, which now includes proxy URLs and the Kemono and Pawchive session tokens. Do not return those fields to anonymous clients or include them in backups.
 - The client keeps a duplicate `SECRET_SETTING_FIELDS` in `public/js/state.js`. Every new credential must be added to both lists, otherwise it survives a client export or is never sent in `x-booru-auth`.
 
 ### Auth And Ownership
@@ -192,6 +192,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - No bundler. `public/` is served statically and the browser imports ES modules directly.
 - `state.js` owns mutable state, local persistence and import/export. `api.js` owns HTTP and auth headers. `app.js` coordinates search and routing.
 - `router.js` is the only writer of search and viewer URL state. Missing URL parameters restore canonical defaults.
+- Omitting a default in `buildQuery()` and normalizing it in `applyUrlToState()` must be symmetric. Compare canonical values, never param presence: `if ((p.site || 'danbooru') !== state.currentSite)`, not `p.site !== state.currentSite`. A false `changed` re-runs `performSearch(true)`, which re-renders the gallery without `preserveScroll` and jumps the feed back to the top, so Back from the viewer silently loses the scroll position. Cover new fields in `test/unit/routerUrlState.test.js`.
 - Gallery cards are delegated on `#galleryGrid`; per-card listeners are allowed only for media error and metadata events.
 - Cards open with click, Enter or Space and expose an accessible name.
 - Untrusted text is escaped. Untrusted URLs pass through `toSafeHttpUrl()` or `toSafeImageUrl()`. Never interpolate raw upstream fields into `innerHTML`.
