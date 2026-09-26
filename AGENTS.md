@@ -111,6 +111,7 @@ Large files must be split by responsibility when touched. Preferred existing bou
 3. Single-site mode runs the parser and a bounded deep-fetch loop.
 4. All-sites mode uses `Promise.allSettled`, a per-site deadline, `Promise.allSettled` fan-out, round-robin merge and a final `limit` slice.
 5. `isPostMatchingFilters()` in `tagHelpers.js` is the canonical content filter. Danbooru also prefilters inside its parser to avoid expensive cursor paging; routes must never add another filter pass.
+6. Auto-discovered Danbooru aliases are only registered when the discovered alias group is plausible (at most 8 names). A Danbooru page with dozens of `other_names` is a circle or aggregator page; registering it aliases unrelated artists to each other, so a single-author Pawchive query returns several unrelated feeds.
 
 Normalized post contract:
 

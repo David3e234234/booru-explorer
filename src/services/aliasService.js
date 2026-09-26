@@ -20,6 +20,11 @@ let discoveredAliasMap = new Map();
 
 // Avoid repeating network lookups for known or already checked candidates
 const CHECKED_CANDIDATES_MAX = 5000;
+// A Danbooru artist page with dozens of other_names is a circle or
+// aggregator page, not an alias group. Registering it would alias every name
+// on the page to every other name, so a single-author query explodes into a
+// multi-author mix (one artist's search returning three unrelated feeds).
+const MAX_DISCOVERED_ALIAS_GROUP = 8;
 const checkedCandidates = new Set();
 let isSavingDiscovered = false;
 let saveTimeout = null;
@@ -370,9 +375,9 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
     }
 
     // Only register if we discovered at least one alternative name!
-    if (aliasSet.size > 1) {
+    if (aliasSet.size > 1 && aliasSet.size <= MAX_DISCOVERED_ALIAS_GROUP) {
       const aliases = Array.from(aliasSet);
-      
+
       const sites = { danbooru: canonicalName };
 
       // Dynamically discover valid tag variant on Rule34
