@@ -82,7 +82,7 @@ export const DEFAULT_CLIENT_SETTINGS = {
   kemonoService: 'all',
   hideFurry: true,
   hidePregnant: true,
-  hideLgbt: false,
+  hideLgbt: true,
   hideZipPosts: false,
   unpackArchivesOnDownload: false,
   archiveDownloadThreads: 4,
@@ -181,7 +181,7 @@ export const state = {
   videoDurationSort: 'none', // 'none' | 'longest' | 'shortest'
   hideFurry: true,
   hidePregnant: true,
-  hideLgbt: false,
+  hideLgbt: true,
   hideZipPosts: false,
   unpackArchivesOnDownload: false,
   archiveDownloadThreads: 4,

@@ -215,7 +215,7 @@ export const DEFAULT_SETTINGS = {
   ageFilter: 'all', // 'all', 'adult', 'young'
   hideFurry: true,
   hidePregnant: true,
-  hideLgbt: false,
+  hideLgbt: true,
   hideZipPosts: false,
   unpackArchivesOnDownload: false,
   archiveDownloadThreads: 4,

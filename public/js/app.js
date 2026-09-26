@@ -2165,13 +2165,13 @@ function setupEventListeners() {
       // 3. Reset toggle sliders (content hiding) to defaults
       state.hideFurry = true;
       state.hidePregnant = true;
-      state.hideLgbt = false;
+      state.hideLgbt = true;
       const checkHideFurry = document.getElementById('checkHideFurry');
       if (checkHideFurry) checkHideFurry.checked = true;
       const checkHidePregnant = document.getElementById('checkHidePregnant');
       if (checkHidePregnant) checkHidePregnant.checked = true;
       const checkHideLgbt = document.getElementById('checkHideLgbt');
-      if (checkHideLgbt) checkHideLgbt.checked = false;
+      if (checkHideLgbt) checkHideLgbt.checked = true;
 
       // 4. Reset other filters and sorts to defaults
       state.postSort = 'new';
@@ -2201,7 +2201,7 @@ function setupEventListeners() {
       persistSettings({
         hideFurry: true,
         hidePregnant: true,
-        hideLgbt: false,
+        hideLgbt: true,
         postSort: 'new',
         aiFilter: 'no-ai',
         ratingFilter: 'all',

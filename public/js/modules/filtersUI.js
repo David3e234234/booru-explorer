@@ -263,7 +263,7 @@ export function updateFilterActiveDot() {
                    (caps.rating === 'all' && state.ratingFilter !== 'all') ||
                    (((caps.supportsVideo && caps.supportsImages) || caps.supportsArchives) && state.typeFilter !== 'all') ||
                    (caps.supportsShapesFilter && state.ageFilter !== 'all') ||
-                   (caps.supportsContentHiding && (!state.hideFurry || !state.hidePregnant || state.hideLgbt)) ||
+                   (caps.supportsContentHiding && (!state.hideFurry || !state.hidePregnant || !state.hideLgbt)) ||
                    (state.currentSite === 'pawchive' && state.pawchiveService && state.pawchiveService !== 'all') ||
                    (state.currentSite === 'kemono' && state.kemonoService && state.kemonoService !== 'all') ||
                    (caps.supportsTags && state.searchTags && state.searchTags.length > 0);

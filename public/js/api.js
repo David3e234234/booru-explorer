@@ -191,7 +191,7 @@ export async function fetchPosts({
   ageFilter = 'all',
   hideFurry = true,
   hidePregnant = true,
-  hideLgbt = false,
+  hideLgbt = true,
   customSites = '',
   pawchiveService = '',
   kemonoService = '',
