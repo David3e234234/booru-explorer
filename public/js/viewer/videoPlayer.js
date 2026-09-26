@@ -1,6 +1,7 @@
 import { t } from '../i18n.js';
 import { showToast, escapeHtml, toSafeHttpUrl, getPostSiteUrl, isFullMediaPending, isRule34VideoTeaserUrl } from '../modules/uiUtils.js';
 import { resolveRule34VideoMedia } from '../modules/rule34VideoResolve.js';
+import { isHevcSource, browserSupportsHevc } from '../modules/hevcCodec.js';
 
 export function makeBannerDraggable(bannerEl) {
   if (!bannerEl) return;
@@ -240,6 +241,15 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const defaultPrefQuality = state.settings?.videoDefaultQuality || 'original';
   let activeQuality = defaultPrefQuality; // 'original', '720p', '480p'
 
+  const baseOriginal = currentPost.fileUrl || currentPost.sampleUrl;
+
+  // HEVC sources (Pawchive serves H.265 under names like "clip_H.265.mp4") do
+  // not play in browsers without an OS HEVC decoder, and the JS remux cannot
+  // help: the codec itself is unsupported. Route them straight to the FFmpeg
+  // transcode instead of the media element. The probe runs once per post.
+  const hevcUnsupported = isHevcSource(baseOriginal) && !browserSupportsHevc();
+  let hevcTranscodeTried = false;
+
   const getMediaUrlForQuality = (qualityKey) => {
     // 1. Check if post has native quality list from source
     if (Array.isArray(currentPost.videoQualities) && currentPost.videoQualities.length > 0) {
@@ -255,9 +265,14 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       }
     }
 
-    const baseOriginal = currentPost.fileUrl || currentPost.sampleUrl;
+    // 2. HEVC the browser cannot decode: the "original" entry becomes the
+    // transcode so playback starts playable instead of failing on decode.
+    if (hevcUnsupported && qualityKey === 'original' && baseOriginal && !baseOriginal.startsWith('/api/transcode-video')) {
+      const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=720p`;
+      return { url: transcodeUrl, isTranscode: true, label: '720p (H.264)' };
+    }
 
-    // 2. If lower quality requested but no native version, use real-time stream transcode
+    // 3. If lower quality requested but no native version, use real-time stream transcode
     if ((qualityKey === '480p' || qualityKey === '720p') && baseOriginal && !baseOriginal.startsWith('/api/transcode-video')) {
       const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=${qualityKey}`;
       return { url: transcodeUrl, isTranscode: true, label: qualityKey };
@@ -839,44 +854,67 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   };
 
-  const startIosTranscodeWait = async (targetUrl) => {
+  // The server holds the transcode request until the background FFmpeg run
+  // finishes, so the client polls it with HEAD until the cached H.264 file
+  // exists, then hands the local URL to the media element.
+  const startTranscodeWait = async (targetUrl, { overlay = false } = {}) => {
     if (iosTranscodeAbort) {
       try { iosTranscodeAbort.abort(); } catch {}
     }
     iosTranscodeAbort = new AbortController();
     iosWaitDone = true;
     isPreCaching = true; // prevent other errors from firing
-    setProgress(0, t('vp.iosTranscoding', 'Apple устройства не поддерживают стриминг. Ожидание завершения конвертации...'), true);
+    setProgress(0, overlay
+      ? t('vp.iosTranscoding', 'Apple устройства не поддерживают стриминг. Ожидание завершения конвертации...')
+      : t('vp.transcodingHevc', 'Видео в кодеке HEVC, конвертируем в H.264...'), true);
     if (switchBtn) switchBtn.textContent = t('vp.transcoding', 'Конвертация...');
-    
-    showIosWaitOverlay();
+
+    if (overlay) showIosWaitOverlay();
 
     try {
       // The server will hold this request until the background transcode completes
-      const res = await fetch(targetUrl, { 
+      const res = await fetch(targetUrl, {
         method: 'HEAD',
         signal: iosTranscodeAbort.signal
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      
+
       // Now the file is fully cached and remuxed to standard MP4!
       isPreCaching = false;
-      hideIosWaitOverlay();
-      setProgress(100, t('vp.iosTranscodeDone', 'Конвертация завершена!'), false);
+      if (overlay) hideIosWaitOverlay();
+      setProgress(100, overlay
+        ? t('vp.iosTranscodeDone', 'Конвертация завершена!')
+        : t('vp.transcodeDone', 'Конвертация завершена!'), false);
       setTimeout(hideStatus, 1500);
-      
+
       video.src = targetUrl;
       safePlay();
     } catch (err) {
       if (err.name === 'AbortError') return;
       isPreCaching = false;
-      hideIosWaitOverlay();
+      if (overlay) hideIosWaitOverlay();
       showUnsupportedVideoFallback();
     }
   };
 
+  const startIosTranscodeWait = (targetUrl) => startTranscodeWait(targetUrl, { overlay: true });
+
   const startRemuxOrFallback = () => {
     const cleanExt = (currentPost.fileExt || '').toLowerCase();
+
+    // HEVC stays undecodable no matter how it is demuxed, so the remux path is
+    // skipped entirely: go to the FFmpeg transcode once, then give up.
+    if (hevcUnsupported) {
+      if (!hevcTranscodeTried) {
+        hevcTranscodeTried = true;
+        const hevcTranscodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=720p`;
+        startTranscodeWait(hevcTranscodeUrl);
+      } else {
+        showUnsupportedVideoFallback();
+      }
+      return;
+    }
+
     const hasMseSupport = Boolean(
       typeof window !== 'undefined' &&
       window.MediaSource &&
@@ -934,6 +972,18 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     const now = Date.now();
     if (now - lastFallbackTime < 1500) return;
     lastFallbackTime = now;
+
+    // HEVC the browser cannot decode: escalate to the FFmpeg transcode once.
+    // The initial source is already the transcode; this covers the cases where
+    // the native URL was still attached (e.g. Rule34Video-resolved streams).
+    if (hevcUnsupported && !hevcTranscodeTried && !(activeMediaInfo && activeMediaInfo.isTranscode)) {
+      hevcTranscodeTried = true;
+      const hevcTranscodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=720p`;
+      setProgress(0, t('vp.transcodingHevc', 'Видео в кодеке HEVC, конвертируем в H.264...'), true);
+      video.src = hevcTranscodeUrl;
+      safePlay();
+      return;
+    }
 
     if (currentSource === 'direct' && !directMedia.startsWith('/api/')) {
       currentSource = 'proxy';

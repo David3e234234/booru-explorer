@@ -70,6 +70,46 @@ test('Pawchive Parser Unit Tests', async (t) => {
     assert.deepEqual(posts, []);
   });
 
+  await t.test('video posts share one thumbnail URL across all quality tiers', async () => {
+    const client = mockContext.agent.get('https://pawchive.pw');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: '3001',
+        user: 'animator',
+        service: 'fanbox',
+        title: 'Tea Party 4K',
+        content: 'Clip',
+        file: {
+          name: 'TeaPartyVik4K_H.265.mp4',
+          path: '/ff/a5/TeaPartyVik4K_H.265.mp4'
+        },
+        attachments: []
+      }
+    ]);
+
+    client.intercept({
+      path: (p) => p.includes('/api/v1/creators'),
+      method: 'GET'
+    }).reply(200, [
+      { id: 'animator', name: 'Animator', service: 'fanbox' }
+    ]);
+
+    const posts = await fetchPawchive({ tags: '', limit: 10, page: 1 }, [], {});
+    assert.equal(posts.length, 1);
+    const post = posts[0];
+    assert.equal(post.isVideo, true);
+    // Each tier used to request its own quality, forcing three full-file
+    // downloads per video; all tiers must now point at one medium request.
+    assert.ok(post.thumb180.startsWith('/api/video-thumbnail?'));
+    assert.ok(post.thumb180.includes('quality=medium'));
+    assert.equal(post.thumb180, post.thumb360);
+    assert.equal(post.thumb360, post.thumb720);
+    assert.equal(post.previewUrl, post.thumb180);
+  });
+
   await t.test('fetchPawchivePostById resolves single post and creator profile', async () => {
     const client = mockContext.agent.get('https://pawchive.pw');
     client.intercept({

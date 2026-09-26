@@ -42,8 +42,11 @@ function resolveArchiveFilePath(relativeUrl) {
 
 const MAX_REMOTE_INPUT_BYTES = 512 * 1024 * 1024;
 const REMOTE_INPUT_TIMEOUT_MS = 120000;
+// A thumbnail needs one frame, not the whole clip: a slow upstream must fail
+// fast to the placeholder instead of pinning a slot for two minutes.
+const THUMBNAIL_INPUT_TIMEOUT_MS = 45000;
 
-async function prepareFfmpegInput(targetUrl, currentSettings, externalSignal = null) {
+async function prepareFfmpegInput(targetUrl, currentSettings, externalSignal = null, inputTimeoutMs = REMOTE_INPUT_TIMEOUT_MS) {
   if (typeof targetUrl === 'string' && targetUrl.startsWith('/')) {
     const localPath = resolveArchiveFilePath(targetUrl);
     return localPath ? { input: localPath, cleanup: () => {} } : null;
@@ -72,8 +75,8 @@ async function prepareFfmpegInput(targetUrl, currentSettings, externalSignal = n
     settings: currentSettings,
     site: resolveSiteFromUrl(targetUrl),
     signal: externalSignal
-      ? AbortSignal.any([AbortSignal.timeout(REMOTE_INPUT_TIMEOUT_MS), externalSignal])
-      : AbortSignal.timeout(REMOTE_INPUT_TIMEOUT_MS)
+      ? AbortSignal.any([AbortSignal.timeout(inputTimeoutMs), externalSignal])
+      : AbortSignal.timeout(inputTimeoutMs)
   });
   if (!response.ok || !response.body) {
     await response.body?.cancel().catch(() => {});
@@ -219,7 +222,7 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
 
     let prepared;
     try {
-      prepared = await prepareFfmpegInput(targetUrl, currentSettings, downloadController.signal);
+      prepared = await prepareFfmpegInput(targetUrl, currentSettings, downloadController.signal, THUMBNAIL_INPUT_TIMEOUT_MS);
     } catch (err) {
       logError('Thumbnail', `Не удалось загрузить видео для превью ${sanitizeLogUrl(targetUrl)}`, err);
       return false;
@@ -303,7 +306,7 @@ function generateThumbnail(req, targetUrl, quality, thumbPath) {
     } finally {
       prepared.cleanup();
     }
-  });
+  }, 'thumbnail');
 }
 
 const activeTranscodes = new Map();

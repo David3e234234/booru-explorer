@@ -167,8 +167,11 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - Image bodies are streamed with a 30 MB byte cap, validated by signature, cached atomically and served with `nosniff` plus a sandbox CSP.
 - Disk image cache is LRU-by-access: cache hits update mtime through `touchCacheFile()`.
 - FFmpeg never receives a remote URL. Remote media is first downloaded through `fetchSafe()` into a bounded local temp file, then processed and cleaned up.
-- FFmpeg concurrency is limited globally by `mediaJobSupervisor.js`; per-hash dedup maps cover the remaining duplicate-request case.
+- FFmpeg concurrency is split per kind by `mediaJobSupervisor.js`: transcodes are CPU-bound (2 parallel, queue 32), thumbnails are I/O-bound (6 parallel, queue 48). A saturated transcode pool must never stall gallery thumbnails; never merge the budgets back into one global counter.
+- Each thumbnail request carries a shorter remote-input budget (45s vs 120s for transcode): a slow upstream must fail fast to the SVG placeholder instead of pinning a slot. Per-hash dedup maps cover the remaining duplicate-request case.
+- Boards that serve large video clips (Pawchive) must emit ONE thumbnail URL (`quality=medium`) for `thumb180`/`thumb360`/`thumb720`; three quality variants mean three full-file downloads per video card.
 - Thumbnail and transcode outputs are written to unique temp files, validated, then atomically renamed.
+- HEVC sources (name markers `h.265`/`265`/`hevc`/`h265`/`x265`) must not be handed to the media element when the browser lacks a HEVC decoder: `public/js/modules/hevcCodec.js` detects this and `videoPlayer.js` routes them through `/api/transcode-video` automatically. Never let the JS remux path claim an HEVC source — demuxing cannot make an undecodable codec playable.
 
 ### Archives
 

@@ -1115,6 +1115,8 @@ Object.assign(en, {
   'vp.iosTranscoding': 'Apple devices do not support streaming. Waiting for conversion to complete...',
   'vp.transcoding': 'Converting...',
   'vp.iosTranscodeDone': 'Conversion complete!',
+  'vp.transcodingHevc': 'Video uses the HEVC codec, converting to H.264...',
+  'vp.transcodeDone': 'Conversion complete!',
   'vp.qualityBtn.title': 'Video quality',
   'vp.quality': 'Quality',
   'vp.switchingQuality': 'Switching quality ({q})...',

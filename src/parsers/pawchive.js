@@ -446,14 +446,18 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     const fileUrl = (isPrevOnly && !isVid)
       ? `https://img.pawchive.pw/thumbnail/data${m.path}`
       : `https://file.pawchive.pw/data${m.path}?f=${encodeURIComponent(rawFileName)}`;
+    // One generation serves every quality slot: each thumbnail request used to
+    // download the whole video again (low/medium/high), which stalled the
+    // gallery on boards full of large clips.
+    const videoThumbUrl = `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium`;
     const previewUrlRaw = isVid
-      ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium`
+      ? videoThumbUrl
       : `https://img.pawchive.pw/thumbnail/data${m.path}`;
     const sampleUrl = (isPrevOnly && !isVid) ? previewUrlRaw : fileUrl;
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVid);
-    const thumb180 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=low` : previewUrl;
-    const thumb360 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium` : previewUrl;
-    const thumb720 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=high` : previewUrl;
+    const thumb180 = isVid ? videoThumbUrl : previewUrl;
+    const thumb360 = isVid ? videoThumbUrl : previewUrl;
+    const thumb720 = isVid ? videoThumbUrl : previewUrl;
 
     return {
       id: `pawchive_${item.id}_${idx + 1}`,
