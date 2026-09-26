@@ -8,11 +8,13 @@ import {
   excludeInterestTag,
   restoreInterestTag,
   resetExcludedInterestTags,
-  clearSessionInterests
+  clearSessionInterests,
+  invalidateInterestCache
 } from '../state.js';
 import { 
   saveSettings, 
-  fetchCacheInfo, 
+  fetchCacheInfo,
+  markAuthHeadersDirty,
   clearCache, 
   syncFavorites, 
   syncLikes, 
@@ -175,6 +177,8 @@ export function applySettingsToUIAndState(s) {
   state.settings = { ...state.settings, ...s, theme };
   document.documentElement.setAttribute('data-theme', theme);
   syncThemeColor();
+  invalidateInterestCache();
+  markAuthHeadersDirty();
   const savedSite = s.defaultSite || localStorage.getItem('booru_selected_site');
   if (savedSite) {
     state.currentSite = savedSite;

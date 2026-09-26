@@ -1,4 +1,4 @@
-const CACHE_NAME = 'booru-explorer-v8.28';
+const CACHE_NAME = 'booru-explorer-v8.29';
 const MEDIA_CACHE = 'booru-media-v2';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
@@ -112,9 +112,24 @@ self.addEventListener('activate', (event) => {
 });
 
 // Media cache cap: LRU by key order (oldest evicted first)
+let trimMediaCacheTimer = null;
+let mediaEntryCount = 0;
+
+function scheduleTrimMediaCache() {
+  if (trimMediaCacheTimer) return;
+  trimMediaCacheTimer = setTimeout(() => {
+    trimMediaCacheTimer = null;
+    trimMediaCache().catch(() => {});
+  }, 30000);
+}
+
 async function trimMediaCache() {
   const cache = await caches.open(MEDIA_CACHE);
   const keys = await cache.keys();
+  if (keys.length <= MAX_MEDIA_ENTRIES) {
+    mediaEntryCount = keys.length;
+    return;
+  }
   const entries = [];
   for (const key of keys) {
     const response = await cache.match(key);
@@ -128,6 +143,7 @@ async function trimMediaCache() {
     await cache.delete(entries[index].key);
     index += 1;
   }
+  mediaEntryCount = entries.length - index;
 }
 
 function isCacheableMediaResponse(response) {
@@ -168,7 +184,14 @@ self.addEventListener('fetch', (event) => {
       if (cached) return cached;
       const response = await fetch(event.request);
       if (response && response.status === 200 && isCacheableMediaResponse(response)) {
-        putSafe(cache, event.request, response).then(() => trimMediaCache().catch(() => {}));
+        putSafe(cache, event.request, response).then(() => {
+          mediaEntryCount++;
+          if (mediaEntryCount > MAX_MEDIA_ENTRIES) {
+            trimMediaCache().catch(() => {});
+          } else {
+            scheduleTrimMediaCache();
+          }
+        });
       }
       return response;
     }));
@@ -229,7 +252,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For all other requests (API, video, proxy): direct network request with cache fallback
+  // Skip non-cacheable API endpoints entirely — they are never stored in the cache,
+  // so intercepting them only adds overhead per request.
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  // For all other requests (video, proxy, etc.): direct network request with cache fallback
   event.respondWith(safeRespond(event.request, async () => {
     try {
       return await fetch(event.request);

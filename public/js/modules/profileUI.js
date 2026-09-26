@@ -1,4 +1,5 @@
 import { state, clearLocalAuth, getUserInterestTags, excludeInterestTag, restoreInterestTag, resetExcludedInterestTags, saveLocalSettings, clearDislikesLocally } from '../state.js';
+import { markAuthHeadersDirty } from '../api.js';
 import { apiLogout, saveSettings, clearDislikesApi } from '../api.js';
 import { showToast, escapeHtml } from './uiUtils.js';
 import { t } from '../i18n.js';
@@ -217,6 +218,7 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   async function handleLogout() {
     await apiLogout();
     clearLocalAuth();
+    markAuthHeadersDirty();
     showToast(t('prof.loggedOut', 'Вы вышли из аккаунта'), 'info');
     if (typeof onReloadState === 'function') onReloadState();
   }

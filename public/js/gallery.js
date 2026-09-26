@@ -308,10 +308,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
   function chunkBounds(chunk) {
     const first = chunk.els[0];
-    const last = chunk.els[chunk.els.length - 1];
     if (!first) return null;
     const a = first.getBoundingClientRect();
-    const b = last !== first ? last.getBoundingClientRect() : a;
+    const last = chunk.els[chunk.els.length - 1];
+    if (last === first) return { top: a.top, bottom: a.bottom };
+    const b = last.getBoundingClientRect();
     return { top: Math.min(a.top, b.top), bottom: Math.max(a.bottom, b.bottom) };
   }
 
@@ -419,10 +420,19 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     setupInfiniteObserver();
   }, { passive: true });
   if ('ResizeObserver' in window) {
-    const gridResizeObserver = new ResizeObserver(() => {
-      // Grid box changed (append, 1col image loads): vertical offsets are stale
-      virtScanFrom = 0;
-      scheduleVirtualUpdate();
+    let resizeDebounceTimer = null;
+    let lastGridHeight = 0;
+    const gridResizeObserver = new ResizeObserver((entries) => {
+      if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+      resizeDebounceTimer = setTimeout(() => {
+        resizeDebounceTimer = null;
+        const newHeight = entries[0]?.contentRect?.height || 0;
+        if (Math.abs(newHeight - lastGridHeight) > 200) {
+          lastGridHeight = newHeight;
+          virtScanFrom = 0;
+          scheduleVirtualUpdate();
+        }
+      }, 100);
     });
     gridResizeObserver.observe(galleryGrid);
   }

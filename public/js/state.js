@@ -214,6 +214,9 @@ export const state = {
 
 export function setAuthorAliases(map) {
   state.authorAliases = (map && typeof map === 'object') ? map : {};
+  _favAuthorsNamesCache = null;
+  _favAuthorsCacheKey = '';
+  invalidateInterestCache();
   if (state.favoriteAuthors && state.favoriteAuthors.length > 0) {
     setFavoriteAuthors(state.favoriteAuthors);
   }
@@ -284,6 +287,7 @@ export function clearLocalAuth() {
   state.favoriteAuthorNames = new Set();
   state.viewedIds = new Set();
   clearSessionInterests();
+  invalidateInterestCache();
   try {
     localStorage.removeItem(STORAGE_KEYS.VIEWED);
     localStorage.removeItem(STORAGE_KEYS.FAVORITES);
@@ -335,6 +339,21 @@ export function setDislikes(dislikesList) {
   state.dislikes = dislikesList || [];
   state.dislikedIds = new Set(state.dislikes.map(d => d.id));
   saveLocalDislikes(state.dislikes);
+  invalidateInterestCache();
+}
+
+export function addDislikedId(id) {
+  if (id && !state.dislikedIds.has(id)) {
+    state.dislikedIds.add(id);
+    invalidateInterestCache();
+  }
+}
+
+export function removeDislikedId(id) {
+  if (id && state.dislikedIds.has(id)) {
+    state.dislikedIds.delete(id);
+    invalidateInterestCache();
+  }
 }
 
 export function isPostDisliked(id) {
@@ -677,6 +696,7 @@ export function importUserData(data, { replace = false } = {}) {
     importedCounts.presets = mergedList.length;
   }
 
+  invalidateInterestCache();
   return importedCounts;
 }
 
@@ -688,6 +708,27 @@ export function setFavorites(favList) {
   state.favorites = favList || [];
   state.favoriteIds = new Set(state.favorites.map(f => f.id));
   saveLocalFavorites(state.favorites);
+  invalidateInterestCache();
+  _mediaPrefsCache = null;
+  _mediaPrefsCacheKey = '';
+}
+
+export function addFavoriteId(id) {
+  if (id && !state.favoriteIds.has(id)) {
+    state.favoriteIds.add(id);
+    invalidateInterestCache();
+    _mediaPrefsCache = null;
+    _mediaPrefsCacheKey = '';
+  }
+}
+
+export function removeFavoriteId(id) {
+  if (id && state.favoriteIds.has(id)) {
+    state.favoriteIds.delete(id);
+    invalidateInterestCache();
+    _mediaPrefsCache = null;
+    _mediaPrefsCacheKey = '';
+  }
 }
 
 export function isPostFavorite(id) {
@@ -698,6 +739,27 @@ export function setLikes(likesList) {
   state.likes = likesList || [];
   state.likedIds = new Set(state.likes.map(l => l.id));
   saveLocalLikes(state.likes);
+  invalidateInterestCache();
+  _mediaPrefsCache = null;
+  _mediaPrefsCacheKey = '';
+}
+
+export function addLikedId(id) {
+  if (id && !state.likedIds.has(id)) {
+    state.likedIds.add(id);
+    invalidateInterestCache();
+    _mediaPrefsCache = null;
+    _mediaPrefsCacheKey = '';
+  }
+}
+
+export function removeLikedId(id) {
+  if (id && state.likedIds.has(id)) {
+    state.likedIds.delete(id);
+    invalidateInterestCache();
+    _mediaPrefsCache = null;
+    _mediaPrefsCacheKey = '';
+  }
 }
 
 export function isPostLiked(id) {
@@ -729,10 +791,23 @@ export function toggleLikeLocally(post) {
   }
 }
 
+let _favAuthorsNamesCache = null;
+let _favAuthorsCacheKey = '';
+
 export function setFavoriteAuthors(authorsList) {
   state.favoriteAuthors = authorsList || [];
-  const names = new Set();
+  invalidateInterestCache();
+
   const aliasMap = state.authorAliases || {};
+  const cacheKey = `${state.favoriteAuthors.length}|${Object.keys(aliasMap).length}`;
+
+  if (_favAuthorsNamesCache && _favAuthorsCacheKey === cacheKey) {
+    state.favoriteAuthorNames = _favAuthorsNamesCache;
+    saveLocalFavoriteAuthors(state.favoriteAuthors);
+    return;
+  }
+
+  const names = new Set();
 
   const registerName = (rawStr) => {
     if (!rawStr) return;
@@ -743,7 +818,6 @@ export function setFavoriteAuthors(authorsList) {
     for (const v of variants) {
       if (!v) continue;
       names.add(v);
-      // Also register all aliases known from aliasService / authorAliases
       if (aliasMap[v]) {
         for (const al of aliasMap[v]) {
           const cleanAl = String(al).toLowerCase().replace(/^(artist|creator|author):/i, '').replace(/\s+/g, '_').trim();
@@ -767,6 +841,8 @@ export function setFavoriteAuthors(authorsList) {
     }
   }
   state.favoriteAuthorNames = names;
+  _favAuthorsNamesCache = names;
+  _favAuthorsCacheKey = cacheKey;
   saveLocalFavoriteAuthors(state.favoriteAuthors);
 }
 
@@ -900,9 +976,21 @@ export function getSessionSkipPenalties() {
 }
 
 // 🎬 Calculate user format preferences (videos vs images, portrait vs landscape)
+let _mediaPrefsCache = null;
+let _mediaPrefsCacheKey = '';
+
 export function getUserMediaPreferences() {
+  const cacheKey = `${state.likes.length}|${state.favorites.length}`;
+  if (_mediaPrefsCache && _mediaPrefsCacheKey === cacheKey) {
+    return _mediaPrefsCache;
+  }
+
   const postsPool = [...state.likes, ...state.favorites];
-  if (postsPool.length === 0) return { videoAffinity: 0, prefersPortrait: false };
+  if (postsPool.length === 0) {
+    _mediaPrefsCache = { videoAffinity: 0, prefersPortrait: false };
+    _mediaPrefsCacheKey = cacheKey;
+    return _mediaPrefsCache;
+  }
   let videoCount = 0;
   let portraitCount = 0;
   let validAspectCount = 0;
@@ -917,7 +1005,9 @@ export function getUserMediaPreferences() {
 
   const videoAffinity = videoCount / postsPool.length;
   const prefersPortrait = validAspectCount > 0 && (portraitCount / validAspectCount) > 0.65;
-  return { videoAffinity, prefersPortrait };
+  _mediaPrefsCache = { videoAffinity, prefersPortrait };
+  _mediaPrefsCacheKey = cacheKey;
+  return _mediaPrefsCache;
 }
 
 // 🚫 Extract top disliked tags to inject into seed queries as negative tokens (-tag)
@@ -976,14 +1066,38 @@ export function getUserNegativeSeedTokens(maxTokens = 4) {
 }
 
 // 🧠 Advanced algorithm for extracting the user's interest map with temporal decay and category balancing
+let _interestCache = null;
+let _interestCacheKey = '';
+
+export function invalidateInterestCache() {
+  _interestCache = null;
+  _interestCacheKey = '';
+}
+
 export function getUserInterestTags(limit = null, options = {}) {
+  const halfLife = state.settings?.recommendationDecayDays || 25;
+  const focusMode = options.focusMode || state.recommendationFocus || state.settings?.recommendationFocus || 'all';
+
+  const cacheKey = [
+    state.likes.length,
+    state.favorites.length,
+    (state.dislikes || []).length,
+    state.favoriteAuthors.length,
+    Object.keys(state.authorAliases || {}).length,
+    state.settings?.excludedInterestTags?.length || 0,
+    halfLife,
+    focusMode
+  ].join('|');
+
+  if (_interestCache && _interestCacheKey === cacheKey) {
+    const cached = _interestCache;
+    return (typeof limit === 'number' && limit > 0) ? cached.slice(0, limit) : cached;
+  }
+
   const counts = new Map(); // tag -> positive weight sum
   const dislikeCounts = new Map(); // tag -> negative penalty sum
   const weights = new Map(); // tag -> baseWeight
   const catMap = new Map(); // tag -> category
-
-  const halfLife = state.settings?.recommendationDecayDays || 25;
-  const focusMode = options.focusMode || state.recommendationFocus || state.settings?.recommendationFocus || 'all';
 
   // 1. Analyze all liked posts (weight 2.2 × temporal decay)
   for (const post of state.likes) {
@@ -1080,12 +1194,14 @@ export function getUserInterestTags(limit = null, options = {}) {
   }
 
   list.sort((a, b) => b.score - a.score);
+  _interestCache = list;
+  _interestCacheKey = cacheKey;
   return (typeof limit === 'number' && limit > 0) ? list.slice(0, limit) : list;
 }
 
 // 🔗 Extract stable tag pair combinations for seed queries
-export function getUserInterestSeedPairs(limit = 12) {
-  const userInterests = getUserInterestTags();
+export function getUserInterestSeedPairs(limit = 12, precomputedInterests = null) {
+  const userInterests = precomputedInterests || getUserInterestTags();
   if (userInterests.length === 0) return [];
 
   const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
@@ -1132,11 +1248,11 @@ export function getUserInterestSeedPairs(limit = 12) {
 }
 
 // 🌐 Build taste clusters by finding co-occurrence communities among liked/favorited posts
-export function getUserTasteClusters(maxClusters = 4) {
+export function getUserTasteClusters(maxClusters = 4, precomputedInterests = null) {
   const postsPool = [...state.likes, ...state.favorites];
   if (postsPool.length < 3) return [];
 
-  const userInterests = getUserInterestTags();
+  const userInterests = precomputedInterests || getUserInterestTags();
   if (userInterests.length === 0) return [];
   const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
   const excludedSet = new Set((state.settings?.excludedInterestTags || []).map(t => String(t).toLowerCase().trim()));
@@ -1219,7 +1335,7 @@ export function getRecommendationSeeds({ limit = 5, page = 1, focusMode = 'all' 
   const userInterests = getUserInterestTags(40, { focusMode });
   if (userInterests.length === 0) return [];
 
-  const seedPairs = getUserInterestSeedPairs(20);
+  const seedPairs = getUserInterestSeedPairs(20, userInterests);
   const selectedSeeds = [];
 
   if (focusMode === 'artists') {
@@ -1254,7 +1370,7 @@ export function getRecommendationSeeds({ limit = 5, page = 1, focusMode = 'all' 
     }
   } else {
     // Balanced "all" mode: Use taste clusters to keep seed pairs thematically coherent
-    const clusters = getUserTasteClusters(4);
+    const clusters = getUserTasteClusters(4, userInterests);
     if (clusters.length > 0) {
       const activeCluster = clusters[(page - 1) % clusters.length];
       if (activeCluster && activeCluster.tags.length >= 2) {
@@ -1316,6 +1432,7 @@ export function excludeInterestTag(tag) {
     state.settings.excludedInterestTags.push(clean);
     state.excludedInterestTags = [...state.settings.excludedInterestTags];
     saveLocalSettings({ excludedInterestTags: state.settings.excludedInterestTags });
+    invalidateInterestCache();
   }
 }
 
@@ -1326,6 +1443,7 @@ export function restoreInterestTag(tag) {
   state.settings.excludedInterestTags = state.settings.excludedInterestTags.filter(t => t !== clean);
   state.excludedInterestTags = [...state.settings.excludedInterestTags];
   saveLocalSettings({ excludedInterestTags: state.settings.excludedInterestTags });
+  invalidateInterestCache();
 }
 
 export function resetExcludedInterestTags() {

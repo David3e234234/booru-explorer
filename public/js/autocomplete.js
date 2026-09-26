@@ -11,6 +11,7 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
   let requestSeq = 0;
   let activeIndex = -1;
   let currentSuggestions = [];
+  let activeAbortController = null;
   const suggestionsCache = new Map(); // Fast client-side suggestion cache
 
   function renderTagsChips() {
@@ -72,6 +73,8 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
 
     debounceTimer = setTimeout(async () => {
       const seq = ++requestSeq;
+      if (activeAbortController) activeAbortController.abort();
+      activeAbortController = new AbortController();
       try {
         const data = await fetchTagAutocomplete(normalizedVal, state.currentSite);
         if (seq !== requestSeq || normalizedVal !== searchInput.value.trim().replace(/\s+/g, '_')) return;
@@ -85,9 +88,9 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
         }
         renderDropdown(currentSuggestions);
       } catch (err) {
-        hideDropdown();
+        if (err?.name !== 'AbortError') hideDropdown();
       }
-    }, 80);
+    }, 150);
   });
 
   searchInput.addEventListener('keydown', (e) => {

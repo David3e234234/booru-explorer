@@ -1,5 +1,5 @@
 import { state, saveLocalAuth, clearLocalAuth, loadLocalFavorites, loadLocalLikes, loadLocalFavoriteAuthors, loadLocalSettings, saveLocalSettings, setPresets, loadLocalPresets } from '../state.js';
-import { apiLogin, apiRegister, apiLogout } from '../api.js';
+import { apiLogin, apiRegister, apiLogout, markAuthHeadersDirty } from '../api.js';
 import { applySettingsToUIAndState } from './settingsModal.js';
 import { renderPresetsList } from './searchPresetsUI.js';
 import { showToast } from './uiUtils.js';
@@ -109,6 +109,7 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
       const res = await apiLogin(username, password, initialData);
       if (res.success && res.token && res.user) {
         saveLocalAuth(res.token, res.user);
+        markAuthHeadersDirty();
         if (res.settings && typeof res.settings === 'object') {
           if (Array.isArray(res.settings.searchPresets)) {
             setPresets(res.settings.searchPresets);
@@ -173,6 +174,7 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
       const res = await apiRegister(username, password, initialData);
       if (res.success && res.token && res.user) {
         saveLocalAuth(res.token, res.user);
+        markAuthHeadersDirty();
         showToast(t('auth.accountCreated', 'Аккаунт {name} успешно создан!').replace('{name}', res.user.username), 'success');
         closeAuthModal();
         if (typeof onAuthSuccess === 'function') onAuthSuccess(res.user);

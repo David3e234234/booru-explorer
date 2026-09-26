@@ -1,4 +1,4 @@
-import { state, STORAGE_KEYS } from './state.js';
+import { state, STORAGE_KEYS, SECRET_SETTING_FIELDS } from './state.js';
 
 export const isMyLiveDemoHost = false;
 
@@ -20,20 +20,65 @@ async function readJsonOrThrow(res) {
 
 export const ADMIN_TOKEN_STORAGE_KEY = STORAGE_KEYS.ADMIN_TOKEN;
 
+let cachedAdminToken = null;
+
 export function getAdminToken() {
+  if (cachedAdminToken !== null) return cachedAdminToken;
   try {
-    return localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
+    cachedAdminToken = localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || '';
   } catch (e) {
-    return '';
+    cachedAdminToken = '';
   }
+  return cachedAdminToken;
 }
 
 export function setAdminToken(value) {
+  const token = String(value || '').trim();
+  cachedAdminToken = token;
   try {
-    const token = String(value || '').trim();
     if (token) localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
     else localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
   } catch (e) {}
+}
+
+const AUTH_CACHE_FIELDS = [
+  'rule34ApiKey', 'rule34UserId',
+  'gelbooruApiKey', 'gelbooruUserId',
+  'danbooruApiKey', 'danbooruLogin',
+  'konachanLogin', 'konachanPassword',
+  'yandereLogin', 'yanderePassword',
+  'pawchiveSession', 'kemonoSession', 'kemonoProxy',
+  'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags', 'aiTags', 'blacklist',
+  'groupAlbums', 'prioritizeUserTags', 'deepFetchPages', 'enablePaheal',
+  'customAliases', 'siteSortTags', 'pawchiveService', 'kemonoService', 'hideZipPosts',
+  ...SECRET_SETTING_FIELDS.filter(f => !['telegramBotToken', 'telegramChatId'].includes(f)),
+  'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy',
+  'konachanProxy', 'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy',
+  'tbibProxy', 'pawchiveProxy'
+];
+
+let cachedAuthHeader = null;
+let cachedAuthToken = null;
+let cachedAdminTokenValue = null;
+let cachedAuthKey = '';
+
+export function markAuthHeadersDirty() {
+  cachedAuthHeader = null;
+  cachedAuthKey = '';
+}
+
+function buildAuthKey() {
+  const s = state.settings || {};
+  let key = state.authToken || '';
+  for (const field of AUTH_CACHE_FIELDS) {
+    const val = s[field];
+    if (val === undefined || val === null) continue;
+    if (Array.isArray(val)) key += `[${val.join(',')}]`;
+    else if (typeof val === 'object') key += JSON.stringify(val);
+    else key += String(val);
+  }
+  key += `|${cachedAdminToken || ''}`;
+  return key;
 }
 
 export function getAuthHeaders(includeJson = false) {
@@ -44,59 +89,49 @@ export function getAuthHeaders(includeJson = false) {
   if (state && state.authToken) {
     headers['Authorization'] = `Bearer ${state.authToken}`;
   }
-  // Server-wide operations (cache clear, tunnel, backup) can be unlocked with the
-  // operator token instead of the owner session, see BOORU_ADMIN_TOKEN.
   const adminToken = getAdminToken();
   if (adminToken) {
     headers['x-booru-admin-token'] = adminToken;
   }
   if (state && state.settings) {
-    const authData = {
-      rule34ApiKey: state.settings.rule34ApiKey || '',
-      rule34UserId: state.settings.rule34UserId || '',
-      gelbooruApiKey: state.settings.gelbooruApiKey || '',
-      gelbooruUserId: state.settings.gelbooruUserId || '',
-      danbooruApiKey: state.settings.danbooruApiKey || '',
-      danbooruLogin: state.settings.danbooruLogin || '',
-      konachanLogin: state.settings.konachanLogin || '',
-      konachanPassword: state.settings.konachanPassword || '',
-      yandereLogin: state.settings.yandereLogin || '',
-      yanderePassword: state.settings.yanderePassword || '',
-      pawchiveSession: state.settings.pawchiveSession || '',
-      kemonoSession: state.settings.kemonoSession || '',
-      globalProxy: state.settings.globalProxy || '',
-      danbooruProxy: state.settings.danbooruProxy || '',
-      gelbooruProxy: state.settings.gelbooruProxy || '',
-      rule34Proxy: state.settings.rule34Proxy || '',
-      yandereProxy: state.settings.yandereProxy || '',
-      konachanProxy: state.settings.konachanProxy || '',
-      safebooruProxy: state.settings.safebooruProxy || '',
-      rule34videoProxy: state.settings.rule34videoProxy || '',
-      xbooruProxy: state.settings.xbooruProxy || '',
-      hypnohubProxy: state.settings.hypnohubProxy || '',
-      tbibProxy: state.settings.tbibProxy || '',
-      pawchiveProxy: state.settings.pawchiveProxy || '',
-      kemonoProxy: state.settings.kemonoProxy || '',
-      curvyTags: state.settings.curvyTags || [],
-      petiteTags: state.settings.petiteTags || [],
-      furryTags: state.settings.furryTags || [],
-      pregnantTags: state.settings.pregnantTags || [],
-      lgbtTags: state.settings.lgbtTags || [],
-      aiTags: state.settings.aiTags || [],
-      blacklist: state.settings.blacklist || [],
-      groupAlbums: state.settings.groupAlbums !== false,
-      prioritizeUserTags: state.settings.prioritizeUserTags === true,
-      deepFetchPages: state.settings.deepFetchPages || 2,
-      enablePaheal: state.settings.enablePaheal !== false,
-      customAliases: state.settings.customAliases || {},
-      siteSortTags: state.settings.siteSortTags || {},
-      pawchiveService: state.settings.pawchiveService || 'all',
-      kemonoService: state.settings.kemonoService || 'all',
-      hideZipPosts: state.settings.hideZipPosts || false
-    };
-    headers['x-booru-auth'] = encodeURIComponent(JSON.stringify(authData));
+    const authKey = buildAuthKey();
+    if (cachedAuthHeader && cachedAuthKey === authKey && cachedAuthToken === state.authToken && cachedAdminTokenValue === adminToken) {
+      headers['x-booru-auth'] = cachedAuthHeader;
+      return headers;
+    }
+    const authData = {};
+    for (const field of AUTH_CACHE_FIELDS) {
+      const val = state.settings[field];
+      if (val === undefined || val === null) continue;
+      if (Array.isArray(val)) {
+        if (val.length > 0) authData[field] = val;
+      } else if (typeof val === 'object') {
+        if (Object.keys(val).length > 0) authData[field] = val;
+      } else {
+        authData[field] = val;
+      }
+    }
+    const serialized = encodeURIComponent(JSON.stringify(authData));
+    cachedAuthHeader = serialized;
+    cachedAuthKey = authKey;
+    cachedAuthToken = state.authToken;
+    cachedAdminTokenValue = adminToken;
+    headers['x-booru-auth'] = serialized;
   }
   return headers;
+}
+
+const inFlightRequests = new Map();
+
+function dedupedFetch(key, fetchFn) {
+  if (inFlightRequests.has(key)) {
+    return inFlightRequests.get(key);
+  }
+  const promise = fetchFn().finally(() => {
+    inFlightRequests.delete(key);
+  });
+  inFlightRequests.set(key, promise);
+  return promise;
 }
 
 export async function apiRegister(username, password, initialData = {}) {
@@ -228,9 +263,10 @@ export async function fetchPosts({
     params._t = String(Date.now());
   }
   const query = new URLSearchParams(params);
-  const res = await fetch(`/api/posts?${query.toString()}`, {
+  const url = `/api/posts?${query.toString()}`;
+  const res = await dedupedFetch(url, () => fetch(url, {
     headers: getAuthHeaders()
-  });
+  }));
   // Surface HTTP failures: returning a fake empty success used to kill infinite
   // scroll after one transient error and showed "nothing found" instead of the error state
   if (!res.ok) {
@@ -291,9 +327,10 @@ export async function fetchArchiveInspect(zipUrl, options = {}) {
 
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
-  const res = await fetch(`/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`, {
+  const url = `/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`;
+  const res = await dedupedFetch(url, () => fetch(url, {
     headers: getAuthHeaders()
-  });
+  }));
   return readJsonOrThrow(res);
 }
 

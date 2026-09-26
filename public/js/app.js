@@ -27,7 +27,8 @@ import {
   SECRET_SETTING_FIELDS,
   setAuthorAliases,
   setPresets,
-  loadLocalPresets
+  loadLocalPresets,
+  invalidateInterestCache
 } from './state.js';
 import { 
   fetchPosts, 
@@ -799,11 +800,7 @@ async function loadUserSettings(generation = accountGeneration) {
       }
 
       // Also transfer any proxy settings that the account is missing
-      const proxyFields = [
-        'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy',
-        'yandereProxy', 'konachanProxy', 'safebooruProxy', 'rule34videoProxy',
-        'xbooruProxy', 'hypnohubProxy', 'tbibProxy', 'pawchiveProxy', 'kemonoProxy'
-      ];
+      const proxyFields = SECRET_SETTING_FIELDS.filter(f => f.endsWith('Proxy'));
       for (const field of proxyFields) {
         const serverVal = serverSettings[field];
         const localVal = local[field];
@@ -2270,6 +2267,7 @@ function setupEventListeners() {
       state.recommendationFocus = focus;
       if (state.settings) state.settings.recommendationFocus = focus;
       saveLocalSettings({ recommendationFocus: focus });
+      invalidateInterestCache();
       recFocusButtons.forEach(b => b.classList.toggle('active', b === btn));
       performSearch(true, { bustCache: false, showLoading: true });
     });
