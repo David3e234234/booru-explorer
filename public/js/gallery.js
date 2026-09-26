@@ -10,8 +10,9 @@ import {
   excludeInterestTag,
   restoreInterestTag
 } from './state.js';
-import { getProxiedUrl, getAuthHeaders, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
-import { showToast, showActionToast, haptic, isVideoMediaUrl, upsertCardDurationBadge, escapeHtml, toSafeImageUrl, toSafeHttpUrl } from './modules/uiUtils.js';
+import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
+import { showToast, showActionToast, haptic, isVideoMediaUrl, getCardPreviewVideoUrl, upsertCardDurationBadge, escapeHtml, toSafeImageUrl, toSafeHttpUrl } from './modules/uiUtils.js';
+import { resolveRule34VideoMedia } from './modules/rule34VideoResolve.js';
 import { t } from './i18n.js';
 
 export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onAuthorSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite, onFindSimilar }) {
@@ -144,7 +145,9 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
         if (entry.isIntersecting) {
           if (!videoEl.src) {
-            const videoTarget = post.fileUrl || post.sampleUrl;
+            // Cards must never pull the full stream: after a post was opened once its
+            // fileUrl points at the 1080p file, while the teaser is the intended material.
+            const videoTarget = getCardPreviewVideoUrl(post);
             if (videoTarget) {
               const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
               card._videoProbe = false;
@@ -629,6 +632,23 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   ]);
 
   const resolvingCardAuthors = new Set();
+  // A Rule34Video page has no author link in its feed markup, so most cards queue a
+  // resolve. Unbounded, one page fired ~30 requests and ate the per-IP budget the
+  // viewer needs for the full stream, which left it playing the teaser forever.
+  const CARD_RESOLVE_CONCURRENCY = 2;
+  let cardResolveInFlight = 0;
+  const cardResolveQueue = [];
+
+  function runNextCardResolve() {
+    while (cardResolveInFlight < CARD_RESOLVE_CONCURRENCY && cardResolveQueue.length > 0) {
+      const task = cardResolveQueue.shift();
+      cardResolveInFlight++;
+      task().finally(() => {
+        cardResolveInFlight--;
+        runNextCardResolve();
+      });
+    }
+  }
 
   function lazyResolveRule34VideoAuthor(card, post) {
     if (!post || post.site !== 'rule34video' || post.author) return;
@@ -636,10 +656,8 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (!postId || resolvingCardAuthors.has(postId)) return;
     resolvingCardAuthors.add(postId);
 
-    fetch(`/api/resolve-video?id=${encodeURIComponent(post.originalId)}&url=${encodeURIComponent(post.source || '')}&site=rule34video`, { headers: getAuthHeaders() })
-      .then(r => r.json())
+    cardResolveQueue.push(() => resolveRule34VideoMedia(post)
       .then(data => {
-        resolvingCardAuthors.delete(postId);
         if (!data || !data.author) return;
         post.author = data.author;
         if (card._post) card._post.author = data.author;
@@ -673,7 +691,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           }
         }
 
-        if (data.duration && (!post.duration || post.duration === 20)) {
+        if (data.duration && data.duration > 0) {
           post.duration = data.duration;
           post.durationText = data.durationText;
           if (card._post) {
@@ -683,9 +701,12 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
           upsertCardDurationBadge(card, post.durationText);
         }
       })
-      .catch(() => {
+      .catch(() => {})
+      .finally(() => {
         resolvingCardAuthors.delete(postId);
-      });
+      }));
+
+    runNextCardResolve();
   }
 
   function createMediaCard(post, index) {
@@ -1335,7 +1356,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     hoverState = { card, timer: null, videoEl };
     hoverState.timer = setTimeout(() => {
       if (!videoEl.src) {
-        const videoTarget = post.fileUrl || post.sampleUrl;
+        const videoTarget = getCardPreviewVideoUrl(post);
         if (videoTarget) {
           const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
           videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;

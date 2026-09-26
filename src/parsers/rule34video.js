@@ -310,6 +310,9 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         previewUrl: resolvePreviewUrl(thumb, videoUrl, videoUrl, true),
         sampleUrl: videoUrl,
         fileUrl: videoUrl,
+        // Resolved through the video page, so the link is already the full file
+        teaserUrl: '',
+        hasFullMediaPending: false,
         fileExt: 'mp4',
         isVideo: true,
         isGif: false,
@@ -706,6 +709,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         const thumb720 = thumb || previewMp4 || '';
         const thumbSample = thumb || '';
         const thumbOriginal = thumb || '';
+        // The feed only exposes the ~20s teaser clip (`data-preview`). It stays in
+        // fileUrl on purpose: gallery cards play it as the muted hover preview.
+        // The viewer must not treat it as final media and has to resolve the full
+        // stream first, which is what hasFullMediaPending tells it.
         const mediaUrl = previewMp4 || thumb || '';
 
         const silentTags = new Set(['no sound', 'no_sound', 'mute', 'silent', 'muted', 'no-sound']);
@@ -728,6 +735,8 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
           thumbOriginal,
           sampleUrl: mediaUrl,
           fileUrl: mediaUrl,
+          teaserUrl: previewMp4,
+          hasFullMediaPending: true,
           fileExt: 'mp4',
           isVideo: true,
           isGif: false,
@@ -770,6 +779,15 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
 
 const resolvedVideoCache = new Map();
 
+function isRule34VideoHost(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === 'rule34video.com' || parsed.hostname === 'www.rule34video.com';
+  } catch {
+    return false;
+  }
+}
+
 export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, preferredAuthor = '') {
   const preferredQuality = settings?.videoDefaultQuality || settings?.preferredQuality || '';
   const cacheKey = `${String(id || sourceUrl)}_${preferredAuthor || ''}_${preferredQuality || ''}`;
@@ -778,29 +796,57 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, 
   }
 
   let videoId = /^\d+$/.test(String(id || '').trim()) ? String(id || '').trim() : '';
-  if (!videoId && typeof sourceUrl === 'string') {
+  let pageUrl = '';
+  if (typeof sourceUrl === 'string' && sourceUrl) {
     try {
       const parsed = new URL(sourceUrl, 'https://rule34video.com');
-      if (parsed.hostname === 'rule34video.com' || parsed.hostname === 'www.rule34video.com') {
+      if (isRule34VideoHost(parsed.toString())) {
         const match = parsed.pathname.match(/\/(?:video|videos)\/(\d+)/i);
-        if (match) videoId = match[1];
+        if (match) {
+          if (!videoId) videoId = match[1];
+          // Feed posts already carry the canonical `/video/<id>/<slug>/` link
+          if (/\/(?:video|videos)\/\d+\/[^/]+\/?$/i.test(parsed.pathname)) {
+            pageUrl = parsed.toString();
+          }
+        }
       }
     } catch {}
   }
   if (!videoId) return null;
 
-  const targetUrl = `https://rule34video.com/video/${videoId}/`;
+  // The board only serves `/video/<id>/<slug>/`; the bare id form answers 404, which
+  // is why the full stream never resolved and the viewer kept replaying the teaser.
+  // Any placeholder slug is answered with a 301 to the canonical URL, so an `id:`
+  // lookup still works through a single manual hop.
+  const targetUrl = pageUrl || `https://rule34video.com/video/${videoId}/x/`;
+
+  const requestOptions = {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'Referer': 'https://rule34video.com/'
+    },
+    timeout: 10000,
+    settings,
+    site: 'rule34video'
+  };
 
   try {
-    const res = await fetchSafe(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://rule34video.com/'
-      },
-      timeout: 10000,
-      settings,
-      site: 'rule34video'
-    });
+    let res = await fetchSafe(targetUrl, requestOptions);
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location');
+      await discardResponse(res);
+      if (!location) return null;
+      let canonical;
+      try {
+        canonical = new URL(location, 'https://rule34video.com').toString();
+      } catch {
+        return null;
+      }
+      // Only the board itself may be followed: a Location header is untrusted input
+      // and this hop is not covered by the SSRF check of a user-supplied URL.
+      if (!isRule34VideoHost(canonical)) return null;
+      res = await fetchSafe(canonical, requestOptions);
+    }
     if (!res.ok) {
       await discardResponse(res);
       return null;

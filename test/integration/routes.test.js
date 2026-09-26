@@ -450,6 +450,16 @@ describe('Express API Integration & Route Tests', () => {
       const data = await res.json();
       assert.strictEqual(data.success, false);
     });
+
+    // The client decides between a retry affordance and a silent fallback by this
+    // reason, so an unsupported target must not look like a throttled request.
+    it('GET /api/resolve-video reports why it could not resolve', async () => {
+      const res = await fetch(`${baseUrl}/api/resolve-video?url=https://example.com/image.jpg`);
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+      assert.strictEqual(data.reason, 'unsupported_target');
+    });
   });
 
   describe('Tag Autocomplete Routes (/api/tags/autocomplete)', () => {

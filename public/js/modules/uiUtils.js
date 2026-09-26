@@ -149,7 +149,7 @@ export function getPostSiteUrl(post) {
     if (post.source && /^https?:\/\/(?:www\.)?rule34video\.com\//i.test(post.source)) {
       return post.source;
     }
-    if (origId) return `https://rule34video.com/videos/${origId}/`;
+    if (origId) return `https://rule34video.com/video/${origId}/`;
   }
   if (site === 'yandere' && origId) {
     return `https://yande.re/post/show/${origId}`;
@@ -217,6 +217,49 @@ export function isVideoMediaUrl(url) {
   const clean = url.split('?')[0].toLowerCase();
   return clean.endsWith('.mp4') || clean.endsWith('.webm') ||
          clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
+}
+
+/**
+ * Strips query/fragment and trailing slashes so path checks are not defeated by
+ * `?v-acctoken=...` or the trailing slash Rule34Video puts on its get_file links
+ * (`4627795_preview.mp4/` - which is why isVideoMediaUrl() does not match them).
+ */
+function normalizeMediaPath(url) {
+  if (!url || typeof url !== 'string') return '';
+  return url.split('?')[0].split('#')[0].replace(/\/+$/, '').toLowerCase();
+}
+
+/**
+ * Rule34Video serves a ~20 second teaser next to every full-quality stream. The
+ * teaser is the right material for a gallery hover preview but must never be
+ * played as if it were the video, so both cases are told apart by file name.
+ */
+export function isRule34VideoTeaserUrl(url) {
+  const path = normalizeMediaPath(url);
+  if (!path) return false;
+  const file = path.slice(path.lastIndexOf('/') + 1);
+  return /(^|[._-])preview([._-]|$)/.test(file);
+}
+
+/**
+ * True while a post only carries teaser media and the full stream still has to be
+ * resolved. Posts stored before the parser started flagging this are detected by
+ * their URL, so favourites and likes reopen without replaying the teaser.
+ */
+export function isFullMediaPending(post) {
+  if (!post || !post.isVideo) return false;
+  if (post.hasFullMediaPending === true) return true;
+  if (post.site !== 'rule34video') return false;
+  return isRule34VideoTeaserUrl(post.fileUrl) || isRule34VideoTeaserUrl(post.sampleUrl);
+}
+
+/**
+ * Media that a card may show without hitting the full-resolution stream: the
+ * short teaser when there is one, otherwise whatever the post exposes.
+ */
+export function getCardPreviewVideoUrl(post) {
+  if (!post) return '';
+  return post.teaserUrl || post.fileUrl || post.sampleUrl || '';
 }
 
 /**

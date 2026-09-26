@@ -121,6 +121,21 @@ Normalized post contract:
 }
 ```
 
+Boards that only publish a short teaser in their feed add two optional fields:
+
+```js
+{
+  teaserUrl,          // the short clip, used for card previews only
+  hasFullMediaPending // fileUrl is not final yet, the full stream must be resolved
+}
+```
+
+- Rule34Video is the only current user. Its feed markup carries `data-preview`, a ~20s silent teaser, and nothing else, so `fileUrl` holds the teaser and the real stream has to be resolved on demand.
+- The teaser must never be played as the video. `videoPlayer.js` attaches no source while `isFullMediaPending()` holds and shows a retry overlay instead of silently looping the teaser.
+- Cards legitimately use the teaser. `getCardPreviewVideoUrl()` keeps them on it after the viewer replaced `fileUrl` with the 1080p link.
+- `isFullMediaPending()` also matches teaser URLs, so posts stored in favourites and likes before the flag existed reopen correctly.
+- The board only serves `/video/<id>/<slug>/`; the bare id form answers 404. `resolveRule34VideoFullMedia()` reuses the post page link when it has one and otherwise makes a single manual redirect hop, which must stay on the board host.
+
 Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` case, all-sites capability use, frontend site metadata, settings UI metadata if site-specific, parser tests and documentation updates.
 
 ### Settings And Cache Keys
@@ -142,6 +157,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - Never log proxy userinfo, signed query strings or full CDN URLs; use `sanitizeLogUrl()`.
 - Board access is token-only. `siteSessionService.js` no longer exchanges credentials: it normalizes the operator's pasted `session` cookie and nothing else. Do not reintroduce a login/password exchange, an upstream login request, or a server-side session cache. Kemono's JSON login API and the Pawchive HTML form are intentionally unused; a gallery page issues many parallel requests, so any per-request credential exchange would trip the upstream anti-flood.
 - `fetchSafe()` must keep `redirect: 'manual'` for every hop. Leaving it unset lets undici follow redirects on its own, which hides the `Location` and `Set-Cookie` headers a caller needs to inspect. A caller asking not to follow has to receive the 3xx itself.
+- A caller that needs the redirect target must follow the `Location` itself and re-check the host. Rule34Video answers any `/video/<id>/<slug>/` with a 301 to its canonical page, and that `Location` is untrusted input.
 - Never log board credentials, session tokens or a raw login response body. Log the site and the HTTP status only.
 - A gallery page issues many parallel requests. Every login path must stay single-flighted, cached and paced; a login per request trips the upstream anti-flood and gets the deployment blocked.
 

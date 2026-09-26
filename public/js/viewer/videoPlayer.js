@@ -1,5 +1,6 @@
 import { t } from '../i18n.js';
-import { getAuthHeaders } from '../api.js';
+import { showToast, escapeHtml, toSafeHttpUrl, getPostSiteUrl, isFullMediaPending, isRule34VideoTeaserUrl } from '../modules/uiUtils.js';
+import { resolveRule34VideoMedia } from '../modules/rule34VideoResolve.js';
 
 export function makeBannerDraggable(bannerEl) {
   if (!bannerEl) return;
@@ -276,6 +277,15 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     proxyMedia = activeMediaInfo.isTranscode ? directMedia : getProxiedUrl(directMedia);
   };
 
+  // A Rule34Video feed post only carries the ~20s teaser, so playback is deferred
+  // until /api/resolve-video hands over the full stream. Handing the teaser to the
+  // media element is what made users report "the video is only 20 seconds long".
+  const teaserUrl = currentPost.teaserUrl || (isRule34VideoTeaserUrl(directMedia) ? directMedia : '');
+  let fullMediaPending = isFullMediaPending(currentPost);
+  let playingTeaser = false;
+  let playerDestroyed = false;
+  let resolveWatchdog = null;
+
   const videoContainer = document.createElement('div');
   videoContainer.className = 'viewer-video-container';
 
@@ -329,7 +339,14 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   const posterQuality = state.settings?.previewQuality || 'high';
   const videoTarget = currentPost.fileUrl || currentPost.sampleUrl || '';
-  if (posterQuality === 'high' || posterQuality === 'original') {
+  // While only the teaser is known, its still frame is the honest poster: running
+  // FFmpeg over a 20s clip to draw a placeholder wastes a job on every opened post.
+  const stillPoster = (fullMediaPending && currentPost.previewUrl && !isRule34VideoTeaserUrl(currentPost.previewUrl))
+    ? currentPost.previewUrl
+    : '';
+  if (stillPoster) {
+    video.poster = stillPoster;
+  } else if (posterQuality === 'high' || posterQuality === 'original') {
     video.poster = videoTarget ? `/api/video-thumbnail?url=${encodeURIComponent(videoTarget)}&quality=${posterQuality}` : (currentPost.previewUrl || '');
   } else if (currentPost.previewUrl) {
     video.poster = currentPost.previewUrl;
@@ -394,6 +411,12 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const switchBtn = statusBanner.querySelector('.btn-switch-source');
   
   const triggerDownload = () => {
+    // Downloading the teaser would silently hand the user a 20s clip labelled as
+    // the video, so the button waits until the full stream is known.
+    if (fullMediaPending) {
+      showToast(t('vp.downloadPending', 'Полное видео ещё загружается, попробуйте через пару секунд'));
+      return;
+    }
     const rawTarget = currentPost.fileUrl || currentPost.sampleUrl || currentPost.previewUrl || '';
     if (!rawTarget) return;
     if (rawTarget.startsWith('/api/archive/file')) {
@@ -525,6 +548,77 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
     videoContainer.appendChild(unsupportedFallbackEl);
     setProgress(0, t('vp.unsupportedShort', 'Формат видео не поддерживается. Скачайте файл.'), false, true);
+  };
+
+  /**
+   * Shown when /api/resolve-video could not hand over the full stream. Silently
+   * replaying the teaser is what made the 20s clip look like the whole video, so
+   * the teaser becomes an explicit, labelled user choice instead of a fallback.
+   */
+  const showFullMediaUnavailable = () => {
+    if (unsupportedFallbackEl || !teaserUrl || playerDestroyed) return;
+    clearTimeout(resolveWatchdog);
+    resolveWatchdog = null;
+
+    const siteUrl = toSafeHttpUrl(getPostSiteUrl(currentPost) || '');
+    const siteAction = siteUrl
+      ? `<a class="btn-video-fallback-ghost" href="${escapeHtml(siteUrl)}" target="_blank" rel="noopener noreferrer">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+           <span>${t('vp.openOnSite', 'Открыть на сайте')}</span>
+         </a>`
+      : '';
+
+    unsupportedFallbackEl = document.createElement('div');
+    unsupportedFallbackEl.className = 'video-unsupported-fallback';
+    unsupportedFallbackEl.innerHTML = `
+      <div class="video-unsupported-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+      </div>
+      <div class="video-unsupported-title">${t('vp.fullUnavailable', 'Полное видео недоступно')}</div>
+      <div class="video-unsupported-desc">${t('vp.fullUnavailableDesc', 'Rule34Video не отдал ссылку на файл. Повторите попытку, откройте страницу на сайте или посмотрите короткое превью.')}</div>
+      <div class="video-unsupported-actions">
+        <button type="button" class="btn-download-video-fallback btn-retry-resolve">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          <span>${t('vp.retryResolve', 'Повторить')}</span>
+        </button>
+        <button type="button" class="btn-video-fallback-ghost btn-play-teaser">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          <span>${t('vp.playTeaser', 'Смотреть превью (20 сек)')}</span>
+        </button>
+        ${siteAction}
+      </div>
+    `;
+
+    unsupportedFallbackEl.querySelector('.btn-retry-resolve')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (unsupportedFallbackEl) { unsupportedFallbackEl.remove(); unsupportedFallbackEl = null; }
+      startFullMediaResolve();
+    });
+
+    unsupportedFallbackEl.querySelector('.btn-play-teaser')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (unsupportedFallbackEl) { unsupportedFallbackEl.remove(); unsupportedFallbackEl = null; }
+      playTeaser();
+    });
+
+    videoContainer.appendChild(unsupportedFallbackEl);
+    setProgress(0, t('vp.fullUnavailableShort', 'Полное видео недоступно'), false, true);
+  };
+
+  // Explicit opt-in: the teaser is muted, ~20s long and must not loop, otherwise
+  // it reads as the finished video.
+  const playTeaser = () => {
+    if (!teaserUrl || playerDestroyed) return;
+    clearTimeout(resolveWatchdog);
+    resolveWatchdog = null;
+    playingTeaser = true;
+    video.loop = false;
+    video.poster = '';
+    const target = needsProxy ? getProxiedUrl(teaserUrl) : teaserUrl;
+    video.src = target;
+    safePlay();
   };
 
   const startPreCaching = async (targetUrl) => {
@@ -806,12 +900,14 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (currentPost.site === 'rule34video' && !reresolvedOnce) {
       reresolvedOnce = true;
       setProgress(0, t('vp.linkExpired', 'Ссылка источника устарела, обновляем...'), true);
-      fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`, { headers: getAuthHeaders() })
-        .then(r => r.json())
+      // The one-shot token is spent, so the cached answer must be bypassed here.
+      resolveRule34VideoMedia(currentPost, { force: true })
         .then(data => {
           if (data && data.fullVideoUrl) {
             currentPost.fileUrl = data.fullVideoUrl;
+            currentPost.hasFullMediaPending = false;
             currentPost.hasSound = true;
+            fullMediaPending = false;
             rebuildMediaUrls();
             setProgress(0, t('vp.reconnectingProxy', 'Повторное подключение через прокси...'), true);
             video.src = proxyMedia;
@@ -1061,6 +1157,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     const isTranscodingStream = Boolean(activeMediaInfo?.isTranscode);
     const hasKnownDuration = Boolean(currentPost.duration && currentPost.duration > 0);
 
+    // A teaser is ~20s long: letting it overwrite the post duration would put
+    // "0:18" on the card badge and in the sidebar for the rest of the session.
+    if (playingTeaser) return;
+
     if (video.duration && !isNaN(video.duration) && (!isTranscodingStream || !hasKnownDuration)) {
       currentPost.duration = video.duration;
       const mins = Math.floor(video.duration / 60);
@@ -1074,53 +1174,86 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   });
 
-  // Automatically resolve full HD video with sound for Rule34Video.
-  // The request itself is owned by the viewer (openViewer); we consume its result
-  // or fall back to an autonomous fetch if opened without the promise.
-  const r34VideoPromise = (currentPost.site === 'rule34video' && typeof resolvedVideoPromise?.then === 'function')
-    ? resolvedVideoPromise
-    : (currentPost.site === 'rule34video' && (currentPost.source || currentPost.originalId)
-      ? fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => null)
-      : null);
+  // Applies a freshly resolved full stream to the player. Shared by the initial
+  // resolve and the retry button, so both paths keep the playback position.
+  const applyFullMedia = (data) => {
+    currentPost.fileUrl = data.fullVideoUrl;
+    currentPost.hasFullMediaPending = false;
+    currentPost.hasSound = true;
+    fullMediaPending = false;
+    playingTeaser = false;
+    if (data.quality) currentPost.quality = data.quality;
+    if (Array.isArray(data.videoQualities)) currentPost.videoQualities = data.videoQualities;
+    updateQualityButtonLabel();
+    rebuildMediaUrls();
+    const targetUrl = (currentSource === 'proxy' || needsProxy || activeMediaInfo.isTranscode) ? proxyMedia : directMedia;
 
-  if (r34VideoPromise) {
-    r34VideoPromise.then(data => {
-      if (!data || !data.fullVideoUrl) return;
-      currentPost.fileUrl = data.fullVideoUrl;
-      currentPost.hasSound = true;
-      if (data.quality) currentPost.quality = data.quality;
-      if (Array.isArray(data.videoQualities)) currentPost.videoQualities = data.videoQualities;
-      updateQualityButtonLabel();
-      rebuildMediaUrls();
-      const targetUrl = (currentSource === 'proxy' || needsProxy || activeMediaInfo.isTranscode) ? proxyMedia : directMedia;
+    let currentTarget = '';
+    try {
+      const parsed = new URL(video.src, window.location.href);
+      currentTarget = parsed.pathname + parsed.search;
+    } catch {}
+    let nextTarget = '';
+    try {
+      const parsed = new URL(targetUrl, window.location.href);
+      nextTarget = parsed.pathname + parsed.search;
+    } catch {}
 
-      let currentTarget = '';
-      try {
-        const parsed = new URL(video.src, window.location.href);
-        currentTarget = parsed.pathname + parsed.search;
-      } catch {}
-      let nextTarget = '';
-      try {
-        const parsed = new URL(targetUrl, window.location.href);
-        nextTarget = parsed.pathname + parsed.search;
-      } catch {}
+    if (currentTarget !== nextTarget && !isPreCaching) {
+      const curTime = video.currentTime || 0;
+      const isPaused = video.paused;
+      video.src = targetUrl;
+      video.addEventListener('loadedmetadata', () => {
+        if (curTime > 0 && curTime < video.duration) {
+          try { video.currentTime = curTime; } catch {}
+        }
+        if (!isPaused) safePlay();
+      }, { once: true });
+      safePlay();
+      setProgress(100, t('vp.hdConnected', 'HD Видео ({q}) со звуком подключено').replace('{q}', data.quality || '1080p'), false);
+      setTimeout(hideStatus, 1500);
+    }
+  };
 
-      if (currentTarget !== nextTarget && !isPreCaching) {
-        const curTime = video.currentTime || 0;
-        const isPaused = video.paused;
-        video.src = targetUrl;
-        video.addEventListener('loadedmetadata', () => {
-          if (curTime > 0 && curTime < video.duration) {
-            try { video.currentTime = curTime; } catch {}
+  // Request the full stream and either play it or explain why it is missing.
+  // `resolvedVideoPromise` is owned by the viewer (openViewer) and goes through the
+  // shared resolver, so the gallery, the metadata pass and the player cost one
+  // request per post instead of one each.
+  const startFullMediaResolve = (force = false) => {
+    if (currentPost.site !== 'rule34video') return;
+    if (currentPost.source || currentPost.originalId) {
+      const request = (force || typeof resolvedVideoPromise?.then !== 'function')
+        ? resolveRule34VideoMedia(currentPost, { force })
+        : resolvedVideoPromise;
+
+      clearTimeout(resolveWatchdog);
+      resolveWatchdog = setTimeout(() => {
+        if (!playerDestroyed && fullMediaPending) showFullMediaUnavailable();
+      }, 20000);
+
+      request
+        .then((data) => {
+          if (playerDestroyed) return;
+          clearTimeout(resolveWatchdog);
+          resolveWatchdog = null;
+          if (data && data.fullVideoUrl) {
+            applyFullMedia(data);
+            return;
           }
-          if (!isPaused) safePlay();
-        }, { once: true });
-        safePlay();
-        setProgress(100, t('vp.hdConnected', 'HD Видео ({q}) со звуком подключено').replace('{q}', data.quality || '1080p'), false);
-        setTimeout(hideStatus, 1500);
-      }
-    }).catch(() => {});
-  }
+          if (fullMediaPending) showFullMediaUnavailable();
+        })
+        .catch(() => {
+          if (playerDestroyed || !fullMediaPending) return;
+          clearTimeout(resolveWatchdog);
+          resolveWatchdog = null;
+          showFullMediaUnavailable();
+        });
+    } else if (fullMediaPending) {
+      showFullMediaUnavailable();
+    }
+  };
+
+  startFullMediaResolve();
 
   video.addEventListener('canplay', () => {
     clearTimeout(loadTimeout);
@@ -1142,16 +1275,20 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   });
 
-  video.src = currentSource === 'proxy' ? proxyMedia : directMedia;
   videoContainer.appendChild(video);
   videoContainer.appendChild(unmuteBtn);
   videoContainer.appendChild(qualityMenuWrapper);
 
   const UNPLAYABLE_CONTAINERS = new Set(['mkv', 'avi', 'wmv', 'flv', 'ts']);
   const cleanExt = String(currentPost.fileExt || '').toLowerCase();
-  if (UNPLAYABLE_CONTAINERS.has(cleanExt)) {
+  if (fullMediaPending) {
+    // Nothing is attached to the media element: the post still has to resolve, and
+    // startFullMediaResolve() above is already waiting for it.
+    setProgress(0, t('vp.resolvingFull', 'Получаем ссылку на полное видео...'), true);
+  } else if (UNPLAYABLE_CONTAINERS.has(cleanExt)) {
     showUnsupportedVideoFallback();
   } else {
+    video.src = currentSource === 'proxy' ? proxyMedia : directMedia;
     // Start autoplay with safe Autoplay Policy handling
     safePlay();
   }
@@ -1161,6 +1298,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     statusBanner,
     video,
     destroy: () => {
+      playerDestroyed = true;
+      clearTimeout(resolveWatchdog);
       if (iosTranscodeAbort) {
         try { iosTranscodeAbort.abort(); iosTranscodeAbort = null; } catch {}
       }

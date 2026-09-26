@@ -3,6 +3,7 @@ import { toggleFavoriteAuthor, updateFavoriteAuthorPreview, syncFavoriteAuthors,
 import { showToast, haptic, upsertCardDurationBadge } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 import { openCreatorResolverModal } from './viewerCreatorResolver.js';
+import { resolveRule34VideoMedia } from '../modules/rule34VideoResolve.js';
 
 function isVideoUrl(url) {
   if (!url) return false;
@@ -33,9 +34,9 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
 
   if (currentPost.site === 'rule34video' && (currentPost.source || currentPost.originalId)) {
     const targetPostId = currentPost.id;
-    const authorParam = encodeURIComponent(currentPost.author || '');
-    return fetch(`/api/resolve-video?url=${encodeURIComponent(currentPost.source || '')}&id=${currentPost.originalId}&site=rule34video&author=${authorParam}`, { headers: getAuthHeaders() })
-      .then(r => r.json())
+    // Shared resolver: deduplicates with the gallery card and with the video player,
+    // so opening a post costs one request instead of two.
+    return resolveRule34VideoMedia(currentPost)
       .then(data => {
         if (!data || livePostId() !== targetPostId) return null;
         let changed = false;
@@ -55,11 +56,12 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
         }
         if (data.fullVideoUrl) {
           currentPost.fileUrl = data.fullVideoUrl;
+          currentPost.hasFullMediaPending = false;
           currentPost.hasSound = true;
           if (data.quality) currentPost.quality = data.quality;
           if (Array.isArray(data.videoQualities)) currentPost.videoQualities = data.videoQualities;
         }
-        if (data.duration && (!currentPost.duration || currentPost.duration === 20)) {
+        if (data.duration && data.duration > 0) {
           currentPost.duration = data.duration;
           currentPost.durationText = data.durationText || currentPost.durationText;
           changed = true;

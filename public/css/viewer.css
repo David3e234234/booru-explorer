@@ -1269,6 +1269,41 @@
   transform: scale(0.97);
 }
 
+/* Secondary actions in the video fallback overlay (retry, teaser, open on site) */
+.btn-video-fallback-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-video-fallback-ghost:hover {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+  background: var(--bg-surface);
+}
+
+.btn-video-fallback-ghost:active {
+  transform: scale(0.97);
+}
+
+/* Touch layouts keep the 44px minimum target from DESIGN.md */
+@media (hover: none) {
+  .video-unsupported-fallback .btn-download-video-fallback,
+  .video-unsupported-fallback .btn-video-fallback-ghost {
+    min-height: 44px;
+  }
+}
+
 .video-status-text {
   font-size: 12px;
   font-weight: 600;
