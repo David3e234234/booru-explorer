@@ -197,6 +197,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - Bearer tokens include a per-user version. Logout increments it and revokes existing tokens.
 - Account export contains identity only, never `passwordHash` or `salt`. Restore requires the plaintext account password.
 - `authMiddleware` is soft auth. `requireAuth` protects user data. `requireOwner` protects cache clear, proxy test, tunnel, Telegram backup and server download.
+- Anonymous GET requests for user collections (`/api/favorite-authors`, `/api/favorites`, `/api/likes`, `/api/dislikes`) return empty arrays so logged-out clients manage their own state purely in `localStorage` without leaking or inheriting server-level files.
 - `requireOwner` accepts either the owner session (first registered user) or, when `BOORU_ADMIN_TOKEN` is set, a matching `x-booru-admin-token` header with no session at all. The token alone is the credential, so token-only operators are not locked out.
 - The client stores the operator token in `localStorage` under `booru_admin_token_v1` and sends it from `getAuthHeaders()`. Logout must delete it, because it grants server-wide rights on a shared machine.
 - Self-registration is currently open. Deployments reachable from an untrusted network must use firewall, HTTPS and `BOORU_ADMIN_TOKEN`.

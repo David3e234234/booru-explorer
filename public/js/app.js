@@ -859,24 +859,8 @@ async function loadFavorites(generation = accountGeneration) {
       updateFavoritesBadge();
     } else {
       const localFavs = loadLocalFavorites() || [];
-      if (localFavs.length > 0) {
-        setFavorites(localFavs);
-        updateFavoritesBadge();
-      }
-      const data = await fetchFavorites();
-      if (generation !== accountGeneration) return;
-      const serverFavs = data?.favorites || [];
-      const map = new Map();
-      serverFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
-      localFavs.forEach(f => { if (f && f.id) map.set(f.id, f); });
-      const merged = Array.from(map.values());
-
-      setFavorites(merged);
+      setFavorites(localFavs);
       updateFavoritesBadge();
-
-      if (localFavs.length > serverFavs.length) {
-        syncFavorites(merged).catch(() => {});
-      }
     }
   } catch (err) {
     console.error('Ошибка избранного:', err);
@@ -885,35 +869,17 @@ async function loadFavorites(generation = accountGeneration) {
 
 async function loadFavoriteAuthors(generation = accountGeneration) {
   try {
-    const localAuthors = loadLocalFavoriteAuthors() || [];
-    if (localAuthors.length > 0) {
+    if (state.currentUser) {
+      const data = await fetchFavoriteAuthors();
+      if (generation !== accountGeneration) return;
+      const serverAuthors = Array.isArray(data?.authors) ? data.authors : [];
+      setFavoriteAuthors(serverAuthors);
+      updateFavoritesBadge();
+    } else {
+      const localAuthors = loadLocalFavoriteAuthors() || [];
       setFavoriteAuthors(localAuthors);
       updateFavoritesBadge();
     }
-
-    const data = await fetchFavoriteAuthors();
-    if (generation !== accountGeneration) return;
-    const serverAuthors = Array.isArray(data?.authors) ? data.authors : [];
-
-    const map = new Map();
-    serverAuthors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
-    localAuthors.forEach(a => {
-      if (a && a.name) {
-        const key = (a.name || '').toLowerCase();
-        const s = map.get(key);
-        if (s) {
-          map.set(key, { ...s, ...a, previewUrl: a.previewUrl || s.previewUrl });
-        } else {
-          map.set(key, a);
-        }
-      }
-    });
-    const merged = Array.from(map.values());
-
-    setFavoriteAuthors(merged);
-    updateFavoritesBadge();
-
-    syncFavoriteAuthors(merged).catch(() => {});
   } catch (err) {
     console.error('Ошибка любимых авторов:', err);
   }
@@ -939,22 +905,7 @@ async function loadLikes(generation = accountGeneration) {
       setLikes(serverLikes);
     } else {
       const localLikes = loadLocalLikes() || [];
-      if (localLikes.length > 0) {
-        setLikes(localLikes);
-      }
-      const data = await fetchLikes();
-      if (generation !== accountGeneration) return;
-      const serverLikes = data?.likes || [];
-      const map = new Map();
-      serverLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
-      localLikes.forEach(l => { if (l && l.id) map.set(l.id, l); });
-      const merged = Array.from(map.values());
-
-      setLikes(merged);
-
-      if (localLikes.length > serverLikes.length) {
-        syncLikes(merged).catch(() => {});
-      }
+      setLikes(localLikes);
     }
   } catch (err) {
     console.error('Ошибка лайков:', err);
@@ -970,22 +921,7 @@ async function loadDislikes(generation = accountGeneration) {
       setDislikes(serverDislikes);
     } else {
       const localDislikes = loadLocalDislikes() || [];
-      if (localDislikes.length > 0) {
-        setDislikes(localDislikes);
-      }
-      const data = await fetchDislikes();
-      if (generation !== accountGeneration) return;
-      const serverDislikes = data?.dislikes || [];
-      const map = new Map();
-      serverDislikes.forEach(d => { if (d && d.id) map.set(d.id, d); });
-      localDislikes.forEach(d => { if (d && d.id) map.set(d.id, d); });
-      const merged = Array.from(map.values());
-
-      setDislikes(merged);
-
-      if (localDislikes.length > serverDislikes.length) {
-        syncDislikes(merged).catch(() => {});
-      }
+      setDislikes(localDislikes);
     }
   } catch (err) {
     console.error('Ошибка загрузки скрытых постов:', err);

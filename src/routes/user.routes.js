@@ -78,6 +78,9 @@ router.post('/settings', (req, res) => {
 // GET /api/favorites
 router.get('/favorites', (req, res) => {
   const userId = req.user?.id || null;
+  if (!userId) {
+    return res.json({ success: true, favorites: [] });
+  }
   const favorites = getFavorites(userId);
   res.json({ success: true, favorites });
 });
@@ -153,6 +156,9 @@ router.delete('/favorites/:id', (req, res) => {
 // GET /api/favorite-authors
 router.get('/favorite-authors', (req, res) => {
   const userId = req.user?.id || null;
+  if (!userId) {
+    return res.json({ success: true, authors: [] });
+  }
   const authors = getFavoriteAuthors(userId);
   res.json({ success: true, authors });
 });
@@ -290,6 +296,9 @@ router.post('/favorite-authors/preview', (req, res) => {
 // GET /api/likes
 router.get('/likes', (req, res) => {
   const userId = req.user?.id || null;
+  if (!userId) {
+    return res.json({ success: true, likes: [] });
+  }
   const likes = getLikes(userId);
   res.json({ success: true, likes });
 });
@@ -345,6 +354,9 @@ router.post('/likes/sync', (req, res) => {
 // GET /api/dislikes
 router.get('/dislikes', (req, res) => {
   const userId = req.user?.id || null;
+  if (!userId) {
+    return res.json({ success: true, dislikes: [] });
+  }
   const dislikes = getDislikes(userId);
   res.json({ success: true, dislikes });
 });

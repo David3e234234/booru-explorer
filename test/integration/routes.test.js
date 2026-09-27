@@ -436,6 +436,24 @@ describe('Express API Integration & Route Tests', () => {
       const delData = await delRes.json();
       assert.strictEqual(delData.success, true);
     });
+
+    it('unauthenticated GET on personal collections returns empty arrays without leaking server defaults', async () => {
+      const endpoints = [
+        { path: '/api/favorite-authors', prop: 'authors' },
+        { path: '/api/favorites', prop: 'favorites' },
+        { path: '/api/likes', prop: 'likes' },
+        { path: '/api/dislikes', prop: 'dislikes' }
+      ];
+
+      for (const ep of endpoints) {
+        const res = await fetch(`${baseUrl}${ep.path}`);
+        assert.strictEqual(res.status, 200);
+        const data = await res.json();
+        assert.strictEqual(data.success, true);
+        assert.ok(Array.isArray(data[ep.prop]), `${ep.path} must return an array`);
+        assert.strictEqual(data[ep.prop].length, 0, `${ep.path} must not leak collections to anonymous callers`);
+      }
+    });
   });
 
   describe('Media & Resolve Video Routes (/api/media, /api/resolve-video)', () => {
