@@ -57,11 +57,14 @@ test('Pawchive Parser Unit Tests', async (t) => {
     assertNormalizedPost(post, 'pawchive');
     assert.equal(post.rating, 'e');
     assert.equal(post.id, 'pawchive_2001');
-    assert.equal(post.originalId, '2001');
-    assert.ok(post.fileUrl.includes('hero.png'));
-    assert.ok(post.thumb180.length > 0);
-    assert.ok(post.thumb360.length > 0);
-    assert.ok(post.thumb720.length > 0);
+    assert.ok(post.fileUrl.includes('file.pawchive.pw/data/ab/cd/hero.png'));
+    assert.ok(post.sampleUrl.includes('img.pawchive.pw/thumbnail/data/ab/cd/hero.png'));
+    assert.ok(post.previewUrl.includes('img.pawchive.pw/thumbnail/data/ab/cd/hero.png'));
+    assert.equal(post.thumb180, post.previewUrl);
+    assert.equal(post.thumb360, post.previewUrl);
+    assert.equal(post.thumb720, post.previewUrl);
+    assert.equal(post.thumbSample, post.previewUrl);
+    assert.equal(post.thumbOriginal, post.fileUrl);
     assert.equal(post.author, 'Art Guy');
   });
 

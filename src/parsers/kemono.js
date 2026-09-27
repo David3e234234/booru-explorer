@@ -466,6 +466,8 @@ export async function normalizeKemonoPost(item, creatorMap, resolvedCreator, aiT
     const thumb180 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=low` : previewUrl;
     const thumb360 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium` : previewUrl;
     const thumb720 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=high` : previewUrl;
+    const thumbSample = isVid ? '' : previewUrl;
+    const thumbOriginal = isVid ? '' : fileUrl;
 
     return {
       id: `kemono_${item.id}_${idx + 1}`,
@@ -480,6 +482,8 @@ export async function normalizeKemonoPost(item, creatorMap, resolvedCreator, aiT
       thumb180,
       thumb360,
       thumb720,
+      thumbSample,
+      thumbOriginal,
       fileExt,
       isVideo: isVid,
       isGif,
@@ -524,6 +528,8 @@ export async function normalizeKemonoPost(item, creatorMap, resolvedCreator, aiT
     thumb180: mainMedia.thumb180,
     thumb360: mainMedia.thumb360,
     thumb720: mainMedia.thumb720,
+    thumbSample: mainMedia.thumbSample,
+    thumbOriginal: mainMedia.thumbOriginal,
     fileExt: mainMedia.fileExt,
     isVideo: mainMedia.isVideo,
     isGif: mainMedia.isGif,

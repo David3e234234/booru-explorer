@@ -453,11 +453,13 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     const previewUrlRaw = isVid
       ? videoThumbUrl
       : `https://img.pawchive.pw/thumbnail/data${m.path}`;
-    const sampleUrl = (isPrevOnly && !isVid) ? previewUrlRaw : fileUrl;
+    const sampleUrl = isVid ? fileUrl : previewUrlRaw;
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVid);
     const thumb180 = isVid ? videoThumbUrl : previewUrl;
     const thumb360 = isVid ? videoThumbUrl : previewUrl;
     const thumb720 = isVid ? videoThumbUrl : previewUrl;
+    const thumbSample = isVid ? '' : previewUrl;
+    const thumbOriginal = isVid ? '' : fileUrl;
 
     return {
       id: `pawchive_${item.id}_${idx + 1}`,
@@ -472,6 +474,8 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
       thumb180,
       thumb360,
       thumb720,
+      thumbSample,
+      thumbOriginal,
       fileExt,
       isVideo: isVid,
       isGif,
@@ -520,6 +524,8 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
     thumb180: mainMedia.thumb180,
     thumb360: mainMedia.thumb360,
     thumb720: mainMedia.thumb720,
+    thumbSample: mainMedia.thumbSample,
+    thumbOriginal: mainMedia.thumbOriginal,
     fileExt: mainMedia.fileExt,
     isVideo: mainMedia.isVideo,
     isGif: mainMedia.isGif,

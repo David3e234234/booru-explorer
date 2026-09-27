@@ -47,9 +47,13 @@ test('Kemono Parser Unit Tests', async (t) => {
     assertNormalizedPost(post, 'kemono');
     assert.equal(post.rating, 'e');
     assert.ok(post.fileUrl.length > 0);
-    assert.ok(post.thumb180.length > 0);
-    assert.ok(post.thumb360.length > 0);
-    assert.ok(post.thumb720.length > 0);
+    assert.ok(post.sampleUrl.length > 0);
+    assert.ok(post.previewUrl.length > 0);
+    assert.equal(post.thumb180, post.previewUrl);
+    assert.equal(post.thumb360, post.previewUrl);
+    assert.equal(post.thumb720, post.previewUrl);
+    assert.equal(post.thumbSample, post.previewUrl);
+    assert.equal(post.thumbOriginal, post.fileUrl);
   });
 
   await t.test('fetchKemonoPostById resolves single post and attachments', async () => {
