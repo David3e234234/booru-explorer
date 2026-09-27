@@ -26,6 +26,7 @@
   "proxyDownloads": true,
   "proxyVideoDefault": true,
   "enableJsDemuxing": true,
+  "rule34Provider": "rule34xxx",
   "enablePaheal": true,
   "defaultSite": "danbooru",
   "customSources": ["danbooru", "gelbooru", "rule34", "yandere"],

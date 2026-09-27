@@ -770,6 +770,7 @@ export function openSettingsModal() {
   const checkEnableSimilarPosts = document.getElementById('checkEnableSimilarPosts');
   const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
   const checkEnablePaheal = document.getElementById('checkEnablePaheal');
+  const selectRule34Provider = document.getElementById('selectRule34Provider');
 
   tempBlacklist = Array.isArray(state.settings.blacklist) && state.settings.blacklist.length > 0 
     ? [...state.settings.blacklist] 
@@ -860,7 +861,11 @@ export function openSettingsModal() {
   if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = state.settings.videoAutoplayViewer !== false;
   if (checkEnableSimilarPosts) checkEnableSimilarPosts.checked = state.settings.enableSimilarPosts !== false;
   if (checkPrioritizeUserTags) checkPrioritizeUserTags.checked = state.settings.prioritizeUserTags === true;
-  if (checkEnablePaheal) checkEnablePaheal.checked = state.settings.enablePaheal !== false;
+  if (selectRule34Provider) {
+    selectRule34Provider.value = state.settings.rule34Provider || (state.settings.enablePaheal === false ? 'rule34xxx' : 'rule34xxx');
+  } else if (checkEnablePaheal) {
+    checkEnablePaheal.checked = state.settings.enablePaheal !== false;
+  }
   const checkHideZipPostsModal = document.getElementById('checkHideZipPosts');
   if (checkHideZipPostsModal) checkHideZipPostsModal.checked = state.settings.hideZipPosts === true;
   const checkUnpackArchivesModal = document.getElementById('checkUnpackArchivesOnDownload');
@@ -1669,8 +1674,12 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
       const prioritizeUserTagsVal = checkPrioritizeUserTags ? checkPrioritizeUserTags.checked : false;
 
+      const selectRule34Provider = document.getElementById('selectRule34Provider');
       const checkEnablePaheal = document.getElementById('checkEnablePaheal');
-      const enablePahealVal = checkEnablePaheal ? checkEnablePaheal.checked : true;
+      const rule34ProviderVal = selectRule34Provider 
+        ? selectRule34Provider.value 
+        : (checkEnablePaheal && !checkEnablePaheal.checked ? 'rule34xxx' : 'rule34xxx');
+      const enablePahealVal = rule34ProviderVal === 'paheal';
 
       const checkEnableJsDemuxing = document.getElementById('checkEnableJsDemuxing');
       const enableJsDemuxingVal = checkEnableJsDemuxing ? checkEnableJsDemuxing.checked : true;
@@ -1762,6 +1771,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         telegramBackupInterval: selectTgInterval ? selectTgInterval.value : 'daily',
         deepFetchPages: deepFetchPagesVal,
         prioritizeUserTags: prioritizeUserTagsVal,
+        rule34Provider: rule34ProviderVal,
         enablePaheal: enablePahealVal,
         enableJsDemuxing: enableJsDemuxingVal,
         hideZipPosts: hideZipPostsVal,
@@ -1868,6 +1878,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkVideoAutoplayMobile) checkVideoAutoplayMobile.checked = true;
       if (checkVideoAutoplayViewer) checkVideoAutoplayViewer.checked = true;
       if (checkEnableSimilarPosts) checkEnableSimilarPosts.checked = true;
+      const selectRule34ProviderReset = document.getElementById('selectRule34Provider');
+      if (selectRule34ProviderReset) selectRule34ProviderReset.value = 'rule34xxx';
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
       if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       if (selectMaxServerCache) selectMaxServerCache.value = '1500';

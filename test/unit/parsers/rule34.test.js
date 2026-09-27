@@ -61,6 +61,55 @@ test('Rule34 Parser Unit Tests (including Paheal integration)', async (t) => {
     assert.equal(posts[0].originalId, '6101');
   });
 
+  await t.test('fetchRule34 does NOT auto-switch to Paheal when Rule34.xxx fails', async () => {
+    // DAPI fails
+    const apiClient = mockContext.agent.get('https://api.rule34.xxx');
+    apiClient.intercept({
+      path: () => true,
+      method: 'GET'
+    }).reply(500, 'Server Error');
+
+    // HTML fallback fails
+    const htmlClient = mockContext.agent.get('https://rule34.xxx');
+    htmlClient.intercept({
+      path: () => true,
+      method: 'GET'
+    }).reply(500, 'Server Error');
+
+    // Paheal must NOT be called
+    let pahealCalled = false;
+    const pahealClient = mockContext.agent.get('https://rule34.paheal.net');
+    pahealClient.intercept({
+      path: () => true,
+      method: 'GET'
+    }).reply(200, () => {
+      pahealCalled = true;
+      return '<posts></posts>';
+    });
+
+    const posts = await fetchRule34({ tags: 'overwatch', limit: 10 }, [], { rule34Provider: 'rule34xxx', ...mockSettings });
+    assert.equal(posts.length, 0);
+    assert.equal(pahealCalled, false, 'Paheal must not be called when provider is rule34xxx');
+  });
+
+  await t.test('fetchRule34 queries Paheal directly when rule34Provider is paheal', async () => {
+    const pahealClient = mockContext.agent.get('https://rule34.paheal.net');
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+      <posts count="1" offset="0">
+        <post id="7101" tags="overwatch mercy" score="80" rating="Explicit" file_url="https://r34.paheal.net/_images/7101.jpg" preview_url="https://r34.paheal.net/_thumbs/7101.jpg" />
+      </posts>`;
+    pahealClient.intercept({
+      path: (p) => p.includes('tags=overwatch'),
+      method: 'GET'
+    }).reply(200, xml);
+
+    const posts = await fetchRule34({ tags: 'overwatch', limit: 10 }, [], { rule34Provider: 'paheal' });
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].id, 'paheal_7101');
+    assert.equal(posts[0].site, 'rule34');
+    assert.equal(posts[0].siteName, 'Rule34');
+  });
+
   await t.test('fetchRule34PostById resolves normal Rule34 post from DAPI', async () => {
     const client = mockContext.agent.get('https://api.rule34.xxx');
     client.intercept({

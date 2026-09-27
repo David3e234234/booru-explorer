@@ -49,7 +49,7 @@ const AUTH_CACHE_FIELDS = [
   'yandereLogin', 'yanderePassword',
   'pawchiveSession', 'kemonoSession', 'kemonoProxy',
   'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags', 'aiTags', 'blacklist',
-  'groupAlbums', 'prioritizeUserTags', 'deepFetchPages', 'enablePaheal',
+  'groupAlbums', 'prioritizeUserTags', 'deepFetchPages', 'rule34Provider', 'enablePaheal',
   'customAliases', 'siteSortTags', 'pawchiveService', 'kemonoService', 'hideZipPosts',
   ...SECRET_SETTING_FIELDS.filter(f => !['telegramBotToken', 'telegramChatId'].includes(f)),
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy',

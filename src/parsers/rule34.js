@@ -24,6 +24,141 @@ function getRecentDateFilter(days = 30) {
 
 export async function fetchRule34(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
+  const provider = settings?.rule34Provider === 'paheal' ? 'paheal' : 'rule34xxx';
+
+  if (provider === 'paheal') {
+    let pahealSearchTags = tags
+      .replace(/([a-zA-Z0-9_-]+)_\([^)]+\)/g, '$1')
+      .replace(/([a-zA-Z0-9_-]+)\s*\([^)]+\)/g, '$1')
+      .replace(/[()]/g, '')
+      .replace(/\bsort:score:desc\b/gi, 'order:score')
+      .replace(/\bsort:score:asc\b/gi, 'order:score_asc')
+      .replace(/\bsort:score\b/gi, 'order:score')
+      .replace(/\bsort:random\b/gi, 'order:random')
+      .replace(/\bsort:id:desc\b/gi, 'order:id_desc')
+      .replace(/\bsort:updated:desc\b/gi, '')
+      .replace(/\bscore:>=?\d+\b/gi, '')
+      .trim();
+
+    const fetchPahealLimit = (category === 'popular' || category === 'recommended') ? Math.max(limit, 70) : limit;
+    if (category === 'top' || category === 'recommended') {
+      if (!pahealSearchTags.includes('order:')) {
+        pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
+      }
+    } else if (category === 'popular') {
+      if (!pahealSearchTags.includes('order:')) {
+        pahealSearchTags = pahealSearchTags ? `order:id_desc ${pahealSearchTags}` : 'order:id_desc';
+      }
+    } else if (category === 'random') {
+      if (!pahealSearchTags.includes('order:')) {
+        pahealSearchTags = pahealSearchTags ? `order:random ${pahealSearchTags}` : 'order:random';
+      }
+    }
+
+    const parsePahealXml = async (queryTags) => {
+      const pahealUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=${encodeURIComponent(queryTags)}&limit=${fetchPahealLimit}&page=${page}`;
+      const pahealRes = await fetchSafe(pahealUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://rule34.paheal.net/'
+        },
+        timeout: 15000,
+        settings,
+        site: 'rule34'
+      });
+      if (!pahealRes.ok) {
+        await discardResponse(pahealRes);
+        return [];
+      }
+      const text = await pahealRes.text();
+
+      const rawAttrsList = [];
+      const tagRegex = /<(?:post|tag)\b\s+([^>]+)>/gi;
+      let match;
+      while ((match = tagRegex.exec(text)) !== null) {
+        const attrsStr = match[1];
+        const attrs = {};
+        const attrRegex = /([a-z0-9_]+)=['"]([^'"]*)['"]/gi;
+        let attrMatch;
+        while ((attrMatch = attrRegex.exec(attrsStr)) !== null) {
+          attrs[attrMatch[1]] = attrMatch[2];
+        }
+        if (attrs.file_url) {
+          rawAttrsList.push(attrs);
+        }
+      }
+
+      const posts = await Promise.all(rawAttrsList.map(async attrs => {
+        const rawTags = decodeHtmlEntities(attrs.tags || '').split(' ').filter(Boolean);
+        const fileName = attrs.file_name || '';
+        let { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(attrs.file_url, fileName, rawTags);
+        if (fileName.toLowerCase().endsWith('.mp4') || fileName.toLowerCase().endsWith('.webm')) {
+          isVideo = true;
+          fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
+        }
+        const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
+        const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false);
+        const createdAt = normalizeDate(attrs.created_at || attrs.date);
+        const thumb180 = previewUrl || attrs.file_url || '';
+        const thumb360 = attrs.file_url || previewUrl || '';
+        const thumb720 = attrs.file_url || previewUrl || '';
+        const thumbSample = attrs.file_url;
+        const thumbOriginal = attrs.file_url;
+        return {
+          id: `paheal_${attrs.id}`,
+          originalId: attrs.id,
+          site: 'rule34',
+          siteName: 'Rule34',
+          previewUrl,
+          thumb180,
+          thumb360,
+          thumb720,
+          thumbSample,
+          thumbOriginal,
+          sampleUrl: attrs.file_url,
+          fileUrl: attrs.file_url,
+          fileExt,
+          isVideo,
+          isGif,
+          hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
+          author,
+          assistants: assistants || [],
+          tags: rawTags,
+          tagDetails,
+          score: parseInt(attrs.score, 10) || 0,
+          rating: 'e',
+          width: parseInt(attrs.width, 10) || 0,
+          height: parseInt(attrs.height, 10) || 0,
+          source: attrs.source || '',
+          postUrl: `https://rule34.paheal.net/post/view/${attrs.id}`,
+          createdAt,
+          isAi: checkIsAi(rawTags, aiTagsList)
+        };
+      }));
+      return posts;
+    };
+
+    try {
+      let posts = await parsePahealXml(pahealSearchTags);
+      if (posts.length === 0 && pahealSearchTags && !pahealSearchTags.includes(':')) {
+        const capitalizedTags = pahealSearchTags.split(/\s+/).map(t => {
+          return t.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('_');
+        }).join(' ');
+        if (capitalizedTags !== pahealSearchTags) {
+          posts = await parsePahealXml(capitalizedTags);
+        }
+      }
+
+      if (category === 'popular' && posts.length > 0) {
+        posts.sort((a, b) => (b.score || 0) - (a.score || 0));
+      }
+
+      return posts.slice(0, limit);
+    } catch (err) {
+      logError('Rule34 Paheal', 'Ошибка запроса Paheal', err);
+      return [];
+    }
+  }
   
   let searchTags = adaptTagsForSite('rule34', tags, ageFilter, typeFilter, settings);
 
@@ -497,143 +632,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
     logError('Rule34.xxx HTML', 'Ошибка веб-парсинга Rule34.xxx', err);
   }
 
-  // 3. Fallback: public Paheal API
-  if (settings && settings.enablePaheal === false) {
-    return [];
-  }
-  let pahealSearchTags = tags
-    .replace(/([a-zA-Z0-9_-]+)_\([^)]+\)/g, '$1')
-    .replace(/([a-zA-Z0-9_-]+)\s*\([^)]+\)/g, '$1')
-    .replace(/[()]/g, '')
-    .replace(/\bsort:score:desc\b/gi, 'order:score')
-    .replace(/\bsort:score:asc\b/gi, 'order:score_asc')
-    .replace(/\bsort:score\b/gi, 'order:score')
-    .replace(/\bsort:random\b/gi, 'order:random')
-    .replace(/\bsort:id:desc\b/gi, 'order:id_desc')
-    .replace(/\bsort:updated:desc\b/gi, '')
-    .replace(/\bscore:>=?\d+\b/gi, '')
-    .trim();
-
-  const fetchPahealLimit = (category === 'popular' || category === 'recommended') ? Math.max(limit, 70) : limit;
-  if (category === 'top' || category === 'recommended') {
-    if (!pahealSearchTags.includes('order:')) {
-      pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
-    }
-  } else if (category === 'popular') {
-    // Paheal: request recent posts and sort locally by score
-    if (!pahealSearchTags.includes('order:')) {
-      pahealSearchTags = pahealSearchTags ? `order:id_desc ${pahealSearchTags}` : 'order:id_desc';
-    }
-  } else if (category === 'random') {
-    if (!pahealSearchTags.includes('order:')) {
-      pahealSearchTags = pahealSearchTags ? `order:random ${pahealSearchTags}` : 'order:random';
-    }
-  }
-  const parsePahealXml = async (queryTags) => {
-    const pahealUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=${encodeURIComponent(queryTags)}&limit=${fetchPahealLimit}&page=${page}`;
-    const pahealRes = await fetchSafe(pahealUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://rule34.paheal.net/'
-      },
-      timeout: 15000,
-      settings,
-      site: 'rule34'
-    });
-    if (!pahealRes.ok) {
-      await discardResponse(pahealRes);
-      return [];
-    }
-    const text = await pahealRes.text();
-
-    const rawAttrsList = [];
-    const tagRegex = /<(?:post|tag)\b\s+([^>]+)>/gi;
-    let match;
-    while ((match = tagRegex.exec(text)) !== null) {
-      const attrsStr = match[1];
-      const attrs = {};
-      const attrRegex = /([a-z0-9_]+)=['"]([^'"]*)['"]/gi;
-      let attrMatch;
-      while ((attrMatch = attrRegex.exec(attrsStr)) !== null) {
-        attrs[attrMatch[1]] = attrMatch[2];
-      }
-      if (attrs.file_url) {
-        rawAttrsList.push(attrs);
-      }
-    }
-
-    const posts = await Promise.all(rawAttrsList.map(async attrs => {
-      const rawTags = decodeHtmlEntities(attrs.tags || '').split(' ').filter(Boolean);
-      const fileName = attrs.file_name || '';
-      let { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(attrs.file_url, fileName, rawTags);
-      if (fileName.toLowerCase().endsWith('.mp4') || fileName.toLowerCase().endsWith('.webm')) {
-        isVideo = true;
-        fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
-      }
-      const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
-      const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false);
-      const createdAt = normalizeDate(attrs.created_at || attrs.date);
-      const thumb180 = previewUrl || attrs.file_url || '';
-      const thumb360 = attrs.file_url || previewUrl || '';
-      const thumb720 = attrs.file_url || previewUrl || '';
-      const thumbSample = attrs.file_url;
-      const thumbOriginal = attrs.file_url;
-      return {
-        id: `paheal_${attrs.id}`,
-        originalId: attrs.id,
-        site: 'rule34',
-        siteName: 'Rule34',
-        previewUrl,
-        thumb180,
-        thumb360,
-        thumb720,
-        thumbSample,
-        thumbOriginal,
-        sampleUrl: attrs.file_url,
-        fileUrl: attrs.file_url,
-        fileExt,
-        isVideo,
-        isGif,
-        hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
-        author,
-        assistants: assistants || [],
-        tags: rawTags,
-        tagDetails,
-        score: parseInt(attrs.score, 10) || 0,
-        rating: 'e',
-        width: parseInt(attrs.width, 10) || 0,
-        height: parseInt(attrs.height, 10) || 0,
-        source: attrs.source || '',
-        postUrl: `https://rule34.paheal.net/post/view/${attrs.id}`,
-        createdAt,
-        isAi: checkIsAi(rawTags, aiTagsList)
-      };
-    }));
-    return posts;
-  };
-
-  try {
-    let posts = await parsePahealXml(pahealSearchTags);
-    
-    // If snake_case tags found nothing on Paheal, try the capitalized variant (e.g. Hu_Tao)
-    if (posts.length === 0 && pahealSearchTags && !pahealSearchTags.includes(':')) {
-      const capitalizedTags = pahealSearchTags.split(/\s+/).map(t => {
-        return t.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('_');
-      }).join(' ');
-      if (capitalizedTags !== pahealSearchTags) {
-        posts = await parsePahealXml(capitalizedTags);
-      }
-    }
-
-    if (category === 'popular' && posts.length > 0) {
-      posts.sort((a, b) => (b.score || 0) - (a.score || 0));
-    }
-
-    return posts.slice(0, limit);
-  } catch (err) {
-    logError('Rule34 Paheal', 'Ошибка запроса Paheal', err);
-    return [];
-  }
+  // Auto-switching to Paheal is disabled; return empty array if rule34.xxx has no results
+  return [];
 }
 
 export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fallbackTags = []) {

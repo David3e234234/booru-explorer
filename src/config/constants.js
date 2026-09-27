@@ -241,6 +241,7 @@ export const DEFAULT_SETTINGS = {
   proxyDownloads: true,
   proxyVideoDefault: true,
   enableJsDemuxing: true,
+  rule34Provider: 'rule34xxx', // 'rule34xxx', 'paheal'
   enablePaheal: true,
   defaultSite: 'danbooru',
   customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],

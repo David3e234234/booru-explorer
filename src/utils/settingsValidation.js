@@ -5,7 +5,7 @@ export const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
   'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant',
   'hideLgbt', 'hideZipPosts', 'groupAlbums', 'customSources', 'customAliases',
-  'enablePaheal', 'siteSortTags', 'kemonoService', 'pawchiveService',
+  'rule34Provider', 'enablePaheal', 'siteSortTags', 'kemonoService', 'pawchiveService',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId',
   'danbooruApiKey', 'danbooruLogin', 'konachanLogin', 'konachanPassword',
   'yandereLogin', 'yanderePassword',
@@ -24,7 +24,8 @@ const STRING_ENUMS = {
   ageFilter: new Set(['all', 'adult', 'young']),
   previewQuality: new Set(['low', 'medium', 'high', 'original']),
   telegramBackupInterval: new Set(['daily', 'every_3_days', 'weekly']),
-  recommendationMode: new Set(['tags-only', 'off'])
+  recommendationMode: new Set(['tags-only', 'off']),
+  rule34Provider: new Set(['rule34xxx', 'paheal'])
 };
 
 const BOOLEAN_FIELDS = [

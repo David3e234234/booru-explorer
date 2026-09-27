@@ -137,6 +137,8 @@ Boards that only publish a short teaser in their feed add two optional fields:
 - `isFullMediaPending()` also matches teaser URLs, so posts stored in favourites and likes before the flag existed reopen correctly.
 - The board only serves `/video/<id>/<slug>/`; the bare id form answers 404. `resolveRule34VideoFullMedia()` reuses the post page link when it has one and otherwise makes a single manual redirect hop, which must stay on the board host.
 
+- Rule34 operates with an explicit provider setting (`rule34Provider`: `'rule34xxx'` or `'paheal'`). Automatic fallback from Rule34.xxx to Paheal is disabled; switching between the two databases is strictly manual via settings.
+
 Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` case, all-sites capability use, frontend site metadata, settings UI metadata if site-specific, parser tests and documentation updates.
 
 ### Settings And Cache Keys

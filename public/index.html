@@ -1668,11 +1668,18 @@
                 <span class="toggle-slider"></span>
                 <span class="toggle-name" data-i18n="settings.prioritizeTags">Отдавать приоритет ручным тегам перед системными фильтрами (Danbooru)</span>
               </label>
-              <label class="toggle-row" title="Использовать открытую базу Rule34 Paheal (rule34.paheal.net) при отсутствии или сбое API ключа Rule34.xxx" data-i18n-title="settings.paheal.title">
-                <input type="checkbox" id="checkEnablePaheal" checked>
-                <span class="toggle-slider"></span>
-                <span class="toggle-name" data-i18n="settings.paheal">Использовать Rule34 через Paheal (открытый источник без API ключа)</span>
-              </label>
+              <div class="setting-row" style="margin-top: 8px; margin-bottom: 8px;">
+                <div class="setting-info">
+                  <label class="setting-title" for="selectRule34Provider" data-i18n="settings.rule34Provider">Источник данных Rule34:</label>
+                  <span class="setting-desc" data-i18n="settings.rule34ProviderHint">Выберите, какой сервис использовать при поиске по сайту Rule34. Автопереключение отключено.</span>
+                </div>
+                <div class="setting-control" style="min-width: 220px;">
+                  <select id="selectRule34Provider" class="input-setting">
+                    <option value="rule34xxx" selected data-i18n="settings.rule34ProviderXxx">Rule34.xxx (основной)</option>
+                    <option value="paheal" data-i18n="settings.rule34ProviderPaheal">Rule34 Paheal (paheal.net)</option>
+                  </select>
+                </div>
+              </div>
               <label class="toggle-row" title="Не показывать посты Pawchive, в которых нет картинок и видео (только ZIP-архивы)" data-i18n-title="settings.hideZipPosts.title">
                 <input type="checkbox" id="checkHideZipPosts">
                 <span class="toggle-slider"></span>
@@ -2649,6 +2656,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=10.1"></script>
+  <script type="module" src="js/app.js?v=10.2"></script>
 </body>
 </html>

@@ -110,6 +110,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   deepFetchPages: 2,
   prioritizeUserTags: false,
   enableJsDemuxing: true,
+  rule34Provider: 'rule34xxx',
+  enablePaheal: true,
   customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
   searchPresets: [],
   maxServerCacheMb: 1500,
