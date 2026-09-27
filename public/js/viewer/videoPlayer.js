@@ -241,44 +241,38 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const defaultPrefQuality = state.settings?.videoDefaultQuality || 'original';
   let activeQuality = defaultPrefQuality; // 'original', '720p', '480p'
 
-  const baseOriginal = currentPost.fileUrl || currentPost.sampleUrl;
+  const getBaseOriginal = () => currentPost.fileUrl || currentPost.sampleUrl || '';
 
   // HEVC sources (Pawchive serves H.265 under names like "clip_H.265.mp4") do
   // not play in browsers without an OS HEVC decoder, and the JS remux cannot
   // help: the codec itself is unsupported. Route them straight to the FFmpeg
   // transcode instead of the media element. The probe runs once per post.
-  const hevcUnsupported = isHevcSource(baseOriginal) && !browserSupportsHevc();
+  const isCurrentHevc = () => isHevcSource(getBaseOriginal()) && !browserSupportsHevc();
   let hevcTranscodeTried = false;
 
   const getMediaUrlForQuality = (qualityKey) => {
+    const originalUrl = getBaseOriginal();
+
     // 1. Check if post has native quality list from source
     if (Array.isArray(currentPost.videoQualities) && currentPost.videoQualities.length > 0) {
-      if (qualityKey === '480p') {
-        const q480 = currentPost.videoQualities.find(q => q.quality === '480p');
-        if (q480?.url) return { url: q480.url, isTranscode: false, label: '480p' };
-      } else if (qualityKey === '720p') {
-        const q720 = currentPost.videoQualities.find(q => q.quality === '720p');
-        if (q720?.url) return { url: q720.url, isTranscode: false, label: '720p' };
-      } else if (qualityKey === '1080p') {
-        const q1080 = currentPost.videoQualities.find(q => q.quality === '1080p');
-        if (q1080?.url) return { url: q1080.url, isTranscode: false, label: '1080p' };
-      }
+      const match = currentPost.videoQualities.find(q => q.quality === qualityKey);
+      if (match?.url) return { url: match.url, isTranscode: false, label: match.label || match.quality };
     }
 
     // 2. HEVC the browser cannot decode: the "original" entry becomes the
     // transcode so playback starts playable instead of failing on decode.
-    if (hevcUnsupported && qualityKey === 'original' && baseOriginal && !baseOriginal.startsWith('/api/transcode-video')) {
-      const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=720p`;
+    if (isCurrentHevc() && qualityKey === 'original' && originalUrl && !originalUrl.startsWith('/api/transcode-video')) {
+      const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(originalUrl)}&quality=720p`;
       return { url: transcodeUrl, isTranscode: true, label: '720p (H.264)' };
     }
 
     // 3. If lower quality requested but no native version, use real-time stream transcode
-    if ((qualityKey === '480p' || qualityKey === '720p') && baseOriginal && !baseOriginal.startsWith('/api/transcode-video')) {
-      const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=${qualityKey}`;
+    if ((qualityKey === '480p' || qualityKey === '720p') && originalUrl && !originalUrl.startsWith('/api/transcode-video')) {
+      const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(originalUrl)}&quality=${qualityKey}`;
       return { url: transcodeUrl, isTranscode: true, label: qualityKey };
     }
 
-    return { url: baseOriginal, isTranscode: false, label: currentPost.quality || 'Оригинал' };
+    return { url: originalUrl, isTranscode: false, label: currentPost.quality || 'Оригинал' };
   };
 
   let activeMediaInfo = getMediaUrlForQuality(activeQuality);
@@ -904,10 +898,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
     // HEVC stays undecodable no matter how it is demuxed, so the remux path is
     // skipped entirely: go to the FFmpeg transcode once, then give up.
-    if (hevcUnsupported) {
+    if (isCurrentHevc()) {
       if (!hevcTranscodeTried) {
         hevcTranscodeTried = true;
-        const hevcTranscodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=720p`;
+        const hevcTranscodeUrl = `/api/transcode-video?url=${encodeURIComponent(getBaseOriginal())}&quality=720p`;
         startTranscodeWait(hevcTranscodeUrl);
       } else {
         showUnsupportedVideoFallback();
@@ -943,6 +937,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
         .then(data => {
           if (data && data.fullVideoUrl) {
             currentPost.fileUrl = data.fullVideoUrl;
+            currentPost.sampleUrl = data.fullVideoUrl;
             currentPost.hasFullMediaPending = false;
             currentPost.hasSound = true;
             fullMediaPending = false;
@@ -976,9 +971,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     // HEVC the browser cannot decode: escalate to the FFmpeg transcode once.
     // The initial source is already the transcode; this covers the cases where
     // the native URL was still attached (e.g. Rule34Video-resolved streams).
-    if (hevcUnsupported && !hevcTranscodeTried && !(activeMediaInfo && activeMediaInfo.isTranscode)) {
+    if (isCurrentHevc() && !hevcTranscodeTried && !(activeMediaInfo && activeMediaInfo.isTranscode)) {
       hevcTranscodeTried = true;
-      const hevcTranscodeUrl = `/api/transcode-video?url=${encodeURIComponent(baseOriginal)}&quality=720p`;
+      const hevcTranscodeUrl = `/api/transcode-video?url=${encodeURIComponent(getBaseOriginal())}&quality=720p`;
       setProgress(0, t('vp.transcodingHevc', 'Видео в кодеке HEVC, конвертируем в H.264...'), true);
       video.src = hevcTranscodeUrl;
       safePlay();
@@ -1228,6 +1223,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   // resolve and the retry button, so both paths keep the playback position.
   const applyFullMedia = (data) => {
     currentPost.fileUrl = data.fullVideoUrl;
+    currentPost.sampleUrl = data.fullVideoUrl;
     currentPost.hasFullMediaPending = false;
     currentPost.hasSound = true;
     fullMediaPending = false;

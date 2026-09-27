@@ -58,4 +58,29 @@ describe('Rule34Video teaser policy', () => {
     assert.equal(getCardPreviewVideoUrl({ fileUrl: 'https://x/y.mp4' }), 'https://x/y.mp4');
     assert.equal(getCardPreviewVideoUrl(null), '');
   });
+
+  it('updates post media and pending state when resolved', () => {
+    const post = {
+      site: 'rule34video',
+      isVideo: true,
+      fileUrl: TEASER,
+      sampleUrl: TEASER,
+      teaserUrl: TEASER,
+      hasFullMediaPending: true
+    };
+    assert.equal(isFullMediaPending(post), true);
+
+    // Simulate resolve metadata
+    post.fileUrl = FULL;
+    post.hasFullMediaPending = false;
+    post.videoQualities = [
+      { quality: '1080p', label: '1080p Full HD', url: FULL },
+      { quality: '720p', label: '720p HD', url: 'https://cdn.example.com/720p.mp4' }
+    ];
+
+    assert.equal(isFullMediaPending(post), false);
+    assert.equal(post.fileUrl, FULL);
+    assert.equal(getCardPreviewVideoUrl(post), TEASER);
+  });
 });
+

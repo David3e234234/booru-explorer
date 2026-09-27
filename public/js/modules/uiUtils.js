@@ -248,6 +248,7 @@ export function isRule34VideoTeaserUrl(url) {
  */
 export function isFullMediaPending(post) {
   if (!post || !post.isVideo) return false;
+  if (post.hasFullMediaPending === false) return false;
   if (post.hasFullMediaPending === true) return true;
   if (post.site !== 'rule34video') return false;
   return isRule34VideoTeaserUrl(post.fileUrl) || isRule34VideoTeaserUrl(post.sampleUrl);

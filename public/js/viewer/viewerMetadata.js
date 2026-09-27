@@ -56,6 +56,7 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
         }
         if (data.fullVideoUrl) {
           currentPost.fileUrl = data.fullVideoUrl;
+          currentPost.sampleUrl = data.fullVideoUrl;
           currentPost.hasFullMediaPending = false;
           currentPost.hasSound = true;
           if (data.quality) currentPost.quality = data.quality;
