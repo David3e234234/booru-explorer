@@ -761,8 +761,10 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   // Ground truth from the booru that owns these tags. It takes precedence over
   // the shared Konachan dictionary, which uses a different tag vocabulary and
   // therefore reports "unknown" for most real artists of these boards.
+  // Upstream tag category lookups are performed ONLY on single post views (when
+  // allowDynamicLookup is enabled), never across batch search feeds.
   let siteTagTypes = new Map();
-  if (site) {
+  if (site && allowDynamicLookup) {
     siteTagTypes = await resolveBooruTagTypes(site, tags, settings);
   }
 

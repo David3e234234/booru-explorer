@@ -52,6 +52,7 @@ export function initWikiModal({ onSelectTag, onSwitchSite }) {
   // Event Listeners
   btnHeaderWiki?.addEventListener('click', () => openWiki('tag-basics'));
   btnClose?.addEventListener('click', closeWiki);
+  document.getElementById('btnUnderstandWikiModal')?.addEventListener('click', closeWiki);
 
   modalBackdrop?.addEventListener('click', (e) => {
     if (e.target === modalBackdrop) closeWiki();

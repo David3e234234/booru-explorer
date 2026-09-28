@@ -682,7 +682,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
             const thumb720 = attrs.file_url || previewUrl || '';
             const thumbSample = attrs.file_url;
             const thumbOriginal = attrs.file_url;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false, 'paheal');
+            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, true, 'paheal');
             return {
               id: `paheal_${attrs.id}`,
               originalId: String(attrs.id),

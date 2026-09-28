@@ -335,7 +335,7 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
             const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true);
+            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true, 'gelbooru');
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
             const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -437,7 +437,7 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
       const thumbOriginal = fileUrl;
 
       const initialAuthor = artistMatches.join(', ');
-      const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true);
+      const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true, 'gelbooru');
 
       if (artistMatches.length > 0) tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
       if (copyrightMatches.length > 0) tagDetails.copyright = [...new Set([...copyrightMatches, ...(tagDetails.copyright || [])])];

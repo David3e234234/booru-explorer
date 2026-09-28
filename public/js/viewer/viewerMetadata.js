@@ -150,9 +150,9 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
         return data;
       })
       .catch(() => null);
-  } else if ((currentPost.site === 'rule34' || currentPost.site === 'xbooru') && (currentPost.originalId || currentPost.id)) {
+  } else if ((currentPost.site === 'rule34' || currentPost.site === 'xbooru' || currentPost.site === 'gelbooru') && (currentPost.originalId || currentPost.id)) {
     const targetPostId = currentPost.id;
-    const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(rule34|xbooru)_/, '').split('_')[0];
+    const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(rule34|xbooru|gelbooru)_/, '').split('_')[0];
     const needsResolve = !currentPost.width ||
       !currentPost.author ||
       !(currentPost.tagDetails?.artist?.length) ||

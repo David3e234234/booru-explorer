@@ -173,7 +173,7 @@ describe('author classification precision', () => {
       const { classifyPostTags } = await import('../../src/utils/tagClassifier.js');
       const r = await classifyPostTags(
         ['1girl', 'highres', 'sen_(senkuden)', 'tomatoman_(tomatoman_kk)', 'tagme', 'cowgirl_position'],
-        '', '', {}, false, 'rule34'
+        '', '', {}, true, 'rule34'
       );
       assert.equal(r.author, 'sen_(senkuden)');
       assert.equal(r.authorSource, 'ground-truth');
