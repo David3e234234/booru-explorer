@@ -2091,9 +2091,8 @@ function setupEventListeners() {
         autocompleteInstance?.renderTagsChips?.();
       }
 
-      // 2. Reset category and site
+      // 2. Reset category (keep currently selected site)
       state.currentCategory = 'feed';
-      state.currentSite = 'danbooru';
 
       // 3. Reset toggle sliders (content hiding) to defaults
       state.hideFurry = true;
@@ -2118,8 +2117,12 @@ function setupEventListeners() {
 
       // 5. Update UI controls
       updateCategoryTabsUI();
+      updateSiteCapabilitiesUI(state.currentSite);
+      updateCurrentSiteLabel();
       renderSitesBar({ onSelectSite: selectSite });
-      updateSiteCapabilitiesUI('danbooru');
+      renderMobileSourcesSheet({ onSelectSite: selectSite });
+      if (state.currentSite === 'pawchive') ensurePawchiveServiceOptions();
+      if (state.currentSite === 'kemono') ensureKemonoServiceOptions();
       updatePostSortUI();
       updateAiFilterUI();
       updateRatingFilterUI();
