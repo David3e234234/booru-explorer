@@ -306,7 +306,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       }
     }
 
-    if (!currentPost._albumFullyFetched && currentPost.site !== 'pawchive' && currentPost.site !== 'kemono' && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:') && !currentPost.seriesKey.startsWith('kemono:')) || currentPost.pixiv_id)) {
+    if (state.settings?.groupAlbums !== false && !currentPost._albumFullyFetched && currentPost.site !== 'pawchive' && currentPost.site !== 'kemono' && (currentPost.hasChildren || currentPost.parentId || (currentPost.seriesKey && !currentPost.seriesKey.startsWith('pawchive:') && !currentPost.seriesKey.startsWith('kemono:')) || currentPost.pixiv_id)) {
       loadFullAlbumForPost(currentPost, false);
     }
   }

@@ -271,6 +271,7 @@ export function switchAlbumSlide(idx, options = {}) {
  */
 export async function loadFullAlbumForPost(targetPost, isUserExplicit = false, options = {}) {
   if (!targetPost || targetPost.site === 'pawchive' || targetPost.site === 'kemono') return;
+  if (!isUserExplicit && state.settings?.groupAlbums === false) return;
   const canFetch = Boolean(targetPost.canFetchAlbum || targetPost.hasChildren || targetPost.parentId || (targetPost.seriesKey && !targetPost.seriesKey.startsWith('pawchive:') && !targetPost.seriesKey.startsWith('kemono:')) || targetPost.pixiv_id);
   if (!canFetch) return;
   if (targetPost._albumFetchInProgress) return;
