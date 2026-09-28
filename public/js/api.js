@@ -121,17 +121,17 @@ export function getAuthHeaders(includeJson = false) {
   return headers;
 }
 
-const inFlightRequests = new Map();
+export const inFlightRequests = new Map();
 
-function dedupedFetch(key, fetchFn) {
+export function dedupedFetch(key, fetchFn) {
   if (inFlightRequests.has(key)) {
-    return inFlightRequests.get(key);
+    return inFlightRequests.get(key).then(res => (typeof res?.clone === 'function' ? res.clone() : res));
   }
   const promise = fetchFn().finally(() => {
     inFlightRequests.delete(key);
   });
   inFlightRequests.set(key, promise);
-  return promise;
+  return promise.then(res => (typeof res?.clone === 'function' ? res.clone() : res));
 }
 
 export async function apiRegister(username, password, initialData = {}) {
