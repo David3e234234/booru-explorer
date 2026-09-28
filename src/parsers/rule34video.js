@@ -827,7 +827,8 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, 
     },
     timeout: 10000,
     settings,
-    site: 'rule34video'
+    site: 'rule34video',
+    redirect: 'manual'
   };
 
   try {

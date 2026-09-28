@@ -80,14 +80,10 @@ export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
     if (e.target === modalBackdrop) closeAuthModal();
   });
 
+  // Header profile button always opens user profile (for guests and logged-in users alike)
   btnHeaderAuth?.addEventListener('click', () => {
-    if (state.currentUser) {
-      // Already logged in: jump to the Profile tab
-      if (typeof onOpenProfile === 'function') {
-        onOpenProfile();
-      }
-    } else {
-      openAuthModal('login');
+    if (typeof onOpenProfile === 'function') {
+      onOpenProfile();
     }
   });
 
@@ -215,7 +211,7 @@ export function updateHeaderAuthUI() {
       mobileNavProfileLabel.textContent = `@${name}`;
     }
   } else {
-    if (headerUserName) headerUserName.textContent = t('header.login', 'Войти');
+    if (headerUserName) headerUserName.textContent = t('header.profile', 'Профиль');
     if (headerUserAvatar) {
       headerUserAvatar.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
     }

@@ -46,7 +46,7 @@ export function updateSiteCapabilitiesUI(siteId) {
   document.querySelectorAll('.nav-tab').forEach(tab => {
     const cat = tab.dataset.category;
     if (cat) {
-      tab.style.display = (supportedCats.has(cat) || (cat === 'feed' && supportedCats.has('feed'))) ? '' : 'none';
+      tab.style.display = (cat === 'favorites' || supportedCats.has(cat) || (cat === 'feed' && supportedCats.has('feed'))) ? '' : 'none';
     }
   });
 
