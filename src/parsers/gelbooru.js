@@ -402,11 +402,23 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
 
     if (res.ok) {
       const html = await res.text();
-      const artistMatches = [...html.matchAll(/class="[^"]*tag-type-artist[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
-      const copyrightMatches = [...html.matchAll(/class="[^"]*tag-type-copyright[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
-      const characterMatches = [...html.matchAll(/class="[^"]*tag-type-character[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
-      const metadataMatches = [...html.matchAll(/class="[^"]*tag-type-(?:metadata|meta)[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
-      const generalMatches = [...html.matchAll(/class="[^"]*tag-type-general[^"]*"[^>]*>[\s\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\/a>/gi)].map(m => safeDecodeURIComponent(m[1]).trim());
+
+      const extractTagsByClass = (htmlStr, cls) => {
+        const re = new RegExp(`class="[^"]*${cls}[^"]*"[^>]*>[\\s\\S]*?<a[^>]*>(?:\\?\\s*)?([^<]+)<\\/a>`, 'gi');
+        const matches = [];
+        let m;
+        while ((m = re.exec(htmlStr)) !== null) {
+          const raw = m[1].replace(/^[?+\s]+/, '').trim();
+          if (raw) matches.push(safeDecodeURIComponent(raw).replace(/\s+/g, '_'));
+        }
+        return matches;
+      };
+
+      const artistMatches = extractTagsByClass(html, 'tag-type-artist');
+      const copyrightMatches = extractTagsByClass(html, 'tag-type-copyright');
+      const characterMatches = extractTagsByClass(html, 'tag-type-character');
+      const metadataMatches = extractTagsByClass(html, 'tag-type-(?:metadata|meta)');
+      const generalMatches = extractTagsByClass(html, 'tag-type-general');
 
       const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...metadataMatches, ...generalMatches, ...fallbackTags])];
 
@@ -454,8 +466,14 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
         rating = normalizeGelbooruRating(ratingMatch[1]);
       }
 
+      const sizeMatch = html.match(/Size:\s*(\d+)\s*x\s*(\d+)/i) || html.match(/(\d+)\s*x\s*(\d+)/);
+      const width = sizeMatch ? parseInt(sizeMatch[1], 10) : 0;
+      const height = sizeMatch ? parseInt(sizeMatch[2], 10) : 0;
+
       const dateMatch = html.match(/Posted:\s*([0-9-]+\s+[0-9:]+)/i) || html.match(/([0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9:]+)/i);
       const createdAt = dateMatch ? normalizeDate(dateMatch[1]) : '';
+
+      const resolvedAuthor = author || (tagDetails.artist && tagDetails.artist.length > 0 ? tagDetails.artist.join(', ') : initialAuthor);
 
       return {
         id: `gelbooru_${cleanId}`,
@@ -474,14 +492,14 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
         isVideo,
         isGif,
         hasSound: isVideo && hasSound,
-        author: author || initialAuthor,
+        author: resolvedAuthor,
         assistants: assistants || [],
         tags: allTags,
         tagDetails,
         score,
         rating,
-        width: 0,
-        height: 0,
+        width,
+        height,
         source: source || viewUrl,
         postUrl: viewUrl,
         parentId: null,

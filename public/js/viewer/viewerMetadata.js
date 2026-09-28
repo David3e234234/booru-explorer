@@ -180,8 +180,9 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
             changed = true;
           }
 
-          if (resolved.author && resolved.author !== currentPost.author) {
-            currentPost.author = resolved.author;
+          const resolvedAuthor = resolved.author || (resolved.tagDetails?.artist?.length ? resolved.tagDetails.artist.join(', ') : '');
+          if (resolvedAuthor && resolvedAuthor !== currentPost.author) {
+            currentPost.author = resolvedAuthor;
             changed = true;
           }
 

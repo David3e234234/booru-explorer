@@ -178,4 +178,41 @@ test('Gelbooru Parser Unit Tests', async (t) => {
     const post = await fetchGelbooruPostById('999999', [], mockSettings);
     assert.equal(post, null);
   });
+
+  await t.test('fetchGelbooruPostById extracts kok_(kokenn) author and dimensions from HTML view page', async () => {
+    const client = mockContext.agent.get('https://gelbooru.com');
+    client.intercept({
+      path: (p) => p.includes('id=8072203') && p.includes('page=dapi'),
+      method: 'GET'
+    }).reply(404, 'Not found');
+
+    const html = `<!DOCTYPE html>
+      <html>
+        <body>
+          <img id="image" src="https://img3.gelbooru.com/images/aa/bb/8072203.jpg" />
+          <ul id="tag-list">
+            <li class="tag-type-artist tag"><a href="index.php?page=post&amp;s=list&amp;tags=kok_(kokenn)">? kok (kokenn)</a></li>
+            <li class="tag-type-character tag"><a href="index.php?page=post&amp;s=list&amp;tags=character_name">character_name</a></li>
+            <li class="tag-type-general tag"><a href="index.php?page=post&amp;s=list&amp;tags=1girl">1girl</a></li>
+          </ul>
+          <div>Statistics</div>
+          <div>Size: 1200x1800</div>
+          <div>Rating: General</div>
+          <div>Score: 42</div>
+        </body>
+      </html>`;
+    client.intercept({
+      path: (p) => p.includes('id=8072203') && p.includes('s=view'),
+      method: 'GET'
+    }).reply(200, html);
+
+    const post = await fetchGelbooruPostById('8072203', [], mockSettings);
+    assert.ok(post);
+    assertNormalizedPost(post, 'gelbooru');
+    assert.equal(post.originalId, '8072203');
+    assert.equal(post.author, 'kok_(kokenn)');
+    assert.equal(post.width, 1200);
+    assert.equal(post.height, 1800);
+    assert.ok(post.tagDetails.artist.includes('kok_(kokenn)'));
+  });
 });
