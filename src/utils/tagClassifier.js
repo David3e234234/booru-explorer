@@ -938,6 +938,11 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       });
 
       // Distinguish social handle / artist alias in parentheses: e.g. name_(handle) or name_(twitter)
+      const matchesInitialAuthor = !!(initialAuthor && (
+        initialAuthor.toLowerCase().includes(lower) ||
+        initialAuthor.toLowerCase().includes(prefix) ||
+        initialAuthor.toLowerCase().includes(suffix)
+      ));
       const isSocialHandle = /^(?:twitter|pixiv|fanbox|patreon|fantia|coconala|skeb|deviantart|artstation)$/i.test(suffix) ||
                              (/\d/.test(suffix) && /^[a-z0-9_]{3,20}$/i.test(suffix) && !isKnownFranchise && !matchesPostTag);
       // The tag must match the handle the source URL actually resolved to, as a
@@ -950,7 +955,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
         `${prefix}_${suffix}` === sourceHandleKey
       ));
 
-      if (matchesSource || isSocialHandle) {
+      if (matchesSource || isSocialHandle || matchesInitialAuthor) {
         // Tag is likely an artist with their handle/platform in parentheses
         addUnique(artist, originalTag);
         continue;
@@ -1104,8 +1109,12 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     }
   });
 
+  const artistTagSet = new Set([...visualArtists, ...assistantTags].map(a => a.toLowerCase()));
+  const prunedCharacter = character.filter(c => !artistTagSet.has(c.toLowerCase()));
+  const prunedGeneral = general.filter(g => !artistTagSet.has(g.toLowerCase()));
+
   return {
-    tagDetails: { artist: visualArtists, assistant: assistantTags, copyright, character, general, meta },
+    tagDetails: { artist: visualArtists, assistant: assistantTags, copyright, character: prunedCharacter, general: prunedGeneral, meta },
     author,
     assistants,
     authorSource

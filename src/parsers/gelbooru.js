@@ -451,10 +451,18 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
       const initialAuthor = artistMatches.join(', ');
       const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true, 'gelbooru');
 
-      if (artistMatches.length > 0) tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
+      if (artistMatches.length > 0) {
+        tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
+      }
       if (copyrightMatches.length > 0) tagDetails.copyright = [...new Set([...copyrightMatches, ...(tagDetails.copyright || [])])];
       if (characterMatches.length > 0) tagDetails.character = [...new Set([...characterMatches, ...(tagDetails.character || [])])];
       if (metadataMatches.length > 0) tagDetails.meta = [...new Set([...metadataMatches, ...(tagDetails.meta || [])])];
+
+      const allArtistSet = new Set((tagDetails.artist || []).map(a => a.toLowerCase()));
+      if (allArtistSet.size > 0) {
+        if (tagDetails.character) tagDetails.character = tagDetails.character.filter(c => !allArtistSet.has(c.toLowerCase()));
+        if (tagDetails.general) tagDetails.general = tagDetails.general.filter(g => !allArtistSet.has(g.toLowerCase()));
+      }
 
       let score = 0;
       const scoreMatch = html.match(/Score:\s*(-?\d+)/i) || html.match(/id="psc">(-?\d+)</i);

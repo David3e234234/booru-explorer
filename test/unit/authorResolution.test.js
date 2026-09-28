@@ -185,5 +185,19 @@ describe('author classification precision', () => {
       await restoreDispatcher(originalDispatcher, agent);
     }
   });
+
+  it('classifies parenthesized artist aliases into artist and never keeps them in character', async () => {
+    const { classifyPostTags } = await import('../../src/utils/tagClassifier.js');
+    const r = await classifyPostTags(
+      ['takagi-san', 'kok_(kokenn)', '1girl', 'solo'],
+      '',
+      'kok_(kokenn)',
+      {}
+    );
+    assert.equal(r.author, 'kok_(kokenn)');
+    assert.ok(r.tagDetails.artist.includes('kok_(kokenn)'));
+    assert.ok(!r.tagDetails.character.includes('kok_(kokenn)'));
+    assert.ok(r.tagDetails.character.includes('takagi-san'));
+  });
 });
 
