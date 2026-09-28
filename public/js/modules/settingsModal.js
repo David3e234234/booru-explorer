@@ -852,7 +852,7 @@ export function openSettingsModal() {
       }
     }
   });
-  if (selectItemsPerPage) selectItemsPerPage.value = String(state.limit || 100);
+  if (selectItemsPerPage) selectItemsPerPage.value = String(state.limit || 40);
   if (selectPreviewQuality) selectPreviewQuality.value = state.settings.previewQuality || 'medium';
   const selectVideoDefaultQualityModal = document.getElementById('selectVideoDefaultQuality');
   if (selectVideoDefaultQualityModal) selectVideoDefaultQualityModal.value = state.settings.videoDefaultQuality || 'original';
@@ -876,7 +876,7 @@ export function openSettingsModal() {
   if (selectArchiveDownloadThreadsModal) selectArchiveDownloadThreadsModal.value = String(state.settings.archiveDownloadThreads || 4);
   const checkEnableJsDemuxingModal = document.getElementById('checkEnableJsDemuxing');
   if (checkEnableJsDemuxingModal) checkEnableJsDemuxingModal.checked = state.settings.enableJsDemuxing !== false;
-  if (selectDeepFetchPages) selectDeepFetchPages.value = String(state.settings.deepFetchPages || 2);
+  if (selectDeepFetchPages) selectDeepFetchPages.value = String(state.settings.deepFetchPages || 1);
 
   if (checkProxyThumbnails) checkProxyThumbnails.checked = state.settings.proxyThumbnails !== false;
   if (checkProxyFullImages) checkProxyFullImages.checked = state.settings.proxyFullImages !== false;
@@ -1654,7 +1654,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const checkProxyVideoDefault = document.getElementById('checkProxyVideos') || document.getElementById('checkProxyVideoDefault');
       const checkShowVideoStatusBanner = document.getElementById('checkShowVideoStatusBanner');
 
-      const itemsPerPageVal = selectItemsPerPage ? (parseInt(selectItemsPerPage.value, 10) || 100) : 100;
+      const itemsPerPageVal = selectItemsPerPage ? (parseInt(selectItemsPerPage.value, 10) || 40) : 40;
       const previewQualityVal = selectPreviewQuality ? selectPreviewQuality.value : 'medium';
       const videoAutoplayHoverVal = checkVideoAutoplayHover ? checkVideoAutoplayHover.checked : true;
       const videoAutoplayMobileVal = checkVideoAutoplayMobile ? checkVideoAutoplayMobile.checked : true;
@@ -1669,7 +1669,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const showVideoStatusBannerVal = checkShowVideoStatusBanner ? checkShowVideoStatusBanner.checked : true;
       
       const selectDeepFetchPages = document.getElementById('selectDeepFetchPages');
-      const deepFetchPagesVal = selectDeepFetchPages ? (parseInt(selectDeepFetchPages.value, 10) || 2) : 2;
+      const deepFetchPagesVal = selectDeepFetchPages ? (parseInt(selectDeepFetchPages.value, 10) || 1) : 1;
 
       const checkPrioritizeUserTags = document.getElementById('checkPrioritizeUserTags');
       const prioritizeUserTagsVal = checkPrioritizeUserTags ? checkPrioritizeUserTags.checked : false;

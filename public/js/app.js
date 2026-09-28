@@ -1050,7 +1050,7 @@ async function performSearch(reset = false, options = {}) {
         // General booru authors (e.g. the_atko, vicineko, doridoriko) exist across multiple boorus
         return true;
       });
-      const currentLimit = state.settings.itemsPerPage || state.limit || 100;
+      const currentLimit = state.settings.itemsPerPage || state.limit || 40;
 
       if (followedAuthors.length === 0) {
         state.posts = [];
@@ -1332,7 +1332,7 @@ async function performSearch(reset = false, options = {}) {
       const focusMode = state.recommendationFocus || state.settings?.recommendationFocus || 'all';
       const userInterests = getUserInterestTags(null, { focusMode });
       const interestMap = new Map(userInterests.map(i => [i.tag, i.score]));
-      const currentLimit = state.settings.itemsPerPage || state.limit || 100;
+      const currentLimit = state.settings.itemsPerPage || state.limit || 40;
       let candidatePosts = [];
 
       if (state.searchTags.length > 0) {
@@ -1750,7 +1750,7 @@ async function performSearch(reset = false, options = {}) {
     const btnRefreshSearch = document.getElementById('btnRefreshSearch');
     if (btnRefreshSearch) btnRefreshSearch.classList.add('refreshing');
 
-    const currentLimit = state.settings.itemsPerPage || state.limit || 100;
+    const currentLimit = state.settings.itemsPerPage || state.limit || 40;
     const res = await fetchPosts({
       site: state.currentSite,
       tags: state.searchTags.join(' '),
@@ -1824,7 +1824,7 @@ function scheduleNextPagePrefetch() {
   if (prefetchTimer) clearTimeout(prefetchTimer);
   prefetchTimer = setTimeout(() => {
     if (state.isLoading || !state.hasMore) return;
-    const currentLimit = state.settings?.itemsPerPage || state.limit || 100;
+    const currentLimit = state.settings?.itemsPerPage || state.limit || 40;
     fetchPosts({
       site: state.currentSite,
       tags: state.searchTags.join(' '),

@@ -110,6 +110,70 @@ test('Rule34 Parser Unit Tests (including Paheal integration)', async (t) => {
     assert.equal(posts[0].siteName, 'Rule34');
   });
 
+  await t.test('fetchRule34 medium tier uses preview when DAPI has no sample_url', async () => {
+    // Without a distinct sample the medium tier must stay on the small
+    // thumbnail instead of aliasing the multi-MB original
+    const client = mockContext.agent.get('https://api.rule34.xxx');
+    client.intercept({
+      path: (p) => p.includes('page=dapi') && p.includes('json=1'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: 6201,
+        directory: '6201',
+        image: 'pic.jpg',
+        preview_url: 'https://us.rule34.xxx/thumbnails/6201/thumbnail_pic.jpg',
+        tags: 'touhou solo',
+        rating: 'explicit',
+        score: 5
+      }
+    ]);
+
+    const posts = await fetchRule34({ tags: 'touhou', limit: 1 }, [], mockSettings);
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].thumb180, 'https://us.rule34.xxx/thumbnails/6201/thumbnail_pic.jpg');
+    assert.equal(posts[0].thumb360, 'https://us.rule34.xxx/thumbnails/6201/thumbnail_pic.jpg');
+    assert.equal(posts[0].thumb720, 'https://us.rule34.xxx/images/6201/pic.jpg');
+    assert.equal(posts[0].thumbOriginal, 'https://us.rule34.xxx/images/6201/pic.jpg');
+  });
+
+  await t.test('fetchRule34 paheal medium tier uses preview thumbnail, not full file', async () => {
+    const pahealClient = mockContext.agent.get('https://rule34.paheal.net');
+    const xml = `<?xml version="1.0" encoding="utf-8"?>
+      <posts count="1" offset="0">
+        <post id="7102" tags="touhou solo" score="10" rating="Explicit" file_url="https://r34.paheal.net/_images/7102.jpg" preview_url="https://r34.paheal.net/_thumbs/7102.jpg" />
+      </posts>`;
+    pahealClient.intercept({
+      path: (p) => p.includes('tags=touhou'),
+      method: 'GET'
+    }).reply(200, xml);
+
+    const posts = await fetchRule34({ tags: 'touhou', limit: 10 }, [], { rule34Provider: 'paheal' });
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].thumb180, 'https://r34.paheal.net/_thumbs/7102.jpg');
+    assert.equal(posts[0].thumb360, 'https://r34.paheal.net/_thumbs/7102.jpg');
+    assert.equal(posts[0].thumb720, 'https://r34.paheal.net/_images/7102.jpg');
+  });
+
+  await t.test('fetchRule34 returns empty without HTML fallback on definitive empty DAPI', async () => {
+    // An empty DAPI page means "no posts", not "request failed": the slow HTML
+    // feed must not fire. The mocked HTML page below would parse into a post,
+    // so a non-empty result proves the fallback ran.
+    const apiClient = mockContext.agent.get('https://api.rule34.xxx');
+    apiClient.intercept({
+      path: (p) => p.includes('page=dapi'),
+      method: 'GET'
+    }).reply(200, []);
+    const htmlClient = mockContext.agent.get('https://rule34.xxx');
+    htmlClient.intercept({
+      path: (p) => p.includes('s=list'),
+      method: 'GET'
+    }).reply(200, `<span class="thumb" id="s7777"><a href="/index.php?page=post&s=view&id=7777"><img src="https://api-cdn.rule34.xxx/thumbnails/7777/thumbnail_abcdef.jpg" title="touhou solo score:5 rating:explicit"></a></span>`);
+
+    const posts = await fetchRule34({ tags: 'zzzznoresults', limit: 10 }, [], mockSettings);
+    assert.equal(posts.length, 0);
+  });
+
   await t.test('fetchRule34PostById resolves normal Rule34 post from DAPI', async () => {
     const client = mockContext.agent.get('https://api.rule34.xxx');
     client.intercept({

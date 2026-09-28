@@ -928,10 +928,10 @@
             <p class="settings-hint" data-i18n="settings.itemsPerPageHint">Сколько постов запрашивать с сайтов за один шаг прокрутки ленты.</p>
             <select id="selectItemsPerPage" class="input-setting">
               <option value="20" data-i18n="settings.items20">20 постов</option>
-              <option value="40" data-i18n="settings.items40">40 постов</option>
+              <option value="40" selected data-i18n="settings.items40">40 постов (Рекомендуется)</option>
               <option value="60" data-i18n="settings.items60">60 постов</option>
               <option value="80" data-i18n="settings.items80">80 постов</option>
-              <option value="100" selected data-i18n="settings.items100">100 постов (Рекомендуется)</option>
+              <option value="100" data-i18n="settings.items100">100 постов</option>
               <option value="150" data-i18n="settings.items150">150 постов</option>
               <option value="200" data-i18n="settings.items200">200 постов (Максимум)</option>
             </select>
@@ -1651,8 +1651,8 @@
             <label class="settings-label" for="selectDeepFetchPages" data-i18n="settings.deepFetch">Глубина глубокого поиска (страниц на запрос):</label>
             <p class="settings-hint" data-i18n="settings.deepFetchHint">Сколько скрытых страниц опрашивать вглубь на всех сайтах (Danbooru, Rule34, Gelbooru и др.) для заполнения ленты при строгой фильтрации (лоли/мамочки, ИИ, черные списки).</p>
             <select id="selectDeepFetchPages" class="input-setting">
-              <option value="1" data-i18n="settings.deep1">1 страница (быстро)</option>
-              <option value="2" selected data-i18n="settings.deep2">2 страницы (по умолчанию)</option>
+              <option value="1" selected data-i18n="settings.deep1">1 страница (быстро, по умолчанию)</option>
+              <option value="2" data-i18n="settings.deep2">2 страницы</option>
               <option value="3" data-i18n="settings.deep3">3 страницы (глубокий)</option>
               <option value="4" data-i18n="settings.deep4">4 страницы (очень глубокий)</option>
               <option value="5" data-i18n="settings.deep5">5 страниц (максимальный)</option>
@@ -2660,6 +2660,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="js/app.js?v=10.7"></script>
+  <script type="module" src="js/app.js?v=10.8"></script>
 </body>
 </html>

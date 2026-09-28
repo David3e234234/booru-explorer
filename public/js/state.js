@@ -62,7 +62,7 @@ export function getSiteCapabilities(siteId) {
 
 export const DEFAULT_CLIENT_SETTINGS = {
   theme: 'kotobox',
-  itemsPerPage: 100,
+  itemsPerPage: 40,
   proxyThumbnails: true,
   proxyFullImages: true,
   proxyVideos: true,
@@ -107,7 +107,7 @@ export const DEFAULT_CLIENT_SETTINGS = {
   pawchiveSession: '',
   kemonoSession: '',
   kemonoProxy: '',
-  deepFetchPages: 2,
+  deepFetchPages: 1,
   prioritizeUserTags: false,
   enableJsDemuxing: true,
   rule34Provider: 'rule34xxx',

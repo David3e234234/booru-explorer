@@ -763,32 +763,17 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         }
       }
     } else {
-      // Static images
+      // Static images: thumb tiers are built server-side from native board URLs
+      // (low=preview thumbnail, medium=sample or preview, high=sample,
+      // original=file), so every site reads the same fields.
       if (quality === 'low') {
-        // Danbooru: 180x180 thumbnail, others: previewUrl
-        directThumb = (post.site === 'danbooru' && post.thumb180) ? post.thumb180
-          : ((!isVideoExt(post.previewUrl) && post.previewUrl) || post.sampleUrl || post.fileUrl || '');
+        directThumb = ((!isVideoExt(post.thumb180) && post.thumb180) || (!isVideoExt(post.previewUrl) && post.previewUrl) || post.sampleUrl || post.fileUrl || '');
       } else if (quality === 'medium') {
-        // Danbooru: 360x360 variant straight from the field
-        if (post.site === 'danbooru') {
-          directThumb = post.thumb360 || post.thumb180 || post.previewUrl || '';
-        } else {
-          directThumb = (!isVideoExt(post.sampleUrl) && post.sampleUrl) || (!isVideoExt(post.previewUrl) && post.previewUrl) || post.fileUrl || '';
-        }
+        directThumb = ((!isVideoExt(post.thumb360) && post.thumb360) || (!isVideoExt(post.previewUrl) && post.previewUrl) || post.sampleUrl || post.fileUrl || '');
       } else if (quality === 'high') {
-        // Danbooru: 720x720 WebP variant straight from the field
-        if (post.site === 'danbooru') {
-          directThumb = post.thumb720 || post.thumbSample || post.thumb360 || post.previewUrl || '';
-        } else {
-          directThumb = (!isVideoExt(post.sampleUrl) && post.sampleUrl) || post.fileUrl || post.previewUrl || '';
-        }
+        directThumb = ((!isVideoExt(post.thumb720) && post.thumb720) || (!isVideoExt(post.sampleUrl) && post.sampleUrl) || post.fileUrl || post.previewUrl || '');
       } else if (quality === 'original') {
-        // Danbooru: full original straight from the field
-        if (post.site === 'danbooru') {
-          directThumb = (!isVideoExt(post.thumbOriginal) && post.thumbOriginal) || post.thumb720 || post.fileUrl || '';
-        } else {
-          directThumb = (!isVideoExt(post.fileUrl) && post.fileUrl) || post.sampleUrl || post.previewUrl || '';
-        }
+        directThumb = ((!isVideoExt(post.thumbOriginal) && post.thumbOriginal) || (!isVideoExt(post.fileUrl) && post.fileUrl) || post.sampleUrl || post.previewUrl || '');
       }
     }
 

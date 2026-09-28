@@ -137,6 +137,8 @@ Normalized post contract:
 }
 ```
 
+Preview tiers are native board URLs, shared by every site (the gallery reads `thumb*` for all boards, not just Danbooru): `thumb180` is the small thumbnail (low), `thumb360` is the sample or the preview when the board returned no distinct sample (medium), `thumb720` is the sample (high), `thumbOriginal` is the full file (original). The medium tier must never alias the full file while a smaller preview exists — that aliasing made medium/high feel identical to original and forced the gallery to download multi-MB files per card. A definitive empty DAPI page means "no posts" and must return `[]` without firing the slow HTML fallback; bare-tag author confirmation must not `await` the global tag dictionary before the DAPI request.
+
 Boards that only publish a short teaser in their feed add two optional fields:
 
 ```js

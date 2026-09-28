@@ -234,7 +234,7 @@ export const DEFAULT_SETTINGS = {
   enableSimilarPosts: true,
   previewQuality: 'medium', // 'low', 'medium', 'high', 'original'
   videoMutedDefault: true,
-  itemsPerPage: 100,
+  itemsPerPage: 40,
   proxyThumbnails: true,
   proxyFullImages: true,
   proxyVideos: true,

@@ -50,6 +50,26 @@ function safeDecodeURIComponent(str) {
   }
 }
 
+// Preview tiers from native board URLs: low (thumb180) is the small thumbnail,
+// medium (thumb360) is the sample image, high (thumb720) prefers the sample and
+// original is the full file. The medium tier must never fall back to the full
+// file while a smaller preview exists: that aliasing made medium/high feel
+// identical to original and forced the gallery to download multi-MB files.
+function buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo }) {
+  const preview = previewUrl || '';
+  const rawSample = rawSampleUrl || '';
+  const file = fileUrl || '';
+  if (isVideo) {
+    const pv = preview || rawSample || file;
+    return { thumb180: pv, thumb360: pv, thumb720: pv };
+  }
+  return {
+    thumb180: preview || rawSample || file,
+    thumb360: (rawSample && rawSample !== file) ? rawSample : (preview || rawSample || file),
+    thumb720: rawSample || file || preview
+  };
+}
+
 export async function fetchGelbooru(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   
@@ -101,24 +121,29 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
       if (res.ok) {
         const text = await res.text();
         let posts = [];
+        let dapiDefinitive = false;
         const data = safeJsonParse(text, null);
         if (data) {
           posts = data?.post || (Array.isArray(data) ? data : []);
+          dapiDefinitive = true;
         } else if (text.includes('<post')) {
           posts = parseDapiXmlPosts(text);
+          dapiDefinitive = true;
         }
+        // A definitive DAPI answer (even an empty page) must not trigger the
+        // slow HTML fallback: empty means "no posts", not "request failed".
+        if (dapiDefinitive && posts.length === 0) return [];
         if (Array.isArray(posts) && posts.length > 0) {
           // One malformed item must not blank the whole page: each post settles
           // on its own and only the rejections are dropped
           const settled = await Promise.allSettled(posts.map(async item => {
             const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
             const fileUrl = item.file_url || (item.image && item.directory ? `https://img3.gelbooru.com/images/${item.directory}/${item.image}` : '');
-            const sampleUrl = item.sample_url || fileUrl;
+            const rawSampleUrl = item.sample_url || '';
+            const sampleUrl = rawSampleUrl || fileUrl;
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
             const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
-            const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-            const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-            const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+            const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
             const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, false, 'gelbooru');
@@ -247,9 +272,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
           tags: p.rawTags
         }, 'gelbooru');
 
-        const thumb180 = p.previewUrl || p.sampleUrl || p.fileUrl || '';
-        const thumb360 = p.isVideo ? p.previewUrl : (p.sampleUrl || p.previewUrl || p.fileUrl || '');
-        const thumb720 = p.isVideo ? p.previewUrl : (p.sampleUrl || p.fileUrl || p.previewUrl || '');
+        const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl: p.previewUrl, rawSampleUrl: p.sampleUrl, fileUrl: p.fileUrl, isVideo: p.isVideo });
         const thumbSample = p.sampleUrl;
         const thumbOriginal = p.fileUrl;
 
@@ -324,15 +347,14 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
           const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
           let fileUrl = item.file_url || (item.image && item.directory ? `https://img3.gelbooru.com/images/${item.directory}/${item.image}` : '');
           if (fileUrl.startsWith('//')) fileUrl = 'https:' + fileUrl;
-          let sampleUrl = item.sample_url || fileUrl;
-          if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
+          let rawSampleUrl = item.sample_url || '';
+          if (rawSampleUrl.startsWith('//')) rawSampleUrl = 'https:' + rawSampleUrl;
+          let sampleUrl = rawSampleUrl || fileUrl;
 
           if (fileUrl || sampleUrl || item.preview_url) {
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
             const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
-            const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-            const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-            const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+            const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
             const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true, 'gelbooru');
@@ -442,9 +464,7 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', allTags);
       const previewUrl = resolvePreviewUrl(sampleUrl, fileUrl, sampleUrl, isVideo);
-      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-      const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-      const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+      const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
       const thumbOriginal = fileUrl;
 

@@ -1,9 +1,29 @@
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
 import { BROWSER_USER_AGENT } from '../config/constants.js';
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
-import { classifyPostTags, loadGlobalTagSummary } from '../utils/tagClassifier.js';
+import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
+
+// Preview tiers from native board URLs: low (thumb180) is the small thumbnail,
+// medium (thumb360) is the sample image, high (thumb720) prefers the sample and
+// original is the full file. The medium tier must never fall back to the full
+// file while a smaller preview exists: that aliasing made medium/high feel
+// identical to original and forced the gallery to download multi-MB files.
+function buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo }) {
+  const preview = previewUrl || '';
+  const rawSample = rawSampleUrl || '';
+  const file = fileUrl || '';
+  if (isVideo) {
+    const pv = preview || rawSample || file;
+    return { thumb180: pv, thumb360: pv, thumb720: pv };
+  }
+  return {
+    thumb180: preview || rawSample || file,
+    thumb360: (rawSample && rawSample !== file) ? rawSample : (preview || rawSample || file),
+    thumb720: rawSample || file || preview
+  };
+}
 
 export function normalizeRule34Rating(raw) {
   const r = String(raw || '').toLowerCase().trim();
@@ -40,7 +60,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
       .replace(/\bscore:>=?\d+\b/gi, '')
       .trim();
 
-    const fetchPahealLimit = (category === 'popular' || category === 'recommended') ? Math.max(limit, 70) : limit;
+    // No over-fetch: the old max(limit, 70) forced at least 70 XML posts through
+    // per-post classification even when the feed only needed 25-40.
+    const fetchPahealLimit = limit;
     if (category === 'top' || category === 'recommended') {
       if (!pahealSearchTags.includes('order:')) {
         pahealSearchTags = pahealSearchTags ? `order:score ${pahealSearchTags}` : 'order:score';
@@ -99,9 +121,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
         const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false, 'paheal');
         const createdAt = normalizeDate(attrs.created_at || attrs.date);
-        const thumb180 = previewUrl || attrs.file_url || '';
-        const thumb360 = attrs.file_url || previewUrl || '';
-        const thumb720 = attrs.file_url || previewUrl || '';
+        const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: '', fileUrl: attrs.file_url, isVideo });
         const thumbSample = attrs.file_url;
         const thumbOriginal = attrs.file_url;
         return {
@@ -194,26 +214,21 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
   const pid = Math.max(0, page - 1);
 
-  // Extract author name from query tags if explicitly searching by author (e.g. artist:name, author:name)
-  // or if the bare tag is confirmed as an artist in the global tag dictionary
+  // Extract author name from explicit query prefixes only (artist:/author:/by_).
+  // The previous version awaited the 83k-entry global tag dictionary on every
+  // search just to confirm a bare tag, blocking the DAPI request behind disk
+  // and network I/O. Bare-tag confirmation now happens inside classifyPostTags,
+  // which loads the dictionary once and shares it across all posts of the batch.
   let searchAuthor = '';
   const searchTokens = (tags || '').split(' ').map(s => s.trim()).filter(Boolean);
-  const tagMap = await loadGlobalTagSummary(settings);
   for (const tok of searchTokens) {
     const lower = tok.toLowerCase();
     if (lower.startsWith('artist:') || lower.startsWith('author:') || lower.startsWith('creator:')) {
       searchAuthor = tok.replace(/^(artist|author|creator):/i, '').trim();
       break;
     }
-    if (lower.startsWith('by_')) {
-      const candidate = lower.slice(3);
-      if (tagMap && tagMap.get(candidate) === 1) {
-        searchAuthor = tok.slice(3).trim();
-        break;
-      }
-    }
-    if (!tok.includes(':') && tagMap && tagMap.get(lower) === 1) {
-      searchAuthor = tok;
+    if (lower.startsWith('by_') && lower.length > 3) {
+      searchAuthor = tok.slice(3).trim();
       break;
     }
   }
@@ -246,20 +261,25 @@ export async function fetchRule34(params, aiTagsList, settings) {
         const text = await res.text();
         if (!text.includes('Missing authentication')) {
           const data = safeJsonParse(text, null);
-          if (Array.isArray(data) && data.length > 0) {
+          // A definitive DAPI answer (even an empty page) must not trigger the
+          // slow HTML fallback: empty means "no posts", not "request failed".
+          if (Array.isArray(data)) {
+            if (data.length === 0) return [];
             // One malformed item must not blank the whole page: each post settles
             // on its own and only the rejections are dropped
             const settledPosts = await Promise.allSettled(data.map(async item => {
               const rawTags = decodeHtmlEntities(item.tags || '').split(' ').filter(Boolean);
               let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
               const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
-              let sampleUrl = item.sample_url || fileUrl;
+              let rawSampleUrl = item.sample_url || '';
+              let sampleUrl = rawSampleUrl || fileUrl;
               let previewUrl = item.preview_url || '';
               if (isVideo) {
                 if (sampleUrl && (sampleUrl.endsWith('.jpg') || sampleUrl.endsWith('.jpeg') || sampleUrl.endsWith('.png'))) {
                   if (!previewUrl) previewUrl = sampleUrl;
                 }
                 sampleUrl = fileUrl;
+                rawSampleUrl = '';
               }
               previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
               const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, searchAuthor, settings, false, 'rule34');
@@ -274,9 +294,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 tags: rawTags
               }, 'rule34');
 
-              const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-              const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-              const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+              const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
               const thumbSample = sampleUrl;
               const thumbOriginal = fileUrl;
 
@@ -460,9 +478,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
             tags: p.rawTags
           }, 'rule34');
 
-          const thumb180 = p.previewUrl || p.sampleUrl || p.fileUrl || '';
-          const thumb360 = p.isVideo ? p.previewUrl : (p.sampleUrl || p.previewUrl || p.fileUrl || '');
-          const thumb720 = p.isVideo ? p.previewUrl : (p.sampleUrl || p.fileUrl || p.previewUrl || '');
+          const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl: p.previewUrl, rawSampleUrl: p.sampleUrl, fileUrl: p.fileUrl, isVideo: p.isVideo });
           const thumbSample = p.sampleUrl;
           const thumbOriginal = p.fileUrl;
 
@@ -579,9 +595,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
         if (altItems.length > 0) {
           posts = await Promise.all(altItems.map(async p => {
             const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
-            const thumb180 = p.thumbUrl || p.sampleUrl || p.fileUrl || '';
-            const thumb360 = p.isVideo ? p.thumbUrl : (p.sampleUrl || p.thumbUrl || p.fileUrl || '');
-            const thumb720 = p.isVideo ? p.thumbUrl : (p.sampleUrl || p.fileUrl || p.thumbUrl || '');
+            const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl: p.thumbUrl, rawSampleUrl: p.sampleUrl, fileUrl: p.fileUrl, isVideo: p.isVideo });
             const thumbSample = p.sampleUrl;
             const thumbOriginal = p.fileUrl;
 
@@ -677,9 +691,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
               fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
             }
             const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
-            const thumb180 = previewUrl || attrs.file_url || '';
-            const thumb360 = attrs.file_url || previewUrl || '';
-            const thumb720 = attrs.file_url || previewUrl || '';
+            const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: '', fileUrl: attrs.file_url, isVideo });
             const thumbSample = attrs.file_url;
             const thumbOriginal = attrs.file_url;
             const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, true, 'paheal');
@@ -748,18 +760,18 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
             const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
             let fileUrl = item.file_url || (item.image && item.directory ? `https://us.rule34.xxx/images/${item.directory}/${item.image}` : '');
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
-            let sampleUrl = item.sample_url || fileUrl;
+            let rawSampleUrl = item.sample_url || '';
+            let sampleUrl = rawSampleUrl || fileUrl;
             let previewUrl = item.preview_url || '';
             if (isVideo) {
               if (sampleUrl && (sampleUrl.endsWith('.jpg') || sampleUrl.endsWith('.jpeg') || sampleUrl.endsWith('.png'))) {
                 if (!previewUrl) previewUrl = sampleUrl;
               }
               sampleUrl = fileUrl;
+              rawSampleUrl = '';
             }
             previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
-            const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-            const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-            const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+            const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
             const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true, 'rule34');
@@ -868,9 +880,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
 
         const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl || sampleUrl, '', allTags);
         previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
-        const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-        const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-        const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+        const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
         const thumbSample = sampleUrl;
         const thumbOriginal = fileUrl;
 

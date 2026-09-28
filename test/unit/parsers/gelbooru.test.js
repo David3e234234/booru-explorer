@@ -114,6 +114,52 @@ test('Gelbooru Parser Unit Tests', async (t) => {
     assert.equal(posts[0].originalId, '201');
   });
 
+  await t.test('fetchGelbooru medium tier falls back to preview when sample_url is missing', async () => {
+    // Without a distinct sample the medium tier must stay on the small
+    // thumbnail instead of aliasing the multi-MB original
+    const client = mockContext.agent.get('https://gelbooru.com');
+    client.intercept({
+      path: (p) => p.includes('page=dapi') && p.includes('json=1'),
+      method: 'GET'
+    }).reply(200, {
+      post: [
+        {
+          id: 103,
+          file_url: 'https://img3.gelbooru.com/images/12/34/103.jpg',
+          preview_url: 'https://img3.gelbooru.com/thumbnails/12/34/thumbnail_103.jpg',
+          tags: 'touhou solo',
+          rating: 'general',
+          score: 5
+        }
+      ]
+    });
+
+    const posts = await fetchGelbooru({ tags: 'touhou', limit: 1 }, [], mockSettings);
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].thumb180, 'https://img3.gelbooru.com/thumbnails/12/34/thumbnail_103.jpg');
+    assert.equal(posts[0].thumb360, 'https://img3.gelbooru.com/thumbnails/12/34/thumbnail_103.jpg');
+    assert.equal(posts[0].thumb720, 'https://img3.gelbooru.com/images/12/34/103.jpg');
+    assert.equal(posts[0].thumbOriginal, 'https://img3.gelbooru.com/images/12/34/103.jpg');
+  });
+
+  await t.test('fetchGelbooru returns empty without HTML fallback on definitive empty DAPI', async () => {
+    // An empty DAPI page means "no posts", not "request failed": the slow HTML
+    // feed must not fire. The mocked HTML page below would parse into a post,
+    // so a non-empty result proves the fallback ran.
+    const client = mockContext.agent.get('https://gelbooru.com');
+    client.intercept({
+      path: (p) => p.includes('page=dapi'),
+      method: 'GET'
+    }).reply(200, { post: [] });
+    client.intercept({
+      path: (p) => p.includes('s=list'),
+      method: 'GET'
+    }).reply(200, `<article class="thumbnail-preview"><a id="p556" href="/index.php?page=post&s=view&id=556"><img src="https://img3.gelbooru.com/thumbnails/aa/bb/thumbnail_556.jpg" title="touhou solo score:10 rating:general"></a></article>`);
+
+    const posts = await fetchGelbooru({ tags: 'zzzznoresults', limit: 10 }, [], mockSettings);
+    assert.equal(posts.length, 0);
+  });
+
   await t.test('fetchGelbooruPostById parses DAPI XML fallback and normalizes post', async () => {
     const client = mockContext.agent.get('https://gelbooru.com');
     const xml = `<posts count="1"><post id="8888" file_url="https://img3.gelbooru.com/images/ab/cd/8888.jpg" preview_url="https://img3.gelbooru.com/thumbnails/ab/cd/thumbnail_8888.jpg" sample_url="https://img3.gelbooru.com/samples/ab/cd/sample_8888.jpg" tags="solo 1girl" rating="questionable" score="55"/></posts>`;

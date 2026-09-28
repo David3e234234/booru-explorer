@@ -243,12 +243,13 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   const shouldDeepFetch = hasStrictFilters || deepFetchPagesSetting > 1 || targetLimit > 40;
   const startRemotePage = page;
   // Remote pages per single-site search, straight from the depth setting. 1 and 3+
-  // mean what the UI says ("страниц на запрос": 1 = one page, 3 = three); the shipped
-  // default (2) keeps the six pages single-site searches have always pulled, because
-  // strict filters need that extra material to fill the feed. The old
-  // Math.max(setting * 2, 6) raised every option the UI offers (1-5) back to six,
-  // which is why the all-sites fan-out below - pinned to a depth of 1 - still fired
-  // six requests per source instead of the single page it promises.
+  // mean what the UI says ("страниц на запрос": 1 = one page, 3 = three); the legacy
+  // server default (2) keeps the six pages single-site searches have always pulled,
+  // because strict filters need that extra material to fill the feed. The shipped
+  // client default is 1, so fresh installs fetch a single fast page per scroll step.
+  // The old Math.max(setting * 2, 6) raised every option the UI offers (1-5) back to
+  // six, which is why the all-sites fan-out below - pinned to a depth of 1 - still
+  // fired six requests per source instead of the single page it promises.
   const maxIterations = deepFetchPagesSetting === DEFAULT_DEEP_FETCH_DEPTH
     ? 6
     : deepFetchPagesSetting;
