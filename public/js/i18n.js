@@ -857,6 +857,8 @@ Object.assign(en, {
   'vw.authorRemoveTitle': 'Remove author "{name}" from favorites',
   'vw.authorAddTitle': 'Add author "{name}" to favorites',
   'vw.authorFavOn': 'In favorites',
+  'viewer.authorNotSpecified': 'author not specified',
+  'viewer.authorNotSpecifiedTitle': 'The source contains no author data',
   'vw.coverSetForAuthor': 'This art is now the cover of {name}!',
   'vw.hiddenFromFeed': 'Hidden from feed',
   'vw.openOnSite': 'Open page on {name}',

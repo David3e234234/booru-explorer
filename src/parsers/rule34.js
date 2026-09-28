@@ -97,7 +97,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
         }
         const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
-        const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false);
+        const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false, 'paheal');
         const createdAt = normalizeDate(attrs.created_at || attrs.date);
         const thumb180 = previewUrl || attrs.file_url || '';
         const thumb360 = attrs.file_url || previewUrl || '';
@@ -262,7 +262,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 sampleUrl = fileUrl;
               }
               previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
-              const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, searchAuthor, settings, false);
+              const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, searchAuthor, settings, false, 'rule34');
               const createdAt = normalizeDate(item.created_at || item.change);
               const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
               const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -451,7 +451,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
       if (rawParsedItems.length > 0) {
         const settledParsed = await Promise.allSettled(rawParsedItems.map(async p => {
-          const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false);
+          const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
           const seriesKey = extractSeriesKey({
             source: p.source,
             parentId: null,
@@ -578,7 +578,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
         if (altItems.length > 0) {
           posts = await Promise.all(altItems.map(async p => {
-            const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false);
+            const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
             const thumb180 = p.thumbUrl || p.sampleUrl || p.fileUrl || '';
             const thumb360 = p.isVideo ? p.thumbUrl : (p.sampleUrl || p.thumbUrl || p.fileUrl || '');
             const thumb720 = p.isVideo ? p.thumbUrl : (p.sampleUrl || p.fileUrl || p.thumbUrl || '');
@@ -682,7 +682,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
             const thumb720 = attrs.file_url || previewUrl || '';
             const thumbSample = attrs.file_url;
             const thumbOriginal = attrs.file_url;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false);
+            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false, 'paheal');
             return {
               id: `paheal_${attrs.id}`,
               originalId: String(attrs.id),
@@ -762,7 +762,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
             const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true);
+            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true, 'rule34');
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
             const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -844,7 +844,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
 
         const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...metadataMatches, ...generalMatches, ...fallbackTags])];
         const initialAuthor = artistMatches.join(', ');
-        const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true);
+        const { tagDetails, author, assistants } = await classifyPostTags(allTags, source, initialAuthor, settings, true, isPaheal ? 'paheal' : 'rule34');
 
         if (artistMatches.length > 0) tagDetails.artist = [...new Set([...artistMatches, ...(tagDetails.artist || [])])];
         if (copyrightMatches.length > 0) tagDetails.copyright = [...new Set([...copyrightMatches, ...(tagDetails.copyright || [])])];
@@ -926,7 +926,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
 
   // 4. Fallback: classify from fallbackTags if provided
   if (Array.isArray(fallbackTags) && fallbackTags.length > 0) {
-    const { tagDetails, author, assistants } = await classifyPostTags(fallbackTags, '', '', settings, true);
+    const { tagDetails, author, assistants } = await classifyPostTags(fallbackTags, '', '', settings, true, isPaheal ? 'paheal' : 'rule34');
     return {
       id: isPaheal ? `paheal_${cleanId}` : `rule34_${cleanId}`,
       originalId: cleanId,

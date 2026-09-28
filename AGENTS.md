@@ -96,6 +96,7 @@ Large files must be split by responsibility when touched. Preferred existing bou
 - `settingsValidation.js`: request auth parsing, settings allowlists, cache key
 - `hostPolicy.js`: hostname boundaries, credential hosts, log redaction
 - `imageCacheService.js`: image signatures and disk cache
+- `booruTagTypeService.js`: per-board authoritative tag categories, batched and disk-cached
 - `mediaJobSupervisor.js`: FFmpeg concurrency and queue limits
 - `siteSessionService.js`: session-token normalization for the Kemono-family boards
 - `tagAutocomplete.routes.js`: autocomplete endpoint, independent from search routes
@@ -112,6 +113,19 @@ Large files must be split by responsibility when touched. Preferred existing bou
 4. All-sites mode uses `Promise.allSettled`, a per-site deadline, `Promise.allSettled` fan-out, round-robin merge and a final `limit` slice.
 5. `isPostMatchingFilters()` in `tagHelpers.js` is the canonical content filter. Danbooru also prefilters inside its parser to avoid expensive cursor paging; routes must never add another filter pass.
 6. Auto-discovered Danbooru aliases are only registered when the discovered alias group is plausible (at most 8 names). A Danbooru page with dozens of `other_names` is a circle or aggregator page; registering it aliases unrelated artists to each other, so a single-author Pawchive query returns several unrelated feeds.
+
+### Author Resolution
+
+Author detection is ground-truth first, heuristics second. The previous order was inverted and that was the source of most wrong authors.
+
+- `booruTagTypeService.js` reads the tag category from the board that owns the tag (`s=tag` DAPI for Gelbooru, Rule34 and Paheal). Gelbooru and Rule34 are different booru genealogies from the Konachan `tags/summary.json` in `tagClassifier.js`, so that dictionary reports "unknown" for most real artists of these boards. It stays as a fallback, never as the primary answer.
+- `classifyPostTags()` takes a trailing `site` argument. When present, the board's answer is consulted first and outranks every heuristic, including `globalTagMap`. Raw codes are per-board: Gelbooru uses 5 for metatags, Rule34 uses 5 for "invalid" and 6 for metatags. `normalizeBooruTagType()` owns that mapping; unknown codes resolve to `null` so the caller's own heuristic stays in charge instead of being actively misled.
+- Lookups are batched, deduped, capped at 4 parallel, and persisted to `data/cache/booru_tag_types_<site>.json` with a 7-day TTL. Never call the tag API once per post without the cache: a 40-card gallery would issue 40 x N upstream requests.
+- `extractAuthorFromSourceUrl()` in `tagHelpers.js` resolves a source handle from URL **structure** (host plus path segment). A substring search over the whole URL is forbidden: it promoted `eula_(genshin_impact)` to a Genshin artist because a DeviantArt artwork slug contained the word "Eula". Tag-to-handle matching is a whole-token comparison only.
+- `pixiv.net/artworks/<id>` names an artwork, not an account, and yields no handle. Account routes are `/users/<id>`, `/en/users/<id>`, `member.php?id=` and `pixiv.me/<name>`. `extractPixivArtworkId()` pulls the artwork id out of the artwork route and out of the `i.pximg.net` CDN filename.
+- `isNoiseHandle()` blocks site chrome from becoming an author. Without it, `www.fanbox.cc` produced the author `www` and `patreon.com/user` produced `patreon:user`. `tagme` and the other request tags are never authors.
+- **When no author survives, return `""`.** The viewer renders that as "автор не указан". Empty is honest; a wrong author pollutes favourite authors and the Kemono/Pawchive resolver. Do not add a fallback that invents a name.
+- `isAuthorResolutionConfident()` is the gate for skipping extra upstream work. It is exported for callers that want to batch or warm resolutions; the parsers currently always resolve.
 
 Normalized post contract:
 

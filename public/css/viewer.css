@@ -380,6 +380,26 @@
   outline-offset: 1px;
 }
 
+/* "автор не указан": the post resolved, but nothing named an author. It reads
+   as informational rather than clickable, so it must not look like a link. */
+.viewer-author-badge--empty {
+  cursor: default;
+  background-color: transparent;
+  color: var(--text-muted);
+  border-color: var(--border-subtle);
+  font-style: italic;
+}
+
+.viewer-author-badge--empty:hover {
+  filter: none;
+}
+
+.info-value--muted {
+  color: var(--text-muted);
+  font-style: italic;
+  cursor: default;
+}
+
 .viewer-fav-author-btn {
   display: inline-flex;
   align-items: center;

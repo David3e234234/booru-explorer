@@ -268,6 +268,14 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onAuth
   const mainAuthorName = authorParts.find(a => !/\((audio|sfx|sound|voice|va|music)\)/i.test(a)) || authorParts[0] || authorName;
 
   if (authorName && authorName.trim()) {
+    // Clear the "not specified" state: the viewer reuses these nodes across
+    // posts, so a previous post without an author would otherwise leak its
+    // muted styling and tooltip into this one.
+    if (viewerAuthorBadge) {
+      viewerAuthorBadge.classList.remove('viewer-author-badge--empty');
+      viewerAuthorBadge.removeAttribute('title');
+    }
+    if (infoAuthor) infoAuthor.classList.remove('info-value--muted');
     const cleanAuthorTag = (primaryVisualArtist || mainAuthorName).trim().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
     const isFavAuthor = isAuthorFavorite(cleanAuthorTag);
 
@@ -394,11 +402,25 @@ export function renderAuthorInfo(currentPost, { closeViewer, onTagSelect, onAuth
       };
     }
   } else {
-    if (viewerAuthorBadge) viewerAuthorBadge.style.display = 'none';
+    // No author could be established. Say so explicitly instead of hiding the
+    // row: an empty author is an honest result, and the user can tell it apart
+    // from a failed load.
+    if (viewerAuthorBadge && viewerAuthorText) {
+      viewerAuthorText.textContent = t('viewer.authorNotSpecified', 'автор не указан');
+      viewerAuthorBadge.style.display = 'inline-flex';
+      viewerAuthorBadge.classList.add('viewer-author-badge--empty');
+      viewerAuthorBadge.onclick = null;
+      viewerAuthorBadge.title = t('viewer.authorNotSpecifiedTitle', 'Источник не содержит данных об авторе');
+    }
     if (viewerFavAuthorBtn) viewerFavAuthorBtn.style.display = 'none';
     if (viewerFindCreatorBtn) viewerFindCreatorBtn.style.display = 'none';
     if (btnFavAuthorSidebar) btnFavAuthorSidebar.style.display = 'none';
-    if (infoAuthorRow) infoAuthorRow.style.display = 'none';
+    if (infoAuthorRow && infoAuthor) {
+      infoAuthor.textContent = t('viewer.authorNotSpecified', 'автор не указан');
+      infoAuthorRow.style.display = 'flex';
+      infoAuthor.onclick = null;
+      infoAuthor.classList.add('info-value--muted');
+    }
     if (infoAssistantsRow) infoAssistantsRow.style.display = 'none';
     if (btnSetAuthorCoverSidebar) btnSetAuthorCoverSidebar.style.display = 'none';
     if (btnFindCreatorSidebar) btnFindCreatorSidebar.style.display = 'none';

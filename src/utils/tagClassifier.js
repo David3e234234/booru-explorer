@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fetchSafe, discardResponse } from './network.js';
-import { extractAuthor as extractAuthorFromSource, decodeHtmlEntities } from './tagHelpers.js';
+import { extractAuthor as extractAuthorFromSource, decodeHtmlEntities, isNoiseHandle } from './tagHelpers.js';
+import { resolveBooruTagTypes, TAG_TYPE } from '../services/booruTagTypeService.js';
 import { getSettings } from '../services/storageService.js';
 import { CACHE_DIR } from '../config/constants.js';
 
@@ -694,7 +695,40 @@ export async function loadGlobalTagSummary(settings = {}) {
  * @param {boolean} allowDynamicLookup - Whether to query external tag API for unknown tags (only for single post resolve)
  * @returns {Promise<{ tagDetails: { artist: string[], copyright: string[], character: string[], general: string[], meta: string[] }, author: string }>}
  */
-export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuthor = '', settings = {}, allowDynamicLookup = false) {
+/**
+ * Tags that can never be an author, whatever the booru says. `tagme` and its
+ * siblings are meta requests to other taggers, and a site pointing at one of
+ * them has not named an author at all.
+ */
+const NEVER_AUTHOR_TAGS = new Set([
+  'tagme', 'artist_request', 'source_request', 'character_request', 'copyright_request',
+  'meta_request', 'commentary', 'commentary_request', 'translation_request',
+  'check_commentary', 'check_my_note', 'official_art', 'third-party_edit'
+]);
+
+/**
+ * Decides whether a classification is trustworthy enough to skip the extra
+ * upstream round trip for ground truth. An empty author is always "unsure";
+ * so is an author that came from a tag the dictionary had never seen, because
+ * that is exactly the case the dictionary gets wrong.
+ */
+export function isAuthorResolutionConfident(classified) {
+  if (!classified || !classified.author) return false;
+  const artistTags = classified.tagDetails?.artist || [];
+  if (artistTags.length === 0) return false;
+  // Every claimed artist must be either explicitly marked as creative work or
+  // accompanied by assistants; a lone unknown tag is a guess, not a fact.
+  const hasMarker = artistTags.some(t =>
+    /_\((?:artist|creator|circle|studio|illustrator|animator|mangaka)\)$/i.test(t)
+    || /^(?:artist|creator|author|draw|channel|uploader):/i.test(t)
+  );
+  if (hasMarker) return true;
+  // A tag the source handle confirms is a real attribution.
+  if (classified.authorSource === 'source') return true;
+  return false;
+}
+
+export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuthor = '', settings = {}, allowDynamicLookup = false, site = '') {
   const tags = (Array.isArray(rawTags) ? rawTags : []).map(t => decodeHtmlEntities(String(t || '').trim())).filter(Boolean);
   const tagMap = await loadGlobalTagSummary(settings);
 
@@ -710,13 +744,26 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     if (val && !arr.includes(val)) arr.push(val);
   };
 
-  // Determine potential source author handle to assist matching
+  // Determine potential source author handle to assist matching. The handle is
+  // taken from URL structure only, so an artwork slug cannot masquerade as one.
   let sourceHandle = '';
+  let sourceHandleKey = '';
+  let sourceResolvedAuthor = '';
   if (sourceUrl && typeof sourceUrl === 'string') {
     const rawSrcAuthor = extractAuthorFromSource(tags, sourceUrl, '');
     if (rawSrcAuthor) {
+      sourceResolvedAuthor = rawSrcAuthor;
       sourceHandle = rawSrcAuthor.replace(/^(?:@|pixiv:)+/i, '').trim().toLowerCase();
+      sourceHandleKey = sourceHandle;
     }
+  }
+
+  // Ground truth from the booru that owns these tags. It takes precedence over
+  // the shared Konachan dictionary, which uses a different tag vocabulary and
+  // therefore reports "unknown" for most real artists of these boards.
+  let siteTagTypes = new Map();
+  if (site) {
+    siteTagTypes = await resolveBooruTagTypes(site, tags, settings);
   }
 
   const isInvalidArtist = (cand) => {
@@ -806,12 +853,37 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       continue;
     }
 
-    // 3.1. Tag type dictionary lookup (PRIORITY OVER HEURISTICS)
+    // 3.1. Tag type dictionary lookup.
     // In Moebooru / Danbooru 1.x / Gelbooru summary dictionaries:
     // 0 = general, 1 = artist, 3 = copyright, 4 = character, 5 = style/meta, 6 = circle/copyright
+    // The booru's own answer is authoritative and is consulted first; the shared
+    // dictionary is a Moebooru-family guess and only fills the remaining gaps.
+    const groundType = siteTagTypes.get(lower);
+    if (groundType === TAG_TYPE.ARTIST && !GENERIC_NON_ARTIST_TAGS.has(lower) && !NEVER_AUTHOR_TAGS.has(lower)) {
+      addUnique(artist, originalTag);
+      continue;
+    }
+    if (groundType === TAG_TYPE.CHARACTER) {
+      addUnique(character, originalTag);
+      continue;
+    }
+    if (groundType === TAG_TYPE.COPYRIGHT) {
+      addUnique(copyright, originalTag);
+      continue;
+    }
+    if (groundType === TAG_TYPE.META) {
+      addUnique(meta, originalTag);
+      continue;
+    }
+    if (groundType === TAG_TYPE.GENERAL) {
+      // The booru has seen this tag and calls it a plain descriptor.
+      general.push(originalTag);
+      continue;
+    }
+
     const type = tagMap ? (tagMap.get(lower) ?? tagMap.get(lower.replace(/^by_/i, ''))) : undefined;
 
-    if (type === 1 && !GENERIC_NON_ARTIST_TAGS.has(lower)) {
+    if (type === 1 && !GENERIC_NON_ARTIST_TAGS.has(lower) && !NEVER_AUTHOR_TAGS.has(lower)) {
       addUnique(artist, originalTag);
       continue;
     } else if (type === 3 || type === 6) {
@@ -866,7 +938,15 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       // Distinguish social handle / artist alias in parentheses: e.g. name_(handle) or name_(twitter)
       const isSocialHandle = /^(?:twitter|pixiv|fanbox|patreon|fantia|coconala|skeb|deviantart|artstation)$/i.test(suffix) ||
                              (/\d/.test(suffix) && /^[a-z0-9_]{3,20}$/i.test(suffix) && !isKnownFranchise && !matchesPostTag);
-      const matchesSource = sourceUrl && (sourceUrl.toLowerCase().includes(suffix) || sourceUrl.toLowerCase().includes(prefix));
+      // The tag must match the handle the source URL actually resolved to, as a
+      // whole token. The previous check ran a substring test over the entire
+      // URL, so a DeviantArt slug containing "Eula" turned the costume tag
+      // `eula_(genshin_impact)` into a Genshin artist.
+      const matchesSource = !!(sourceHandleKey && (
+        prefix === sourceHandleKey ||
+        suffix === sourceHandleKey ||
+        `${prefix}_${suffix}` === sourceHandleKey
+      ));
 
       if (matchesSource || isSocialHandle) {
         // Tag is likely an artist with their handle/platform in parentheses
@@ -960,6 +1040,7 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
     : [];
 
   let candidateList = [];
+  let authorSource = 'tags';
   if (validInitialAuthors.length > 0) {
     candidateList = [...validInitialAuthors];
     validInitialAuthors.forEach(a => {
@@ -971,16 +1052,26 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   } else if (artist.length > 0) {
     candidateList = artist
       .map(a => a.replace(/^(artist|creator|author|draw|channel|uploader):/i, '').replace(/^by_/i, '').trim())
-      .filter(a => a && !GENERIC_NON_ARTIST_TAGS.has(a.toLowerCase()) && !LOCATION_BY_NOUNS.has(a.toLowerCase()) && !isInvalidArtist(a));
+      .filter(a => a && !GENERIC_NON_ARTIST_TAGS.has(a.toLowerCase()) && !LOCATION_BY_NOUNS.has(a.toLowerCase()) && !NEVER_AUTHOR_TAGS.has(a.toLowerCase()) && !isNoiseHandle(a) && !isInvalidArtist(a));
   } else if (sourceUrl) {
-    const authorFromSource = extractAuthorFromSource(tags, sourceUrl, '');
-    if (authorFromSource && !isInvalidArtist(authorFromSource)) {
+    const authorFromSource = sourceResolvedAuthor || extractAuthorFromSource(tags, sourceUrl, '');
+    if (authorFromSource && !isNoiseHandle(authorFromSource) && !isInvalidArtist(authorFromSource)) {
       candidateList = [authorFromSource];
+      authorSource = 'source';
       const cleanA = authorFromSource.replace(/^(?:@|pixiv:)+/i, '').replace(/\s+/g, '_');
       if (cleanA && !artist.includes(cleanA)) {
         artist.push(cleanA);
       }
     }
+  }
+
+  // Ground truth from the booru outranks a source-URL handle: the board knows
+  // which of its tags is the artist even when the uploader's own link points at
+  // a repost account.
+  const groundArtists = artist.filter(t => siteTagTypes.get(String(t).toLowerCase()) === TAG_TYPE.ARTIST);
+  if (groundArtists.length > 0 && authorSource !== 'ground-truth') {
+    candidateList = [...groundArtists];
+    authorSource = 'ground-truth';
   }
 
   if (candidateList.length > 0) {
@@ -1014,7 +1105,8 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   return {
     tagDetails: { artist: visualArtists, assistant: assistantTags, copyright, character, general, meta },
     author,
-    assistants
+    assistants,
+    authorSource
   };
 }
 

@@ -121,7 +121,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
             const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings);
+            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, false, 'gelbooru');
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
             const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -238,7 +238,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
 
     if (rawParsed.length > 0) {
       return await Promise.all(rawParsed.map(async p => {
-        const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, '', settings);
+        const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, '', settings, false, 'gelbooru');
         const seriesKey = extractSeriesKey({
           source: '',
           parentId: null,

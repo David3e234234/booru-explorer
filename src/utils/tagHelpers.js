@@ -471,6 +471,189 @@ const LOCATION_NOUNS = new Set([
   'cliff', 'rock', 'forest', 'field', 'grass', 'bench', 'steps', 'gate', 'street'
 ]);
 
+/**
+ * Path segments and subdomains that belong to the hosting site, never to a
+ * person. Returning one of these as an author produced garbage like "www"
+ * (captured from `www.fanbox.cc`) or "patreon:user".
+ */
+const PLATFORM_NOISE_HANDLES = new Set([
+  'www', 'user', 'users', 'post', 'posts', 'art', 'arts', 'artwork', 'artworks',
+  'page', 'pages', 'index', 'home', 'login', 'log-in', 'signup', 'sign-up', 'logout',
+  'status', 'search', 'tag', 'tags', 'topic', 'topics', 'view', 'data', 'img',
+  'image', 'images', 'media', 'creator', 'creators', 'settings', 'upload', 'uploads',
+  'api', 'cdn', 'static', 'files', 'file', 'gallery', 'profile', 'about', 'join',
+  'checkout', 'bepatron', 'intent', 'share', 'embed', 'i', 'null',
+  'undefined', 'anonymous', 'misc', 'other', 'content', 'member', 'members', 'new',
+  // Meta tags are requests to other taggers, never a person.
+  'tagme', 'tagme_request', 'artist_request', 'source_request', 'character_request',
+  'copyright_request', 'meta_request', 'commentary_request', 'translation_request'
+]);
+
+/** True when a platform-derived candidate is really site chrome, not a handle. */
+export function isNoiseHandle(value) {
+  if (!value || typeof value !== 'string') return true;
+  let clean;
+  try {
+    clean = decodeURIComponent(String(value)).trim().toLowerCase();
+  } catch {
+    clean = String(value).trim().toLowerCase();
+  }
+  if (!clean || clean.length < 2) return true;
+  if (PLATFORM_NOISE_HANDLES.has(clean)) return true;
+  // A bare number is an id fragment, not a handle.
+  if (/^\d+$/.test(clean)) return true;
+  return false;
+}
+
+/**
+ * Extracts a Pixiv artwork id from any Pixiv URL shape, including the CDN form
+ * `i.pximg.net/.../149850016_p0.png` where the id is the filename prefix.
+ * @returns {string} numeric artwork id, or '' when there is none
+ */
+export function extractPixivArtworkId(source) {
+  if (!source || typeof source !== 'string') return '';
+  const s = source.trim();
+  const artworkMatch = s.match(/pixiv\.net\/(?:[a-z]{2}\/)?artworks\/(\d+)/i);
+  if (artworkMatch) return artworkMatch[1];
+  // The CDN keeps the artwork id in the filename: 149850016_p0.png
+  const cdnMatch = s.match(/pximg\.net\/.*\/(\d{6,})_p\d+\.[a-z0-9]+/i);
+  if (cdnMatch) return cdnMatch[1];
+  return '';
+}
+
+
+/**
+ * Pulls the handle out of a source URL using URL structure only: platform
+ * identity comes from the host and the path prefix. A free substring search
+ * over the whole URL is what promoted `eula_(genshin_impact)` to artist when a
+ * DeviantArt artwork slug happened to contain the word "Eula".
+ *
+ * @returns {{ handle: string, handleKey: string } | null}
+ */
+export function extractAuthorFromSourceUrl(source) {
+  if (!source || typeof source !== 'string') return null;
+  const s = source.trim();
+  if (!s || !/^https?:\/\//i.test(s)) return null;
+
+  let url;
+  try {
+    url = new URL(s);
+  } catch {
+    return null;
+  }
+
+  const rawHost = url.hostname.toLowerCase();
+  const host = rawHost.replace(/^www\./, '');
+  const segments = url.pathname.split('/').filter(Boolean).map(seg => {
+    try {
+      return decodeURIComponent(seg);
+    } catch {
+      return seg;
+    }
+  });
+  const first = segments[0] ? segments[0].replace(/^@/, '') : '';
+  const second = segments[1] ? segments[1].replace(/^@/, '') : '';
+
+  const pick = (handle, prefix = '', { allowNumeric = false } = {}) => {
+    const clean = String(handle || '').trim();
+    // Prefix is written without the colon (`pixiv:` in the source reads as
+    // `pixiv`) and is normalised here, so no call site can produce `pixiv::1`.
+    const tag = prefix.endsWith(':') ? prefix.slice(0, -1) : prefix;
+    const join = (value) => {
+      if (tag === '@') return `@${value}`;
+      if (!tag) return value;
+      return `${tag}:${value}`;
+    };
+    if (allowNumeric && /^\d+$/.test(clean) && clean.length >= 2) {
+      return { handle: join(clean), handleKey: clean };
+    }
+    if (isNoiseHandle(clean)) return null;
+    return { handle: join(clean), handleKey: clean.toLowerCase() };
+  };
+
+  // --- Social networks ---
+  if (host === 'twitter.com' || host === 'x.com') {
+    if (first && !['i', 'intent', 'home', 'search', 'hashtag'].includes(first.toLowerCase())) {
+      return pick(first, '@');
+    }
+    return null;
+  }
+  if (host === 'bsky.app') return segments[0] === 'profile' ? pick(second, '@') : null;
+  if (host === 'pawoo.net' || host === 'baraag.net' || host.endsWith('.misskey.io')) {
+    return first ? pick(first, '@') : null;
+  }
+  if (host === 'skeb.jp' || host === 'skeb.gg') return first ? pick(first, '@') : null;
+  if (host === 'weibo.com' || host === 'weibo.cn') {
+    if (first && !['u', 'p', 'profile'].includes(first.toLowerCase())) return pick(first);
+    return null;
+  }
+  if (host === 'reddit.com' || host === 'old.reddit.com') {
+    return (first === 'user' || first === 'u') ? pick(second, 'reddit:') : null;
+  }
+  if (host === 'civitai.com') return first === 'user' ? pick(second) : null;
+  if (host === 'furaffinity.net') return first === 'user' ? pick(second) : null;
+  if (host === 'inkbunny.net') return first ? pick(first) : null;
+
+  // --- Pixiv ---
+  // `/artworks/<id>` names the artwork, not the account, so it carries no
+  // handle. Only the account routes do. The CDN host carries none either.
+  if (host === 'pixiv.net' || host === 'i.pximg.net') {
+    if (first === 'users') return segments[1] ? pick(segments[1], 'pixiv:', { allowNumeric: true }) : null;
+    if (first === 'en' && segments[1] === 'users') return segments[2] ? pick(segments[2], 'pixiv:', { allowNumeric: true }) : null;
+    // Legacy `member.php?id=N`: the id lives in the query string, not the path.
+    const legacyId = url.searchParams.get('id');
+    if (legacyId && /^\d+$/.test(legacyId)) return pick(legacyId, 'pixiv:', { allowNumeric: true });
+    return null;
+  }
+  if (host === 'pixiv.me') return first ? pick(first, 'pixiv:') : null;
+
+  // --- Subscription platforms ---
+  // `www.fanbox.cc` must not yield "www": the handle is a path segment.
+  if (host === 'fanbox.cc' || host.endsWith('.fanbox.cc')) {
+    if (first === 'creator' || first === 'creators') return pick(second);
+    return pick(first);
+  }
+  if (host === 'fantia.jp') {
+    return first === 'fanclubs' ? pick(second, 'fantia:', { allowNumeric: true }) : null;
+  }
+  if (host === 'patreon.com') {
+    if (first === 'user' || first === 'u') {
+      const uid = url.searchParams.get('u');
+      return uid ? pick(uid, 'patreon:', { allowNumeric: true }) : null;
+    }
+    if (['posts', 'join', 'login', 'settings', 'checkout', 'pledge', 'discovery'].includes(first.toLowerCase())) {
+      return null;
+    }
+    return pick(first, 'patreon:');
+  }
+  if (host === 'boosty.to') return first ? pick(first) : null;
+  if (host === 'subscribestar.adult' || host === 'subscribestar.com') return first ? pick(first) : null;
+  if (host.endsWith('.gumroad.com')) return pick(host.split('.')[0]);
+  if (host === 'gumroad.com') return first === 'l' ? pick(second) : pick(first);
+  if (host === 'ko-fi.com') return first === 'shop' ? pick(second) : null;
+  if (host.endsWith('.ci-en.net') || host === 'shop.ci-en.net') return pick(first);
+  if (host === 'booth.pm') return pick(first);
+  if (host === 'seiga.nicovideo.jp') return first ? pick(first) : null;
+  if (host === 'alphapolis.co' || host === 'alphapolis.net') return first ? pick(first) : null;
+
+  // --- Art hosts ---
+  if (host.endsWith('.deviantart.com')) return pick(host.split('.')[0]);
+  if (host === 'deviantart.com') return first ? pick(first) : null;
+  if (host === 'artstation.com') {
+    if (first && !['artwork', 'artworks', 'projects', 'artist', 'users'].includes(first.toLowerCase())) {
+      return pick(first);
+    }
+    return null;
+  }
+  if (host.endsWith('.newgrounds.com')) return pick(host.split('.')[0]);
+  if (host === 'newgrounds.com') {
+    return (first === 'art' && segments[1] === 'view') ? pick(segments[2]) : null;
+  }
+  if (host.endsWith('.tumblr.com')) return pick(host.split('.')[0]);
+
+  return null;
+}
+
 export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
   let tags = [];
   if (Array.isArray(rawTags)) {
@@ -501,98 +684,21 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     return markerArtistTags.join(', ');
   }
 
-  // 3. Extract the author from the source URL or source text
+  // 3. Extract the author from the source URL or source text.
+  // URL hosts are resolved structurally (see extractAuthorFromSourceUrl) so an
+  // artwork slug can never promote an unrelated tag to author.
   if (source && typeof source === 'string') {
     const s = source.trim()
       .replace(/\s*\(\.\)\s*/g, '.')
       .replace(/\s*\[\.\]\s*/g, '.');
-    const twitterMatch = s.match(/(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+)(?:\/status|\/|$)/i);
-    if (twitterMatch && !['intent', 'i', 'home', 'search', 'post', 'status'].includes(twitterMatch[1].toLowerCase())) {
-      return `@${twitterMatch[1]}`;
-    }
-    const bskyMatch = s.match(/bsky\.app\/profile\/([a-zA-Z0-9_.-]+)/i);
-    if (bskyMatch) {
-      return `@${bskyMatch[1]}`;
-    }
-    const pixivUserMatch = s.match(/pixiv\.net\/(?:en\/)?users\/(\d+)/i) || s.match(/pixiv\.me\/([a-zA-Z0-9_-]+)/i);
-    if (pixivUserMatch) {
-      return `pixiv:${pixivUserMatch[1]}`;
-    }
-    const pixivLegacyMatch = s.match(/pixiv\.net\/member\.php\?id=(\d+)/i);
-    if (pixivLegacyMatch) {
-      return `pixiv:${pixivLegacyMatch[1]}`;
-    }
-    const fediverseMatch = s.match(/(?:pawoo\.net|misskey\.io|baraag\.net)\/@([a-zA-Z0-9_.-]+)/i);
-    if (fediverseMatch) {
-      return `@${fediverseMatch[1]}`;
-    }
-    const artstationMatch = s.match(/artstation\.com\/([a-zA-Z0-9_-]+)/i);
-    if (artstationMatch && !['artwork', 'projects', 'artist'].includes(artstationMatch[1].toLowerCase())) {
-      return artstationMatch[1];
-    }
-    const deviantArtMatch = s.match(/deviantart\.com\/([a-zA-Z0-9_-]+)/i) || s.match(/([a-zA-Z0-9_-]+)\.deviantart\.com/i);
-    if (deviantArtMatch && !['art', 'tag', 'topic', 'view', 'www'].includes(deviantArtMatch[1].toLowerCase())) {
-      return deviantArtMatch[1];
-    }
-    const furAffinityMatch = s.match(/furaffinity\.net\/user\/([a-zA-Z0-9_-]+)/i);
-    if (furAffinityMatch) {
-      return furAffinityMatch[1];
-    }
-    const inkbunnyMatch = s.match(/inkbunny\.net\/([a-zA-Z0-9_-]+)/i);
-    if (inkbunnyMatch && !['submissions', 'gallery', 'pool', 'search'].includes(inkbunnyMatch[1].toLowerCase())) {
-      return inkbunnyMatch[1];
-    }
-    const fanboxMatch = s.match(/([a-zA-Z0-9_-]+)\.fanbox\.cc/i);
-    if (fanboxMatch) {
-      return fanboxMatch[1];
-    }
-    const fantiaMatch = s.match(/fantia\.jp\/fanclubs\/(\d+)/i);
-    if (fantiaMatch) {
-      return `fantia:${fantiaMatch[1]}`;
-    }
-    const patreonMatch = s.match(/patreon\.com\/([a-zA-Z0-9_-]+)/i);
-    if (patreonMatch && !['posts', 'join'].includes(patreonMatch[1].toLowerCase())) {
-      return `patreon:${patreonMatch[1]}`;
-    }
-    const subStarMatch = s.match(/subscribestar\.(?:adult|com)\/([a-zA-Z0-9_-]+)/i);
-    if (subStarMatch) {
-      return subStarMatch[1];
-    }
-    const boostyMatch = s.match(/boosty\.to\/([a-zA-Z0-9_-]+)/i);
-    if (boostyMatch) {
-      return boostyMatch[1];
-    }
-    const gumroadMatch = s.match(/([a-zA-Z0-9_-]+)\.gumroad\.com/i) || s.match(/gumroad\.com\/([a-zA-Z0-9_-]+)/i);
-    if (gumroadMatch) {
-      return gumroadMatch[1];
-    }
-    const skebMatch = s.match(/skeb\.jp\/@([a-zA-Z0-9_-]+)/i);
-    if (skebMatch) {
-      return `@${skebMatch[1]}`;
-    }
-    const newgroundsViewMatch = s.match(/newgrounds\.com\/art\/view\/([a-zA-Z0-9_-]+)/i);
-    if (newgroundsViewMatch) {
-      return newgroundsViewMatch[1];
-    }
-    const newgroundsSubMatch = s.match(/([a-zA-Z0-9_-]+)\.newgrounds\.com/i);
-    if (newgroundsSubMatch && !['www', 'art', 'portal', 'wiki', 'bbs', 'ngfiles', 'uploads'].includes(newgroundsSubMatch[1].toLowerCase())) {
-      return newgroundsSubMatch[1];
-    }
-    const nijieMatch = s.match(/nijie\.info\/members\.php\?id=(\d+)/i);
-    if (nijieMatch) {
-      return `nijie:${nijieMatch[1]}`;
-    }
-    const redditUserMatch = s.match(/reddit\.com\/user\/([a-zA-Z0-9_-]+)/i);
-    if (redditUserMatch) {
-      return `reddit:${redditUserMatch[1]}`;
-    }
-    const civitaiMatch = s.match(/civitai\.com\/user\/([a-zA-Z0-9_-]+)/i);
-    if (civitaiMatch) {
-      return civitaiMatch[1];
-    }
-    const weiboMatch = s.match(/weibo\.(?:com|cn)\/(?:u\/)?([a-zA-Z0-9_]+)/i);
-    if (weiboMatch && !['p', 'status', 'u', 'home'].includes(weiboMatch[1].toLowerCase())) {
-      return weiboMatch[1];
+
+    const fromUrl = extractAuthorFromSourceUrl(s);
+    if (fromUrl) return fromUrl.handle;
+
+    // Bare handle sources such as `jinroku` (uploader field, not a URL).
+    const bare = s.trim();
+    if (bare && !/[\s/?#]/.test(bare) && !isNoiseHandle(bare) && bare.length <= 40) {
+      return bare;
     }
 
     // Text source with circle / artist in brackets: e.g. (C82) [T2 ART WORKS (Tony)] Title
@@ -600,10 +706,10 @@ export function extractAuthor(rawTags = [], source = '', itemAuthor = '') {
     if (bracketMatch) {
       const candidate = bracketMatch[1].trim();
       const parenArtist = candidate.match(/\(([^)]+)\)$/);
-      if (parenArtist && parenArtist[1].length >= 2) {
+      if (parenArtist && parenArtist[1].length >= 2 && !isNoiseHandle(parenArtist[1])) {
         return parenArtist[1].trim();
       }
-      if (candidate.length >= 2 && candidate.length <= 35) {
+      if (candidate.length >= 2 && candidate.length <= 35 && !isNoiseHandle(candidate)) {
         return candidate;
       }
     }
