@@ -35,7 +35,9 @@ jobs:
           username: ${{ secrets.ALWAYS_USERNAME }}
           password: ${{ secrets.ALWAYS_PASSWORD }}
           script: |
+            set -e
             cd ~/booru-explorer
+            git fetch origin main
             git reset --hard origin/main
             npm install --omit=dev --no-audit --no-fund
             mkdir -p tmp && touch tmp/restart.txt
