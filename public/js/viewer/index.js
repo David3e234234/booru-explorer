@@ -51,6 +51,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
   const viewerSimilarFilmstrip = document.getElementById('viewerSimilarFilmstrip');
   const similarFilmstripInner = document.getElementById('similarFilmstripInner');
+  const viewerMainColumn = document.getElementById('viewerMainColumn');
 
   let currentPost = null;
   let currentAlbumIndex = 0;
@@ -336,6 +337,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     });
 
     renderViewerPost();
+    if (viewerMainColumn) viewerMainColumn.scrollTop = 0;
     if (modal) modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
@@ -536,14 +538,11 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
     if (viewerSimilarFilmstrip) {
       if (viewerSimilarFilmstrip.style.display === 'none') {
-        renderSidebarSimilarPosts(currentPost, true);
+        renderSidebarSimilarPosts(currentPost, true).then(() => {
+          viewerSimilarFilmstrip.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
       } else {
-        viewerSimilarFilmstrip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        viewerSimilarFilmstrip.animate([
-          { transform: 'translateY(0) scale(1)' },
-          { transform: 'translateY(-6px) scale(1.01)' },
-          { transform: 'translateY(0) scale(1)' }
-        ], { duration: 300, easing: 'ease-out' });
+        viewerSimilarFilmstrip.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }
   });
@@ -608,6 +607,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     viewerContent,
     backdrop,
     viewerSidebar,
+    scrollContainer: viewerMainColumn,
     getZoomInstance: () => currentZoomInstance,
     goToNext,
     goToPrev,

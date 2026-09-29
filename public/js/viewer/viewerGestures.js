@@ -32,6 +32,7 @@ export function isInteractiveTouchTarget(target, touch) {
     target.closest('.video-status-banner') ||
     target.closest('.viewer-album-filmstrip') ||
     target.closest('.viewer-similar-filmstrip') ||
+    target.closest('.viewer-similar-section') ||
     target.closest('.btn-video-unmute') ||
     target.closest('.viewer-sidebar') ||
     target.closest('.viewer-header') ||
@@ -66,6 +67,7 @@ export function setupViewerGestures({
   viewerContent,
   backdrop,
   viewerSidebar,
+  scrollContainer,
   getZoomInstance,
   goToNext,
   goToPrev,
@@ -141,7 +143,8 @@ export function setupViewerGestures({
     } else if (e.touches.length === 1 && (!zoom || zoom.getZoomLevel() <= 1.05)) {
       const deltaY = e.touches[0].clientY - touchStartY;
       const deltaX = e.touches[0].clientX - touchStartX;
-      if (deltaY > 15 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2) {
+      const isAtScrollTop = !scrollContainer || scrollContainer.scrollTop <= 0;
+      if (deltaY > 15 && Math.abs(deltaY) > Math.abs(deltaX) * 1.2 && isAtScrollTop) {
         isDraggingDown = true;
         if (e.cancelable) {
           e.preventDefault();
@@ -237,7 +240,8 @@ export function setupViewerGestures({
         return;
       }
 
-      if (deltaY > 80 && absY > absX * 1.5 && deltaTime < 450) {
+      const isAtScrollTop = !scrollContainer || scrollContainer.scrollTop <= 0;
+      if (deltaY > 80 && absY > absX * 1.5 && deltaTime < 450 && isAtScrollTop) {
         haptic(25);
         if (typeof closeViewer === 'function') closeViewer();
         return;

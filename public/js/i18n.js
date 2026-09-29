@@ -312,6 +312,7 @@ Object.assign(en, {
   'viewer.hideFromFeed': 'Hide from feed',
   'viewer.hideFromFeed.title': 'Not interested (hide and recommend less)',
   'viewer.similarHeading': 'Similar works',
+  'viewer.similarHint': 'Matched based on tags and author',
   'viewer.refreshSimilar': 'Refresh',
   'viewer.refreshSimilar.title': 'Refresh similar works list',
   'viewer.similarSearching': 'Searching similar posts...',

@@ -104,10 +104,6 @@
   transition: opacity var(--transition-normal), transform var(--transition-normal), bottom var(--transition-normal);
 }
 
-.viewer-content.has-album.has-similar .viewer-album-filmstrip {
-  bottom: 200px;
-}
-
 .album-filmstrip-inner {
   display: flex;
   align-items: center;
@@ -204,51 +200,60 @@
   transform: translate(-50%, 20px);
 }
 
-.viewer-content.ui-hidden .viewer-similar-filmstrip {
+.viewer-content.ui-hidden .viewer-similar-filmstrip,
+.viewer-content.ui-hidden .viewer-similar-section {
   opacity: 0;
   pointer-events: none;
   transform: translateY(20px);
 }
 
-/* Similar posts bottom filmstrip (Danbooru style) */
+/* Similar posts section below media (like YouTube/Twitch panels) */
+.viewer-similar-section,
 .viewer-similar-filmstrip {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 340px; /* stops exactly before desktop sidebar */
-  width: auto;
-  max-width: none;
-  padding: 8px 16px 10px;
-  background: rgba(12, 10, 8, 0.94);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-top: 1px solid rgba(229, 169, 104, 0.22);
-  border-left: none;
-  border-right: 1px solid var(--border-subtle);
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 16px 20px 24px;
+  background: rgba(14, 11, 8, 0.82);
+  border-top: 1px solid var(--border-subtle);
   border-bottom: none;
-  border-radius: 0;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.6);
-  z-index: 20;
+  border-left: none;
+  border-right: none;
+  z-index: 10;
   transition: opacity var(--transition-normal), transform var(--transition-normal);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .similar-filmstrip-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 2px 4px 2px;
   min-width: 0;
+  border-bottom: 1px solid rgba(229, 169, 104, 0.12);
+}
+
+.similar-filmstrip-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .similar-filmstrip-title {
-  font-size: 11px;
+  font-family: var(--font-display);
+  font-size: 13px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: var(--accent-primary);
+}
+
+.similar-filmstrip-hint {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .similar-filmstrip-count {
@@ -584,6 +589,46 @@
   overflow: hidden;
 }
 
+/* Main scrollable column (holds media stage + similar posts below) */
+.viewer-main-column {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.viewer-main-column::-webkit-scrollbar {
+  width: 6px;
+}
+
+.viewer-main-column::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 4px;
+}
+
+.viewer-main-column::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Media stage: takes full viewport height minus header on first screen */
+.viewer-media-stage {
+  position: relative;
+  width: 100%;
+  min-height: calc(100vh - 52px);
+  min-height: calc(100dvh - 52px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 /* Media container (pan & zoom) */
 .viewer-media-wrapper {
   flex: 1 1 0;
@@ -602,20 +647,9 @@
   box-sizing: border-box;
 }
 
-/* Reserve space for the album or similar filmstrip. Measured strip geometry: the similar
-   strip is 190px tall (200px when its row scrolls) sitting on the bottom edge, the album
-   strip is 82px tall sitting 20px above it, so the media area has to clear the top edge
-   of the highest strip. */
+/* Reserve space only for the album filmstrip overlay when visible */
 .viewer-content.has-album:not(.ui-hidden) .viewer-media-wrapper {
   padding-bottom: 108px;
-}
-
-.viewer-content.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-  padding-bottom: 206px;
-}
-
-.viewer-content.has-album.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-  padding-bottom: 292px;
 }
 
 /* Work in a frame: a thin shadow instead of a glow */
@@ -1939,14 +1973,6 @@
     padding-bottom: calc(62px + max(10px, env(safe-area-inset-bottom, 10px)));
   }
 
-  .viewer-content.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-    padding-bottom: calc(var(--similar-strip-h) + max(10px, env(safe-area-inset-bottom, 10px)));
-  }
-
-  .viewer-content.has-album.has-similar:not(.ui-hidden) .viewer-media-wrapper {
-    padding-bottom: calc(var(--strip-gap) + var(--album-strip-h) + var(--strip-gap) + var(--similar-strip-h) + max(12px, env(safe-area-inset-bottom, 12px)));
-  }
-
   .viewer-album-filmstrip {
     bottom: max(10px, env(safe-area-inset-bottom, 10px));
     padding: 4px 6px;
@@ -1954,17 +1980,12 @@
     max-width: calc(100vw - 16px);
   }
 
-  .viewer-content.has-album.has-similar .viewer-album-filmstrip {
-    bottom: calc(var(--strip-gap) + var(--similar-strip-h) + max(8px, env(safe-area-inset-bottom, 8px)));
-  }
-
+  .viewer-similar-section,
   .viewer-similar-filmstrip {
-    bottom: 0;
-    left: 0;
-    right: 0;
+    position: relative;
     width: 100%;
     max-width: 100%;
-    padding: 6px 10px calc(6px + max(6px, env(safe-area-inset-bottom, 6px)));
+    padding: 12px 12px calc(12px + max(8px, env(safe-area-inset-bottom, 8px)));
     border-radius: 0;
     border-left: none;
     border-right: none;

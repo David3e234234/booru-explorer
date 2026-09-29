@@ -713,25 +713,32 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
 
-        <div class="viewer-media-wrapper" id="viewerMediaWrapper"></div>
+        <div class="viewer-main-column" id="viewerMainColumn">
+          <div class="viewer-media-stage" id="viewerMediaStage">
+            <div class="viewer-media-wrapper" id="viewerMediaWrapper"></div>
+
+            <!-- Album page thumbnail filmstrip -->
+            <div class="viewer-album-filmstrip" id="viewerAlbumFilmstrip" style="display: none;">
+              <div class="album-filmstrip-inner" id="albumFilmstripInner"></div>
+            </div>
+          </div>
+
+          <!-- Similar posts section below media -->
+          <section class="viewer-similar-section" id="viewerSimilarFilmstrip" style="display: none;">
+            <div class="similar-filmstrip-header">
+              <div class="similar-filmstrip-title-wrap">
+                <span class="similar-filmstrip-title" data-i18n="viewer.similarHeading">Похожие работы</span>
+                <span class="similar-filmstrip-count" id="similarFilmstripCount"></span>
+              </div>
+              <span class="similar-filmstrip-hint" data-i18n="viewer.similarHint">Найдено на основе тегов и автора</span>
+            </div>
+            <div class="similar-filmstrip-inner" id="similarFilmstripInner"></div>
+          </section>
+        </div>
 
         <button class="viewer-nav-btn nav-next desktop-only" id="btnViewerNext" title="Следующий (→ или свайп)" data-i18n-title="viewer.next.title">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
-
-        <!-- Album page thumbnail filmstrip -->
-        <div class="viewer-album-filmstrip" id="viewerAlbumFilmstrip" style="display: none;">
-          <div class="album-filmstrip-inner" id="albumFilmstripInner"></div>
-        </div>
-
-        <!-- Similar posts bottom filmstrip (Danbooru style) -->
-        <div class="viewer-similar-filmstrip" id="viewerSimilarFilmstrip" style="display: none;">
-          <div class="similar-filmstrip-header">
-            <span class="similar-filmstrip-title" data-i18n="viewer.similarHeading">Похожие работы</span>
-            <span class="similar-filmstrip-count" id="similarFilmstripCount"></span>
-          </div>
-          <div class="similar-filmstrip-inner" id="similarFilmstripInner"></div>
-        </div>
 
         <!-- Info and tags sidebar / sheet -->
         <aside class="viewer-sidebar" id="viewerSidebar">
