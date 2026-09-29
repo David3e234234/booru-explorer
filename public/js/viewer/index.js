@@ -488,12 +488,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   function goToNext(skipAlbum = false) {
-    if (directPostRef) return;
     if (!skipAlbum && currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex < currentPost.albumItems.length - 1) {
       haptic(10);
       switchAlbumSlide(currentAlbumIndex + 1);
       return;
     }
+    if (directPostRef) return;
 
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
     if (state.currentViewerIndex < list.length - 1) {
@@ -503,12 +503,12 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   }
 
   function goToPrev(skipAlbum = false) {
-    if (directPostRef) return;
     if (!skipAlbum && currentPost?.isAlbum && Array.isArray(currentPost.albumItems) && currentAlbumIndex > 0) {
       haptic(10);
       switchAlbumSlide(currentAlbumIndex - 1);
       return;
     }
+    if (directPostRef) return;
 
     const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
     if (state.currentViewerIndex > 0) {
