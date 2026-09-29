@@ -42,6 +42,14 @@ function getRecentDateFilter(days = 30) {
   return `date:>=${year}-${month}-${day}`;
 }
 
+function safeDecodeURIComponent(str) {
+  try {
+    return decodeURIComponent(String(str || ''));
+  } catch {
+    return String(str || '');
+  }
+}
+
 export async function fetchRule34(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   const provider = settings?.rule34Provider === 'paheal' ? 'paheal' : 'rule34xxx';
@@ -845,11 +853,58 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
 
       if (res.ok) {
         const html = await res.text();
-        const artistMatches = [...html.matchAll(/class="[^"]*tag-type-artist[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
-        const copyrightMatches = [...html.matchAll(/class="[^"]*tag-type-copyright[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
-        const characterMatches = [...html.matchAll(/class="[^"]*tag-type-character[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
-        const metadataMatches = [...html.matchAll(/class="[^"]*tag-type-(?:metadata|meta)[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
-        const generalMatches = [...html.matchAll(/class="[^"]*tag-type-general[^"]*"[^>]*>[\s\S]*?<a[^>]*>([^<]+)<\/a>/gi)].map(m => m[1].trim());
+
+        const extractTagsByClass = (htmlStr, cls) => {
+          const re = new RegExp(`class="[^"]*${cls}[^"]*"[^>]*>([\\s\\S]*?)<\\/li>`, 'gi');
+          const matches = [];
+          let m;
+          while ((m = re.exec(htmlStr)) !== null) {
+            const block = m[1];
+            // Prefer link containing tags=
+            const tagLinkMatch = block.match(/<a[^>]*tags=([^"&]+)[^>]*>([\s\S]*?)<\/a>/i);
+            if (tagLinkMatch) {
+              const raw = (tagLinkMatch[2] || tagLinkMatch[1]).replace(/<[^>]+>/g, '').trim();
+              const clean = safeDecodeURIComponent(raw).replace(/\s+/g, '_');
+              if (clean && clean !== '?') {
+                matches.push(clean);
+                continue;
+              }
+            }
+            // Fallback: search for any <a> whose innerText is not '?'
+            const allLinks = [...block.matchAll(/<a[^>]*>([^<]+)<\/a>/gi)];
+            for (const link of allLinks) {
+              const text = link[1].trim();
+              if (text && text !== '?') {
+                matches.push(safeDecodeURIComponent(text).replace(/\s+/g, '_'));
+                break;
+              }
+            }
+          }
+          // If no <li> wrapper matched, fallback to tag pattern directly
+          if (matches.length === 0) {
+            const fallbackRe = new RegExp(`class="[^"]*${cls}[^"]*"[^>]*>[\\s\\S]*?<a[^>]*tags=([^"&]+)[^>]*>([^<]+)<\\/a>`, 'gi');
+            let fm;
+            while ((fm = fallbackRe.exec(htmlStr)) !== null) {
+              const clean = safeDecodeURIComponent(fm[2] || fm[1]).trim().replace(/\s+/g, '_');
+              if (clean && clean !== '?') matches.push(clean);
+            }
+          }
+          if (matches.length === 0) {
+            const fallbackRe2 = new RegExp(`class="[^"]*${cls}[^"]*"[^>]*>[\\s\\S]*?<a[^>]*>(?:\\?\\s*)?([^<]+)<\\/a>`, 'gi');
+            let fm;
+            while ((fm = fallbackRe2.exec(htmlStr)) !== null) {
+              const raw = fm[1].replace(/^[?+\s]+/, '').trim();
+              if (raw && raw !== '?') matches.push(safeDecodeURIComponent(raw).replace(/\s+/g, '_'));
+            }
+          }
+          return matches;
+        };
+
+        const artistMatches = extractTagsByClass(html, 'tag-type-artist');
+        const copyrightMatches = extractTagsByClass(html, 'tag-type-copyright');
+        const characterMatches = extractTagsByClass(html, 'tag-type-character');
+        const metadataMatches = extractTagsByClass(html, 'tag-type-(?:metadata|meta)');
+        const generalMatches = extractTagsByClass(html, 'tag-type-general');
 
         const sourceMatch = html.match(/Source:\s*<a[^>]+href="([^"]+)"/i) || html.match(/Source:\s*([^\s<]+)/i);
         const source = sourceMatch ? sourceMatch[1].trim().replace(/&amp;/g, '&') : '';
@@ -918,7 +973,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
           isVideo,
           isGif,
           hasSound: isVideo && (hasSound || allTags.includes('sound') || allTags.includes('audio')),
-          author: author || initialAuthor,
+          author: (author && author !== '?') ? author : ((initialAuthor && initialAuthor !== '?') ? initialAuthor : ''),
           assistants: assistants || [],
           tags: allTags,
           tagDetails,

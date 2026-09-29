@@ -275,4 +275,58 @@ test('Rule34 Parser Unit Tests (including Paheal integration)', async (t) => {
     assert.equal(post.originalId, '9001');
     assert.ok(post.tags.includes('fallback_artist'));
   });
+
+  await t.test('fetchRule34PostById correctly extracts author and tags when sidebar has question mark wiki links', async () => {
+    const apiClient = mockContext.agent.get('https://api.rule34.xxx');
+    apiClient.intercept({
+      path: (p) => p.includes('18475095'),
+      method: 'GET'
+    }).reply(404, 'Not found');
+
+    const html = `<!DOCTYPE html>
+      <html>
+        <body>
+          <img id="image" src="https://us.rule34.xxx/images/18475/18475095.jpg" />
+          <ul id="tag-sidebar">
+            <li class="tag-type-artist tag" id="tag_artist_1">
+              <a href="index.php?page=wiki&amp;s=list&amp;search=nito_me">?</a>
+              <a href="index.php?page=post&amp;s=list&amp;tags=nito_me">nito me</a>
+              <span class="tag-count">59</span>
+            </li>
+            <li class="tag-type-copyright tag" id="tag_copy_1">
+              <a href="index.php?page=wiki&amp;s=list&amp;search=zenless_zone_zero">?</a>
+              <a href="index.php?page=post&amp;s=list&amp;tags=zenless_zone_zero">zenless zone zero</a>
+              <span class="tag-count">115146</span>
+            </li>
+            <li class="tag-type-character tag" id="tag_char_1">
+              <a href="index.php?page=wiki&amp;s=list&amp;search=norma_hollowell">?</a>
+              <a href="index.php?page=post&amp;s=list&amp;tags=norma_hollowell">norma hollowell</a>
+              <span class="tag-count">236</span>
+            </li>
+            <li class="tag-type-general tag" id="tag_gen_1">
+              <a href="index.php?page=wiki&amp;s=list&amp;search=1girl">?</a>
+              <a href="index.php?page=post&amp;s=list&amp;tags=1girl">1girl</a>
+              <span class="tag-count">1000</span>
+            </li>
+          </ul>
+          <div>Rating: Explicit</div>
+          <div>Score: 112</div>
+        </body>
+      </html>`;
+    const htmlClient = mockContext.agent.get('https://rule34.xxx');
+    htmlClient.intercept({
+      path: (p) => p.includes('18475095') && p.includes('s=view'),
+      method: 'GET'
+    }).reply(200, html);
+
+    const post = await fetchRule34PostById('18475095', [], mockSettings);
+    assert.ok(post, 'Post must resolve from HTML');
+    assertNormalizedPost(post, 'rule34');
+    assert.notEqual(post.author, '?', 'Author must not be a question mark');
+    assert.match(post.author, /nito/i, 'Author must be extracted as nito me / nito_me');
+    assert.ok(!post.tags.includes('?'), 'Tags must not contain question mark');
+    assert.ok(post.tags.includes('nito_me') || post.tags.includes('nito me'));
+    assert.ok(post.tagDetails.artist.includes('nito_me') || post.tagDetails.artist.includes('nito me'));
+    assert.ok(post.tagDetails.character.includes('norma_hollowell') || post.tagDetails.character.includes('norma hollowell'));
+  });
 });
