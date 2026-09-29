@@ -60,22 +60,54 @@ export function toSafeCssColor(value, fallback = 'var(--text-muted)') {
     : fallback;
 }
 
-export function showToast(message) {
+export function showToast(message, type = 'info', duration = 2400) {
   const toastContainer = document.getElementById('toastContainer');
-  if (!toastContainer) return;
+  if (!toastContainer) return null;
+
+  // Handle case where duration is passed as second argument: showToast('msg', 3500)
+  let effectiveType = type;
+  let effectiveDuration = duration;
+  if (typeof type === 'number') {
+    effectiveDuration = type;
+    effectiveType = 'info';
+  }
+
   const toast = document.createElement('div');
-  toast.className = 'toast';
+  const isError = effectiveType === 'error';
+  const isSuccess = effectiveType === 'success' || effectiveType === 'info';
+  toast.className = `toast ${isError ? 'toast-error' : (effectiveType === 'success' ? 'toast-success' : '')}`.trim();
+
+  const iconSvg = isError
+    ? `<svg class="toast-icon toast-icon-error" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+    : `<svg class="toast-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
   toast.innerHTML = `
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+    ${iconSvg}
     <span>${escapeHtml(message)}</span>
   `;
   toastContainer.appendChild(toast);
-  setTimeout(() => {
+
+  let dismissed = false;
+  const dismiss = () => {
+    if (dismissed) return;
+    dismissed = true;
+    clearTimeout(hideTimeout);
+    clearTimeout(removeTimeout);
     toast.style.opacity = '0';
     toast.style.transform = 'translateY(10px)';
     toast.style.transition = 'all 0.2s ease-out';
     setTimeout(() => toast.remove(), 200);
-  }, 2400);
+  };
+
+  let removeTimeout = null;
+  const hideTimeout = setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    toast.style.transition = 'all 0.2s ease-out';
+    removeTimeout = setTimeout(() => toast.remove(), 200);
+  }, effectiveDuration);
+
+  return { toastEl: toast, dismiss };
 }
 
 export function showActionToast(message, actionLabel, onAction, duration = 6000) {

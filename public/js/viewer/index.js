@@ -31,7 +31,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const btnDislikeModal = document.getElementById('btnDislikeModal');
   const btnLikeModal = document.getElementById('btnLikeModal');
   const btnFavModal = document.getElementById('btnFavModal');
-  const btnSimilarModal = document.getElementById('btnSimilarModal');
   const btnDownload = document.getElementById('btnDownload');
   const btnDownloadAlbum = document.getElementById('btnDownloadAlbum');
   const btnCopyLink = document.getElementById('btnCopyLink');
@@ -247,10 +246,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (btnDislikeSidebarText) {
       btnDislikeSidebarText.textContent = isDisliked ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
     }
-
-    if (btnSimilarModal) {
-      btnSimilarModal.style.display = (state.settings?.enableSimilarPosts === false) ? 'none' : '';
-    }
   }
 
   function renderViewerPost(skipMediaLoad = false) {
@@ -396,7 +391,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (btnDislikeSidebarText) {
       btnDislikeSidebarText.textContent = isDislikedNow ? t('vw.hiddenFromFeed', 'Скрыто из ленты') : t('viewer.hideFromFeed', 'Скрыть из ленты');
     }
-    showToast(isDislikedNow ? t('vw.postHiddenToast', 'Пост скрыт (рекомендации обновлены)') : t('vw.unhiddenToast', 'Скрытие отменено'));
+    const optimisticToast = showToast(isDislikedNow ? t('vw.postHiddenToast', 'Пост скрыт (рекомендации обновлены)') : t('vw.unhiddenToast', 'Скрытие отменено'));
 
     if (isDislikedNow) {
       state.posts = (state.posts || []).filter(p => p && p.id !== targetPost.id);
@@ -415,6 +410,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         btnDislikeSidebar?.classList.toggle('active', !isDislikedNow);
       }
       if (isDislikedNow && !state.posts.some(p => p.id === targetPost.id)) state.posts.unshift(targetPost);
+      optimisticToast?.dismiss?.();
       showToast(t('vw.hideFailed', 'Не удалось скрыть пост'), 'error');
     } finally {
       pendingViewerMutations.delete(key);
@@ -433,7 +429,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       btnLikeModal?.classList.toggle('active', isLikedNow);
       btnLikeModal?.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'currentColor' : 'none');
     }
-    showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
+    const optimisticToast = showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
     try {
       const result = await toggleLikePost(targetPost, isLikedNow);
       if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить лайк');
@@ -443,6 +439,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
         btnLikeModal?.classList.toggle('active', !isLikedNow);
         btnLikeModal?.querySelector('svg')?.setAttribute('fill', isLikedNow ? 'none' : 'currentColor');
       }
+      optimisticToast?.dismiss?.();
       showToast(t('vw.likeFailed', 'Не удалось сохранить лайк'), 'error');
     } finally {
       pendingViewerMutations.delete(key);
@@ -529,24 +526,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   btnDislikeSidebar?.addEventListener('click', handleDislikeToggle);
   btnLikeModal?.addEventListener('click', handleLikeToggle);
   btnFavModal?.addEventListener('click', handleFavToggle);
-
-  btnSimilarModal?.addEventListener('click', () => {
-    if (!currentPost) return;
-    haptic(15);
-    if (typeof onFindSimilar === 'function') {
-      onFindSimilar(currentPost);
-      return;
-    }
-    if (viewerSimilarFilmstrip) {
-      if (viewerSimilarFilmstrip.style.display === 'none') {
-        renderSidebarSimilarPosts(currentPost, true).then(() => {
-          viewerSimilarFilmstrip.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
-      } else {
-        viewerSimilarFilmstrip.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }
-  });
 
   btnCopyLink?.addEventListener('click', async () => {
     if (!currentPost) return;
@@ -649,9 +628,6 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   });
 
   function refreshSimilarState() {
-    if (btnSimilarModal) {
-      btnSimilarModal.style.display = (state.settings?.enableSimilarPosts === false) ? 'none' : '';
-    }
     if (state.settings?.enableSimilarPosts === false) {
       if (viewerSimilarFilmstrip) viewerSimilarFilmstrip.style.display = 'none';
       if (viewerContent) viewerContent.classList.remove('has-similar');

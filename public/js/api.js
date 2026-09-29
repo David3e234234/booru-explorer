@@ -341,11 +341,22 @@ export async function fetchFavorites() {
   return readJsonOrThrow(res);
 }
 
+function cleanPostPayload(post, desiredState = null) {
+  if (!post || typeof post !== 'object') return { id: post, desiredState };
+  const clean = { ...post };
+  delete clean._similarSession;
+  delete clean._archivePromise;
+  delete clean._archiveUnpacked;
+  delete clean._unpackedZips;
+  delete clean.albumItems;
+  return { ...clean, desiredState };
+}
+
 export async function toggleFavoritePost(post, desiredState = null) {
   const res = await fetch('/api/favorites', {
     method: 'POST',
     headers: getAuthHeaders(true),
-    body: JSON.stringify({ ...post, desiredState })
+    body: JSON.stringify(cleanPostPayload(post, desiredState))
   });
   return await res.json();
 }
@@ -362,7 +373,7 @@ export async function syncFavorites(favorites) {
   const res = await fetch('/api/favorites/sync', {
     method: 'POST',
     headers: getAuthHeaders(true),
-    body: JSON.stringify({ favorites })
+    body: JSON.stringify({ favorites: Array.isArray(favorites) ? favorites.map(f => cleanPostPayload(f)) : [] })
   });
   return await res.json();
 }
@@ -378,7 +389,7 @@ export async function toggleLikePost(post, desiredState = null) {
   const res = await fetch('/api/like', {
     method: 'POST',
     headers: getAuthHeaders(true),
-    body: JSON.stringify({ ...post, desiredState })
+    body: JSON.stringify(cleanPostPayload(post, desiredState))
   });
   return await res.json();
 }
@@ -387,7 +398,7 @@ export async function syncLikes(likes) {
   const res = await fetch('/api/likes/sync', {
     method: 'POST',
     headers: getAuthHeaders(true),
-    body: JSON.stringify({ likes })
+    body: JSON.stringify({ likes: Array.isArray(likes) ? likes.map(l => cleanPostPayload(l)) : [] })
   });
   return await res.json();
 }
@@ -403,7 +414,7 @@ export async function toggleDislikeApi(post, desiredState = null) {
   const res = await fetch('/api/dislike', {
     method: 'POST',
     headers: getAuthHeaders(true),
-    body: JSON.stringify({ ...post, desiredState })
+    body: JSON.stringify(cleanPostPayload(post, desiredState))
   });
   return await res.json();
 }

@@ -815,6 +815,24 @@
   max-width: min(420px, calc(100vw - 32px));
 }
 
+.toast-icon {
+  flex-shrink: 0;
+  color: var(--accent-success);
+}
+
+.toast-icon-error {
+  color: var(--accent-danger);
+}
+
+.toast.toast-error {
+  border-color: rgba(251, 113, 133, 0.35);
+  background-color: var(--bg-surface-elevated);
+}
+
+.toast.toast-error span {
+  color: var(--text-primary);
+}
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
