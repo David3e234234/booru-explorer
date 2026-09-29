@@ -226,7 +226,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     getCurrentPost: () => currentPost,
     getAlbumIndex: () => currentAlbumIndex,
     setAlbumIndex: (idx) => { currentAlbumIndex = idx; },
-    loadMediaItem,
+    loadMediaItem: (item) => {
+      if (viewerMainColumn) viewerMainColumn.scrollTop = 0;
+      loadMediaItem(item);
+    },
     renderSidebarContent: (post) => renderSidebarContent(post),
     updateNavButtons
   });
