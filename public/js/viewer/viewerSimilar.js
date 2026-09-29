@@ -138,7 +138,7 @@ export function renderSimilarFilmstripSession(targetPost, options = {}) {
 
   similarFilmstripInner.innerHTML = '';
   session.renderedCount = 0;
-  appendSimilarItems(targetPost, 18, options);
+  appendSimilarItems(targetPost, 24, options);
 }
 
 /**
@@ -179,7 +179,7 @@ export function resumeSimilarSession(targetPost, options = {}) {
  * @param {number} [count=18]
  * @param {Object} [options={}]
  */
-export function appendSimilarItems(targetPost, count = 18, options = {}) {
+export function appendSimilarItems(targetPost, count = 24, options = {}) {
   const similarFilmstripInner = document.getElementById('similarFilmstripInner');
   const similarFilmstripCount = document.getElementById('similarFilmstripCount');
   if (!similarFilmstripInner || !targetPost?._similarSession) return;
@@ -372,25 +372,19 @@ export function displaySimilarPosts(similarItems, sourcePost, options = {}) {
 }
 
 /**
- * Initializes mouse wheel and infinite scroll events on the similar filmstrip.
- * @param {{ getCurrentPost: () => Object }} ctx
+ * Initializes infinite scroll events for the similar posts grid.
+ * Listens to vertical scrolling on the viewer main column.
+ * @param {{ getCurrentPost: () => Object, scrollContainer?: HTMLElement }} ctx
  */
 export function initSimilarEvents(ctx) {
-  const similarFilmstripInner = document.getElementById('similarFilmstripInner');
-  if (!similarFilmstripInner) return;
+  const scrollEl = ctx?.scrollContainer || document.getElementById('viewerMainColumn');
+  if (!scrollEl) return;
 
-  similarFilmstripInner.addEventListener('wheel', (e) => {
-    if (e.deltaY !== 0) {
-      e.preventDefault();
-      similarFilmstripInner.scrollLeft += e.deltaY;
-    }
-  }, { passive: false });
-
-  similarFilmstripInner.addEventListener('scroll', () => {
+  scrollEl.addEventListener('scroll', () => {
     const currentPost = ctx?.getCurrentPost?.();
     if (!currentPost || !currentPost._similarSession) return;
-    const { scrollLeft, clientWidth, scrollWidth } = similarFilmstripInner;
-    if (scrollLeft + clientWidth >= scrollWidth - 250) {
+    const { scrollTop, clientHeight, scrollHeight } = scrollEl;
+    if (scrollTop + clientHeight >= scrollHeight - 350) {
       loadMoreSimilarPosts(currentPost);
     }
   });

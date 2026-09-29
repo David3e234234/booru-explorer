@@ -219,7 +219,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   });
 
   initSimilarEvents({
-    getCurrentPost: () => currentPost
+    getCurrentPost: () => currentPost,
+    scrollContainer: viewerMainColumn
   });
 
   configureAlbum({
