@@ -96,6 +96,7 @@ import { initModalAccessibility } from './modules/modalAccessibility.js';
 import { initWikiModal } from './modules/wikiModal.js';
 import { initProfileUI } from './modules/profileUI.js';
 import { initDownloadManager } from './modules/downloadManager.js';
+import { initDiscoveredAliasesModal } from './modules/aliasManagerModal.js';
 import { consumeInitialUrl, initRouter, syncSearchUrl } from './router.js';
 import { t, applyStaticTranslations } from './i18n.js';
 
@@ -424,6 +425,8 @@ async function init() {
     },
     onUpdateFavoritesBadge: updateFavoritesBadge
   });
+
+  initDiscoveredAliasesModal();
 
   initCustomSourcesModal({
     onApply: () => {

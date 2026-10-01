@@ -113,6 +113,8 @@ Large files must be split by responsibility when touched. Preferred existing bou
 4. All-sites mode uses `Promise.allSettled`, a per-site deadline, `Promise.allSettled` fan-out, round-robin merge and a final `limit` slice.
 5. `isPostMatchingFilters()` in `tagHelpers.js` is the canonical content filter. Danbooru also prefilters inside its parser to avoid expensive cursor paging; routes must never add another filter pass.
 6. Auto-discovered Danbooru aliases are only registered when the discovered alias group is plausible (at most 8 names). A Danbooru page with dozens of `other_names` is a circle or aggregator page; registering it aliases unrelated artists to each other, so a single-author Pawchive query returns several unrelated feeds.
+7. Author alias auto-discovery can be globally disabled via `enableAliasDiscovery: false` in user settings. Erroneous or noisy tags can be blacklisted via `ignoredAliases: string[]`, preventing them from being discovered, linked, or resolved.
+8. Discovered aliases can be inspected and edited via `/api/aliases/discovered` (`GET`, `PUT /:id`, `DELETE /:id`). All writes serialize atomically through `jsonFileStore.js`.
 
 ### Author Resolution
 

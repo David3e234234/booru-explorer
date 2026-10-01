@@ -27,7 +27,14 @@ import { fetchSafe, safeJsonParse, isSafeExternalUrlResolved, normalizeProxyUrl 
 import { requireOwner } from '../services/userService.js';
 import { sanitizeLogUrl } from '../utils/hostPolicy.js';
 import { logInfo, logError } from '../utils/logger.js';
-import { getAliasesInfo, clearDiscoveredAliases, getAllKnownAliasesMap } from '../services/aliasService.js';
+import {
+  getAliasesInfo,
+  clearDiscoveredAliases,
+  getAllKnownAliasesMap,
+  getDiscoveredAliasesList,
+  updateDiscoveredAliasEntry,
+  deleteDiscoveredAliasEntry
+} from '../services/aliasService.js';
 import { resolveAuthorCreators } from '../services/creatorResolverService.js';
 import { parseRequestAuth, buildAuthCacheKey } from '../utils/settingsValidation.js';
 import { extractSessionToken } from '../services/siteSessionService.js';
@@ -522,9 +529,34 @@ router.get('/aliases/info', (req, res) => {
   res.json(getAliasesInfo());
 });
 
+// GET /api/aliases/discovered - list of discovered aliases
+router.get('/aliases/discovered', (req, res) => {
+  res.json({ success: true, list: getDiscoveredAliasesList() });
+});
+
+// PUT /api/aliases/discovered/:id - update a discovered alias entry
+router.put('/aliases/discovered/:id', requireOwner, (req, res) => {
+  const result = updateDiscoveredAliasEntry(req.params.id, req.body || {});
+  if (!result.success) {
+    return res.status(400).json(result);
+  }
+  res.json(result);
+});
+
+// DELETE /api/aliases/discovered/:id - delete a discovered alias entry
+router.delete('/aliases/discovered/:id', requireOwner, (req, res) => {
+  const result = deleteDiscoveredAliasEntry(req.params.id);
+  if (!result.success) {
+    return res.status(400).json(result);
+  }
+  res.json(result);
+});
+
 // GET /api/aliases/map - bidirectional alias map for client-side following and recommendations
 router.get('/aliases/map', (req, res) => {
-  res.json(getAllKnownAliasesMap());
+  const clientAuth = parseRequestAuth(req);
+  const ignored = Array.isArray(clientAuth?.ignoredAliases) ? clientAuth.ignoredAliases : [];
+  res.json(getAllKnownAliasesMap(ignored));
 });
 
 // POST /api/aliases/clear-discovered

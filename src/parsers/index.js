@@ -192,7 +192,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     }
     const targetLimit = parseInt(params.limit, 10) || 100;
     const limited = combined.slice(0, Math.max(1, targetLimit));
-    learnAliasesFromPostMatches(limited);
+    learnAliasesFromPostMatches(limited, settings);
     return limited;
   }
 

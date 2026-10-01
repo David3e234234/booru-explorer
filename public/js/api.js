@@ -50,7 +50,7 @@ const AUTH_CACHE_FIELDS = [
   'pawchiveSession', 'kemonoSession', 'kemonoProxy',
   'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags', 'aiTags', 'blacklist',
   'groupAlbums', 'prioritizeUserTags', 'deepFetchPages', 'rule34Provider', 'enablePaheal',
-  'customAliases', 'siteSortTags', 'pawchiveService', 'kemonoService', 'hideZipPosts',
+  'customAliases', 'enableAliasDiscovery', 'ignoredAliases', 'siteSortTags', 'pawchiveService', 'kemonoService', 'hideZipPosts',
   ...SECRET_SETTING_FIELDS.filter(f => !['telegramBotToken', 'telegramChatId'].includes(f)),
   'globalProxy', 'danbooruProxy', 'gelbooruProxy', 'rule34Proxy', 'yandereProxy',
   'konachanProxy', 'safebooruProxy', 'rule34videoProxy', 'xbooruProxy', 'hypnohubProxy',
@@ -611,6 +611,41 @@ export async function clearDiscoveredAliasesApi() {
     return await res.json();
   } catch {
     return { success: false };
+  }
+}
+
+export async function fetchDiscoveredAliasesList() {
+  try {
+    const res = await fetch('/api/aliases/discovered', { headers: getAuthHeaders() });
+    if (!res.ok) return { success: false, list: [] };
+    return await res.json();
+  } catch {
+    return { success: false, list: [] };
+  }
+}
+
+export async function updateDiscoveredAliasApi(id, payload) {
+  try {
+    const res = await fetch(`/api/aliases/discovered/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(true),
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteDiscoveredAliasApi(id) {
+  try {
+    const res = await fetch(`/api/aliases/discovered/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(true)
+    });
+    return await res.json();
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 }
 

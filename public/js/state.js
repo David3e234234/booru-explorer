@@ -115,6 +115,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
   searchPresets: [],
   maxServerCacheMb: 1500,
+  enableAliasDiscovery: true,
+  ignoredAliases: [],
   recommendationMode: 'tags-only', // 'tags-only' | 'off'
   recommendationFocus: 'all', // 'all' | 'artists' | 'characters' | 'discovery'
   recommendationDecayDays: 25, // half-life for temporal interest decay

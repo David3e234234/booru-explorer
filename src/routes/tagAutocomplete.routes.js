@@ -263,7 +263,7 @@ router.get('/tags/autocomplete', async (req, res) => {
         const { list } = await getCreatorsDirectory(settings);
         if (Array.isArray(list) && list.length > 0) {
           const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
-          const queryAliases = getAllAliasesForName(query, settings?.customAliases).map(a => a.toLowerCase().replace(/[\s_.-]+/g, ''));
+          const queryAliases = getAllAliasesForName(query, settings?.customAliases, settings?.ignoredAliases).map(a => a.toLowerCase().replace(/[\s_.-]+/g, ''));
           const aliasSet = new Set(queryAliases);
 
           const matches = list.filter(c => {
@@ -288,7 +288,7 @@ router.get('/tags/autocomplete', async (req, res) => {
         const { list } = await getKemonoCreatorsDirectory(settings);
         if (Array.isArray(list) && list.length > 0) {
           const cleanQ = query.toLowerCase().replace(/[\s_.-]+/g, '');
-          const queryAliases = getAllAliasesForName(query, settings?.customAliases).map(a => a.toLowerCase().replace(/[\s_.-]+/g, ''));
+          const queryAliases = getAllAliasesForName(query, settings?.customAliases, settings?.ignoredAliases).map(a => a.toLowerCase().replace(/[\s_.-]+/g, ''));
           const aliasSet = new Set(queryAliases);
 
           const matches = list.filter(c => {

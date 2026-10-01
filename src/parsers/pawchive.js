@@ -235,7 +235,7 @@ export async function resolvePawchiveCreators(authorQuery, preferredService = nu
       noSpaceVariants.add(rLower.replace(/[\s_.-]+/g, ''));
     }
 
-    const aliases = getAllAliasesForName(clean, settings?.customAliases);
+    const aliases = getAllAliasesForName(clean, settings?.customAliases, settings?.ignoredAliases);
     for (const al of aliases) {
       const alLower = String(al).toLowerCase();
       exactVariants.add(alLower);

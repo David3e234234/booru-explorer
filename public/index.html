@@ -1108,16 +1108,41 @@
             <span class="settings-section-title" style="font-weight: 600; font-size: 13px; color: var(--accent-primary); text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="settings.authorAliasesTitle">Алиасы авторов и тегов</span>
           </div>
 
+          <!-- Toggle: Enable Alias Discovery -->
           <div class="settings-group">
+            <label class="toggle-row" title="Автоматически искать синонимы авторов в Danbooru и связывать авторов по совпадающим источникам" data-i18n-title="settings.enableAliasDiscovery.title">
+              <input type="checkbox" id="checkEnableAliasDiscovery" checked>
+              <span class="toggle-slider"></span>
+              <span class="toggle-name" data-i18n="settings.enableAliasDiscovery">Автообнаружение алиасов</span>
+            </label>
+            <p class="settings-hint" style="margin-top: 4px;" data-i18n="settings.enableAliasDiscoveryHint">Автоматически находит другие ники автора в каталоге Danbooru и сопоставляет авторов по одинаковым ссылкам на арты.</p>
+          </div>
+
+          <!-- Ignored/Banned Aliases -->
+          <div class="settings-group" style="margin-top: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+              <label class="settings-label" for="ignoredAliasesInput" data-i18n="settings.ignoredAliasesLabel">Запрещённые алиасы (чёрный список):</label>
+              <button type="button" class="btn-text" id="btnResetIgnoredAliases" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.clear">Очистить</button>
+            </div>
+            <p class="settings-hint" data-i18n="settings.ignoredAliasesHint">Теги и имена, которые запрещено связывать или автоматически регистрировать как синонимы.</p>
+            <div class="tags-input-box" id="ignoredAliasesWrapper">
+              <input type="text" id="ignoredAliasesInput" placeholder="Добавить запрещенный тег (например: tagme, various_artists)..." data-i18n-placeholder="settings.ignoredAliases.placeholder" spellcheck="false">
+            </div>
+          </div>
+
+          <div class="settings-group" style="margin-top: 8px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
               <label class="settings-label" for="customAliasesInput" data-i18n="settings.authorAliasesLabel">Пользовательские соответствия (межсайтовые синонимы):</label>
               <button type="button" class="btn-text" id="btnResetCustomAliases" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none;" data-i18n="settings.clear">Очистить</button>
             </div>
             <p class="settings-hint" data-i18n="settings.authorAliasesHint">Форматирует теги под движки сайтов. Формат: ник = danbooru:ник1, rule34:ник2 или ник1 = ник2.</p>
             <textarea id="customAliasesInput" class="input-setting" style="width: 100%; min-height: 80px; font-family: monospace; font-size: 12px; line-height: 1.4; resize: vertical;" placeholder="# Пример:&#10;redrainsfm = danbooru:redrain3d, rule34:redrainsfm&#10;csr = cutesexyrobutts" spellcheck="false"></textarea>
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 8px; font-size: 11px; color: var(--text-muted);">
               <span><span data-i18n="settings.discoveredAliasesCount">Обнаружено автоматически:</span> <strong id="discoveredAliasesCountText" style="color: var(--text-primary);">0</strong></span>
-              <button type="button" class="btn-text" id="btnClearDiscoveredAliases" style="font-size: 11px; color: var(--text-muted); cursor: pointer; background: none; border: none;" data-i18n="settings.clearDiscoveredBtn">Очистить кэш автопоиска</button>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button type="button" class="btn-text" id="btnManageDiscoveredAliases" style="font-size: 11px; color: var(--accent-primary); cursor: pointer; background: none; border: none; font-weight: 500;" data-i18n="settings.manageDiscoveredBtn">Редактировать список...</button>
+                <button type="button" class="btn-text" id="btnClearDiscoveredAliases" style="font-size: 11px; color: var(--text-muted); cursor: pointer; background: none; border: none;" data-i18n="settings.clearDiscoveredBtn">Очистить кэш автопоиска</button>
+              </div>
             </div>
           </div>
 
@@ -2654,6 +2679,37 @@
           <button type="submit" class="btn-primary" id="btnSavePresetConfirm" data-i18n="modal.save">Сохранить</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Discovered Aliases Manager Modal -->
+  <div class="modal-backdrop" id="modalDiscoveredAliasesBackdrop" style="display: none;">
+    <div class="modal-dialog" style="max-width: 680px; max-height: 85vh; display: flex; flex-direction: column;" role="dialog" aria-modal="true" aria-label="Управление обнаруженными алиасами">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <h3 class="modal-title" data-i18n="aliasManager.title">Обнаруженные алиасы авторов</h3>
+        </div>
+        <button class="btn-icon btn-modal-close" id="btnCloseDiscoveredAliasesModal" title="Закрыть" data-i18n-title="modal.close.title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body" style="padding: 16px 20px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="text" id="inputSearchDiscoveredAliases" class="form-input" style="flex: 1;" placeholder="Поиск по автору или тегу..." data-i18n-placeholder="aliasManager.searchPlaceholder" spellcheck="false">
+          <button type="button" class="btn-secondary btn-sm" id="btnRefreshDiscoveredAliases" title="Обновить список" data-i18n-title="aliasManager.refresh">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span data-i18n="aliasManager.refresh">Обновить</span>
+          </button>
+        </div>
+        <div id="discoveredAliasesListContainer" style="display: flex; flex-direction: column; gap: 10px; min-height: 120px;">
+          <!-- Dynamically populated rows -->
+        </div>
+      </div>
+      <div class="modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 12px; color: var(--text-muted);" id="discoveredAliasesTotalStatus">Загрузка...</span>
+        <button type="button" class="btn-secondary" id="btnCloseDiscoveredAliasesModalFooter" data-i18n="modal.close">Закрыть</button>
+      </div>
     </div>
   </div>
 

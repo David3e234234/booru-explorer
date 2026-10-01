@@ -84,4 +84,24 @@ describe('Settings validation', () => {
 
     assert.deepStrictEqual(anonymous, {});
   });
+
+  it('validates enableAliasDiscovery and ignoredAliases correctly', () => {
+    assert.ok(AUTH_CACHE_FIELDS.includes('enableAliasDiscovery'));
+    assert.ok(AUTH_CACHE_FIELDS.includes('ignoredAliases'));
+
+    const clean = sanitizeSettingsPatch({
+      enableAliasDiscovery: false,
+      ignoredAliases: ['tagme', 'various_artists', 123, '   ']
+    });
+
+    assert.strictEqual(clean.enableAliasDiscovery, false);
+    assert.deepStrictEqual(clean.ignoredAliases, ['tagme', 'various_artists']);
+
+    const invalid = sanitizeSettingsPatch({
+      enableAliasDiscovery: 'no',
+      ignoredAliases: 'not-an-array'
+    });
+    assert.strictEqual(invalid.enableAliasDiscovery, undefined);
+    assert.strictEqual(invalid.ignoredAliases, undefined);
+  });
 });

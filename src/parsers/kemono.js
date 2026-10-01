@@ -246,7 +246,7 @@ export async function resolveKemonoCreators(authorQuery, preferredService = null
       noSpaceVariants.add(rLower.replace(/[\s_.-]+/g, ''));
     }
 
-    const aliases = getAllAliasesForName(clean, settings?.customAliases);
+    const aliases = getAllAliasesForName(clean, settings?.customAliases, settings?.ignoredAliases);
     for (const al of aliases) {
       const alLower = String(al).toLowerCase();
       exactVariants.add(alLower);

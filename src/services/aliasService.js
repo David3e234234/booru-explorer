@@ -5,6 +5,8 @@ import { DATA_DIR } from '../config/constants.js';
 import { fetchSafe, discardResponse } from '../utils/network.js';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
 
+import { writeJsonFileAsync } from './jsonFileStore.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -28,6 +30,16 @@ const MAX_DISCOVERED_ALIAS_GROUP = 8;
 const checkedCandidates = new Set();
 let isSavingDiscovered = false;
 let saveTimeout = null;
+
+/**
+ * Returns true if an alias is in the user's blacklist of ignored/rejected aliases.
+ */
+export function isAliasIgnored(alias, ignoredList = []) {
+  if (!alias || !Array.isArray(ignoredList) || ignoredList.length === 0) return false;
+  const clean = String(alias).trim().toLowerCase();
+  if (!clean) return false;
+  return ignoredList.some(item => String(item).trim().toLowerCase() === clean);
+}
 
 function loadBuiltinAliases() {
   try {
@@ -102,16 +114,9 @@ function rebuildDiscoveredMap() {
 }
 
 function saveDiscoveredAliasesAsync() {
-  if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(async () => {
-    try {
-      const dir = path.dirname(DISCOVERED_ALIASES_FILE);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      await fs.promises.writeFile(DISCOVERED_ALIASES_FILE, JSON.stringify(discoveredAliasList, null, 2), 'utf8');
-    } catch (e) {
-      logError('AliasService', 'Не удалось сохранить discovered_aliases.json', e);
-    }
-  }, 400);
+  writeJsonFileAsync(DISCOVERED_ALIASES_FILE, discoveredAliasList, 200).catch((e) => {
+    logError('AliasService', 'Не удалось сохранить discovered_aliases.json', e);
+  });
 }
 
 // Initial load
@@ -241,10 +246,10 @@ async function findRule34TagMatch(candidates = [], settings = {}) {
  * @param {Array|string} [customAliases]
  * @returns {string[]}
  */
-export function getAllAliasesForName(rawName, customAliases = []) {
+export function getAllAliasesForName(rawName, customAliases = [], ignoredAliases = []) {
   if (!rawName || typeof rawName !== 'string') return [];
   const clean = rawName.trim().toLowerCase().replace(/^(?:artist|author|creator):/i, '');
-  if (!clean) return [];
+  if (!clean || isAliasIgnored(clean, ignoredAliases)) return [];
 
   const result = new Set();
   result.add(clean);
@@ -296,7 +301,8 @@ export function getAllAliasesForName(rawName, customAliases = []) {
     }
   }
 
-  return Array.from(result);
+  // Filter out any ignored/banned aliases
+  return Array.from(result).filter(a => !isAliasIgnored(a, ignoredAliases));
 }
 
 /**
@@ -304,10 +310,13 @@ export function getAllAliasesForName(rawName, customAliases = []) {
  * Non-blocking, saves to local disk cache upon finding alternatives.
  */
 export async function discoverAuthorAliases(authorCandidate, settings = {}) {
+  if (settings?.enableAliasDiscovery === false) return null;
   if (!authorCandidate || typeof authorCandidate !== 'string') return null;
 
   const candidate = authorCandidate.toLowerCase().trim();
   if (candidate.length < 3 || candidate.length > 50) return null;
+  const ignoredList = Array.isArray(settings?.ignoredAliases) ? settings.ignoredAliases : [];
+  if (isAliasIgnored(candidate, ignoredList)) return null;
   if (checkedCandidates.has(candidate)) return null;
 
   if (checkedCandidates.size >= CHECKED_CANDIDATES_MAX) {
@@ -353,13 +362,15 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
     if (!artistObj || !artistObj.name) return null;
 
     const canonicalName = artistObj.name.toLowerCase().trim();
+    if (isAliasIgnored(canonicalName, ignoredList)) return null;
+
     const aliasSet = new Set();
     aliasSet.add(canonicalName);
 
     if (Array.isArray(artistObj.other_names)) {
       for (const on of artistObj.other_names) {
         const cleaned = cleanAuthorHandle(on);
-        if (cleaned && cleaned.length >= 3) {
+        if (cleaned && cleaned.length >= 3 && !isAliasIgnored(cleaned, ignoredList)) {
           aliasSet.add(cleaned);
         }
       }
@@ -368,7 +379,7 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
     if (Array.isArray(artistObj.urls)) {
       for (const uObj of artistObj.urls) {
         const handle = extractHandleFromUrl(uObj?.url);
-        if (handle && handle.length >= 3) {
+        if (handle && handle.length >= 3 && !isAliasIgnored(handle, ignoredList)) {
           aliasSet.add(handle);
         }
       }
@@ -376,17 +387,18 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
 
     // Only register if we discovered at least one alternative name!
     if (aliasSet.size > 1 && aliasSet.size <= MAX_DISCOVERED_ALIAS_GROUP) {
-      const aliases = Array.from(aliasSet);
+      const aliases = Array.from(aliasSet).filter(a => !isAliasIgnored(a, ignoredList));
+      if (aliases.length <= 1) return null;
 
       const sites = { danbooru: canonicalName };
 
       // Dynamically discover valid tag variant on Rule34
       const rule34Match = await findRule34TagMatch(aliases, settings);
-      if (rule34Match) {
+      if (rule34Match && !isAliasIgnored(rule34Match, ignoredList)) {
         sites.rule34 = rule34Match;
         sites.rule34video = rule34Match;
       } else {
-        const sfmName = aliases.find(a => a.endsWith('sfm'));
+        const sfmName = aliases.find(a => a.endsWith('sfm') && !isAliasIgnored(a, ignoredList));
         if (sfmName) {
           sites.rule34 = sfmName;
           sites.rule34video = sfmName;
@@ -397,7 +409,7 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
       const existingIdx = discoveredAliasList.findIndex(e => e.id === canonicalName);
       if (existingIdx >= 0) {
         const existing = discoveredAliasList[existingIdx];
-        const mergedAliases = Array.from(new Set([...existing.aliases, ...aliases]));
+        const mergedAliases = Array.from(new Set([...existing.aliases, ...aliases])).filter(a => !isAliasIgnored(a, ignoredList));
         discoveredAliasList[existingIdx] = {
           ...existing,
           aliases: mergedAliases,
@@ -428,12 +440,17 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
 /**
  * Self-learning: automatically correlates author tags across sites when posts share the same source artwork URL.
  */
-export function learnAliasesFromPostMatches(posts = []) {
+export function learnAliasesFromPostMatches(posts = [], settings = {}) {
+  if (settings?.enableAliasDiscovery === false) return;
   if (!Array.isArray(posts) || posts.length < 2) return;
+
+  const ignoredList = Array.isArray(settings?.ignoredAliases) ? settings.ignoredAliases : [];
 
   const sourceGroups = new Map();
   for (const post of posts) {
     if (!post || !post.source || !post.author || !post.site) continue;
+    const authorClean = post.author.toLowerCase().trim();
+    if (isAliasIgnored(authorClean, ignoredList)) continue;
     try {
       const u = new URL(post.source);
       const host = u.hostname.toLowerCase();
@@ -441,7 +458,7 @@ export function learnAliasesFromPostMatches(posts = []) {
       if (['twitter.com', 'x.com', 'pixiv.net', 'artstation.com', 'patreon.com', 'fanbox.cc', 'fantia.jp', 'boosty.to', 'subscribestar.adult', 'subscribestar.com'].some(h => host.includes(h))) {
         const normKey = `${host}${u.pathname}`.replace(/\/+$/, '').toLowerCase();
         if (!sourceGroups.has(normKey)) sourceGroups.set(normKey, []);
-        sourceGroups.get(normKey).push({ site: post.site, author: post.author.toLowerCase().trim() });
+        sourceGroups.get(normKey).push({ site: post.site, author: authorClean });
       }
     } catch {}
   }
@@ -452,13 +469,14 @@ export function learnAliasesFromPostMatches(posts = []) {
     
     // Check if we have different sites with different author names
     const distinctSites = new Set(items.map(i => i.site));
-    const distinctAuthors = new Set(items.map(i => i.author));
+    const distinctAuthors = new Set(items.map(i => i.author).filter(a => !isAliasIgnored(a, ignoredList)));
 
     if (distinctSites.size > 1 && distinctAuthors.size > 1) {
       const canonical = items.find(i => i.site === 'danbooru')?.author || Array.from(distinctAuthors)[0];
+      if (isAliasIgnored(canonical, ignoredList)) continue;
       const sitesMap = {};
       for (const item of items) {
-        if (item.author) sitesMap[item.site] = item.author;
+        if (item.author && !isAliasIgnored(item.author, ignoredList)) sitesMap[item.site] = item.author;
       }
 
       const aliasArray = Array.from(distinctAuthors);
@@ -466,7 +484,7 @@ export function learnAliasesFromPostMatches(posts = []) {
 
       if (existingIdx >= 0) {
         const existing = discoveredAliasList[existingIdx];
-        const mergedAliases = Array.from(new Set([...existing.aliases, ...aliasArray]));
+        const mergedAliases = Array.from(new Set([...existing.aliases, ...aliasArray])).filter(a => !isAliasIgnored(a, ignoredList));
         const mergedSites = { ...existing.sites, ...sitesMap };
         if (mergedAliases.length > existing.aliases.length || Object.keys(mergedSites).length > Object.keys(existing.sites).length) {
           discoveredAliasList[existingIdx] = {
@@ -617,12 +635,17 @@ export function resolveTagForSite(token, targetSite, customRules = [], settings 
     }
   }
 
+  const ignoredList = Array.isArray(settings?.ignoredAliases) ? settings.ignoredAliases : [];
+  if (isAliasIgnored(lookupKey, ignoredList)) {
+    return token;
+  }
+
   // If unknown and explicitly an artist or bare single word, trigger background discovery (non-blocking)
-  if (process.env.NODE_ENV !== 'test' && !replacedTag && (isExplicitArtist || (!lookupKey.includes(':') && !lookupKey.startsWith('order:') && !lookupKey.startsWith('sort:')))) {
+  if (process.env.NODE_ENV !== 'test' && !replacedTag && settings?.enableAliasDiscovery !== false && (isExplicitArtist || (!lookupKey.includes(':') && !lookupKey.startsWith('order:') && !lookupKey.startsWith('sort:')))) {
     discoverAuthorAliases(lookupKey, settings).catch(() => {});
   }
 
-  if (replacedTag) {
+  if (replacedTag && !isAliasIgnored(replacedTag, ignoredList)) {
     return `${prefix}${categoryPrefix}${replacedTag}`;
   }
 
@@ -669,15 +692,80 @@ export function clearDiscoveredAliases() {
   return true;
 }
 
+export function getDiscoveredAliasesList() {
+  return [...discoveredAliasList];
+}
+
+export function updateDiscoveredAliasEntry(originalId, { id, aliases, sites } = {}) {
+  if (!originalId || typeof originalId !== 'string') return { success: false, error: 'Идентификатор не указан' };
+  const targetId = originalId.trim().toLowerCase();
+  const idx = discoveredAliasList.findIndex(e => (e.id || '').trim().toLowerCase() === targetId);
+
+  const newId = typeof id === 'string' && id.trim() ? id.trim().toLowerCase() : targetId;
+  const newAliases = Array.isArray(aliases)
+    ? Array.from(new Set(aliases.map(a => String(a).trim().toLowerCase()).filter(Boolean)))
+    : (idx !== -1 ? discoveredAliasList[idx].aliases : [newId]);
+  const newSites = (sites && typeof sites === 'object' && !Array.isArray(sites))
+    ? { ...sites }
+    : (idx !== -1 ? discoveredAliasList[idx].sites : {});
+
+  // Ensure newId is in aliases or present
+  if (!newAliases.includes(newId)) {
+    newAliases.unshift(newId);
+  }
+
+  let updatedEntry;
+  if (idx === -1) {
+    updatedEntry = {
+      id: newId,
+      aliases: newAliases,
+      sites: newSites,
+      discoveredAt: new Date().toISOString()
+    };
+    discoveredAliasList.push(updatedEntry);
+  } else {
+    const existing = discoveredAliasList[idx];
+    updatedEntry = {
+      ...existing,
+      id: newId,
+      aliases: newAliases,
+      sites: newSites,
+      updatedAt: new Date().toISOString()
+    };
+    discoveredAliasList[idx] = updatedEntry;
+  }
+
+  rebuildDiscoveredMap();
+  saveDiscoveredAliasesAsync();
+  logInfo('AliasService', `Алиас "${originalId}" ${idx === -1 ? 'добавлен' : 'обновлен'} пользователем: ${newAliases.join(', ')}`);
+  return { success: true, entry: updatedEntry };
+}
+
+export function deleteDiscoveredAliasEntry(id) {
+  if (!id || typeof id !== 'string') return { success: false, error: 'Идентификатор не указан' };
+  const targetId = id.trim().toLowerCase();
+  const idx = discoveredAliasList.findIndex(e => (e.id || '').trim().toLowerCase() === targetId);
+  if (idx === -1) {
+    return { success: false, error: 'Запись не найдена' };
+  }
+
+  discoveredAliasList.splice(idx, 1);
+  rebuildDiscoveredMap();
+  saveDiscoveredAliasesAsync();
+  logInfo('AliasService', `Алиас "${id}" удален пользователем`);
+  return { success: true };
+}
+
 /**
  * Returns a complete bidirectional alias mapping: lowercased alias/name -> Array of lowercased alias variants.
  * Used by client-side Following and Recommended algorithms to resolve aliases across sites.
  */
-export function getAllKnownAliasesMap() {
+export function getAllKnownAliasesMap(ignoredAliases = []) {
   const map = {};
 
   const addVariants = (variants) => {
-    const list = Array.from(new Set(variants.map(v => String(v).trim().toLowerCase()).filter(Boolean)));
+    const list = Array.from(new Set(variants.map(v => String(v).trim().toLowerCase()).filter(Boolean)))
+      .filter(v => !isAliasIgnored(v, ignoredAliases));
     if (list.length <= 1) return;
     for (const item of list) {
       if (!map[item]) map[item] = [];

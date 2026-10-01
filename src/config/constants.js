@@ -247,6 +247,8 @@ export const DEFAULT_SETTINGS = {
   customSources: ['danbooru', 'gelbooru', 'rule34', 'yandere'],
   searchPresets: [],
   maxServerCacheMb: 1500,
+  enableAliasDiscovery: true,
+  ignoredAliases: [],
   rule34ApiKey: '',
   rule34UserId: '',
   gelbooruApiKey: '',

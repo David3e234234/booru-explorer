@@ -5,6 +5,7 @@ export const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
   'aiTags', 'prioritizeUserTags', 'deepFetchPages', 'hideFurry', 'hidePregnant',
   'hideLgbt', 'hideZipPosts', 'groupAlbums', 'customSources', 'customAliases',
+  'enableAliasDiscovery', 'ignoredAliases',
   'rule34Provider', 'enablePaheal', 'siteSortTags', 'kemonoService', 'pawchiveService',
   'rule34ApiKey', 'rule34UserId', 'gelbooruApiKey', 'gelbooruUserId',
   'danbooruApiKey', 'danbooruLogin', 'konachanLogin', 'konachanPassword',
@@ -33,7 +34,8 @@ const BOOLEAN_FIELDS = [
   'showVideoStatusBanner', 'videoAutoplayHover', 'videoAutoplayMobile', 'videoAutoplayViewer',
   'enableSimilarPosts', 'videoMutedDefault', 'proxyThumbnails', 'proxyFullImages',
   'proxyVideos', 'proxyDownloads', 'proxyVideoDefault', 'enableJsDemuxing', 'enablePaheal',
-  'groupAlbums', 'prioritizeUserTags', 'telegramBackupEnabled', 'enableRecommendations'
+  'groupAlbums', 'prioritizeUserTags', 'telegramBackupEnabled', 'enableRecommendations',
+  'enableAliasDiscovery'
 ];
 
 const INTEGER_RANGES = {
@@ -43,7 +45,7 @@ const INTEGER_RANGES = {
   itemsPerPage: [10, 200]
 };
 
-const TAG_LIST_FIELDS = ['blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags', 'aiTags', 'excludedInterestTags'];
+const TAG_LIST_FIELDS = ['blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags', 'aiTags', 'excludedInterestTags', 'ignoredAliases'];
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);

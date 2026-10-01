@@ -70,8 +70,24 @@ let tempPetiteTags = [];
 let tempFurryTags = [];
 let tempPregnantTags = [];
 let tempLgbtTags = [];
+let tempIgnoredAliases = [];
 let tempSiteSortTags = {};
 let currentSortEditingSite = 'gelbooru';
+
+export function addIgnoredAliasTag(tag) {
+  if (!tag || typeof tag !== 'string') return;
+  const clean = tag.trim().toLowerCase();
+  if (!clean) return;
+  if (!tempIgnoredAliases.includes(clean)) {
+    tempIgnoredAliases.push(clean);
+  }
+  const currentList = Array.isArray(state.settings?.ignoredAliases) ? [...state.settings.ignoredAliases] : [];
+  if (!currentList.includes(clean)) {
+    currentList.push(clean);
+    persistSettings({ ignoredAliases: currentList });
+  }
+  renderSettingsChips();
+}
 
 function saveCurrentSiteSortInputs() {
   const inputHot = document.getElementById('inputSiteSortHot');
@@ -485,6 +501,13 @@ export function renderSettingsChips() {
     tempLgbtTags,
     (tag) => { tempLgbtTags = tempLgbtTags.filter(t => t !== tag); renderSettingsChips(); }
   );
+
+  renderChipsForGroup(
+    document.getElementById('ignoredAliasesWrapper'),
+    document.getElementById('ignoredAliasesInput'),
+    tempIgnoredAliases,
+    (tag) => { tempIgnoredAliases = tempIgnoredAliases.filter(t => t !== tag); renderSettingsChips(); }
+  );
 }
 
 export function renderTasteProfileUI() {
@@ -800,6 +823,15 @@ export function openSettingsModal() {
     ? [...state.settings.lgbtTags] 
     : [...DEFAULT_LGBT_TAGS];
 
+  tempIgnoredAliases = Array.isArray(state.settings.ignoredAliases)
+    ? [...state.settings.ignoredAliases]
+    : [];
+
+  const checkEnableAliasDiscovery = document.getElementById('checkEnableAliasDiscovery');
+  if (checkEnableAliasDiscovery) {
+    checkEnableAliasDiscovery.checked = state.settings.enableAliasDiscovery !== false;
+  }
+
   renderSettingsChips();
   renderTasteProfileUI();
   updateStorageUsageInfo();
@@ -1040,6 +1072,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   setupTagInput('furryTagsInput', 'furryTagsWrapper', () => tempFurryTags, (l) => { tempFurryTags = l; });
   setupTagInput('pregnantTagsInput', 'pregnantTagsWrapper', () => tempPregnantTags, (l) => { tempPregnantTags = l; });
   setupTagInput('lgbtTagsInput', 'lgbtTagsWrapper', () => tempLgbtTags, (l) => { tempLgbtTags = l; });
+  setupTagInput('ignoredAliasesInput', 'ignoredAliasesWrapper', () => tempIgnoredAliases, (l) => { tempIgnoredAliases = l; });
 
   // Reset-to-defaults buttons
   const btnResetBlacklist = document.getElementById('btnResetBlacklist');
@@ -1100,6 +1133,15 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       tempLgbtTags = [...DEFAULT_LGBT_TAGS];
       renderSettingsChips();
       showToast(t('set.lgbtReset', 'Слова для «ЛГБТ» сброшены к стандартным'));
+    });
+  }
+
+  const btnResetIgnoredAliases = document.getElementById('btnResetIgnoredAliases');
+  if (btnResetIgnoredAliases) {
+    btnResetIgnoredAliases.addEventListener('click', () => {
+      tempIgnoredAliases = [];
+      renderSettingsChips();
+      showToast(t('set.ignoredAliasesReset', 'Список запрещённых алиасов очищен'));
     });
   }
 
@@ -1782,7 +1824,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         enableRecommendations: document.getElementById('selectRecommendationMode')?.value !== 'off',
         recommendationEnableSkipPenalty: document.getElementById('checkRecSkipPenalty')?.checked !== false,
         siteSortTags: tempSiteSortTags,
-        customAliases: document.getElementById('customAliasesInput')?.value || ''
+        customAliases: document.getElementById('customAliasesInput')?.value || '',
+        enableAliasDiscovery: document.getElementById('checkEnableAliasDiscovery')?.checked !== false,
+        ignoredAliases: tempIgnoredAliases
       };
 
       saveLocalSettings(updated);
@@ -1883,6 +1927,9 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
       if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       if (selectMaxServerCache) selectMaxServerCache.value = '1500';
+      tempIgnoredAliases = [];
+      const checkEnableAliasDiscovery = document.getElementById('checkEnableAliasDiscovery');
+      if (checkEnableAliasDiscovery) checkEnableAliasDiscovery.checked = true;
       const customAliasesInput = document.getElementById('customAliasesInput');
       if (customAliasesInput) customAliasesInput.value = '';
       tempSiteSortTags = {};
@@ -1901,6 +1948,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         curvyTags: tempCurvyTags,
         petiteTags: tempPetiteTags,
         customAliases: '',
+        enableAliasDiscovery: true,
+        ignoredAliases: [],
         rule34ApiKey: '',
         rule34UserId: '',
         gelbooruApiKey: '',
