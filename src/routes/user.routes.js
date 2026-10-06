@@ -1,4 +1,5 @@
 import express from 'express';
+import { ah } from '../utils/asyncHandler.js';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
@@ -304,7 +305,7 @@ router.get('/likes', (req, res) => {
 });
 
 // POST /api/like
-router.post('/like', async (req, res) => {
+router.post('/like', ah(async (req, res) => {
   const post = req.body;
   if (!post || !post.id) return res.status(400).json({ success: false, message: 'Некорректные данные' });
 
@@ -332,7 +333,7 @@ router.post('/like', async (req, res) => {
   sendBooruLike(post.site || 'danbooru', post, isLiked, settings).catch(() => {});
 
   return res.json({ success: true, isLiked, count: likes.length });
-});
+}));
 
 // POST /api/likes/sync
 router.post('/likes/sync', (req, res) => {
@@ -362,7 +363,7 @@ router.get('/dislikes', (req, res) => {
 });
 
 // POST /api/dislike
-router.post('/dislike', async (req, res) => {
+router.post('/dislike', ah(async (req, res) => {
   const post = req.body;
   if (!post || !post.id) return res.status(400).json({ success: false, message: 'Некорректные данные' });
 
@@ -385,7 +386,7 @@ router.post('/dislike', async (req, res) => {
   }
 
   return res.json({ success: true, isDisliked, count: dislikes.length });
-});
+}));
 
 // POST /api/dislikes/clear
 router.post('/dislikes/clear', (req, res) => {
@@ -412,7 +413,7 @@ router.post('/dislikes/sync', (req, res) => {
 });
 
 // GET /api/cache-info
-router.get('/cache-info', async (req, res) => {
+router.get('/cache-info', ah(async (req, res) => {
   const userId = req.user?.id || null;
   const settings = getSettings(userId);
   const [thumbs, videos, archives] = await Promise.all([
@@ -432,7 +433,7 @@ router.get('/cache-info', async (req, res) => {
     archivesCount: archives.fileList.length,
     ramCacheEntries: apiPostsCache.size() + tagAutocompleteCache.size()
   });
-});
+}));
 
 // POST /api/cache-clear - wipes the RAM cache and every cached file on disk.
 // Destructive and server-wide, so it is gated the same way as /tunnel below:

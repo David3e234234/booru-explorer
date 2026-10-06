@@ -90,6 +90,10 @@ start_phone.bat                   # Windows: LAN-доступ и QR-код
 
 Интерфейс: `http://localhost:3000`.
 
+### Фронтенд-бандл
+
+Браузер загружает один бандл `public/dist/app.js` (esbuild, code-splitting: тяжёлые модули — просмотрщик, настройки, архивы — подгружаются динамически `import()` при первом открытии). `public/dist/` не коммитится: при старте `server.js` сравнивает mtime `public/js` и `public/dist` и пересобирает бандл при необходимости. Вручную: `npm run build:client`.
+
 ## Проверка и тесты
 
 ```bash

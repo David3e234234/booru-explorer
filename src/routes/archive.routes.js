@@ -15,6 +15,17 @@ function getRequestSettings(req) {
   return parseRequestAuth(req);
 }
 
+
+function isArchiveNetworkError(err) {
+  if (!err) return false;
+  const names = [err.name, err.cause?.name].filter(Boolean).join(' ').toLowerCase();
+  const codes = [err.code, err.cause?.code].filter(Boolean).join(' ').toLowerCase();
+  if (names.includes('abort') || names.includes('timeout')) return true;
+  if (['econnreset','etimedout','enotfound','econnrefused','ehostunreach','enetunreach','epipe','und_err_'].some(c => codes.includes(c))) return true;
+  const msg = String(err.message || '').toLowerCase();
+  return msg.includes('fetch failed') || msg.includes('network') || msg.includes('не удалось связаться');
+}
+
 // GET /api/archive/inspect?url=<zip-url> - inspect zip file structure, list all files, and scan for cloud links/passwords
 router.get('/inspect', async (req, res) => {
   const zipUrl = req.query.url;
@@ -30,8 +41,7 @@ router.get('/inspect', async (req, res) => {
     const inspection = await inspectArchive(zipUrl, { threads, settings });
     res.json(inspection);
   } catch (err) {
-    const msg = (err.message || '').toLowerCase();
-    const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('econnreset') || msg.includes('abort') || msg.includes('не удалось связаться');
+    const isNetworkErr = isArchiveNetworkError(err);
     const userMsg = isNetworkErr
       ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
       : 'Не удалось проверить архив';
@@ -57,8 +67,7 @@ router.get('/list', async (req, res) => {
     const albumItems = buildArchiveAlbumItems(manifest, site);
     res.json({ success: true, albumItems, albumCount: albumItems.length });
   } catch (err) {
-    const msg = (err.message || '').toLowerCase();
-    const isNetworkErr = msg.includes('fetch failed') || msg.includes('timeout') || msg.includes('econnreset') || msg.includes('abort') || msg.includes('не удалось связаться');
+    const isNetworkErr = isArchiveNetworkError(err);
     const userMsg = isNetworkErr
       ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
       : 'Не удалось распаковать архив';

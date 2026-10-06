@@ -124,15 +124,23 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Frontend static assets: etag + one hour of caching (caching used to be fully disabled,
-// so the browser re-downloaded every bundle on each visit)
+// Frontend static assets: versioned files (?v=...) are immutable, the rest
+// gets a short cache; index.html and sw.js must always revalidate.
+app.use((req, res, next) => {
+  if (req.query && typeof req.query.v === 'string' && req.query.v !== '') {
+    res.locals.assetVersioned = true;
+  }
+  next();
+});
 const publicDir = path.join(ROOT_DIR, 'public');
 app.use(express.static(publicDir, {
   etag: true,
   maxAge: '1h',
   setHeaders(res, filePath) {
-    if (filePath.endsWith('.html') || filePath.endsWith('.js')) {
+    if (filePath.endsWith('index.html') || filePath.endsWith('sw.js')) {
       res.setHeader('Cache-Control', 'no-cache');
+    } else if (res.locals.assetVersioned || /dist[\\/]chunks[\\/]/.test(filePath)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     }
   }
 }));
@@ -170,6 +178,7 @@ app.get('*', (req, res) => {
     spaIndexPath = candidates.find(p => fs.existsSync(p)) || '';
   }
   if (spaIndexPath) {
+    res.setHeader('Cache-Control', 'no-cache');
     return res.sendFile(spaIndexPath);
   }
   res.status(404).send(`index.html not found. CWD: ${process.cwd()}`);
@@ -204,9 +213,39 @@ function startServer(port) {
   });
 }
 
+// Rebuild the client bundle when public/js changed or dist is missing.
+// Keeps deploys reproducible: esbuild is a runtime dependency, dist is not committed.
+async function ensureClientBundle() {
+  try {
+    const distEntry = path.join(ROOT_DIR, 'public', 'dist', 'app.js');
+    const jsDir = path.join(ROOT_DIR, 'public', 'js');
+    let stale = !fs.existsSync(distEntry);
+    if (!stale) {
+      const distMtime = fs.statSync(distEntry).mtimeMs;
+      const stack = [jsDir];
+      while (stack.length && !stale) {
+        const dir = stack.pop();
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) stack.push(full);
+          else if (entry.name.endsWith('.js') && fs.statSync(full).mtimeMs > distMtime) { stale = true; break; }
+        }
+      }
+    }
+    if (stale) {
+      const { buildClient } = await import('./scripts/buildClient.mjs');
+      console.log('[Client] Пересобираю фронтенд-бандл (public/dist)...');
+      await buildClient({ logLevel: 'warning' });
+    }
+  } catch (err) {
+    console.error('[Client] Не удалось собрать фронтенд-бандл:', err.message);
+  }
+}
+
 const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 
 if (!isServerless && process.env.NODE_ENV !== 'test' && isMainModule) {
+  await ensureClientBundle();
   initBackupScheduler();
   startServer(Number(PORT));
 }

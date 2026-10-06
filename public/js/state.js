@@ -121,7 +121,6 @@ export const DEFAULT_CLIENT_SETTINGS = {
   recommendationFocus: 'all', // 'all' | 'artists' | 'characters' | 'discovery'
   recommendationDecayDays: 25, // half-life for temporal interest decay
   recommendationEnableSkipPenalty: true,
-  excludedInterestTags: [],
   enableRecommendations: true,
   postSort: 'new',
   siteSortTags: {}

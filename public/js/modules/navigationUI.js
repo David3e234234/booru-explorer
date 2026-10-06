@@ -1,7 +1,7 @@
 import { state } from '../state.js';
 import { closeAllDrawers } from './drawers.js';
 import { fetchSites } from '../api.js';
-import { persistSettings } from './settingsModal.js';
+import { persistSettings } from './settingsPersist.js';
 import { showToast, escapeHtml, toSafeCssColor } from './uiUtils.js';
 import { t } from '../i18n.js';
 

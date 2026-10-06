@@ -12,11 +12,13 @@
     "test": "node --test test/run-all.js",
     "test:unit": "node --test test/unit",
     "test:integration": "node --test test/integration/routes.test.js",
-    "verify": "npm test"
+    "verify": "npm test",
+    "build:client": "node scripts/buildClient.mjs"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",
     "compression": "^1.8.1",
+    "esbuild": "^0.28.2",
     "express": "^4.22.3",
     "https-proxy-agent": "^9.1.0",
     "node-stream-zip": "^1.16.0",

@@ -49,7 +49,7 @@ import {
 } from './api.js';
 import { initAutocomplete } from './autocomplete.js';
 import { initGallery } from './gallery.js';
-import { initViewer } from './viewer.js';
+import { consumeInitialUrl, initRouter, syncSearchUrl } from './router.js';
 import { isMyLiveDemoHost, isVercelHost, showToast, haptic } from './modules/uiUtils.js';
 import { openDrawer, closeAllDrawers, setDrawerCallbacks } from './modules/drawers.js';
 import { 
@@ -81,24 +81,232 @@ import {
   initCoverPickerModal,
   openAddAuthorModal
 } from './modules/favoriteAuthorsUI.js';
-import { 
-  initSettingsModal, 
-  applySettingsToUIAndState, 
-  persistSettings, 
-  openSettingsModal, 
-  closeSettingsModal 
-} from './modules/settingsModal.js';
+import {
+  persistSettings,
+} from './modules/settingsPersist.js';
 import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js';
 import { initSidebarCollapse } from './modules/sidebarCollapse.js';
-import { initAuthModal, updateHeaderAuthUI } from './modules/authModal.js';
 import { initModalAccessibility } from './modules/modalAccessibility.js';
-import { initWikiModal } from './modules/wikiModal.js';
-import { initProfileUI } from './modules/profileUI.js';
-import { initDownloadManager } from './modules/downloadManager.js';
-import { initDiscoveredAliasesModal } from './modules/aliasManagerModal.js';
-import { consumeInitialUrl, initRouter, syncSearchUrl } from './router.js';
 import { t, applyStaticTranslations } from './i18n.js';
+
+// Heavy subsystems (settings modal, profile, downloads, viewer) load lazily so
+// the gallery can paint without waiting for ~150 KB of viewer/modal code.
+// Lazy loaders must use literal specifiers so esbuild can split chunks.
+const lazyModules = new Map();
+function importOnce(key, loader) {
+  let p = lazyModules.get(key);
+  if (!p) {
+    p = loader().catch((err) => { lazyModules.delete(key); throw err; });
+    lazyModules.set(key, p);
+  }
+  return p;
+}
+
+let settingsModalPromise = null;
+function ensureSettingsModal() {
+  if (!settingsModalPromise) {
+    settingsModalPromise = importOnce('settingsModal', () => import('./modules/settingsModal.js')).then((m) => {
+      m.initSettingsModal({
+        onSettingsChanged: () => {
+          updateSiteCapabilitiesUI();
+          updateCategoryTabsUI();
+          whenViewerLoaded((v) => v.refreshSimilarState?.());
+          if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
+              (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
+            renderFavoriteAuthors();
+          } else {
+            performSearch(true);
+          }
+        },
+        onDataImported: () => {
+          updateFavoritesBadge();
+          performSearch(true);
+        },
+        onUpdateFavoritesBadge: updateFavoritesBadge
+      });
+      return m;
+    }).catch((err) => { settingsModalPromise = null; throw err; });
+  }
+  return settingsModalPromise;
+}
+function applySettingsToUIAndState(s) {
+  return ensureSettingsModal().then((m) => m.applySettingsToUIAndState(s));
+}
+function openSettingsModal() {
+  ensureSettingsModal().then((m) => m.openSettingsModal()).catch(() => {});
+}
+function closeSettingsModal() {
+  ensureSettingsModal().then((m) => m.closeSettingsModal()).catch(() => {});
+}
+
+let authModalPromise = null;
+function ensureAuthModal() {
+  if (!authModalPromise) {
+    authModalPromise = importOnce('authModal', () => import('./modules/authModal.js')).then((m) => {
+      authModalInstance = m.initAuthModal({
+        onAuthSuccess: async (user) => {
+          accountGeneration += 1;
+          updateHeaderAuthUI();
+          await refreshAllUserData();
+          if (profileUIInstance) profileUIInstance.renderProfile();
+          selectCategory('profile');
+        },
+        onLogout: async () => {
+          accountGeneration += 1;
+          updateHeaderAuthUI();
+          await refreshAllUserData();
+          if (profileUIInstance) profileUIInstance.renderProfile();
+          selectCategory('feed');
+        },
+        onOpenProfile: () => {
+          selectCategory('profile');
+        }
+      });
+      return m;
+    }).catch((err) => { authModalPromise = null; throw err; });
+  }
+  return authModalPromise;
+}
+function updateHeaderAuthUI() {
+  ensureAuthModal().then((m) => m.updateHeaderAuthUI()).catch(() => {});
+}
+
+let profileUIPromise = null;
+function ensureProfileUI() {
+  if (!profileUIPromise) {
+    profileUIPromise = importOnce('profileUI', () => import('./modules/profileUI.js')).then((m) => {
+      profileUIInstance = m.initProfileUI({
+        onOpenAuth: (mode) => authModalInstance?.openAuthModal(mode),
+        onTabChange: (type, val) => {
+          if (type === 'search-tag') {
+            state.searchTags = [];
+            addSearchTag(val);
+            autocompleteInstance?.renderTagsChips();
+            selectCategory('feed');
+          } else if (type === 'profile-subtab') {
+            if (val === 'authors') {
+              renderFavoriteAuthors();
+            } else {
+              performSearch(true);
+            }
+          } else if (type === 'profile-authors-search') {
+            renderFavoriteAuthors();
+          }
+        },
+        onReloadState: async () => {
+          accountGeneration += 1;
+          updateHeaderAuthUI();
+          await refreshAllUserData();
+          renderPresetsList();
+          if (profileUIInstance) profileUIInstance.renderProfile();
+          selectCategory('feed');
+        }
+      });
+      return m;
+    }).catch((err) => { profileUIPromise = null; throw err; });
+  }
+  return profileUIPromise;
+}
+
+function ensureDownloadManager() {
+  return importOnce('downloadManager', () => import('./modules/downloadManager.js')).then((m) => m.initDownloadManager()).catch(() => {});
+}
+function ensureAliasManagerModal() {
+  return importOnce('aliasManagerModal', () => import('./modules/aliasManagerModal.js')).then((m) => m.initDiscoveredAliasesModal()).catch(() => {});
+}
+function ensureWikiModal() {
+  return importOnce('wikiModal', () => import('./modules/wikiModal.js')).then((m) => m.initWikiModal({
+    onSelectTag: (tag) => {
+      addSearchTag(tag);
+      if (autocompleteInstance) autocompleteInstance.renderTagsChips();
+      performSearch(true);
+    },
+    onSwitchSite: (site) => {
+      selectSite(site);
+    }
+  })).catch(() => {});
+}
+
+let viewerPromise = null;
+function ensureViewer() {
+  if (!viewerPromise) {
+    viewerPromise = importOnce('viewer', () => import('./viewer.js')).then((m) => {
+      viewerInstance = m.initViewer({
+        onFavoriteToggle: () => {
+          galleryInstance.renderGallery(false, { preserveScroll: true });
+          updateFavoritesBadge();
+        },
+        onFavoriteAuthorToggle: () => {
+          updateFavoritesBadge();
+          if (state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') {
+            renderFavoriteAuthors();
+          }
+        },
+        onTagSelect: (tag) => {
+          autocompleteInstance.selectTag(tag, true);
+        },
+        onAuthorSelect: (author) => {
+          handleAuthorSelect(author);
+        },
+        onDislikeToggle: () => {
+          galleryInstance.renderGallery(false, { preserveScroll: true });
+        },
+        onFindSimilar: (post) => handleFindSimilarPost(post),
+        onSwitchSiteAndSearch: (site, query) => {
+          whenViewerLoaded((v) => v.closeViewer({ skipHistoryBack: true }));
+          if (site) {
+            state.currentSite = site;
+            persistSettings({ defaultSite: site });
+            updateSiteCapabilitiesUI(site);
+            updateCurrentSiteLabel();
+            renderSitesBar({ onSelectSite: selectSite });
+            renderMobileSourcesSheet({ onSelectSite: selectSite });
+            if (site === 'pawchive') ensurePawchiveServiceOptions();
+            if (site === 'kemono') ensureKemonoServiceOptions();
+          }
+          state.currentCategory = 'feed';
+          updateCategoryTabsUI();
+
+          state.postSort = 'new';
+          state.videoDurationSort = 'none';
+          state.typeFilter = 'all';
+          state.ageFilter = 'all';
+          state.ratingFilter = 'all';
+          state.aiFilter = 'no-ai';
+
+          updatePostSortUI();
+          updateVideoSortUI();
+          updateTypeFilterUI();
+          updateAgeFilterUI();
+          updateRatingFilterUI();
+          updateAiFilterUI();
+          updateFilterActiveDot();
+
+          if (autocompleteInstance) {
+            if (typeof autocompleteInstance.clear === 'function') {
+              autocompleteInstance.clear();
+            } else if (typeof autocompleteInstance.clearTags === 'function') {
+              autocompleteInstance.clearTags();
+            }
+            if (query) {
+              autocompleteInstance.selectTag(query, false);
+            }
+          } else {
+            state.searchTags = query ? [query] : [];
+          }
+          performSearch(true);
+        },
+        showToast
+      });
+      return viewerInstance;
+    }).catch((err) => { viewerPromise = null; throw err; });
+  }
+  return viewerPromise;
+}
+function whenViewerLoaded(fn) {
+  if (viewerInstance) fn(viewerInstance);
+}
 
 export { isMyLiveDemoHost, isVercelHost, showToast, openDrawer, closeAllDrawers };
 
@@ -130,9 +338,12 @@ async function init() {
     onCloseSettingsModal: closeSettingsModal
   });
 
-  // 1. Initialize subsystems and validate the token
+  // 1. Initialize subsystems. Token validation is fired concurrently with the
+  // data loaders: if we awaited it, a slow/dead auth endpoint would stall the
+  // first feed render. On 401/403 we drop the session and reload as anonymous.
   loadLocalAuth();
-  if (state.authToken) {
+  void (async () => {
+    if (!state.authToken) return;
     try {
       const me = await apiGetMe();
       if (me && me.user) {
@@ -140,64 +351,22 @@ async function init() {
         saveLocalAuth(state.authToken, me.user);
       } else {
         clearLocalAuth();
+        await refreshAllUserData();
       }
     } catch (e) {
       if (e?.status === 401 || e?.status === 403) {
         clearLocalAuth();
+        await refreshAllUserData();
       } else {
         showToast(t('auth.serverUnavailable', 'Сервер авторизации недоступен. Вход в аккаунт временно не подтвержден.'), 'error');
       }
     }
-  }
+    updateHeaderAuthUI();
+  })();
   updateHeaderAuthUI();
 
-  authModalInstance = initAuthModal({
-    onAuthSuccess: async (user) => {
-      accountGeneration += 1;
-      updateHeaderAuthUI();
-      await refreshAllUserData();
-      if (profileUIInstance) profileUIInstance.renderProfile();
-      selectCategory('profile');
-    },
-    onLogout: async () => {
-      accountGeneration += 1;
-      updateHeaderAuthUI();
-      await refreshAllUserData();
-      if (profileUIInstance) profileUIInstance.renderProfile();
-      selectCategory('feed');
-    },
-    onOpenProfile: () => {
-      selectCategory('profile');
-    }
-  });
-
-  profileUIInstance = initProfileUI({
-    onOpenAuth: (mode) => authModalInstance?.openAuthModal(mode),
-    onTabChange: (type, val) => {
-      if (type === 'search-tag') {
-        state.searchTags = [];
-        addSearchTag(val);
-        autocompleteInstance?.renderTagsChips();
-        selectCategory('feed');
-      } else if (type === 'profile-subtab') {
-        if (val === 'authors') {
-          renderFavoriteAuthors();
-        } else {
-          performSearch(true);
-        }
-      } else if (type === 'profile-authors-search') {
-        renderFavoriteAuthors();
-      }
-    },
-    onReloadState: async () => {
-      accountGeneration += 1;
-      updateHeaderAuthUI();
-      await refreshAllUserData();
-      renderPresetsList();
-      if (profileUIInstance) profileUIInstance.renderProfile();
-      selectCategory('feed');
-    }
-  });
+  ensureAuthModal().catch(() => {});
+  ensureProfileUI().catch(() => {});
 
   autocompleteInstance = initAutocomplete({
     onSearch: () => performSearch(true),
@@ -268,7 +437,7 @@ async function init() {
   });
 
   galleryInstance = initGallery({
-    onOpenViewer: (index) => viewerInstance.openViewer(index),
+    onOpenViewer: (index) => { ensureViewer().then((v) => v.openViewer(index)).catch(() => {}); },
     onFavoriteToggle: updateFavoritesBadge,
     onTagClick: (tag) => {
       autocompleteInstance.selectTag(tag, true);
@@ -305,78 +474,9 @@ async function init() {
     profileUIInstance?.renderProfile();
   });
 
-  viewerInstance = initViewer({
-    onFavoriteToggle: () => {
-      galleryInstance.renderGallery(false, { preserveScroll: true });
-      updateFavoritesBadge();
-    },
-    onFavoriteAuthorToggle: () => {
-      updateFavoritesBadge();
-      if (state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') {
-        renderFavoriteAuthors();
-      }
-    },
-    onTagSelect: (tag) => {
-      autocompleteInstance.selectTag(tag, true);
-    },
-    onAuthorSelect: (author) => {
-      handleAuthorSelect(author);
-    },
-    onDislikeToggle: () => {
-      galleryInstance.renderGallery(false, { preserveScroll: true });
-    },
-    onFindSimilar: (post) => handleFindSimilarPost(post),
-    onSwitchSiteAndSearch: (site, query) => {
-      if (viewerInstance) viewerInstance.closeViewer({ skipHistoryBack: true });
-      if (site) {
-        state.currentSite = site;
-        persistSettings({ defaultSite: site });
-        updateSiteCapabilitiesUI(site);
-        updateCurrentSiteLabel();
-        renderSitesBar({ onSelectSite: selectSite });
-        renderMobileSourcesSheet({ onSelectSite: selectSite });
-        if (site === 'pawchive') ensurePawchiveServiceOptions();
-        if (site === 'kemono') ensureKemonoServiceOptions();
-      }
-      state.currentCategory = 'feed';
-      updateCategoryTabsUI();
-
-      // Reset filters and sorting to defaults
-      state.postSort = 'new';
-      state.videoDurationSort = 'none';
-      state.typeFilter = 'all';
-      state.ageFilter = 'all';
-      state.ratingFilter = 'all';
-      state.aiFilter = 'no-ai';
-
-      updatePostSortUI();
-      updateVideoSortUI();
-      updateTypeFilterUI();
-      updateAgeFilterUI();
-      updateRatingFilterUI();
-      updateAiFilterUI();
-      updateFilterActiveDot();
-
-      if (autocompleteInstance) {
-        if (typeof autocompleteInstance.clear === 'function') {
-          autocompleteInstance.clear();
-        } else if (typeof autocompleteInstance.clearTags === 'function') {
-          autocompleteInstance.clearTags();
-        }
-        if (query) {
-          autocompleteInstance.selectTag(query, false);
-        }
-      } else {
-        state.searchTags = query ? [query] : [];
-      }
-      performSearch(true);
-    },
-    showToast
-  });
-
   initRouter({
     onCloseViewerUi: () => {
-      if (viewerInstance) viewerInstance.closeViewer();
+      whenViewerLoaded((v) => v.closeViewer());
     },
     onOpenPost: (postId) => {
       openPostById(postId);
@@ -407,26 +507,8 @@ async function init() {
     }
   });
 
-  initSettingsModal({
-    onSettingsChanged: () => {
-      updateSiteCapabilitiesUI();
-      updateCategoryTabsUI();
-      viewerInstance?.refreshSimilarState?.();
-      if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
-          (state.currentCategory === 'profile' && state.profileSubTab === 'authors')) {
-        renderFavoriteAuthors();
-      } else {
-        performSearch(true);
-      }
-    },
-    onDataImported: () => {
-      updateFavoritesBadge();
-      performSearch(true);
-    },
-    onUpdateFavoritesBadge: updateFavoritesBadge
-  });
-
-  initDiscoveredAliasesModal();
+  ensureSettingsModal().catch(() => {});
+  ensureAliasManagerModal().catch(() => {});
 
   initCustomSourcesModal({
     onApply: () => {
@@ -434,18 +516,9 @@ async function init() {
     }
   });
 
-  initWikiModal({
-    onSelectTag: (tag) => {
-      addSearchTag(tag);
-      if (autocompleteInstance) autocompleteInstance.renderTagsChips();
-      performSearch(true);
-    },
-    onSwitchSite: (site) => {
-      selectSite(site);
-    }
-  });
+  ensureWikiModal().catch(() => {});
 
-  initDownloadManager();
+  ensureDownloadManager().catch(() => {});
 
   renderSitesBar({ onSelectSite: selectSite });
   renderMobileSourcesSheet({ onSelectSite: selectSite });
@@ -497,7 +570,7 @@ function refreshSearchUiFromState() {
 // Opens a post by its original site id: fast path searches the loaded feed,
 // slow path fetches it with the `id:` metatag (bypassing content filters).
 async function openPostById(postId) {
-  if (!postId || !viewerInstance) return;
+  if (!postId) return;
 
   const rawPostId = String(postId);
   const prefixedSite = (state.sites || []).find(site => rawPostId.startsWith(`${site.id}_`));
@@ -508,7 +581,7 @@ async function openPostById(postId) {
   const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
   const idx = list.findIndex(p => p && (String(p.id) === rawPostId || String(p.originalId) === originalId));
   if (idx >= 0) {
-    viewerInstance.openViewer(idx);
+    ensureViewer().then((v) => v.openViewer(idx)).catch(() => {});
     return;
   }
 
@@ -530,7 +603,7 @@ async function openPostById(postId) {
     const posts = res && res.success && Array.isArray(res.posts) ? res.posts : [];
     const post = posts.find(p => String(p.id) === rawPostId || String(p.originalId) === originalId);
     if (post) {
-      viewerInstance.openViewer(-1, { directPost: post });
+      ensureViewer().then((v) => v.openViewer(-1, { directPost: post })).catch(() => {});
     } else {
       showToast(t('router.postNotFound', 'Пост не найден'));
     }
@@ -752,11 +825,13 @@ function handleFindSimilarPost(post) {
   const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
   const postIdx = (list || []).findIndex(p => p && p.id === post.id);
 
-  if (postIdx !== -1 && viewerInstance) {
-    viewerInstance.openViewer(postIdx);
-  } else if (viewerInstance) {
-    viewerInstance.openViewer(-1, { directPost: post });
-  }
+  ensureViewer().then((v) => {
+    if (postIdx !== -1) {
+      v.openViewer(postIdx);
+    } else {
+      v.openViewer(-1, { directPost: post });
+    }
+  }).catch(() => {});
 
   // If on mobile, open tags/info drawer so the similar section is immediately visible
   if (window.innerWidth <= 800) {
@@ -776,7 +851,7 @@ async function loadUserSettings(generation = accountGeneration) {
   try {
     const local = loadLocalSettings() || {};
     if (Object.keys(local).length > 0) {
-      applySettingsToUIAndState(local);
+      await applySettingsToUIAndState(local);
     }
     const data = await fetchSettings();
     if (generation !== accountGeneration) return;
@@ -839,7 +914,7 @@ async function loadUserSettings(generation = accountGeneration) {
       }
     }
 
-    applySettingsToUIAndState(merged);
+    await applySettingsToUIAndState(merged);
     saveLocalSettings(merged);
     renderPresetsList();
     updatePresetActiveState();
@@ -2080,7 +2155,7 @@ function setupEventListeners() {
   const btnLogo = document.getElementById('btnLogo');
   if (btnLogo) {
     btnLogo.addEventListener('click', () => {
-      if (viewerInstance) viewerInstance.closeViewer({ skipHistoryBack: true });
+      whenViewerLoaded((v) => v.closeViewer({ skipHistoryBack: true }));
 
       // 1. Clear search tags and input
       if (autocompleteInstance?.clear) {

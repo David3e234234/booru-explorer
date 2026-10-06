@@ -428,11 +428,8 @@ export function updateTelegramBackupStatusUI(s = state.settings) {
   }
 }
 
-export function persistSettings(partial) {
-  state.settings = { ...state.settings, ...partial };
-  saveLocalSettings(state.settings);
-  saveSettings(state.settings).catch(() => {});
-}
+export { persistSettings } from './settingsPersist.js';
+import { persistSettings } from './settingsPersist.js';
 
 function renderChipsForGroup(wrapperEl, inputEl, tagList, onRemove) {
   if (!wrapperEl || !inputEl) return;

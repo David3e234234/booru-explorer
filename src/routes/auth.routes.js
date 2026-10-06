@@ -1,4 +1,5 @@
 import express from 'express';
+import { ah } from '../utils/asyncHandler.js';
 import { 
   registerUser, 
   loginUser, 
@@ -71,10 +72,10 @@ router.get('/me', requireAuth, (req, res) => {
 });
 
 // POST /api/auth/logout
-router.post('/logout', requireAuth, async (req, res) => {
+router.post('/logout', requireAuth, ah(async (req, res) => {
   await revokeUserTokens(req.user.id);
   res.json({ success: true, message: 'Успешный выход' });
-});
+}));
 
 // GET /api/auth/export - full account record for backup/export files (requires token)
 router.get('/export', requireAuth, (req, res) => {

@@ -23,7 +23,7 @@ Tracked directories: `src/`, `public/`, `test/`, `data/settings.example.json`, r
 4. Do not push to `main` or `master` unless the user explicitly requests it. A push deploys to production after the verify job.
 5. Preserve public API shapes unless the user asks for a breaking change. Update callers, tests and docs together.
 6. Comments are written in English. UI strings and logs are Russian by default; English UI comes from the i18n layer.
-7. Do not add a build step, framework or runtime dependency without an explicit need and a documented reason.
+7. Do not add a build step, framework or runtime dependency without an explicit need and a documented reason. (Current exception: the esbuild client bundle, documented in §7 Frontend Architecture.)
 8. New network-facing routes require input validation, an auth decision, a rate limit where appropriate, bounded resources and tests.
 
 ### Documentation Ownership
@@ -51,6 +51,7 @@ npm test                                   # unit, parser and integration suites
 npm run test:unit                          # test/unit
 npm run test:integration                   # test/integration/routes.test.js
 npm run verify                             # alias for npm test
+npm run build:client                       # esbuild: public/js/app.js -> public/dist
 node --check path/to/file.js               # every touched JS file
 ```
 
@@ -83,7 +84,9 @@ src/routes/                    HTTP endpoints grouped by domain
 src/services/                  storage, cache, media, auth, backup, archives
 src/utils/                     network, tag logic, logging, host policy, settings policy
 public/index.html              static application shell and SVG sprite
-public/js/                     ES modules loaded directly by the browser
+public/js/                     ES modules loaded by the esbuild bundle entry (app.js)
+public/dist/                   esbuild output (git-ignored, rebuilt by server.js)
+scripts/buildClient.mjs        esbuild bundle script behind `npm run build:client`
 public/css/                    theme tokens and component styles
 test/unit/                     pure unit and mocked parser suites
 test/integration/              Express app tests on an ephemeral port
@@ -231,7 +234,8 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 
 ## 7. Frontend Architecture
 
-- No bundler. `public/` is served statically and the browser imports ES modules directly.
+- No framework. `public/` is served statically and bundled by esbuild (`public/js/app.js` → `public/dist`, code-splitting keeps dynamic `import()` boundaries). Heavy subsystems (viewer stack, settings modal, profile, downloads, wiki, aliases) stay lazy; do not add static imports of them from `app.js`, or they rejoin the critical path. Variable-specifier dynamic imports do not bundle — always use literal specifiers in `importOnce` loaders.
+- `public/dist/` is git-ignored and rebuilt by `server.js` when sources change (mtime check); `npm run build:client` rebuilds manually. esbuild is a runtime dependency so `npm install --omit=dev` deploys still build.
 - `state.js` owns mutable state, local persistence and import/export. `api.js` owns HTTP and auth headers. `app.js` coordinates search and routing.
 - `router.js` is the only writer of search and viewer URL state. Missing URL parameters restore canonical defaults.
 - Omitting a default in `buildQuery()` and normalizing it in `applyUrlToState()` must be symmetric. Compare canonical values, never param presence: `if ((p.site || 'danbooru') !== state.currentSite)`, not `p.site !== state.currentSite`. A false `changed` re-runs `performSearch(true)`, which re-renders the gallery without `preserveScroll` and jumps the feed back to the top, so Back from the viewer silently loses the scroll position. Cover new fields in `test/unit/routerUrlState.test.js`.
@@ -250,7 +254,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - UI strings use `t('key', 'Русский текст')`. Static markup uses `data-i18n*`; do not put translatable text with child markup directly on a `data-i18n` parent.
 - Gallery icons come from the SVG sprite in `index.html`. Do not set `fill` on card SVG elements; swap `<use href>`.
 - CSS tokens live in `variables.css`. Legacy aliases are temporary; do not add new references to undefined custom properties.
-- After changing CSS or `app.js`, bump the `?v=X.Y` value in `index.html` and update the service-worker cache version.
+- After changing CSS or `app.js`, bump the `?v=X.Y` value on every versioned asset in `index.html` (CSS, manifest, icons, `dist/app.js`) and sync `CACHE_NAME` in `public/sw.js`. Server serves those as `immutable`; a forgotten bump strands old assets in the browser cache.
 - `mp4box.all.min.js` loads lazily only when client-side demuxing is used.
 
 Visual changes follow `DESIGN.md`: collector's-cabinet identity, amber `#e5a968` accent, Fraunces / Plus Jakarta Sans / JetBrains Mono, dials ENERGY 2 / RHYTHM 2 / MOTION 2.

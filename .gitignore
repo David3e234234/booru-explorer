@@ -58,3 +58,6 @@ MEMORY.md
 # Локальные папки ИИ-агентов (не для репозитория)
 .agents/
 anti-slop/
+
+public/dist/
+

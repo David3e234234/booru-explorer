@@ -2,6 +2,28 @@ import { state, STORAGE_KEYS, SECRET_SETTING_FIELDS } from './state.js';
 
 export const isMyLiveDemoHost = false;
 
+
+const DEFAULT_FETCH_TIMEOUT_MS = 30000;
+
+// Long-running endpoints (archive inspection, telegram backups, upstream auth
+// probes) get a bigger budget; the search feed gets enough for a deep fetch.
+function fetchTimeoutFor(url) {
+  const u = String(url);
+  if (u.startsWith('/api/posts')) return 45000;
+  if (u.includes('/api/archive/') || u.includes('/api/backup/') || u.includes('/api/sync-external') || u.includes('/api/proxy/test') || u.includes('/api/sites/auth-test')) return 120000;
+  return DEFAULT_FETCH_TIMEOUT_MS;
+}
+
+// Every client request gets a hard timeout: a hung upstream must surface as an
+// error toast instead of an endless spinner (and a blocked init chain).
+function fetchWithTimeout(url, options = {}) {
+  const timeoutSignal = AbortSignal.timeout(fetchTimeoutFor(url));
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, timeoutSignal])
+    : timeoutSignal;
+  return fetch(url, { ...options, signal });
+}
+
 export class ApiError extends Error {
   constructor(message, status = 0) {
     super(message);
@@ -135,7 +157,7 @@ export function dedupedFetch(key, fetchFn) {
 }
 
 export async function apiRegister(username, password, initialData = {}) {
-  const res = await fetch('/api/auth/register', {
+  const res = await fetchWithTimeout('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, initialData })
@@ -146,7 +168,7 @@ export async function apiRegister(username, password, initialData = {}) {
 export async function apiLogin(username, password, initialData = null) {
   const body = { username, password };
   if (initialData) body.initialData = initialData;
-  const res = await fetch('/api/auth/login', {
+  const res = await fetchWithTimeout('/api/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
@@ -155,7 +177,7 @@ export async function apiLogin(username, password, initialData = null) {
 }
 
 export async function apiGetMe() {
-  const res = await fetch('/api/auth/me', {
+  const res = await fetchWithTimeout('/api/auth/me', {
     headers: getAuthHeaders()
   });
   if (res.status === 401 || res.status === 403) return null;
@@ -164,13 +186,13 @@ export async function apiGetMe() {
 
 export async function apiLogout() {
   try {
-    await fetch('/api/auth/logout', { method: 'POST', headers: getAuthHeaders() });
+    await fetchWithTimeout('/api/auth/logout', { method: 'POST', headers: getAuthHeaders() });
   } catch (e) {}
 }
 
 export async function apiExportAccount() {
   try {
-    const res = await fetch('/api/auth/export', { headers: getAuthHeaders() });
+    const res = await fetchWithTimeout('/api/auth/export', { headers: getAuthHeaders() });
     if (!res.ok) return null;
     const data = await res.json();
     return data && data.success ? data.account : null;
@@ -180,7 +202,7 @@ export async function apiExportAccount() {
 }
 
 export async function apiRestoreAccount(account, password) {
-  const res = await fetch('/api/auth/restore', {
+  const res = await fetchWithTimeout('/api/auth/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ account, password })
@@ -189,14 +211,14 @@ export async function apiRestoreAccount(account, password) {
 }
 
 export async function fetchSites() {
-  const res = await fetch('/api/sites');
+  const res = await fetchWithTimeout('/api/sites');
   if (!res.ok) throw new Error('Не удалось загрузить список сайтов');
   return await res.json();
 }
 
 export async function fetchPawchiveServices() {
   try {
-    const res = await fetch('/api/pawchive-services');
+    const res = await fetchWithTimeout('/api/pawchive-services');
     if (!res.ok) return { success: false, services: [] };
     return await res.json();
   } catch (e) {
@@ -206,7 +228,7 @@ export async function fetchPawchiveServices() {
 
 export async function fetchKemonoServices() {
   try {
-    const res = await fetch('/api/kemono-services');
+    const res = await fetchWithTimeout('/api/kemono-services');
     if (!res.ok) return { success: false, services: [] };
     return await res.json();
   } catch (e) {
@@ -264,7 +286,7 @@ export async function fetchPosts({
   }
   const query = new URLSearchParams(params);
   const url = `/api/posts?${query.toString()}`;
-  const res = await dedupedFetch(url, () => fetch(url, {
+  const res = await dedupedFetch(url, () => fetchWithTimeout(url, {
     headers: getAuthHeaders()
   }));
   // Surface HTTP failures: returning a fake empty success used to kill infinite
@@ -283,7 +305,7 @@ export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', paren
   if (originalId) params.set('originalId', originalId);
   if (postUrl) params.set('postUrl', postUrl);
 
-  const res = await fetch(`/api/posts/album?${params.toString()}`, {
+  const res = await fetchWithTimeout(`/api/posts/album?${params.toString()}`, {
     headers: getAuthHeaders()
   });
   return readJsonOrThrow(res);
@@ -291,7 +313,7 @@ export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', paren
 
 export async function fetchArchiveList(zipUrl, options = {}) {
   const threads = options.threads ?? state.settings?.archiveDownloadThreads ?? 4;
-  const res = await fetch(`/api/archive/list?url=${encodeURIComponent(zipUrl)}&threads=${threads}`, {
+  const res = await fetchWithTimeout(`/api/archive/list?url=${encodeURIComponent(zipUrl)}&threads=${threads}`, {
     headers: getAuthHeaders()
   });
   return readJsonOrThrow(res);
@@ -299,7 +321,7 @@ export async function fetchArchiveList(zipUrl, options = {}) {
 
 export async function fetchArchiveStatus(zipUrl) {
   try {
-    const res = await fetch(`/api/archive/status?url=${encodeURIComponent(zipUrl)}`, {
+    const res = await fetchWithTimeout(`/api/archive/status?url=${encodeURIComponent(zipUrl)}`, {
       headers: getAuthHeaders()
     });
     if (!res.ok) return { active: false };
@@ -312,7 +334,7 @@ export async function fetchArchiveStatus(zipUrl) {
 export async function fetchArchiveInspect(zipUrl, options = {}) {
   try {
     const threads = options.threads ?? state.settings?.archiveDownloadThreads ?? 4;
-    const res = await fetch(`/api/archive/inspect?url=${encodeURIComponent(zipUrl)}&threads=${threads}`, {
+    const res = await fetchWithTimeout(`/api/archive/inspect?url=${encodeURIComponent(zipUrl)}&threads=${threads}`, {
       headers: getAuthHeaders()
     });
     if (!res.ok) {
@@ -328,14 +350,14 @@ export async function fetchArchiveInspect(zipUrl, options = {}) {
 export async function fetchTagAutocomplete(query, site = 'danbooru') {
   if (!query) return { tags: [] };
   const url = `/api/tags/autocomplete?q=${encodeURIComponent(query)}&site=${encodeURIComponent(site)}`;
-  const res = await dedupedFetch(url, () => fetch(url, {
+  const res = await dedupedFetch(url, () => fetchWithTimeout(url, {
     headers: getAuthHeaders()
   }));
   return readJsonOrThrow(res);
 }
 
 export async function fetchFavorites() {
-  const res = await fetch('/api/favorites', {
+  const res = await fetchWithTimeout('/api/favorites', {
     headers: getAuthHeaders()
   });
   return readJsonOrThrow(res);
@@ -353,7 +375,7 @@ function cleanPostPayload(post, desiredState = null) {
 }
 
 export async function toggleFavoritePost(post, desiredState = null) {
-  const res = await fetch('/api/favorites', {
+  const res = await fetchWithTimeout('/api/favorites', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify(cleanPostPayload(post, desiredState))
@@ -362,7 +384,7 @@ export async function toggleFavoritePost(post, desiredState = null) {
 }
 
 export async function deleteFavoritePost(id) {
-  const res = await fetch(`/api/favorites/${encodeURIComponent(id)}`, {
+  const res = await fetchWithTimeout(`/api/favorites/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     headers: getAuthHeaders()
   });
@@ -370,7 +392,7 @@ export async function deleteFavoritePost(id) {
 }
 
 export async function syncFavorites(favorites) {
-  const res = await fetch('/api/favorites/sync', {
+  const res = await fetchWithTimeout('/api/favorites/sync', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify({ favorites: Array.isArray(favorites) ? favorites.map(f => cleanPostPayload(f)) : [] })
@@ -379,14 +401,14 @@ export async function syncFavorites(favorites) {
 }
 
 export async function fetchLikes() {
-  const res = await fetch('/api/likes', {
+  const res = await fetchWithTimeout('/api/likes', {
     headers: getAuthHeaders()
   });
   return readJsonOrThrow(res);
 }
 
 export async function toggleLikePost(post, desiredState = null) {
-  const res = await fetch('/api/like', {
+  const res = await fetchWithTimeout('/api/like', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify(cleanPostPayload(post, desiredState))
@@ -395,7 +417,7 @@ export async function toggleLikePost(post, desiredState = null) {
 }
 
 export async function syncLikes(likes) {
-  const res = await fetch('/api/likes/sync', {
+  const res = await fetchWithTimeout('/api/likes/sync', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify({ likes: Array.isArray(likes) ? likes.map(l => cleanPostPayload(l)) : [] })
@@ -404,14 +426,14 @@ export async function syncLikes(likes) {
 }
 
 export async function fetchDislikes() {
-  const res = await fetch('/api/dislikes', {
+  const res = await fetchWithTimeout('/api/dislikes', {
     headers: getAuthHeaders()
   });
   return readJsonOrThrow(res);
 }
 
 export async function toggleDislikeApi(post, desiredState = null) {
-  const res = await fetch('/api/dislike', {
+  const res = await fetchWithTimeout('/api/dislike', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify(cleanPostPayload(post, desiredState))
@@ -420,7 +442,7 @@ export async function toggleDislikeApi(post, desiredState = null) {
 }
 
 export async function clearDislikesApi() {
-  const res = await fetch('/api/dislikes/clear', {
+  const res = await fetchWithTimeout('/api/dislikes/clear', {
     method: 'POST',
     headers: getAuthHeaders(true)
   });
@@ -428,7 +450,7 @@ export async function clearDislikesApi() {
 }
 
 export async function syncDislikes(dislikes) {
-  const res = await fetch('/api/dislikes/sync', {
+  const res = await fetchWithTimeout('/api/dislikes/sync', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify({ dislikes })
@@ -437,14 +459,14 @@ export async function syncDislikes(dislikes) {
 }
 
 export async function fetchFavoriteAuthors() {
-  const res = await fetch('/api/favorite-authors', {
+  const res = await fetchWithTimeout('/api/favorite-authors', {
     headers: getAuthHeaders()
   });
   return readJsonOrThrow(res);
 }
 
 export async function toggleFavoriteAuthor(authorData) {
-  const res = await fetch('/api/favorite-authors', {
+  const res = await fetchWithTimeout('/api/favorite-authors', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify(authorData)
@@ -453,7 +475,7 @@ export async function toggleFavoriteAuthor(authorData) {
 }
 
 export async function deleteFavoriteAuthor(name) {
-  const res = await fetch(`/api/favorite-authors/${encodeURIComponent(name)}`, {
+  const res = await fetchWithTimeout(`/api/favorite-authors/${encodeURIComponent(name)}`, {
     method: 'DELETE',
     headers: getAuthHeaders()
   });
@@ -462,7 +484,7 @@ export async function deleteFavoriteAuthor(name) {
 
 export async function updateFavoriteAuthorPreview(name, previewUrl, site = 'danbooru', extra = {}) {
   try {
-    const res = await fetch('/api/favorite-authors/preview', {
+    const res = await fetchWithTimeout('/api/favorite-authors/preview', {
       method: 'POST',
       headers: getAuthHeaders(true),
       body: JSON.stringify({ name, previewUrl, site, ...extra })
@@ -479,7 +501,7 @@ export async function updateFavoriteAuthorPreview(name, previewUrl, site = 'danb
 }
 
 export async function syncFavoriteAuthors(authors) {
-  const res = await fetch('/api/favorite-authors/sync', {
+  const res = await fetchWithTimeout('/api/favorite-authors/sync', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify({ authors })
@@ -488,14 +510,14 @@ export async function syncFavoriteAuthors(authors) {
 }
 
 export async function fetchSettings() {
-  const res = await fetch('/api/settings', {
+  const res = await fetchWithTimeout('/api/settings', {
     headers: getAuthHeaders()
   });
   return readJsonOrThrow(res);
 }
 
 export async function saveSettings(settings) {
-  const res = await fetch('/api/settings', {
+  const res = await fetchWithTimeout('/api/settings', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify(settings)
@@ -511,7 +533,7 @@ export function getProxiedUrl(targetUrl) {
 }
 
 export async function fetchCacheInfo() {
-  const res = await fetch('/api/cache-info', {
+  const res = await fetchWithTimeout('/api/cache-info', {
     headers: getAuthHeaders()
   });
   if (!res.ok) return { diskCacheMB: '0.0', thumbsCount: 0, videosCount: 0, archivesCount: 0, ramCacheEntries: 0 };
@@ -519,7 +541,7 @@ export async function fetchCacheInfo() {
 }
 
 export async function clearCache() {
-  const res = await fetch('/api/cache-clear', {
+  const res = await fetchWithTimeout('/api/cache-clear', {
     method: 'POST',
     headers: getAuthHeaders(true)
   });
@@ -531,7 +553,7 @@ export async function clearCache() {
 }
 
 export async function testTelegramConnection(token, chatId) {
-  const res = await fetch('/api/backup/telegram/test', {
+  const res = await fetchWithTimeout('/api/backup/telegram/test', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify({ token, chatId })
@@ -540,7 +562,7 @@ export async function testTelegramConnection(token, chatId) {
 }
 
 export async function testSiteAuth(payload) {
-  const res = await fetch('/api/sites/auth-test', {
+  const res = await fetchWithTimeout('/api/sites/auth-test', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify(payload)
@@ -549,7 +571,7 @@ export async function testSiteAuth(payload) {
 }
 
 export async function testProxyConnection(site, proxyUrl) {
-  const res = await fetch('/api/proxy/test', {
+  const res = await fetchWithTimeout('/api/proxy/test', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify({ site, proxyUrl })
@@ -558,7 +580,7 @@ export async function testProxyConnection(site, proxyUrl) {
 }
 
 export async function sendTelegramBackupNow() {
-  const res = await fetch('/api/backup/telegram/send', {
+  const res = await fetchWithTimeout('/api/backup/telegram/send', {
     method: 'POST',
     headers: getAuthHeaders(true)
   });
@@ -566,7 +588,7 @@ export async function sendTelegramBackupNow() {
 }
 
 export async function fetchTelegramBackupStatus() {
-  const res = await fetch('/api/backup/telegram/status', {
+  const res = await fetchWithTimeout('/api/backup/telegram/status', {
     headers: getAuthHeaders()
   });
   if (!res.ok) return { enabled: false, lastBackupAt: null };
@@ -574,7 +596,7 @@ export async function fetchTelegramBackupStatus() {
 }
 
 export async function syncExternalAccounts(options = {}) {
-  const res = await fetch('/api/sync-external', {
+  const res = await fetchWithTimeout('/api/sync-external', {
     method: 'POST',
     headers: getAuthHeaders(true),
     body: JSON.stringify(options)
@@ -584,7 +606,7 @@ export async function syncExternalAccounts(options = {}) {
 
 export async function fetchAliasesInfo() {
   try {
-    const res = await fetch('/api/aliases/info', { headers: getAuthHeaders() });
+    const res = await fetchWithTimeout('/api/aliases/info', { headers: getAuthHeaders() });
     if (!res.ok) return { builtinCount: 0, discoveredCount: 0 };
     return await res.json();
   } catch {
@@ -594,7 +616,7 @@ export async function fetchAliasesInfo() {
 
 export async function fetchAliasesMap() {
   try {
-    const res = await fetch('/api/aliases/map', { headers: getAuthHeaders() });
+    const res = await fetchWithTimeout('/api/aliases/map', { headers: getAuthHeaders() });
     if (!res.ok) return {};
     return await res.json();
   } catch {
@@ -604,7 +626,7 @@ export async function fetchAliasesMap() {
 
 export async function clearDiscoveredAliasesApi() {
   try {
-    const res = await fetch('/api/aliases/clear-discovered', {
+    const res = await fetchWithTimeout('/api/aliases/clear-discovered', {
       method: 'POST',
       headers: getAuthHeaders(true)
     });
@@ -616,7 +638,7 @@ export async function clearDiscoveredAliasesApi() {
 
 export async function fetchDiscoveredAliasesList() {
   try {
-    const res = await fetch('/api/aliases/discovered', { headers: getAuthHeaders() });
+    const res = await fetchWithTimeout('/api/aliases/discovered', { headers: getAuthHeaders() });
     if (!res.ok) return { success: false, list: [] };
     return await res.json();
   } catch {
@@ -626,7 +648,7 @@ export async function fetchDiscoveredAliasesList() {
 
 export async function updateDiscoveredAliasApi(id, payload) {
   try {
-    const res = await fetch(`/api/aliases/discovered/${encodeURIComponent(id)}`, {
+    const res = await fetchWithTimeout(`/api/aliases/discovered/${encodeURIComponent(id)}`, {
       method: 'PUT',
       headers: getAuthHeaders(true),
       body: JSON.stringify(payload)
@@ -639,7 +661,7 @@ export async function updateDiscoveredAliasApi(id, payload) {
 
 export async function deleteDiscoveredAliasApi(id) {
   try {
-    const res = await fetch(`/api/aliases/discovered/${encodeURIComponent(id)}`, {
+    const res = await fetchWithTimeout(`/api/aliases/discovered/${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: getAuthHeaders(true)
     });
