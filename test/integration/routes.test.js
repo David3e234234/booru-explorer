@@ -399,6 +399,87 @@ describe('Express API Integration & Route Tests', () => {
       assert.strictEqual(data.success, false);
     });
 
+    it('POST /api/favorite-authors/sync rejects oversized batches with 400', async () => {
+      // This route was the only sync endpoint without a length check, so an
+      // oversized author list could be merged straight into storage.
+      const oversized = new Array(5001).fill(null).map((_, i) => ({ name: `artist_${i}` }));
+      const syncRes = await fetch(`${baseUrl}/api/favorite-authors/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ authors: oversized })
+      });
+      assert.strictEqual(syncRes.status, 400);
+      const data = await syncRes.json();
+      assert.strictEqual(data.success, false);
+    });
+
+    it('stores a liked post without the similar-posts pool or unknown fields', async () => {
+      // A like made in the viewer used to carry the whole similar-posts pool,
+      // up to ~300 KB in a single record.
+      const pool = Array.from({ length: 60 }, (_, i) => ({ post: { id: `sim_${i}`, tags: ['x'] }, score: 1 }));
+      const leakyPost = {
+        id: 'danbooru_pool_1',
+        site: 'danbooru',
+        author: 'some_artist',
+        tags: ['1girl'],
+        tagDetails: { artist: ['some_artist'] },
+        previewUrl: 'https://example.com/p.jpg',
+        fileUrl: 'https://example.com/f.jpg',
+        _similarPosts: pool,
+        _similarSession: { pool },
+        someUnmappedFutureField: 'x',
+        desiredState: true
+      };
+
+      const likeRes = await fetch(`${baseUrl}/api/like`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify(leakyPost)
+      });
+      assert.strictEqual(likeRes.status, 200);
+
+      const getRes = await fetch(`${baseUrl}/api/likes`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      const getData = await getRes.json();
+      const saved = getData.likes.find(l => l.id === leakyPost.id);
+      assert.ok(saved);
+      assert.equal(saved._similarPosts, undefined);
+      assert.equal(saved._similarSession, undefined);
+      assert.equal(saved.someUnmappedFutureField, undefined);
+      assert.equal(saved.desiredState, undefined);
+      assert.deepStrictEqual(saved.tags, ['1girl']);
+      assert.deepStrictEqual(saved.tagDetails, { artist: ['some_artist'] });
+
+      await fetch(`${baseUrl}/api/likes`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+    });
+
+    it('stores a collection gzipped on disk', async () => {
+      await fetch(`${baseUrl}/api/like`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ id: 'danbooru_gzip_1', site: 'danbooru', tags: ['a'] })
+      });
+      await flushPendingWrites();
+
+      const usersIndex = JSON.parse(await fs.readFile(path.join(testDataDir, 'users.json'), 'utf8'));
+      const currentUser = usersIndex.find(u => u.username === testUsername);
+      assert.ok(currentUser, 'registered test user must exist');
+      const likesPath = path.join(testDataDir, 'users', currentUser.id, 'likes.json');
+      const raw = await fs.readFile(likesPath);
+      assert.equal(raw[0], 0x1f, 'likes.json must start with the gzip magic byte');
+      assert.equal(raw[1], 0x8b);
+    });
+
     it('Favorite Authors: add, preview update, and delete', async () => {
       const addRes = await fetch(`${baseUrl}/api/favorite-authors`, {
         method: 'POST',

@@ -1,10 +1,11 @@
 import path from 'path';
+import fs from 'fs';
 import crypto from 'crypto';
-import { 
-  DEFAULT_SETTINGS, 
-  SETTINGS_FILE, 
-  FAVORITES_FILE, 
-  FAVORITE_AUTHORS_FILE, 
+import {
+  DEFAULT_SETTINGS,
+  SETTINGS_FILE,
+  FAVORITES_FILE,
+  FAVORITE_AUTHORS_FILE,
   LIKES_FILE,
   DISLIKES_FILE,
   AUTHOR_FEED_STATE_FILE,
@@ -15,16 +16,20 @@ import {
 import { logInfo, logError } from '../utils/logger.js';
 import { fetchSafe, discardResponse } from '../utils/network.js';
 import { resolveSiteSession } from './siteSessionService.js';
-import { getUserDataDir } from './userService.js';
+import { getUserDataDir, USERS_DIR } from './userService.js';
+import { compactStoredPost } from './storedPostSchema.js';
 import {
   readJsonFile,
   writeJsonFile,
   writeJsonFileAsync,
   flushPendingWrites,
-  flushPendingWritesSync
+  flushPendingWritesSync,
+  isCompressedJsonFile
 } from './jsonFileStore.js';
 
 export { readJsonFile, writeJsonFile, writeJsonFileAsync, flushPendingWrites, flushPendingWritesSync };
+
+const COLLECTION_FILENAMES = ['likes.json', 'favorites.json', 'dislikes.json', 'favorite_authors.json'];
 
 function getUserFilePath(userId, defaultFile, filename) {
   if (!userId) return defaultFile;
@@ -121,6 +126,58 @@ export function getDislikes(userId = null) {
 export function saveDislikes(dislikes, userId = null) {
   const filePath = getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json');
   writeJsonFileAsync(filePath, dislikes);
+}
+
+// Rewrite collections that predate the compact schema: strip internal viewer
+// state and alias URL tiers, then store gzipped. A file already in the compact
+// form is detected and skipped, so this is cheap to call on every boot.
+export async function compactStoredCollections() {
+  const targets = [];
+
+  const addTargets = (filePrefix, userId) => {
+    for (const filename of COLLECTION_FILENAMES) {
+      targets.push(userId ? path.join(filePrefix, userId, filename) : path.join(filePrefix, filename));
+    }
+  };
+
+  addTargets(DATA_DIR, null);
+  try {
+    for (const entry of fs.readdirSync(USERS_DIR, { withFileTypes: true })) {
+      if (entry.isDirectory()) addTargets(USERS_DIR, entry.name);
+    }
+  } catch (err) {
+    logError('Storage', 'Не удалось прочитать каталог пользователей при компактизации', err);
+  }
+
+  let compacted = 0;
+  let beforeTotal = 0;
+  let afterTotal = 0;
+
+  for (const filePath of targets) {
+    try {
+      if (!fs.existsSync(filePath)) continue;
+      const records = readJsonFile(filePath, []);
+      if (!Array.isArray(records) || records.length === 0) continue;
+
+      const compactedRecords = records.map((record) => compactStoredPost(record));
+      if (JSON.stringify(compactedRecords) === JSON.stringify(records) && isCompressedJsonFile(filePath)) continue;
+
+      const before = Buffer.byteLength(JSON.stringify(records, null, 2));
+      await writeJsonFile(filePath, compactedRecords);
+      const after = fs.statSync(filePath).size;
+
+      beforeTotal += before;
+      afterTotal += after;
+      compacted += 1;
+    } catch (err) {
+      logError('Storage', `Не удалось компактизировать ${filePath}`, err);
+    }
+  }
+
+  if (compacted > 0) {
+    logInfo('Storage', `Коллекции приведены к компактной схеме: файлов ${compacted}, ${(beforeTotal / 1024).toFixed(0)} КБ -> ${(afterTotal / 1024).toFixed(0)} КБ`);
+  }
+  return { compacted };
 }
 
 export function clearDislikes(userId = null) {

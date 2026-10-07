@@ -363,14 +363,18 @@ export async function fetchFavorites() {
   return readJsonOrThrow(res);
 }
 
+// Strip internal viewer state before a post leaves the browser. The server
+// applies the same allowlist, but doing it here keeps a payload carrying a
+// similar-posts pool (up to ~120 posts) off the wire, and every such field
+// would otherwise count against the express.json body limit.
 function cleanPostPayload(post, desiredState = null) {
   if (!post || typeof post !== 'object') return { id: post, desiredState };
-  const clean = { ...post };
-  delete clean._similarSession;
-  delete clean._archivePromise;
-  delete clean._archiveUnpacked;
-  delete clean._unpackedZips;
-  delete clean.albumItems;
+  const clean = {};
+  for (const [key, value] of Object.entries(post)) {
+    if (key.startsWith('_')) continue;
+    if (key === 'albumItems' || key === 'allSeriesKeys' || key === 'desiredState') continue;
+    clean[key] = value;
+  }
   return { ...clean, desiredState };
 }
 

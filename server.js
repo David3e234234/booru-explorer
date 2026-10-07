@@ -22,8 +22,25 @@ import userRoutes, { stopActiveTunnel } from './src/routes/user.routes.js';
 import authRoutes from './src/routes/auth.routes.js';
 import archiveRoutes from './src/routes/archive.routes.js';
 import { initBackupScheduler } from './src/services/backupService.js';
-import { flushPendingWrites, flushPendingWritesSync } from './src/services/storageService.js';
+import { flushPendingWrites, flushPendingWritesSync, compactStoredCollections } from './src/services/storageService.js';
+import { cleanupStaleUserArtifacts } from './src/services/userService.js';
 import { setRuntimePort } from './src/utils/runtimeState.js';
+
+// Rewrite collections written before the compact gzipped schema, then drop the
+// artifacts nothing prunes (throwaway test accounts, quarantined corrupt-file
+// copies). Failures here must never keep the server from starting.
+async function runStartupMaintenance() {
+  try {
+    cleanupStaleUserArtifacts();
+  } catch (err) {
+    console.error('[Startup] Не удалось очистить устаревшие артефакты:', err.message);
+  }
+  try {
+    await compactStoredCollections();
+  } catch (err) {
+    console.error('[Startup] Не удалось компактизировать коллекции:', err.message);
+  }
+}
 
 // Force IPv4 first for reliable network requests to overseas Booru sites
 if (dns.setDefaultResultOrder) {
@@ -247,6 +264,7 @@ const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === path.
 if (!isServerless && process.env.NODE_ENV !== 'test' && isMainModule) {
   await ensureClientBundle();
   initBackupScheduler();
+  await runStartupMaintenance();
   startServer(Number(PORT));
 }
 

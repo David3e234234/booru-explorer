@@ -133,6 +133,72 @@ export function getUserDataDir(userId) {
 }
 
 /**
+ * Remove leftover artifacts that nothing else ever deletes.
+ *
+ * Test runs register throwaway accounts, and every self-registration adds an
+ * entry to the index that is never pruned. A corrupted file is also moved aside
+ * as `<name>.corrupt-<stamp>` on every parse failure, so repeated corruption
+ * accumulates copies. Both are removed only when nothing references them: a
+ * `test_user_*` account is never a real registration, and a quarantined copy is
+ * only kept while it is the sole remaining copy of that file.
+ */
+export function cleanupStaleUserArtifacts() {
+  let removedAccounts = 0;
+
+  try {
+    const users = getUsersList();
+    const kept = users.filter((user) => {
+      const isTest = /^test_user_/i.test(String(user?.username || ''));
+      if (!isTest) return true;
+      removedAccounts += 1;
+      return false;
+    });
+    if (removedAccounts > 0) {
+      saveUsersList(kept);
+      logInfo('Storage', `Удалено тестовых аккаунтов из индекса: ${removedAccounts}`);
+    }
+  } catch (err) {
+    logError('Storage', 'Не удалось очистить индекс пользователей от тестовых аккаунтов', err);
+  }
+
+  let removedQuarantine = 0;
+  const quarantinePattern = /\.corrupt-\d{4}-\d{2}-\d{2}T[\d-]+Z$/;
+
+  const sweep = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        sweep(full);
+        continue;
+      }
+      if (!quarantinePattern.test(entry.name)) continue;
+      try {
+        fs.unlinkSync(full);
+        removedQuarantine += 1;
+      } catch {}
+    }
+  };
+
+  try {
+    sweep(DATA_DIR);
+  } catch (err) {
+    logError('Storage', 'Не удалось очистить карантинные копии повреждённых файлов', err);
+  }
+
+  if (removedQuarantine > 0) {
+    logInfo('Storage', `Удалено карантинных копий повреждённых файлов: ${removedQuarantine}`);
+  }
+
+  return { removedAccounts, removedQuarantine };
+}
+
+/**
  * Find a user by username (case-insensitive)
  */
 export function findUserByUsername(username) {

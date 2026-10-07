@@ -95,7 +95,8 @@ scratch/                       tracked manual diagnostics, not part of npm test
 
 Large files must be split by responsibility when touched. Preferred existing boundaries:
 
-- `jsonFileStore.js`: atomic serialized JSON writes
+- `jsonFileStore.js`: atomic serialized JSON writes, compact serialization, gzip for collections
+- `storedPostSchema.js`: allowlist of fields persisted with a liked/favorited post
 - `settingsValidation.js`: request auth parsing, settings allowlists, cache key
 - `hostPolicy.js`: hostname boundaries, credential hosts, log redaction
 - `imageCacheService.js`: image signatures and disk cache
@@ -211,7 +212,13 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - All persistence is JSON under `DATA_DIR` through `jsonFileStore.js`.
 - Writes are atomic, serialized per file, revision-aware and flushed on shutdown.
 - Never call `fs.writeFile` directly for user data.
-- Stored posts pass through `sanitizeStoredPost()`; keep heavy fields such as album items and unpacked state out of persisted payloads.
+- Serialization is compact (no indentation) everywhere. Collections (`likes`, `favorites`, `dislikes`, `favorite_authors`) are additionally gzip-compressed, chosen by basename; settings and `users.json` stay readable JSON because they get hand-edited.
+- `readJsonFile` detects gzip by magic bytes, not by file name. A collection written before compression must keep reading, so never gate decompression on the extension or an existing `.gz` sibling.
+- Stored posts pass through `sanitizeStoredPost()` in `storedPostSchema.js`. It is an **allowlist**, not a denylist: any field added to a post later stays out of storage by default. When a renderer starts reading a new post field, add it to `STORED_POST_FIELDS` explicitly or it will be missing from every stored collection.
+- `cleanPostPayload()` in `public/js/api.js` strips the same internal fields client-side. Keep it aligned with the server allowlist: a payload carrying a similar-posts pool (up to ~120 posts) counts against the `express.json` body limit.
+- **Collections are never trimmed.** Every like, favorite and disliked post the user made stays forever; likes feed recommendations through `likedAt`. Growth is bounded per record instead: measured 3496 B/like before, 372 B after. Do not add a cap, a TTL or oldest-first eviction to `saveLikes`/`saveFavorites`/`saveDislikes` — that would silently delete user data.
+- Redundant URL tiers are elided only when provably identical: `thumbOriginal` is dropped when byte-equal to `fileUrl`, `thumbSample` only when equal to `sampleUrl` *and* `thumb720` exists. Never elide a tier that differs, and never drop `thumbSample` when it is the only card preview available.
+- `compactStoredCollections()` in `storageService.js` migrates pre-existing collections on boot and is idempotent (a file already compact and gzipped is skipped). `cleanupStaleUserArtifacts()` in `userService.js` removes throwaway `test_user_*` accounts from the index and `.corrupt-<stamp>` quarantine copies that nothing else prunes. Both run from `runStartupMaintenance()` in `server.js` and must never block startup.
 - Secret settings are listed in `SECRET_SETTING_FIELDS`, which now includes proxy URLs and the Kemono and Pawchive session tokens. Do not return those fields to anonymous clients or include them in backups.
 - The client keeps a duplicate `SECRET_SETTING_FIELDS` in `public/js/state.js`. Every new credential must be added to both lists, otherwise it survives a client export or is never sent in `x-booru-auth`.
 
@@ -229,7 +236,10 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 ### Backup
 
 - Telegram backup is a JSON document, not a ZIP of `data/`.
+- The document is serialized compactly, never pretty-printed: it is machine-restored, and indentation costs roughly a quarter of the payload for nothing.
 - Credentials, proxies, session tokens and archive passwords are stripped before sending.
+- Backups call `sanitizeStoredPost(post, { rawCompact: true })`: internal viewer state never leaves the server, but every stored field is kept so a restore is complete. `rawCompact` also disables the redundant URL tier elision, which would otherwise make an exported record depend on a reconstruction step.
+- A document above 45 MB is rejected with a named cause before the Telegram call. Telegram's own 50 MB cap answers with an opaque error, and the scheduled backup would otherwise fail silently every run.
 - The scheduler is single-flight per user and cannot overlap runs.
 
 ## 7. Frontend Architecture

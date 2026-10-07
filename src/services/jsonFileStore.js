@@ -1,12 +1,26 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import zlib from 'zlib';
 import { logError } from '../utils/logger.js';
 
 const pendingWrites = new Map();
 const pendingData = new Map();
 const revisions = new Map();
 const writeQueues = new Map();
+
+// Collections hold one full post copy per entry and are never trimmed, so their
+// size is dominated by repeated field names and long tag strings. gzip collapses
+// both: a measured likes.json went from 1895 KB pretty-printed to 182 KB, and a
+// record from 3496 to 372 bytes. Settings and the user index stay plain JSON
+// because they are small and get edited by hand.
+const COMPRESSED_BASENAMES = new Set([
+  'likes.json', 'favorites.json', 'dislikes.json', 'favorite_authors.json'
+]);
+
+function isCompressedPath(filePath) {
+  return COMPRESSED_BASENAMES.has(path.basename(filePath));
+}
 
 function cloneData(value) {
   if (value === null || typeof value !== 'object') return value;
@@ -44,12 +58,22 @@ function stageWrite(filePath, data) {
   return revision;
 }
 
-async function writeFileAtomic(filePath, content) {
+// Serialize for disk: compact always, gzipped for collections. The payload is
+// returned as a Buffer so the caller does not have to know about encoding.
+function serializeForDisk(filePath, data) {
+  const json = JSON.stringify(data);
+  if (isCompressedPath(filePath)) {
+    return zlib.gzipSync(json, { level: zlib.constants.Z_DEFAULT_COMPRESSION });
+  }
+  return Buffer.from(json, 'utf8');
+}
+
+async function writeFileAtomic(filePath, buffer) {
   const dir = path.dirname(filePath);
   await fs.promises.mkdir(dir, { recursive: true });
   const tmpPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
   try {
-    await fs.promises.writeFile(tmpPath, content, 'utf8');
+    await fs.promises.writeFile(tmpPath, buffer);
     await fs.promises.rename(tmpPath, filePath);
   } catch (err) {
     await fs.promises.unlink(tmpPath).catch(() => {});
@@ -57,11 +81,11 @@ async function writeFileAtomic(filePath, content) {
   }
 }
 
-function writeFileAtomicSync(filePath, content) {
+function writeFileAtomicSync(filePath, buffer) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const tmpPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
   try {
-    fs.writeFileSync(tmpPath, content, 'utf8');
+    fs.writeFileSync(tmpPath, buffer);
     fs.renameSync(tmpPath, filePath);
   } catch (err) {
     try { fs.unlinkSync(tmpPath); } catch {}
@@ -77,7 +101,7 @@ function enqueueWrite(filePath, revision) {
       if (revision !== revisions.get(filePath)) return true;
       const data = pendingData.get(filePath);
       if (data === undefined) return true;
-      const content = JSON.stringify(data, null, 2);
+      const content = serializeForDisk(filePath, data);
       await writeFileAtomic(filePath, content);
       if (revision === revisions.get(filePath)) {
         pendingData.delete(filePath);
@@ -98,15 +122,37 @@ function enqueueWrite(filePath, revision) {
   return tracked;
 }
 
+// Detect gzip by its magic bytes instead of the file name: a collection written
+// before this change is plain JSON on disk and must keep reading.
+function isGzipBuffer(buffer) {
+  return buffer.length > 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+}
+
+function decodeJsonBuffer(buffer) {
+  const text = isGzipBuffer(buffer) ? zlib.gunzipSync(buffer).toString('utf8') : buffer.toString('utf8');
+  return JSON.parse(text);
+}
+
+// Lets the boot-time migration skip files that are already compact, so a
+// migration does not re-read and re-write every collection on every start.
+export function isCompressedJsonFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return false;
+    return isGzipBuffer(fs.readFileSync(filePath));
+  } catch {
+    return false;
+  }
+}
+
 export function readJsonFile(filePath, defaultData) {
   if (pendingData.has(filePath)) {
     return cloneData(pendingData.get(filePath));
   }
   try {
     if (fs.existsSync(filePath)) {
-      const content = fs.readFileSync(filePath, 'utf8');
+      const buffer = fs.readFileSync(filePath);
       try {
-        return JSON.parse(content);
+        return decodeJsonBuffer(buffer);
       } catch (parseErr) {
         quarantineCorruptFile(filePath, parseErr);
         return cloneData(defaultData);
@@ -139,7 +185,7 @@ export function flushPendingWritesSync() {
   let ok = true;
   for (const [filePath, data] of pendingData.entries()) {
     try {
-      writeFileAtomicSync(filePath, JSON.stringify(data, null, 2));
+      writeFileAtomicSync(filePath, serializeForDisk(filePath, data));
     } catch (err) {
       ok = false;
       logError('Storage', `Не удалось сбросить отложенную запись ${filePath}`, err);

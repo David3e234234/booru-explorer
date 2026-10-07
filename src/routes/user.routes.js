@@ -31,6 +31,7 @@ import { getLocalIpAddress } from '../utils/network.js';
 import { logInfo, logError } from '../utils/logger.js';
 import { authMiddleware, requireAuth, requireOwner } from '../services/userService.js';
 import { testTelegramBot, performTelegramBackup } from '../services/backupService.js';
+import { sanitizeStoredPost } from '../services/storedPostSchema.js';
 import { sanitizeSettingsPatch, parseRequestAuth, resolveRequestSettings } from '../utils/settingsValidation.js';
 
 const router = express.Router();
@@ -39,20 +40,6 @@ const router = express.Router();
 // lets anonymous callers through - a logged-out client keeps its data in the
 // browser. Routes that must not be reachable anonymously add requireAuth below.
 router.use(authMiddleware);
-
-// Store the minimum: album items are full post copies (huge JSON bloat),
-// and duplicate series keys are recomputed at render time
-function sanitizeStoredPost(post) {
-  if (!post || typeof post !== 'object') return post;
-  const clean = { ...post };
-  delete clean.albumItems;
-  delete clean.allSeriesKeys;
-  delete clean._archiveUnpacked;
-  delete clean._archivePromise;
-  delete clean._unpackedZips;
-  delete clean.desiredState;
-  return clean;
-}
 
 // GET /api/settings
 router.get('/settings', (req, res) => {
@@ -214,6 +201,9 @@ router.post('/favorite-authors/sync', (req, res) => {
   const { authors } = req.body || {};
   if (!Array.isArray(authors)) {
     return res.status(400).json({ success: false, message: 'Ожидается массив авторов' });
+  }
+  if (authors.length > MAX_SYNC_BATCH) {
+    return res.status(400).json({ success: false, message: `Ожидается массив авторов (макс. ${MAX_SYNC_BATCH})` });
   }
   const userId = req.user?.id || null;
   const current = getFavoriteAuthors(userId);

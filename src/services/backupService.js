@@ -1,16 +1,21 @@
-import { 
-  getSettings, 
-  updateSettings, 
-  getFavorites, 
-  getLikes, 
-  getDislikes, 
+import {
+  getSettings,
+  updateSettings,
+  getFavorites,
+  getLikes,
+  getDislikes,
   getFavoriteAuthors,
   stripSecretSettings
 } from './storageService.js';
 import { getUsersList, exportAccountRecord } from './userService.js';
+import { sanitizeStoredPost } from './storedPostSchema.js';
 import { logInfo, logError, logWarn } from '../utils/logger.js';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
+
+// Telegram rejects sendDocument above 50 MB with an opaque error. Checking here
+// turns a silent recurring backup failure into a message that names the cause.
+const TELEGRAM_MAX_DOCUMENT_BYTES = 45 * 1024 * 1024;
 
 // An account export carries passwordHash + salt so the login can be recreated on
 // another machine. A backup goes to a third-party chat instead, so the password
@@ -22,9 +27,14 @@ function stripAccountSecrets(account) {
   return safe;
 }
 
+// A backup is meant to be restorable on its own, so it keeps every stored field
+// (rawCompact) and only drops credentials. Archive passwords are stripped from
+// the post body and from each inspected link, because the document lands in a
+// third-party chat.
 function stripBackupPost(post) {
-  if (!post || typeof post !== 'object') return post;
-  const clean = { ...post };
+  const base = sanitizeStoredPost(post, { rawCompact: true });
+  if (!base || typeof base !== 'object' || Array.isArray(base)) return base;
+  const clean = { ...base };
   delete clean.password;
   delete clean.archivePassword;
   if (Array.isArray(clean.inspectedLinks)) {
@@ -216,9 +226,18 @@ async function performTelegramBackupInternal(userId, isManual) {
     throw new Error('Настройки Telegram-бота (Token / Chat ID) не заполнены');
   }
 
+  // Compact, not pretty-printed: a backup is machine-restored, and indentation
+  // costs roughly a quarter of the document for no benefit.
   const payload = buildBackupPayload(userId);
-  const jsonContent = JSON.stringify(payload, null, 2);
-  const buffer = Buffer.from(jsonContent, 'utf-8');
+  const buffer = Buffer.from(JSON.stringify(payload), 'utf-8');
+
+  if (buffer.length > TELEGRAM_MAX_DOCUMENT_BYTES) {
+    const mb = (buffer.length / (1024 * 1024)).toFixed(1);
+    const message = `Бэкап не отправлен: документ ${mb} МБ превышает лимит Telegram (50 МБ). ` +
+      'Сократите число лайков или отключите автоматический бэкап.';
+    logError('Backup', message);
+    throw new Error(message);
+  }
 
   const now = new Date();
   const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
