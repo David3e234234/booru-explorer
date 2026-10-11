@@ -1,7 +1,12 @@
-// Feed slide virtualization: at most a few slides exist in the DOM at any
-// moment (the active one and its neighbours). Far slides are recycled so a
-// long session stays bounded in memory. Each slide is one screen tall and the
-// track scroll-snaps between them.
+// Feed slide track: every list index keeps a lightweight shell (one screen
+// tall, snap-aligned) for the whole session, so the scroll geometry is always
+// exactly listLength screens and scrollTop = index * slideHeight holds for any
+// position. Only a small window around the active slide carries content;
+// leaving the window depopulates the shell (video and zoom disposed, DOM
+// cleared) without changing layout. Earlier revisions removed far slides from
+// the DOM entirely, which collapsed the scrollable range: past the fourth post
+// the track ran out of scroll and froze, and opening at a deep index clamped
+// to the wrong post.
 import { t } from '../i18n.js';
 import { state } from '../state.js';
 import { fetchAlbumPosts, getProxiedUrl } from '../api.js';
@@ -9,18 +14,18 @@ import { escapeHtml } from '../modules/uiUtils.js';
 import { getMediaItemUrl, preloadSingleUrl } from '../viewer/viewerAlbum.js';
 import { createFeedVideoPlayer } from './video.js';
 
-const WINDOW = 2;          // active +- this many slides stay mounted
-const LOOKAHEAD_MOUNT = 1; // mounts kept on each side of the active slide
+const POPULATE_RADIUS = 1;    // content mounted this far around the active slide
+const DEPOPULATE_RADIUS = 2;  // content outside this distance is disposed
+const DEPOPULATE_DELAY_MS = 300;
 
-let slideNodes = [];        // HTMLElement or null, index = list index
+let slideNodes = [];   // shell elements for every index (kept for the session)
 let activeIdx = -1;
-let viewport = null;        // feed-track scroll container
-let slidesContainer = null; // inner container holding the slides
+let viewport = null;   // feed-track scroll container
+let slidesContainer = null;
 let postList = [];
 let renderCallbacks = null;
-
-let cleanupQueue = [];
-let cleanupTimer = null;
+let depopulateQueue = new Set();
+let depopulateTimer = null;
 
 export function initSlides({ trackEl, hooks }) {
   viewport = trackEl;
@@ -32,70 +37,63 @@ export function initSlides({ trackEl, hooks }) {
   renderCallbacks = hooks || {};
 }
 
-function disposeSlides() {
-  slideNodes.forEach((node) => {
-    if (!node) return;
-    if (renderCallbacks.onSlideDispose) renderCallbacks.onSlideDispose(node);
-    node.remove();
-  });
-  slideNodes = [];
-  activeIdx = -1;
+function createShell(i) {
+  const node = document.createElement('div');
+  node.className = 'feed-slide';
+  node.dataset.index = String(i);
+  node._populated = false;
+  slidesContainer.appendChild(node);
+  slideNodes[i] = node;
+  return node;
 }
 
-function flushCleanupQueue() {
-  if (cleanupTimer) { clearTimeout(cleanupTimer); cleanupTimer = null; }
-  const removed = cleanupQueue;
-  cleanupQueue = [];
-  removed.forEach((node) => {
-    if (renderCallbacks.onSlideDispose) renderCallbacks.onSlideDispose(node);
-    node.remove();
-  });
+function populateSlide(i) {
+  const node = slideNodes[i];
+  if (!node || node._populated) return node || null;
+  if (i < 0 || i >= postList.length) return null;
+  node._populated = true;
+  renderCallbacks.renderSlide(node, i);
+  return node;
 }
 
-function scheduleCleanup() {
-  if (cleanupTimer) return;
-  cleanupTimer = setTimeout(() => {
-    cleanupTimer = null;
-    const removed = cleanupQueue;
-    cleanupQueue = [];
-    removed.forEach((node) => {
-      if (renderCallbacks.onSlideDispose) renderCallbacks.onSlideDispose(node);
-      node.remove();
+function depopulateSlide(i) {
+  const node = slideNodes[i];
+  if (!node || !node._populated) return;
+  node._populated = false;
+  if (renderCallbacks.onSlideDispose) renderCallbacks.onSlideDispose(node);
+  node.innerHTML = '';
+  node._feedVideo = null;
+  node._feedCarousel = null;
+  node._feedImg = null;
+  node._feedNoMedia = false;
+}
+
+function flushDepopulateQueue() {
+  if (depopulateTimer) { clearTimeout(depopulateTimer); depopulateTimer = null; }
+  const candidates = [...depopulateQueue];
+  depopulateQueue.clear();
+  candidates.forEach((i) => depopulateSlide(i));
+}
+
+function scheduleDepopulate() {
+  if (depopulateTimer) return;
+  depopulateTimer = setTimeout(() => {
+    depopulateTimer = null;
+    const candidates = [...depopulateQueue];
+    depopulateQueue.clear();
+    candidates.forEach((i) => {
+      if (Math.abs(i - activeIdx) > DEPOPULATE_RADIUS) depopulateSlide(i);
     });
-  }, 300);
+  }, DEPOPULATE_DELAY_MS);
 }
 
 function recycleFarSlides(center) {
   for (let i = 0; i < slideNodes.length; i++) {
     const node = slideNodes[i];
-    if (!node) continue;
-    if (Math.abs(i - center) > WINDOW) {
-      slideNodes[i] = null;
-      cleanupQueue.push(node);
-    }
+    if (!node || !node._populated) continue;
+    if (Math.abs(i - center) > DEPOPULATE_RADIUS) depopulateQueue.add(i);
   }
-  if (cleanupQueue.length > 0) scheduleCleanup();
-}
-
-function ensureSlide(i) {
-  if (slideNodes[i]) return slideNodes[i];
-  if (i < 0 || i >= postList.length) return null;
-  const node = document.createElement('div');
-  node.className = 'feed-slide';
-  node.dataset.index = String(i);
-  slideNodes[i] = node;
-
-  // Keep slides in list order inside the container.
-  let before = null;
-  for (let j = i + 1; j < slideNodes.length; j++) {
-    if (slideNodes[j]) { before = slideNodes[j]; break; }
-  }
-  if (before) slidesContainer.insertBefore(node, before);
-  else slidesContainer.appendChild(node);
-
-  if (i === activeIdx) node.classList.add('is-active');
-  renderCallbacks.renderSlide(node, i);
-  return node;
+  if (depopulateQueue.size > 0) scheduleDepopulate();
 }
 
 function markActive(i) {
@@ -103,8 +101,7 @@ function markActive(i) {
   const prev = activeIdx >= 0 ? slideNodes[activeIdx] : null;
   activeIdx = i;
   if (prev) prev.classList.remove('is-active');
-  let cur = slideNodes[i];
-  if (!cur) cur = ensureSlide(i);
+  const cur = populateSlide(i);
   if (cur) cur.classList.add('is-active');
   if (renderCallbacks.onActiveChange) renderCallbacks.onActiveChange(i, prev);
 }
@@ -129,11 +126,13 @@ export function getActiveMediaItem(post) {
  * Rebuilds the feed for a new post list, opening at `startIndex`.
  */
 export function rebuildFeed(list, startIndex) {
-  flushCleanupQueue();
-  disposeSlides();
+  flushDepopulateQueue();
+  for (let i = 0; i < slideNodes.length; i++) depopulateSlide(i);
   slidesContainer.innerHTML = '';
+  slideNodes = [];
   postList = Array.isArray(list) ? list : [];
-  slideNodes = new Array(postList.length).fill(null);
+  activeIdx = -1;
+  for (let i = 0; i < postList.length; i++) createShell(i);
 
   if (postList.length === 0) {
     if (renderCallbacks.onEmpty) renderCallbacks.onEmpty();
@@ -141,8 +140,8 @@ export function rebuildFeed(list, startIndex) {
   }
 
   const first = Math.max(0, Math.min(startIndex, postList.length - 1));
-  for (let i = Math.max(0, first - LOOKAHEAD_MOUNT); i <= Math.min(postList.length - 1, first + LOOKAHEAD_MOUNT); i++) {
-    ensureSlide(i);
+  for (let i = Math.max(0, first - POPULATE_RADIUS); i <= Math.min(postList.length - 1, first + POPULATE_RADIUS); i++) {
+    populateSlide(i);
   }
   requestAnimationFrame(() => {
     if (!viewport) return;
@@ -153,14 +152,15 @@ export function rebuildFeed(list, startIndex) {
 }
 
 /**
- * Extends the mounted list after infinite-scroll appends new posts. Shrinking
- * lists are ignored: removing entries mid-scroll would shift every index.
+ * Extends the track after infinite-scroll appends new posts: new indices get
+ * fresh shells at the end. Shrinking lists are ignored (removing entries
+ * mid-scroll would shift every index).
  */
 export function syncList(newList) {
   if (!Array.isArray(newList) || newList === postList) return;
   if (newList.length < postList.length) return;
   postList = newList;
-  while (slideNodes.length < postList.length) slideNodes.push(null);
+  for (let i = slideNodes.length; i < postList.length; i++) createShell(i);
 }
 
 /**
@@ -168,10 +168,10 @@ export function syncList(newList) {
  */
 export function setActiveIndex(i) {
   if (i < 0 || i >= postList.length) return;
-  // Mount the window around the new slide first, then mark it active so the
-  // active-change hook always sees a mounted node.
-  for (let j = Math.max(0, i - LOOKAHEAD_MOUNT); j <= Math.min(postList.length - 1, i + LOOKAHEAD_MOUNT); j++) {
-    ensureSlide(j);
+  // Populate the window around the new slide first, then mark it active so the
+  // active-change hook always sees a populated node.
+  for (let j = Math.max(0, i - POPULATE_RADIUS); j <= Math.min(postList.length - 1, i + POPULATE_RADIUS); j++) {
+    populateSlide(j);
   }
   markActive(i);
   recycleFarSlides(i);
@@ -195,9 +195,10 @@ export function getSlideNode(i) {
 }
 
 export function disposeAll() {
-  flushCleanupQueue();
-  disposeSlides();
+  flushDepopulateQueue();
+  for (let i = 0; i < slideNodes.length; i++) depopulateSlide(i);
   if (slidesContainer) slidesContainer.innerHTML = '';
+  slideNodes = [];
   postList = [];
   activeIdx = -1;
 }
@@ -425,7 +426,7 @@ export function renderSlideContent(node, post) {
   // Album-like posts whose items are not loaded yet: fetch once for the
   // active slide so the carousel can appear (same exclusions as the viewer).
   maybeFetchAlbum(post).then((loaded) => {
-    if (!loaded || !node.isConnected) return;
+    if (!loaded || !node.isConnected || node._populated !== true) return;
     renderSlideContent(node, post);
     if (node.classList.contains('is-active') && node._feedVideo) node._feedVideo.setPlaying(true);
   });
