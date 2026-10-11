@@ -71,7 +71,7 @@ sections as the identity motif (e.g., `Коллекция ─── 128 пост
 
 ## Phone / mobile (vertical feed)
 
-The phone experience (viewport up to 800 px) is a fullscreen vertical snap feed: one post per screen, swipe up or down to move between posts, tap to toggle the interface, double tap to like. Posts with albums swipe horizontally inside the slide. The feed is consumption-first; the grid stays for focused browsing, and the desktop viewer remains the deep-inspection tool (archives, similar posts, Kemono / Pawchive lookup).
+The phone experience (viewport up to 800 px) is a fullscreen vertical snap feed: one post per screen, swipe up or down to move between posts, tap to pause or resume a video (or toggle the interface on still slides), double tap to like, and a long press for the action sheet that also hosts the "Clean screen" mode. The sound toggle lives in the right rail on video posts; the bar at the bottom scrubs. Posts with albums swipe horizontally inside the slide. The feed is consumption-first; the grid stays for focused browsing, and the desktop viewer remains the deep-inspection tool (archives, similar posts, Kemono / Pawchive lookup).
 
 - Dials on the phone: **ENERGY 2 / RHYTHM 2 / MOTION 3**. MOTION rises to 3 because in a feed the motion is the navigation itself (snap scrolling, drag-dismiss, the like burst), not decoration.
 - Overlays over media (scrims, action rail, info block) stay dark in every theme: they sit over arbitrary artwork, and light-on-dark is what keeps text readable there. The accent stays a single amber (or the theme accent) for active states and the like burst.

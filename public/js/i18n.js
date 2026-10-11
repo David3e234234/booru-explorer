@@ -1218,6 +1218,11 @@ Object.assign(en, {
   'feed.play': 'Play',
   'feed.pause': 'Pause',
   'feed.mute': 'Mute',
+  'feed.sound.title': 'Sound',
+  'feed.sound.on': 'Unmute',
+  'feed.sound.off': 'Mute',
+  'feed.more.clean': 'Clear screen',
+  'feed.more.showUi': 'Show interface',
   'header.feedMode.title': 'Feed mode'
 });
 

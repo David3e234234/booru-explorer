@@ -64,6 +64,8 @@ function depopulateSlide(i) {
   node.innerHTML = '';
   node._feedVideo = null;
   node._feedCarousel = null;
+  node._feedCarouselPages = null;
+  node._carouselIndex = 0;
   node._feedImg = null;
   node._feedNoMedia = false;
 }
@@ -104,6 +106,27 @@ function markActive(i) {
   const cur = populateSlide(i);
   if (cur) cur.classList.add('is-active');
   if (renderCallbacks.onActiveChange) renderCallbacks.onActiveChange(i, prev);
+}
+
+function notifyMediaStateChange() {
+  if (renderCallbacks && renderCallbacks.onMediaStateChange) {
+    try { renderCallbacks.onMediaStateChange(); } catch (_) { /* UI refresh must never break playback */ }
+  }
+}
+
+/**
+ * The player of the active slide's currently visible media (a single video or
+ * the active album page), or null when the active media is not a video.
+ */
+export function getActiveVideoPlayer() {
+  const node = activeIdx >= 0 ? slideNodes[activeIdx] : null;
+  if (!node) return null;
+  if (node._feedVideo) return node._feedVideo;
+  if (Array.isArray(node._feedCarouselPages)) {
+    const page = node._feedCarouselPages[node._carouselIndex || 0];
+    return page && page._feedVideo ? page._feedVideo : null;
+  }
+  return null;
 }
 
 function preloadForSlide(i) {
@@ -248,11 +271,11 @@ function buildSingleMedia(node, item) {
     return;
   }
   if (item.isVideo && (item.fileUrl || item.sampleUrl || item.teaserUrl)) {
-    const player = createFeedVideoPlayer(item);
+    const player = createFeedVideoPlayer(item, { onMediaState: notifyMediaStateChange });
     if (player) {
       stage.appendChild(player.wrap);
       stage.appendChild(player.progress);
-      stage.appendChild(player.controls);
+      stage.appendChild(player.stateEl);
       node._feedVideo = player;
       node._feedNoMedia = false;
       if (node.classList.contains('is-active')) player.setPlaying(true);
@@ -324,16 +347,17 @@ function buildCarousel(node, post) {
   const carousel = document.createElement('div');
   carousel.className = 'feed-carousel';
 
+  const pages = [];
   items.forEach((item, idx) => {
     const page = document.createElement('div');
     page.className = 'feed-carousel-item';
     page.dataset.page = String(idx);
     if (item.isVideo && (item.fileUrl || item.sampleUrl)) {
-      const player = createFeedVideoPlayer(item);
+      const player = createFeedVideoPlayer(item, { onMediaState: notifyMediaStateChange });
       if (player) {
         page.appendChild(player.wrap);
         page.appendChild(player.progress);
-        page.appendChild(player.controls);
+        page.appendChild(player.stateEl);
         page._feedVideo = player;
       } else {
         page.appendChild(createImageWithFallbacks(item, 'feed-media feed-img'));
@@ -350,7 +374,9 @@ function buildCarousel(node, post) {
       page.appendChild(createImageWithFallbacks(item, 'feed-media feed-img'));
     }
     carousel.appendChild(page);
+    pages.push(page);
   });
+  node._feedCarouselPages = pages;
 
   const counter = document.createElement('div');
   counter.className = 'feed-carousel-counter mono';
@@ -372,6 +398,7 @@ function buildCarousel(node, post) {
       raf = false;
       const w = carousel.clientWidth || 1;
       const page = Math.round(carousel.scrollLeft / w);
+      node._carouselIndex = Math.max(0, Math.min(items.length - 1, page));
       counter.textContent = `${Math.min(items.length, page + 1)} / ${items.length}`;
       dots.querySelectorAll('.feed-carousel-dot').forEach((d, i) => d.classList.toggle('active', i === page));
       // Only the visible page may play a video, and only on the active slide.
@@ -397,6 +424,8 @@ function buildCarousel(node, post) {
 export function renderSlideContent(node, post) {
   node._feedVideo = null;
   node._feedCarousel = null;
+  node._feedCarouselPages = null;
+  node._carouselIndex = 0;
   node._feedImg = null;
   node._feedNoMedia = false;
   node.innerHTML = '';
@@ -433,6 +462,7 @@ export function renderSlideContent(node, post) {
     if (!loaded || !node.isConnected || node._populated !== true) return;
     renderSlideContent(node, post);
     if (node.classList.contains('is-active') && node._feedVideo) node._feedVideo.setPlaying(true);
+    notifyMediaStateChange();
   });
 }
 

@@ -8,7 +8,7 @@ import { showToast, haptic, escapeHtml, copyToClipboard, getPostSiteUrl } from '
 import { t } from '../i18n.js';
 import { notifyFeedOpened, notifyFeedMoved, notifyFeedClosed, adoptFeedUrl } from '../router.js';
 import { downloadSingleMedia } from '../viewer/viewerAlbum.js';
-import { initSlides, rebuildFeed, setActiveIndex, getActiveIndex, getPostList, getActiveMediaItem, disposeAll, syncList, renderSlideContent } from './slides.js';
+import { initSlides, rebuildFeed, setActiveIndex, getActiveIndex, getPostList, getActiveMediaItem, disposeAll, syncList, renderSlideContent, getActiveVideoPlayer } from './slides.js';
 import { createFeedGestures } from './gestures.js';
 import { initFeedSheet } from './sheet.js';
 
@@ -86,8 +86,8 @@ function buildOverlay() {
       <button type="button" class="feed-rail-btn" data-action="info" id="feedInfoBtn">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
       </button>
-      <button type="button" class="feed-rail-btn" data-action="more" id="feedMoreBtn">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/></svg>
+      <button type="button" class="feed-rail-btn" data-action="sound" id="feedSoundBtn" hidden>
+        <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><use href="#ic-volume"/></svg>
       </button>
     </div>
     <div class="feed-info" id="feedInfo">
@@ -136,7 +136,14 @@ function buildOverlay() {
       case 'fav': performFav(post); break;
       case 'download': performDownload(post); break;
       case 'info': feedSheet.openFor(post); break;
-      case 'more': openMoreSheet(post); break;
+      case 'sound': {
+        const player = getActiveVideoPlayer();
+        if (player) {
+          player.toggleMuted();
+          updateSoundButton();
+        }
+        break;
+      }
     }
   });
 
@@ -190,10 +197,29 @@ function buildOverlay() {
     });
   }, { passive: true });
 
+  // Long-press fires the native context menu on touch devices; the feed has
+  // its own long-press action and must not show the system one.
+  track.addEventListener('contextmenu', (e) => e.preventDefault());
+
   gestures = createFeedGestures({
     track,
     getActiveSlide: () => track.querySelector('.feed-slide.is-active'),
-    onToggleChrome: () => overlay.classList.toggle('chrome-hidden'),
+    onTap: () => {
+      // TikTok-style: on a video a tap toggles playback; on still slides it
+      // toggles the chrome. "Clean screen" from the long-press sheet hides
+      // the chrome explicitly.
+      const player = getActiveVideoPlayer();
+      if (player) {
+        player.togglePlay();
+        return;
+      }
+      setChromeHidden(!overlay.classList.contains('chrome-hidden'));
+    },
+    onLongPress: () => {
+      haptic(25);
+      const post = currentPost();
+      if (post) openMoreSheet(post);
+    },
     onLike: (x, y) => {
       const post = currentPost();
       if (!post) return;
@@ -227,7 +253,31 @@ function applyStaticLabels() {
   setBtn('#feedFavBtn', 'viewer.fav.title', 'Сохранить в закладки (Избранное)');
   setBtn('#feedDownloadBtn', 'feed.download', 'Скачать');
   setBtn('#feedInfoBtn', 'viewer.tagsToggle.title', 'Теги и информация');
-  setBtn('#feedMoreBtn', 'feed.more.title', 'Ещё');
+  updateSoundButton();
+}
+
+// Chrome visibility has two layers: the feed overlay chrome and the app
+// bottom nav, which the "Clean screen" mode hides as well.
+function setChromeHidden(hidden) {
+  overlay.classList.toggle('chrome-hidden', hidden);
+  document.body.classList.toggle('feed-clean', hidden);
+}
+
+function updateSoundButton() {
+  if (!overlay) return;
+  const btn = overlay.querySelector('#feedSoundBtn');
+  if (!btn) return;
+  const player = getActiveVideoPlayer();
+  if (!player) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  const muted = player.getMuted();
+  btn.querySelector('use').setAttribute('href', muted ? '#ic-mute' : '#ic-volume');
+  const label = muted ? t('feed.sound.on', 'Включить звук') : t('feed.sound.off', 'Выключить звук');
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
 }
 
 function refreshLabels() {
@@ -281,6 +331,7 @@ function updateChromeForIndex(idx) {
     : '');
 
   updateRailStates(post);
+  updateSoundButton();
 }
 
 // ── Actions ──────────────────────────────────────────────────────
@@ -387,8 +438,13 @@ async function performCopyLink(post) {
 // ── Sheets ───────────────────────────────────────────────────────
 
 function openMoreSheet(post) {
+  const chromeHidden = overlay.classList.contains('chrome-hidden');
   openActionSheet(t('feed.more.title', 'Ещё'), [
     { label: t('feed.more.dislike', 'Не интересно'), icon: '#ic-dislike', action: async () => { closeActionSheet(); await performDislike(post); } },
+    { label: chromeHidden ? t('feed.more.showUi', 'Показать интерфейс') : t('feed.more.clean', 'Чистый экран'), icon: '#ic-eye', action: () => {
+      closeActionSheet();
+      setChromeHidden(!chromeHidden);
+    } },
     { label: t('feed.more.similar', 'Похожие посты'), icon: '#ic-compass', action: () => { closeActionSheet(); performSimilar(post); } },
     { label: t('feed.openOnSite', 'Открыть на сайте'), icon: '#ic-external', action: () => { closeActionSheet(); performOpenSite(post); } },
     { label: t('feed.copyLink', 'Скопировать ссылку'), icon: '#ic-link', action: () => { closeActionSheet(); performCopyLink(post); } }
@@ -539,8 +595,14 @@ export function initFeed(hooks) {
         renderSlideContent(node, getPostList()[idx]);
       },
       onSlideCreated: () => {},
+      onMediaStateChange: () => updateSoundButton(),
       onSlideDispose: (node) => {
         if (node._feedVideo) { node._feedVideo.destroy(); node._feedVideo = null; }
+        if (Array.isArray(node._feedCarouselPages)) {
+          node._feedCarouselPages.forEach((page) => {
+            if (page._feedVideo) { page._feedVideo.destroy(); page._feedVideo = null; }
+          });
+        }
         node._feedImg = null;
       },
       onActiveChange: (idx, prevNode) => {
@@ -619,6 +681,7 @@ export function openFeed(index = 0, opts = {}) {
 
   overlay.classList.add('open');
   overlay.classList.remove('chrome-hidden');
+  document.body.classList.remove('feed-clean');
   document.body.style.overflow = 'hidden';
 
   rebuildFeed(list, Math.max(0, Math.min(startIndex, Math.max(0, list.length - 1))));
@@ -650,6 +713,7 @@ export function closeFeed(options = {}) {
   isOpen = false;
   openedInitialized = false;
   overlay.classList.remove('open');
+  document.body.classList.remove('feed-clean');
   document.body.style.overflow = '';
   feedSheet.close();
   closeActionSheet();

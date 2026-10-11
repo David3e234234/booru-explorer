@@ -356,7 +356,6 @@
 .feed-overlay.chrome-hidden .feed-rail,
 .feed-overlay.chrome-hidden .feed-info,
 .feed-overlay.chrome-hidden .feed-scrim,
-.feed-overlay.chrome-hidden .feed-video-controls,
 .feed-overlay.chrome-hidden .feed-carousel-dots,
 .feed-overlay.chrome-hidden .feed-carousel-counter {
   opacity: 0;
@@ -466,29 +465,42 @@
   background: var(--accent-primary);
 }
 
-.feed-video-controls {
+.feed-video-state {
   position: absolute;
-  top: calc(max(10px, env(safe-area-inset-top, 0px)) + 52px);
-  right: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 5;
-  transition: opacity 0.16s ease;
-}
-
-.feed-vc-btn {
-  width: 44px;
-  height: 44px;
+  left: 50%;
+  top: 50%;
+  width: 76px;
+  height: 76px;
+  margin: -38px 0 0 -38px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(247, 239, 226, 0.12);
   border-radius: var(--radius-full);
-  background: rgba(12, 9, 6, 0.48);
+  background: rgba(12, 9, 6, 0.45);
   color: #f7efe2;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.feed-video-state.visible {
+  opacity: 1;
+}
+
+.feed-rail-btn[hidden] {
+  display: none;
+}
+
+/* The app bottom nav is a glass bar above the overlay; clean mode fades it
+   with the rest of the chrome so the media owns the whole screen. */
+.mobile-bottom-nav {
+  transition: opacity 0.16s ease;
+}
+
+body.feed-clean .mobile-bottom-nav {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .feed-resolve {

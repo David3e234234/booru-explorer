@@ -20,11 +20,19 @@ function iconSvg(id, size = 20) {
  * Returns null when the post has no playable source: the caller then renders
  * the download fallback card.
  *
+ * Playback control lives outside the player: the gesture layer toggles
+ * play/pause on tap, the feed rail hosts the sound button (refreshed through
+ * options.onMediaState) and the state element shows the paused glyph.
+ *
  * @param {Object} post normalized post (or album item)
+ * @param {{ onMediaState?: Function }} [options]
  * @returns {{ wrap: HTMLElement, video: HTMLVideoElement, progress: HTMLElement,
- *             controls: HTMLElement, setPlaying: Function, destroy: Function } | null}
+ *             stateEl: HTMLElement, setPlaying: Function, togglePlay: Function,
+ *             isPaused: Function, getMuted: Function, toggleMuted: Function,
+ *             destroy: Function } | null}
  */
-export function createFeedVideoPlayer(post) {
+export function createFeedVideoPlayer(post, options = {}) {
+  const onMediaState = options.onMediaState;
   const baseUrl = post.fileUrl || post.sampleUrl || '';
   if (!baseUrl) return null;
 
@@ -83,51 +91,27 @@ export function createFeedVideoPlayer(post) {
   progress.addEventListener('pointerup', () => { seeking = false; });
   progress.addEventListener('pointercancel', () => { seeking = false; });
 
-  // Play/pause and mute toggles. They live in the chrome layer and fade with it.
-  const controls = document.createElement('div');
-  controls.className = 'feed-video-controls';
+  // Paused-state glyph in the middle of the media. A tap toggles playback
+  // (gesture layer) and the sound toggle lives in the feed rail, so this
+  // player owns no buttons of its own.
+  const stateEl = document.createElement('div');
+  stateEl.className = 'feed-video-state';
+  stateEl.setAttribute('aria-hidden', 'true');
+  stateEl.innerHTML = iconSvg('ic-play', 34);
 
-  const playBtn = document.createElement('button');
-  playBtn.type = 'button';
-  playBtn.className = 'feed-vc-btn';
-  playBtn.title = t('feed.pause', 'Пауза');
-  playBtn.setAttribute('aria-label', t('feed.pause', 'Пауза'));
-  playBtn.innerHTML = iconSvg('ic-pause');
-
-  const muteBtn = document.createElement('button');
-  muteBtn.type = 'button';
-  muteBtn.className = 'feed-vc-btn';
-  muteBtn.setAttribute('aria-label', t('vp.unmute.title', 'Включить звук (кликните для снятия ограничения браузера)'));
-  muteBtn.innerHTML = iconSvg(savedMuted ? 'ic-mute' : 'ic-volume');
-
-  const syncMuteUi = () => {
-    muteBtn.innerHTML = iconSvg(video.muted ? 'ic-mute' : 'ic-volume');
-    muteBtn.title = video.muted ? t('vp.unmute', 'Включить звук') : t('feed.mute', 'Выключить звук');
-    muteBtn.setAttribute('aria-label', muteBtn.title);
+  const notifyMediaState = () => {
+    try { if (typeof onMediaState === 'function') onMediaState(); } catch (_) { /* UI refresh must never break playback */ }
   };
 
-  playBtn.addEventListener('click', () => {
-    if (video.paused) video.play().catch(() => {}); else video.pause();
-  });
-  muteBtn.addEventListener('click', () => {
-    video.muted = !video.muted;
-    try { localStorage.setItem('booru_video_muted', String(video.muted)); } catch {}
-    syncMuteUi();
-  });
-
-  controls.appendChild(playBtn);
-  controls.appendChild(muteBtn);
-
-  const syncPlayUi = () => {
-    const playing = !video.paused && !video.ended;
-    playBtn.innerHTML = iconSvg(playing ? 'ic-pause' : 'ic-play');
-    playBtn.title = playing ? t('feed.pause', 'Пауза') : t('feed.play', 'Воспроизвести');
-    playBtn.setAttribute('aria-label', playBtn.title);
+  const syncStateUi = () => {
+    stateEl.classList.toggle('visible', video.paused && !video.ended);
+    notifyMediaState();
   };
 
-  video.addEventListener('play', syncPlayUi);
-  video.addEventListener('pause', syncPlayUi);
-  syncPlayUi();
+  video.addEventListener('play', syncStateUi);
+  video.addEventListener('pause', syncStateUi);
+  video.addEventListener('volumechange', notifyMediaState);
+  syncStateUi();
   video.addEventListener('timeupdate', () => {
     if (video.duration > 0) {
       progress.removeAttribute('hidden', '');
@@ -155,7 +139,7 @@ export function createFeedVideoPlayer(post) {
         if (destroyed) return;
         // Autoplay with sound was blocked: fall back to muted playback.
         video.muted = true;
-        syncMuteUi();
+        notifyMediaState();
         video.play().catch(() => {});
       });
     }
@@ -234,7 +218,7 @@ export function createFeedVideoPlayer(post) {
     wrap,
     video,
     progress,
-    controls,
+    stateEl,
     setPlaying(on) {
       if (destroyed) return;
       desiredPlaying = Boolean(on);
@@ -245,6 +229,22 @@ export function createFeedVideoPlayer(post) {
         video.pause();
         video.preload = 'metadata';
       }
+    },
+    togglePlay() {
+      if (destroyed) return;
+      if (video.paused || video.ended) video.play().catch(() => {}); else video.pause();
+    },
+    isPaused() {
+      return video.paused;
+    },
+    getMuted() {
+      return video.muted;
+    },
+    toggleMuted() {
+      if (destroyed) return;
+      video.muted = !video.muted;
+      try { localStorage.setItem('booru_video_muted', String(video.muted)); } catch {}
+      notifyMediaState();
     },
     destroy() {
       destroyed = true;
