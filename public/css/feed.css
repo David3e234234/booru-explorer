@@ -429,6 +429,18 @@
   background: rgba(255, 255, 255, 0.18);
   z-index: 5;
   transition: opacity 0.16s ease;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* Wider invisible hit area so the thin bar is easy to grab. */
+.feed-video-progress::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  bottom: -8px;
 }
 
 .feed-video-progress[hidden] {
@@ -436,8 +448,21 @@
 }
 
 .feed-video-progress-fill {
+  position: relative;
   height: 100%;
   width: 0%;
+  background: var(--accent-primary);
+}
+
+.feed-video-progress-fill::after {
+  content: '';
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
   background: var(--accent-primary);
 }
 

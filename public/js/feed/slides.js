@@ -251,6 +251,8 @@ function buildSingleMedia(node, item) {
     const player = createFeedVideoPlayer(item);
     if (player) {
       stage.appendChild(player.wrap);
+      stage.appendChild(player.progress);
+      stage.appendChild(player.controls);
       node._feedVideo = player;
       node._feedNoMedia = false;
       if (node.classList.contains('is-active')) player.setPlaying(true);
@@ -330,6 +332,8 @@ function buildCarousel(node, post) {
       const player = createFeedVideoPlayer(item);
       if (player) {
         page.appendChild(player.wrap);
+        page.appendChild(player.progress);
+        page.appendChild(player.controls);
         page._feedVideo = player;
       } else {
         page.appendChild(createImageWithFallbacks(item, 'feed-media feed-img'));

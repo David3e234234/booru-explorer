@@ -59,6 +59,30 @@ export function createFeedVideoPlayer(post) {
   progress.appendChild(progressFill);
   progress.setAttribute('hidden', '');
 
+  // Scrubbing: drag on the thin bar seeks (CSS touch-action: none keeps the
+  // feed from scrolling while the finger is on it).
+  let seeking = false;
+  const seekTo = (clientX) => {
+    if (!video.duration || !isFinite(video.duration)) return;
+    const rect = progress.getBoundingClientRect();
+    if (!rect.width) return;
+    const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    video.currentTime = ratio * video.duration;
+    progressFill.style.width = `${ratio * 100}%`;
+  };
+  progress.addEventListener('pointerdown', (e) => {
+    if (!video.duration || !isFinite(video.duration)) return;
+    seeking = true;
+    try { progress.setPointerCapture(e.pointerId); } catch {}
+    seekTo(e.clientX);
+    e.preventDefault();
+  });
+  progress.addEventListener('pointermove', (e) => {
+    if (seeking) seekTo(e.clientX);
+  });
+  progress.addEventListener('pointerup', () => { seeking = false; });
+  progress.addEventListener('pointercancel', () => { seeking = false; });
+
   // Play/pause and mute toggles. They live in the chrome layer and fade with it.
   const controls = document.createElement('div');
   controls.className = 'feed-video-controls';
@@ -103,11 +127,20 @@ export function createFeedVideoPlayer(post) {
 
   video.addEventListener('play', syncPlayUi);
   video.addEventListener('pause', syncPlayUi);
+  syncPlayUi();
   video.addEventListener('timeupdate', () => {
     if (video.duration > 0) {
       progress.removeAttribute('hidden', '');
-      progressFill.style.width = `${Math.min(100, (video.currentTime / video.duration) * 100)}%`;
+      if (!seeking) {
+        progressFill.style.width = `${Math.min(100, (video.currentTime / video.duration) * 100)}%`;
+      }
     }
+  });
+
+  // Show the bar as soon as metadata is known, even before the first frame
+  // tick (paused or still buffering videos must expose their length).
+  video.addEventListener('loadedmetadata', () => {
+    if (video.duration > 0 && isFinite(video.duration)) progress.removeAttribute('hidden', '');
   });
 
   let destroyed = false;

@@ -33,7 +33,7 @@ export function createFeedGestures({
   function isUiElement(target) {
     if (!target || typeof target.closest !== 'function') return true;
     return Boolean(
-      target.closest('button, a, input, textarea, select, .feed-info, .feed-rail, .feed-sheet, .feed-video-controls, .feed-resolve')
+      target.closest('button, a, input, textarea, select, .feed-info, .feed-rail, .feed-sheet, .feed-video-controls, .feed-resolve, .feed-video-progress')
     );
     // The media itself, scrims and dots stay gesture targets.
   }
