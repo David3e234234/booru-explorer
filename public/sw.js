@@ -1,4 +1,4 @@
-const CACHE_NAME = 'booru-explorer-v12.3';
+const CACHE_NAME = 'booru-explorer-v12.4';
 const MEDIA_CACHE = 'booru-media-v2';
 const MAX_MEDIA_ENTRIES = 400;
 const MAX_CACHED_MEDIA_BYTES = 3 * 1024 * 1024;
@@ -30,22 +30,22 @@ async function safeRespond(request, strategy) {
 const STATIC_ASSETS = [
   '/',
   '/index.html',
-  '/manifest.json?v=12.3',
-  '/css/variables.css?v=12.3',
-  '/css/main.css?v=12.3',
-  '/css/components.css?v=12.3',
-  '/css/settings.css?v=12.3',
-  '/css/authors.css?v=12.3',
-  '/css/profile.css?v=12.3',
-  '/css/viewer.css?v=12.3',
-  '/css/archive-inspect.css?v=12.3',
-  '/css/feed.css?v=12.3',
-  '/dist/app.js?v=12.3',
-  '/icons/favicon.png?v=12.3',
+  '/manifest.json?v=12.4',
+  '/css/variables.css?v=12.4',
+  '/css/main.css?v=12.4',
+  '/css/components.css?v=12.4',
+  '/css/settings.css?v=12.4',
+  '/css/authors.css?v=12.4',
+  '/css/profile.css?v=12.4',
+  '/css/viewer.css?v=12.4',
+  '/css/archive-inspect.css?v=12.4',
+  '/css/feed.css?v=12.4',
+  '/dist/app.js?v=12.4',
+  '/icons/favicon.png?v=12.4',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/maskable-512.png',
-  '/icons/apple-touch-icon.png?v=12.3'
+  '/icons/apple-touch-icon.png?v=12.4'
 ];
 
 // Install the Service Worker and precache the App Shell

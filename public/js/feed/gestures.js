@@ -7,6 +7,7 @@ const DOUBLE_TAP_MS = 280;
 const CLOSE_DRAG_PX = 110;
 
 export function createFeedGestures({
+  host,
   track,
   getActiveSlide,
   onTap,
@@ -14,6 +15,10 @@ export function createFeedGestures({
   onLike,
   onClose
 }) {
+  // Touch listeners live on the whole overlay (rail and info included), while
+  // the scroll geometry still comes from the track; every handler already
+  // ignores interactive elements by itself.
+  host = host || track;
   let touchStartX = 0;
   let touchStartY = 0;
   let touchStartTime = 0;
@@ -52,9 +57,22 @@ export function createFeedGestures({
     // The media itself, scrims and dots stay gesture targets.
   }
 
+  // Long press is allowed over the media and over the non-interactive parts
+  // of the info block (like holding a caption on TikTok), but never over
+  // real controls.
+  function isHoldUiElement(target) {
+    if (!target || typeof target.closest !== 'function') return true;
+    return Boolean(
+      target.closest('button, a, input, textarea, select, .feed-rail, .feed-sheet, .feed-video-progress, .feed-resolve')
+    );
+  }
+
   const attachZoomSafe = slide => {
     if (zoomInst) { zoomInst.destroy(); zoomInst = null; }
-    const img = slide && slide.querySelector('.feed-img');
+    if (!slide) return;
+    // Album carousels pan natively in both axes; JS zoom would fight them.
+    if (slide.querySelector('.feed-carousel')) return;
+    const img = slide.querySelector('.feed-img');
     if (!img) return;
     zoomInst = setupImageZoom(img, {});
   };
@@ -75,13 +93,14 @@ export function createFeedGestures({
     if (zoomed()) return; // imageZoom owns panning while zoomed
 
     const onUi = isUiElement(e.target);
+    const holdUi = isHoldUiElement(e.target);
     const active = getActiveSlide();
     const atTop = active ? track.scrollTop <= 1 : true;
     if (atTop && !onUi) {
       pullStartY = touch.clientY;
       pulling = true;
     }
-    if (!onUi && typeof onLongPress === 'function') {
+    if (!holdUi && typeof onLongPress === 'function') {
       cancelLongPress();
       longPressFired = false;
       longPressTimer = setTimeout(() => {
@@ -179,10 +198,10 @@ export function createFeedGestures({
     }, DOUBLE_TAP_MS);
   }
 
-  track.addEventListener('touchstart', onTouchStart, { passive: true });
-  track.addEventListener('touchmove', onTouchMove, { passive: false });
-  track.addEventListener('touchend', onTouchEnd, { passive: false });
-  track.addEventListener('touchcancel', () => { pulling = false; finishPull(); cancelLongPress(); });
+  host.addEventListener('touchstart', onTouchStart, { passive: true });
+  host.addEventListener('touchmove', onTouchMove, { passive: false });
+  host.addEventListener('touchend', onTouchEnd, { passive: false });
+  host.addEventListener('touchcancel', () => { pulling = false; finishPull(); cancelLongPress(); });
 
   return {
     onActiveSlideChange,
@@ -192,9 +211,9 @@ export function createFeedGestures({
       if (singleTapTimer) clearTimeout(singleTapTimer);
       if (zoomInst) { zoomInst.destroy(); zoomInst = null; }
       finishPull();
-      track.removeEventListener('touchstart', onTouchStart);
-      track.removeEventListener('touchmove', onTouchMove);
-      track.removeEventListener('touchend', onTouchEnd);
+      host.removeEventListener('touchstart', onTouchStart);
+      host.removeEventListener('touchmove', onTouchMove);
+      host.removeEventListener('touchend', onTouchEnd);
     }
   };
 }

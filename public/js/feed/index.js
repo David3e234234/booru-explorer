@@ -199,9 +199,10 @@ function buildOverlay() {
 
   // Long-press fires the native context menu on touch devices; the feed has
   // its own long-press action and must not show the system one.
-  track.addEventListener('contextmenu', (e) => e.preventDefault());
+  overlay.addEventListener('contextmenu', (e) => e.preventDefault());
 
   gestures = createFeedGestures({
+    host: overlay,
     track,
     getActiveSlide: () => track.querySelector('.feed-slide.is-active'),
     onTap: () => {
