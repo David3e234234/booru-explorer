@@ -26,6 +26,7 @@ let bootPostId = null;       // post= param from the URL the app booted with
 let awaitingBackPop = false; // our own history.back() is in flight
 let applyingPopState = false; // inside popstate handling -> never push
 let didFirstSync = false;    // first performSearch replaces instead of pushing
+let feedModeActive = false;  // the phone feed mirrors its post id into the URL
 
 const enc = (s) => encodeURIComponent(String(s));
 
@@ -63,14 +64,15 @@ function buildQuery() {
 function buildUrl(postId) {
   const effectivePostId = postId !== undefined ? postId : (activePostId != null ? activePostId : bootPostId);
   const q = buildQuery();
+  const feedPart = feedModeActive ? 'view=feed' : '';
   const postPart = effectivePostId != null && effectivePostId !== '' ? `post=${enc(effectivePostId)}` : '';
-  const full = [q, postPart].filter(Boolean).join('&');
+  const full = [q, feedPart, postPart].filter(Boolean).join('&');
   return window.location.pathname + (full ? `?${full}` : '');
 }
 
 export function parseParams(searchStr = window.location.search) {
   const sp = new URLSearchParams(searchStr || '');
-  const out = { tags: [], site: null, sort: null, cat: null, favtab: null, ptab: null, post: null };
+  const out = { tags: [], site: null, sort: null, cat: null, favtab: null, ptab: null, post: null, view: null };
 
   const tagsRaw = sp.get('tags');
   if (tagsRaw !== null) {
@@ -113,6 +115,10 @@ export function parseParams(searchStr = window.location.search) {
 
   const post = sp.get('post');
   out.post = post && POST_ID_RE.test(post) ? post : null;
+
+  // Feed overlay marker: only meaningful next to post= on phone layouts.
+  const view = sp.get('view');
+  out.view = view === 'feed' ? 'feed' : null;
 
   return out;
 }
@@ -167,9 +173,14 @@ function onPopState() {
   applyingPopState = true;
   try {
     if (!p.post && handlers.onCloseViewerUi) handlers.onCloseViewerUi();
+    if (!p.post && handlers.onCloseFeedUi) handlers.onCloseFeedUi();
     const changed = applyUrlToState(p);
     if (handlers.onSearchParams) handlers.onSearchParams(changed);
-    if (p.post && handlers.onOpenPost) handlers.onOpenPost(p.post);
+    if (p.post && p.view === 'feed' && handlers.onOpenFeedPost) {
+      handlers.onOpenFeedPost(p.post);
+    } else if (p.post && handlers.onOpenPost) {
+      handlers.onOpenPost(p.post);
+    }
   } finally {
     applyingPopState = false;
   }
@@ -207,6 +218,7 @@ export function syncSearchUrl(mode = 'push') {
 }
 
 export function notifyViewerOpened(postId) {
+  feedModeActive = false;
   activePostId = postId != null ? String(postId) : null;
   bootPostId = null;
   const target = buildUrl(activePostId);
@@ -221,12 +233,14 @@ export function notifyViewerOpened(postId) {
 }
 
 export function notifyViewerMoved(postId) {
+  feedModeActive = false;
   activePostId = postId != null ? String(postId) : null;
   bootPostId = null;
   history.replaceState({ vr: 1 }, '', buildUrl(activePostId));
 }
 
 export function notifyViewerClosed(options = {}) {
+  feedModeActive = false;
   activePostId = null;
   bootPostId = null;
   if (applyingPopState) return;
@@ -237,4 +251,51 @@ export function notifyViewerClosed(options = {}) {
     awaitingBackPop = true;
     history.back();
   }
+}
+
+// ── Phone feed session (mirrors the viewer's history contract) ──
+// Opening pushes one entry with a view=feed URL so Back closes the feed;
+// moving between posts only rewrites the current entry.
+
+export function notifyFeedOpened(postId) {
+  feedModeActive = true;
+  activePostId = postId != null ? String(postId) : null;
+  bootPostId = null;
+  const target = buildUrl(activePostId);
+  if (target === currentUrl()) {
+    if (!(history.state && history.state.vr)) {
+      history.replaceState({ ...(history.state || {}), vr: 1 }, '', target);
+    }
+  } else {
+    history.pushState({ vr: 1 }, '', target);
+  }
+}
+
+export function notifyFeedMoved(postId) {
+  feedModeActive = true;
+  activePostId = postId != null ? String(postId) : null;
+  bootPostId = null;
+  history.replaceState({ vr: 1 }, '', buildUrl(activePostId));
+}
+
+export function notifyFeedClosed(options = {}) {
+  feedModeActive = false;
+  activePostId = null;
+  bootPostId = null;
+  if (applyingPopState) return;
+  if (options.skipHistoryBack || !history.state?.vr) {
+    history.replaceState(history.state, '', buildUrl(null));
+  } else if (history.state && history.state.vr) {
+    if (awaitingBackPop) return;
+    awaitingBackPop = true;
+    history.back();
+  }
+}
+
+// Called when the feed was restored from the URL (the history entry already
+// carries view=feed): adopt the flag without touching history.
+export function adoptFeedUrl(postId) {
+  feedModeActive = true;
+  activePostId = postId != null ? String(postId) : null;
+  bootPostId = null;
 }

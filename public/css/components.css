@@ -78,29 +78,20 @@
     padding: 2px 5px;
   }
 
-  /* On mobile the bottom like/bookmark bar is always visible */
+  /* Phone cards are light media tiles: the action row and the score move
+     into the feed rail and the long-press quick actions sheet. */
   .card-overlay-bottom {
     opacity: 1 !important;
-    padding: 22px 6px 6px !important;
-    gap: 4px !important;
+    padding: 16px 8px 8px !important;
   }
 
-  .btn-card-action {
-    width: 32px !important;
-    height: 32px !important;
+  .card-action-btns,
+  .card-score {
+    display: none !important;
   }
 
-  /* Wider spacing so the enlarged touch zones of neighbouring buttons never overlap */
-  .card-action-btns {
-    gap: 12px;
-  }
-
-  /* Invisible halo around each button: visual stays 32 px, tap zone grows to 44 px.
-     With the 12 px gap the neighbouring touch zones touch but never overlap. */
-  .btn-card-action::after {
-    content: '';
-    position: absolute;
-    inset: -6px;
+  .media-card {
+    -webkit-touch-callout: none;
   }
 }
 

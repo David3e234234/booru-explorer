@@ -68,3 +68,12 @@ the section heading in panels. Everything else defers to it via hierarchy, not d
 
 The "collection label plate": serif heading + thin amber rule + mono count, repeated across
 sections as the identity motif (e.g., `Коллекция ─── 128 постов`).
+
+## Phone / mobile (vertical feed)
+
+The phone experience (viewport up to 800 px) is a fullscreen vertical snap feed: one post per screen, swipe up or down to move between posts, tap to toggle the interface, double tap to like. Posts with albums swipe horizontally inside the slide. The feed is consumption-first; the grid stays for focused browsing, and the desktop viewer remains the deep-inspection tool (archives, similar posts, Kemono / Pawchive lookup).
+
+- Dials on the phone: **ENERGY 2 / RHYTHM 2 / MOTION 3**. MOTION rises to 3 because in a feed the motion is the navigation itself (snap scrolling, drag-dismiss, the like burst), not decoration.
+- Overlays over media (scrims, action rail, info block) stay dark in every theme: they sit over arbitrary artwork, and light-on-dark is what keeps text readable there. The accent stays a single amber (or the theme accent) for active states and the like burst.
+- The phone bottom navigation is the one glass surface (translucent plus backdrop blur). Reason: the bar floats over feed media while the user scrolls.
+- Phone grid cards drop the like / bookmark row and the score: actions live in the feed rail and in the long-press quick actions sheet. Reason: the grid is for choosing a post, the feed is for acting on it.

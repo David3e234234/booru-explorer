@@ -308,6 +308,85 @@ function whenViewerLoaded(fn) {
   if (viewerInstance) fn(viewerInstance);
 }
 
+let feedPromise = null;
+let feedInstance = null;
+function ensureFeed() {
+  if (!feedPromise) {
+    feedPromise = importOnce('feed', () => import('./feed/index.js')).then((m) => {
+      feedInstance = m.initFeed({
+        getList: () => (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts,
+        onFavoriteToggle: () => {
+          galleryInstance.renderGallery(false, { preserveScroll: true });
+          updateFavoritesBadge();
+        },
+        onDislikeToggle: () => {
+          galleryInstance.renderGallery(false, { preserveScroll: true });
+        },
+        onTagSelect: (tag) => {
+          autocompleteInstance.selectTag(tag, true);
+        },
+        onAuthorSelect: (author) => {
+          handleAuthorSelect(author);
+        },
+        onFavoriteAuthorToggle: () => {
+          updateFavoritesBadge();
+        },
+        onFindSimilar: (post) => {
+          handleFindSimilarPost(post);
+        },
+        onOpenViewer: (index) => {
+          openPostOverlay(index, { forceViewer: true });
+        },
+        onOpenSearchDrawer: () => {
+          openDrawer(document.getElementById('sidebarSearch'));
+        },
+        onSwitchSiteAndSearch: (site, query) => {
+          switchSiteAndSearchForFeed(site, query);
+        },
+        onLoadMore: () => {
+          const now = Date.now();
+          if (now - lastLoadMoreTime < 450) return;
+          if (!state.isLoading && state.hasMore) {
+            lastLoadMoreTime = now;
+            state.page++;
+            galleryInstance.showScrollLoading();
+            performSearch(false).then(() => {
+              feedInstance?.onListChanged?.();
+            }).catch(() => {});
+          }
+        }
+      });
+      return feedInstance;
+    }).catch((err) => { feedPromise = null; throw err; });
+  }
+  return feedPromise;
+}
+
+function isPhoneViewport() {
+  return window.matchMedia('(max-width: 800px)').matches;
+}
+
+function isArchiveLikePost(post) {
+  return Boolean(post && (post.isArchive === true || String(post.fileExt || '').toLowerCase() === 'zip' ||
+    (Array.isArray(post.archiveUrls) && post.archiveUrls.length > 0)));
+}
+
+// One routing point for "open this post fullscreen": phones get the immersive
+// feed, desktops keep the classic viewer. Archive posts stay on the viewer
+// everywhere: the feed cannot host the archive inspection UI.
+function openPostOverlay(index, opts = {}) {
+  const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+  const post = opts.directPost || list[index];
+  const useViewer = opts.forceViewer || !isPhoneViewport() || isArchiveLikePost(post);
+  if (useViewer) {
+    ensureViewer().then((v) => v.openViewer(index, opts)).catch(() => {});
+  } else {
+    ensureFeed().then((f) => f.openFeed(index, opts)).catch(() => {
+      ensureViewer().then((v) => v.openViewer(index, opts)).catch(() => {});
+    });
+  }
+}
+
 export { isMyLiveDemoHost, isVercelHost, showToast, openDrawer, closeAllDrawers };
 
 let autocompleteInstance = null;
@@ -317,6 +396,7 @@ let authModalInstance = null;
 let profileUIInstance = null;
 let deferredInstallPrompt = null;
 let pendingPostId = null;
+let pendingFeedView = false;
 let lastLoadMoreTime = 0;
 
 // Monotonic token: responses from superseded searches are discarded on arrival
@@ -437,7 +517,7 @@ async function init() {
   });
 
   galleryInstance = initGallery({
-    onOpenViewer: (index) => { ensureViewer().then((v) => v.openViewer(index)).catch(() => {}); },
+    onOpenViewer: (index) => openPostOverlay(index),
     onFavoriteToggle: updateFavoritesBadge,
     onTagClick: (tag) => {
       autocompleteInstance.selectTag(tag, true);
@@ -455,7 +535,9 @@ async function init() {
         lastLoadMoreTime = now;
         state.page++;
         galleryInstance.showScrollLoading();
-        performSearch(false);
+        performSearch(false).then(() => {
+          feedInstance?.onListChanged?.();
+        }).catch(() => {});
       }
     },
     onRefresh: () => {
@@ -463,7 +545,11 @@ async function init() {
     },
     onAddAuthor: openAddAuthorModal,
     onSelectSite: (siteId) => selectSite(siteId),
-    onFindSimilar: (post) => handleFindSimilarPost(post)
+    onFindSimilar: (post) => handleFindSimilarPost(post),
+    onCardLongPress: (post) => {
+      haptic(20);
+      ensureFeed().then((f) => f.openQuickActions(post)).catch(() => {});
+    }
   });
 
   document.addEventListener('booru:langchange', () => {
@@ -478,8 +564,20 @@ async function init() {
     onCloseViewerUi: () => {
       whenViewerLoaded((v) => v.closeViewer());
     },
+    onCloseFeedUi: () => {
+      if (feedInstance?.isFeedOpen?.()) feedInstance.closeFeed({ skipHistoryBack: true });
+    },
     onOpenPost: (postId) => {
       openPostById(postId);
+    },
+    onOpenFeedPost: (postId) => {
+      // The feed owns the entry now: drop any viewer that was stacked above it.
+      whenViewerLoaded((v) => v.closeViewer({ skipHistoryBack: true }));
+      if (isPhoneViewport()) {
+        openPostById(postId, { overlay: 'feed', fromHistory: true });
+      } else {
+        openPostById(postId);
+      }
     },
     onSearchParams: (changed) => {
       if (!changed) return;
@@ -543,6 +641,7 @@ async function init() {
   // 4. Restore search/viewer state from the URL before the initial load
   const urlParams = consumeInitialUrl();
   pendingPostId = urlParams.post || null;
+  pendingFeedView = urlParams.view === 'feed';
   refreshSearchUiFromState();
 
   // 5. Initial search
@@ -550,8 +649,14 @@ async function init() {
 
   if (pendingPostId) {
     const pid = pendingPostId;
+    const wantFeed = pendingFeedView && isPhoneViewport();
     pendingPostId = null;
-    await openPostById(pid);
+    pendingFeedView = false;
+    await openPostById(pid, wantFeed ? { overlay: 'feed', fromHistory: true } : {});
+  } else if (pendingFeedView && isPhoneViewport()) {
+    // A bare view=feed link opens the feed at the top of the current results.
+    pendingFeedView = false;
+    ensureFeed().then((f) => f.openFeed(0)).catch(() => {});
   }
 }
 
@@ -569,7 +674,7 @@ function refreshSearchUiFromState() {
 
 // Opens a post by its original site id: fast path searches the loaded feed,
 // slow path fetches it with the `id:` metatag (bypassing content filters).
-async function openPostById(postId) {
+async function openPostById(postId, opts = {}) {
   if (!postId) return;
 
   const rawPostId = String(postId);
@@ -581,7 +686,11 @@ async function openPostById(postId) {
   const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
   const idx = list.findIndex(p => p && (String(p.id) === rawPostId || String(p.originalId) === originalId));
   if (idx >= 0) {
-    ensureViewer().then((v) => v.openViewer(idx)).catch(() => {});
+    if (opts.overlay === 'feed') {
+      ensureFeed().then((f) => f.openFeed(idx, opts)).catch(() => {});
+    } else {
+      openPostOverlay(idx);
+    }
     return;
   }
 
@@ -603,7 +712,11 @@ async function openPostById(postId) {
     const posts = res && res.success && Array.isArray(res.posts) ? res.posts : [];
     const post = posts.find(p => String(p.id) === rawPostId || String(p.originalId) === originalId);
     if (post) {
-      ensureViewer().then((v) => v.openViewer(-1, { directPost: post })).catch(() => {});
+      if (opts.overlay === 'feed') {
+        ensureFeed().then((f) => f.openFeed(-1, { directPost: post, fromHistory: Boolean(opts.fromHistory) })).catch(() => {});
+      } else {
+        openPostOverlay(-1, { directPost: post });
+      }
     } else {
       showToast(t('router.postNotFound', 'Пост не найден'));
     }
@@ -816,6 +929,53 @@ function handleAuthorSelect(authorTag) {
   performSearch(true);
 }
 
+// Feed variant of the site-and-search switch: closes the feed, applies the
+// site and filter defaults, then runs the new search.
+function switchSiteAndSearchForFeed(site, query) {
+  if (feedInstance?.isFeedOpen?.()) feedInstance.closeFeed({ skipHistoryBack: true });
+  if (site) {
+    state.currentSite = site;
+    persistSettings({ defaultSite: site });
+    updateSiteCapabilitiesUI(site);
+    updateCurrentSiteLabel();
+    renderSitesBar({ onSelectSite: selectSite });
+    renderMobileSourcesSheet({ onSelectSite: selectSite });
+    if (site === 'pawchive') ensurePawchiveServiceOptions();
+    if (site === 'kemono') ensureKemonoServiceOptions();
+  }
+  state.currentCategory = 'feed';
+  updateCategoryTabsUI();
+
+  state.postSort = 'new';
+  state.videoDurationSort = 'none';
+  state.typeFilter = 'all';
+  state.ageFilter = 'all';
+  state.ratingFilter = 'all';
+  state.aiFilter = 'no-ai';
+
+  updatePostSortUI();
+  updateVideoSortUI();
+  updateTypeFilterUI();
+  updateAgeFilterUI();
+  updateRatingFilterUI();
+  updateAiFilterUI();
+  updateFilterActiveDot();
+
+  if (autocompleteInstance) {
+    if (typeof autocompleteInstance.clear === 'function') {
+      autocompleteInstance.clear();
+    } else if (typeof autocompleteInstance.clearTags === 'function') {
+      autocompleteInstance.clearTags();
+    }
+    if (query) {
+      autocompleteInstance.selectTag(query, false);
+    }
+  } else {
+    state.searchTags = query ? [query] : [];
+  }
+  performSearch(true);
+}
+
 function handleFindSimilarPost(post) {
   if (!post) return;
   // Record session interaction
@@ -1023,6 +1183,12 @@ async function refreshAllUserData() {
 
 async function performSearch(reset = false, options = {}) {
   const seq = ++searchSeq;
+
+  // A fresh search supersedes the feed session: close it without polluting
+  // history (the search itself rewrites the URL right after).
+  if (reset && feedInstance?.isFeedOpen?.()) {
+    feedInstance.closeFeed({ skipHistoryBack: true });
+  }
 
   const favoritesHeaderBar = document.getElementById('favoritesHeaderBar');
   if (favoritesHeaderBar) {
@@ -2400,6 +2566,21 @@ function setupEventListeners() {
       }
     });
   });
+
+  // Phone feed entry: opens the current results as a fullscreen feed.
+  const btnMobileFeedMode = document.getElementById('btnMobileFeedMode');
+  if (btnMobileFeedMode) {
+    btnMobileFeedMode.addEventListener('click', () => {
+      haptic(15);
+      const list = (state.displayedPosts && state.displayedPosts.length > 0) ? state.displayedPosts : state.posts;
+      if (!Array.isArray(list) || list.length === 0) {
+        showToast(t('feed.empty.title', 'Здесь пока пусто'));
+        openDrawer(document.getElementById('sidebarSearch'));
+        return;
+      }
+      ensureFeed().then((f) => f.openFeed(0)).catch(() => {});
+    });
+  }
 
   // Mobile grid toggle (1 or 2 columns)
   const btnMobileGridToggle = document.getElementById('btnMobileGridToggle');

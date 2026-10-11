@@ -85,6 +85,7 @@ src/services/                  storage, cache, media, auth, backup, archives
 src/utils/                     network, tag logic, logging, host policy, settings policy
 public/index.html              static application shell and SVG sprite
 public/js/                     ES modules loaded by the esbuild bundle entry (app.js)
+public/js/feed/                phone feed subsystem (vertical snap feed: slides, video, gestures, sheets)
 public/dist/                   esbuild output (git-ignored, rebuilt by server.js)
 scripts/buildClient.mjs        esbuild bundle script behind `npm run build:client`
 public/css/                    theme tokens and component styles
@@ -248,6 +249,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - `public/dist/` is git-ignored and rebuilt by `server.js` when sources change (mtime check); `npm run build:client` rebuilds manually. esbuild is a runtime dependency so `npm install --omit=dev` deploys still build.
 - `state.js` owns mutable state, local persistence and import/export. `api.js` owns HTTP and auth headers. `app.js` coordinates search and routing.
 - `router.js` is the only writer of search and viewer URL state. Missing URL parameters restore canonical defaults.
+- The phone feed (`public/js/feed/`) is a fullscreen vertical snap feed for viewports up to 800 px. `openPostOverlay()` in `app.js` routes every "open post" action: phones get the feed, desktops keep the viewer; archive posts (`isArchive`, `zip`, `archiveUrls`) always open the viewer. `view=feed` mirrors a feed session in the URL; `notifyFeedOpened/Moved/Closed` in `router.js` own those history entries. The feed mounts at most five slides (active ± 2), preloads image neighbours and reuses the viewer's HEVC/teaser rules in `public/js/feed/video.js`. Long-press on a phone grid card opens the quick actions sheet; per-card action buttons stay hidden below 800 px.
 - Omitting a default in `buildQuery()` and normalizing it in `applyUrlToState()` must be symmetric. Compare canonical values, never param presence: `if ((p.site || 'danbooru') !== state.currentSite)`, not `p.site !== state.currentSite`. A false `changed` re-runs `performSearch(true)`, which re-renders the gallery without `preserveScroll` and jumps the feed back to the top, so Back from the viewer silently loses the scroll position. Cover new fields in `test/unit/routerUrlState.test.js`.
 - Gallery cards are delegated on `#galleryGrid`; per-card listeners are allowed only for media error and metadata events.
 - Cards open with click, Enter or Space and expose an accessible name.

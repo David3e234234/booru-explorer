@@ -1127,7 +1127,12 @@ input.search-input:focus,
   min-height: 56px;
   padding-top: 6px;
   padding-bottom: max(14px, env(safe-area-inset-bottom, 16px));
+  /* The single glass surface of the app (dose cap R-10): the bar floats over
+     feed media. Solid fallback first for browsers without color-mix(). */
   background: var(--bg-surface);
+  background: color-mix(in srgb, var(--bg-surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  backdrop-filter: blur(16px) saturate(1.25);
   border-top: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
@@ -1565,26 +1570,26 @@ input.search-input:focus,
   }
 
   .header-right {
-    gap: 5px;
+    gap: 4px;
     flex-shrink: 0;
   }
 
   .header-status-info {
     cursor: pointer;
-    padding: 2px 6px;
+    padding: 2px 5px;
     background: var(--bg-surface-elevated);
     border-radius: var(--radius-full);
     border: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
-    max-width: 95px;
+    max-width: 76px;
     overflow: hidden;
   }
 
   .active-site-badge {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
-    padding: 2px 4px;
+    padding: 2px 3px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1660,6 +1665,18 @@ input.search-input:focus,
   .main-content {
     height: auto;
     padding: 10px 10px calc(65px + max(16px, env(safe-area-inset-bottom, 20px))) 10px;
+  }
+}
+
+/* Narrow phones: the brand drops to the logo mark so every header action
+   (sources, shuffle, feed, grid, wiki) stays reachable. */
+@media (max-width: 440px) {
+  .brand-title {
+    display: none !important;
+  }
+
+  .header-status-info {
+    max-width: 64px;
   }
 }
 

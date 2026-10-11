@@ -15,7 +15,7 @@ import { showToast, showActionToast, haptic, isVideoMediaUrl, getCardPreviewVide
 import { resolveRule34VideoMedia } from './modules/rule34VideoResolve.js';
 import { t } from './i18n.js';
 
-export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onAuthorSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite, onFindSimilar }) {
+export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagSelect, onAuthorSelect, onLoadMore, onRefresh, onAddAuthor, onSelectSite, onFindSimilar, onCardLongPress }) {
   const galleryGrid = document.getElementById('galleryGrid');
   const loadingSpinner = document.getElementById('loadingSpinner');
   const emptyState = document.getElementById('emptyState');
@@ -1207,10 +1207,42 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
   let touchResetTimer = null;
   const TOUCH_DRIFT_TOLERANCE_PX = 10;
 
+  // Long-press (~450 ms) opens the quick actions sheet on touch devices.
+  // The synthetic click after the release is swallowed so the card does not
+  // also open the feed.
+  let cardLongPressTimer = null;
+  let longPressFired = false;
+  const CARD_LONG_PRESS_MS = 450;
+
+  function cancelCardLongPress() {
+    if (cardLongPressTimer) {
+      clearTimeout(cardLongPressTimer);
+      cardLongPressTimer = null;
+    }
+  }
+
+  function startCardLongPress(target) {
+    cancelCardLongPress();
+    if (!onCardLongPress || !target || typeof target.closest !== 'function') return;
+    const card = target.closest('.media-card');
+    if (!card || !galleryGrid.contains(card)) return;
+    cardLongPressTimer = setTimeout(() => {
+      cardLongPressTimer = null;
+      const post = card._post;
+      if (!post) return;
+      longPressFired = true;
+      haptic(20);
+      onCardLongPress(post, card);
+    }, CARD_LONG_PRESS_MS);
+  }
+
   galleryGrid.addEventListener('touchstart', (e) => {
     if (e.touches.length === 1) {
       touchStartPoint = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       didDrift = false;
+      startCardLongPress(e.target);
+    } else {
+      cancelCardLongPress();
     }
   }, { passive: true });
 
@@ -1220,26 +1252,42 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const dy = e.touches[0].clientY - touchStartPoint.y;
     if ((dx * dx + dy * dy) > TOUCH_DRIFT_TOLERANCE_PX * TOUCH_DRIFT_TOLERANCE_PX) {
       didDrift = true;
+      cancelCardLongPress();
     }
   }, { passive: true });
 
-  galleryGrid.addEventListener('touchend', () => {
+  galleryGrid.addEventListener('touchend', (e) => {
+    cancelCardLongPress();
+    // A long-press already acted on this gesture: cancel the compatibility
+    // click, otherwise the release click lands on the quick actions sheet
+    // that just opened under the finger and closes it immediately.
+    if (longPressFired && e.cancelable) e.preventDefault();
     if (touchResetTimer) clearTimeout(touchResetTimer);
     touchResetTimer = setTimeout(() => {
       touchStartPoint = null;
       didDrift = false;
+      longPressFired = false;
       touchResetTimer = null;
     }, 400);
-  }, { passive: true });
+  }, { passive: false });
 
   galleryGrid.addEventListener('touchcancel', () => {
     touchStartPoint = null;
     didDrift = false;
+    cancelCardLongPress();
     if (touchResetTimer) {
       clearTimeout(touchResetTimer);
       touchResetTimer = null;
     }
   }, { passive: true });
+
+  // The long-press quick actions sheet replaces the native context menu on
+  // touch devices; desktop right-click stays untouched.
+  if (window.matchMedia('(hover: none)').matches) {
+    galleryGrid.addEventListener('contextmenu', (e) => {
+      if (e.target.closest('.media-card')) e.preventDefault();
+    });
+  }
 
   function isDriftedTouch(e) {
     if (didDrift) return true;
@@ -1254,6 +1302,14 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     if (!card || !galleryGrid.contains(card)) return;
     const post = card._post;
     if (!post) return;
+
+    // The long-press quick actions sheet already handled this card: swallow
+    // the synthetic click that follows the finger release.
+    if (longPressFired) {
+      longPressFired = false;
+      e.stopPropagation();
+      return;
+    }
 
     card._hasInteracted = true;
 

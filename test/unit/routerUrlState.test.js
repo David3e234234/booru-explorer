@@ -41,6 +41,12 @@ describe('Router URL state', () => {
       assert.strictEqual(parsed.cat, 'feed');
       assert.strictEqual(parsed.sort, 'top');
     });
+
+    it('parses the feed view marker and rejects unknown values', () => {
+      assert.strictEqual(parseParams('?view=feed&post=abc').view, 'feed');
+      assert.strictEqual(parseParams('?view=grid').view, null);
+      assert.strictEqual(parseParams('').view, null);
+    });
   });
 
   describe('applyUrlToState', () => {
@@ -70,6 +76,13 @@ describe('Router URL state', () => {
     it('treats every omitted default as unchanged', () => {
       assert.strictEqual(applyUrlToState(parseParams('')), false);
       assert.strictEqual(applyUrlToState(parseParams('?site=gelbooru')), true);
+    });
+
+    // view=feed is overlay state, not search state: it must never count as a
+    // search change, or Back from the feed would re-run the search.
+    it('ignores the feed view marker in the search comparison', () => {
+      assert.strictEqual(applyUrlToState(parseParams('?view=feed')), false);
+      assert.strictEqual(applyUrlToState(parseParams('?view=feed&post=abc')), false);
     });
 
     it('detects real changes in the other normalized defaults', () => {
