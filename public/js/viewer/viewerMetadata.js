@@ -153,9 +153,12 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
   } else if ((currentPost.site === 'rule34' || currentPost.site === 'xbooru' || currentPost.site === 'gelbooru') && (currentPost.originalId || currentPost.id)) {
     const targetPostId = currentPost.id;
     const cleanOrigId = (currentPost.originalId || currentPost.id || '').replace(/^(rule34|xbooru|gelbooru)_/, '').split('_')[0];
+    const isTentativeAuthor = !!currentPost.authorTentative ||
+      (typeof currentPost.author === 'string' && currentPost.author.startsWith('@')) ||
+      !(currentPost.tagDetails?.artist?.length);
     const needsResolve = !currentPost.width ||
       !currentPost.author ||
-      !(currentPost.tagDetails?.artist?.length) ||
+      isTentativeAuthor ||
       !currentPost.source ||
       currentPost.source.includes('rule34.xxx/index.php') ||
       currentPost.source.includes('xbooru.com/index.php');
@@ -183,6 +186,7 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
           const resolvedAuthor = resolved.author || (resolved.tagDetails?.artist?.length ? resolved.tagDetails.artist.join(', ') : '');
           if (resolvedAuthor && resolvedAuthor !== currentPost.author) {
             currentPost.author = resolvedAuthor;
+            currentPost.authorTentative = false;
             changed = true;
           }
 
@@ -222,6 +226,13 @@ export function resolvePostMetadata(currentPost, { onPostUpdated, getCurrentPost
             const card = document.querySelector(`.media-card[data-post-id="${currentPost.id}"]`);
             if (card) {
               card._post = currentPost;
+              const authorChip = card.querySelector('.card-author-chip');
+              if (authorChip && currentPost.author) {
+                const cleanA = currentPost.author.replace(/^@/, '').replace(/^pixiv:/, '').trim();
+                authorChip.setAttribute('data-author', cleanA);
+                const nameSpan = authorChip.querySelector('.card-author-name');
+                if (nameSpan) nameSpan.textContent = cleanA;
+              }
             }
           }
           return data;

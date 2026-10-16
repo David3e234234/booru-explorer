@@ -1,6 +1,6 @@
-﻿import fs from 'fs';
+import fs from 'fs';
 import path from 'path';
-import { fetchSafe, discardResponse } from '../utils/network.js';
+import { fetchSafe, discardResponse, safeJsonParse } from '../utils/network.js';
 import { getSettings } from './storageService.js';
 import { CACHE_DIR } from '../config/constants.js';
 
@@ -127,6 +127,17 @@ function scheduleDiskSave(site) {
   if (typeof saveTimer.unref === 'function') saveTimer.unref();
 }
 
+export function setCachedTagType(site, tag, type) {
+  const normalizedSite = normalizeSite(site);
+  if (!normalizedSite || !tag || type === null || type === undefined) return;
+  const canonical = typeof type === 'number' ? type : normalizeBooruTagType(normalizedSite, type);
+  if (canonical === null || canonical === undefined) return;
+  const map = loadDiskCache(normalizedSite);
+  const low = String(tag).toLowerCase().trim();
+  map.set(low, { type: canonical, at: Date.now() });
+  scheduleDiskSave(normalizedSite);
+}
+
 export function getCachedTagType(site, tag) {
   const normalizedSite = normalizeSite(site);
   if (!normalizedSite || !tag) return null;
@@ -191,28 +202,76 @@ async function fetchTagTypeOnce(site, tag, effectiveSettings) {
       site
     }).catch(() => null);
 
-    if (!res) return null;
-    if (!res.ok) {
+    let resolvedType = null;
+    let resolvedName = String(tag).toLowerCase();
+
+    if (res && res.ok) {
+      const text = await res.text();
+      // 1. Both boards answer the tag DAPI with a single <tag .../> element.
+      const m = text.match(/<tag\s+([^>]*?)\/?>/i);
+      if (m) {
+        const typeM = m[1].match(/type="(\d+)"/i);
+        const nameM = m[1].match(/name="([^"]+)"/i);
+        if (typeM) {
+          resolvedType = normalizeBooruTagType(site, typeM[1]);
+          if (nameM && nameM[1]) resolvedName = nameM[1].toLowerCase();
+        }
+      } else {
+        // Check if DAPI answered with JSON
+        const data = safeJsonParse(text, null);
+        if (data) {
+          const item = Array.isArray(data) ? data[0] : (data?.tag?.[0] || data?.tag || null);
+          if (item && (item.type !== undefined || item.category !== undefined)) {
+            resolvedType = normalizeBooruTagType(site, item.type ?? item.category);
+            if (item.name) resolvedName = String(item.name).toLowerCase();
+          }
+        }
+      }
+    } else if (res) {
       await discardResponse(res);
-      return null;
     }
 
-    const text = await res.text();
-    // Both boards answer the tag DAPI with a single <tag .../> element.
-    const m = text.match(/<tag\s+([^>]*?)\/?>/i);
-    if (!m) return null;
-    const typeM = m[1].match(/type="(\d+)"/i);
-    const nameM = m[1].match(/name="([^"]+)"/i);
-    if (!typeM) return null;
+    // 2. Zero-credential public autocomplete fallback for Gelbooru
+    if (resolvedType === null && site === 'gelbooru') {
+      try {
+        const autoUrl = `https://gelbooru.com/index.php?page=autocomplete2&term=${encodeURIComponent(tag.toLowerCase())}&type=tag_query&limit=5`;
+        const autoRes = await fetchSafe(autoUrl, {
+          headers: { Referer: 'https://gelbooru.com/' },
+          timeout: 4000,
+          settings: effectiveSettings,
+          site: 'gelbooru'
+        }).catch(() => null);
 
-    const type = normalizeBooruTagType(site, typeM[1]);
-    if (type === null) return null;
+        if (autoRes && autoRes.ok) {
+          const autoData = await autoRes.json().catch(() => null);
+          if (Array.isArray(autoData)) {
+            const cleanTarget = tag.toLowerCase().trim();
+            const match = autoData.find(item => {
+              const val = String(item.value || item.label || '').toLowerCase().trim();
+              return val === cleanTarget || val.replace(/_/g, ' ') === cleanTarget.replace(/_/g, ' ');
+            });
+            if (match && match.category) {
+              const catLow = String(match.category).toLowerCase();
+              if (catLow === 'artist' || catLow === '1') resolvedType = TAG_TYPE.ARTIST;
+              else if (catLow === 'character' || catLow === '4') resolvedType = TAG_TYPE.CHARACTER;
+              else if (catLow === 'copyright' || catLow === '3') resolvedType = TAG_TYPE.COPYRIGHT;
+              else if (catLow === 'metadata' || catLow === 'meta' || catLow === '5' || catLow === '6') resolvedType = TAG_TYPE.META;
+              else if (catLow === 'general' || catLow === '0' || catLow === 'tag') resolvedType = TAG_TYPE.GENERAL;
+              if (match.value) resolvedName = String(match.value).toLowerCase();
+            }
+          }
+        } else if (autoRes) {
+          await discardResponse(autoRes);
+        }
+      } catch {}
+    }
+
+    if (resolvedType === null) return null;
 
     const map = getMemoryMap(site);
-    const resolvedName = (nameM && nameM[1] ? nameM[1] : tag).toLowerCase();
-    map.set(resolvedName, { type, at: Date.now() });
+    map.set(resolvedName, { type: resolvedType, at: Date.now() });
     scheduleDiskSave(site);
-    return { tag: resolvedName, type };
+    return { tag: resolvedName, type: resolvedType };
   } catch {
     return null;
   } finally {
@@ -296,3 +355,42 @@ export function clearBooruTagTypeCache() {
     }
   }
 }
+
+/**
+ * Resolves the author name from the user's search query tags for a specific site.
+ * Supports explicit prefixes (artist:x, author:x, creator:x, by_x) as well as bare artist tags
+ * (e.g. "xaea_xp") by consulting in-memory and disk cached booru tag types.
+ * Does NOT perform network calls during search feeds to adhere to AGENTS.md rule 129.
+ *
+ * @param {string} site - 'gelbooru' | 'rule34' | 'paheal'
+ * @param {string} searchTagsStr - User search tags string
+ * @returns {string} Author name, or empty string
+ */
+export function resolveSearchAuthor(site, searchTagsStr = '') {
+  const normalizedSite = normalizeSite(site);
+  if (!searchTagsStr || typeof searchTagsStr !== 'string') return '';
+  const tokens = searchTagsStr.split(/\s+/).map(s => s.trim()).filter(Boolean);
+  if (tokens.length === 0) return '';
+
+  for (const tok of tokens) {
+    const lower = tok.toLowerCase();
+    if (lower.startsWith('artist:') || lower.startsWith('author:') || lower.startsWith('creator:')) {
+      return tok.replace(/^(artist|author|creator):/i, '').trim();
+    }
+    if (lower.startsWith('by_') && lower.length > 3) {
+      return tok.slice(3).trim();
+    }
+    // Skip operational / meta search tokens
+    if (lower.includes(':') || lower.startsWith('-') || lower.startsWith('~')) continue;
+    // Check if tag is known artist in memory or disk cache
+    if (normalizedSite) {
+      const cached = getCachedTagType(normalizedSite, lower);
+      if (cached === TAG_TYPE.ARTIST) {
+        return tok;
+      }
+    }
+  }
+
+  return '';
+}
+

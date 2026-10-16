@@ -4,6 +4,7 @@ import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtml
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
+import { resolveSearchAuthor } from '../services/booruTagTypeService.js';
 
 // Preview tiers from native board URLs: low (thumb180) is the small thumbnail,
 // medium (thumb360) is the sample image, high (thumb720) prefers the sample and
@@ -85,6 +86,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
       }
     }
 
+    const pahealAuthor = await resolveSearchAuthor('paheal', tags, settings);
     const parsePahealXml = async (queryTags) => {
       const pahealUrl = `https://rule34.paheal.net/api/danbooru/post/index.xml?tags=${encodeURIComponent(queryTags)}&limit=${fetchPahealLimit}&page=${page}`;
       const pahealRes = await fetchSafe(pahealUrl, {
@@ -127,7 +129,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           fileExt = fileName.toLowerCase().endsWith('.webm') ? 'webm' : 'mp4';
         }
         const previewUrl = resolvePreviewUrl(attrs.preview_url, attrs.file_url, attrs.file_url, isVideo);
-        const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, false, 'paheal');
+        const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(rawTags, attrs.source, pahealAuthor, settings, false, 'paheal');
         const createdAt = normalizeDate(attrs.created_at || attrs.date);
         const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: '', fileUrl: attrs.file_url, isVideo });
         const thumbSample = attrs.file_url;
@@ -151,6 +153,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
           author,
           assistants: assistants || [],
+          authorTentative: !!authorTentative,
           tags: rawTags,
           tagDetails,
           score: parseInt(attrs.score, 10) || 0,
@@ -221,25 +224,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
   }
 
   const pid = Math.max(0, page - 1);
-
-  // Extract author name from explicit query prefixes only (artist:/author:/by_).
-  // The previous version awaited the 83k-entry global tag dictionary on every
-  // search just to confirm a bare tag, blocking the DAPI request behind disk
-  // and network I/O. Bare-tag confirmation now happens inside classifyPostTags,
-  // which loads the dictionary once and shares it across all posts of the batch.
-  let searchAuthor = '';
-  const searchTokens = (tags || '').split(' ').map(s => s.trim()).filter(Boolean);
-  for (const tok of searchTokens) {
-    const lower = tok.toLowerCase();
-    if (lower.startsWith('artist:') || lower.startsWith('author:') || lower.startsWith('creator:')) {
-      searchAuthor = tok.replace(/^(artist|author|creator):/i, '').trim();
-      break;
-    }
-    if (lower.startsWith('by_') && lower.length > 3) {
-      searchAuthor = tok.slice(3).trim();
-      break;
-    }
-  }
+  const searchAuthor = resolveSearchAuthor('rule34', tags);
 
   // 1. Try the official DAPI when an API key is available
   if (settings?.rule34ApiKey && settings?.rule34UserId) {
@@ -273,6 +258,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
           // slow HTML fallback: empty means "no posts", not "request failed".
           if (Array.isArray(data)) {
             if (data.length === 0) return [];
+
             // One malformed item must not blank the whole page: each post settles
             // on its own and only the rejections are dropped
             const settledPosts = await Promise.allSettled(data.map(async item => {
@@ -290,7 +276,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 rawSampleUrl = '';
               }
               previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
-              const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, searchAuthor, settings, false, 'rule34');
+              const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(rawTags, item.source, searchAuthor, settings, false, 'rule34');
               const createdAt = normalizeDate(item.created_at || item.change);
               const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
               const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -325,6 +311,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
                 author,
                 assistants: assistants || [],
+                authorTentative: !!authorTentative,
                 tags: rawTags,
                 tagDetails,
                 score: parseInt(item.score, 10) || 0,
@@ -476,8 +463,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
       }
 
       if (rawParsedItems.length > 0) {
+        await resolveBatchCandidateTags('rule34', rawParsedItems, null, settings);
         const settledParsed = await Promise.allSettled(rawParsedItems.map(async p => {
-          const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
+          const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
           const seriesKey = extractSeriesKey({
             source: p.source,
             parentId: null,
@@ -509,6 +497,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
             hasSound: p.isVideo && (p.rawTags.includes('sound') || p.rawTags.includes('audio')),
             author,
             assistants: assistants || [],
+            authorTentative: !!authorTentative,
             tags: p.rawTags,
             tagDetails,
             score: p.score,
@@ -601,8 +590,9 @@ export async function fetchRule34(params, aiTagsList, settings) {
         }
 
         if (altItems.length > 0) {
+          await resolveBatchCandidateTags('rule34', altItems, null, settings);
           posts = await Promise.all(altItems.map(async p => {
-            const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
+            const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl: p.thumbUrl, rawSampleUrl: p.sampleUrl, fileUrl: p.fileUrl, isVideo: p.isVideo });
             const thumbSample = p.sampleUrl;
             const thumbOriginal = p.fileUrl;
@@ -626,6 +616,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
               hasSound: p.isVideo && (p.rawTags.includes('sound') || p.rawTags.includes('audio')),
               author,
               assistants: assistants || [],
+              authorTentative: !!authorTentative,
               tags: p.rawTags,
               tagDetails,
               score: p.score,

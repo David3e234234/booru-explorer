@@ -3,6 +3,7 @@ import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtml
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
+import { resolveSearchAuthor, setCachedTagType, TAG_TYPE } from '../services/booruTagTypeService.js';
 
 function getRecentDateFilter(days = 30) {
   const d = new Date();
@@ -112,6 +113,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
   }
 
   const pid = Math.max(0, page - 1);
+  const searchAuthor = resolveSearchAuthor('gelbooru', tags);
 
   // 1. Try the official DAPI when an API key is available
   if (settings?.gelbooruApiKey && settings?.gelbooruUserId) {
@@ -134,6 +136,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
         // slow HTML fallback: empty means "no posts", not "request failed".
         if (dapiDefinitive && posts.length === 0) return [];
         if (Array.isArray(posts) && posts.length > 0) {
+
           // One malformed item must not blank the whole page: each post settles
           // on its own and only the rejections are dropped
           const settled = await Promise.allSettled(posts.map(async item => {
@@ -146,7 +149,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, false, 'gelbooru');
+            const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(rawTags, item.source, searchAuthor, settings, false, 'gelbooru');
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
             const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -177,6 +180,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
               hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
               author,
               assistants: assistants || [],
+              authorTentative: !!authorTentative,
               tags: rawTags,
               tagDetails,
               score: parseInt(item.score, 10) || 0,
@@ -262,8 +266,11 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     }
 
     if (rawParsed.length > 0) {
+      // Pre-resolve unknown candidate artist tags for the batch
+      await resolveBatchCandidateTags('gelbooru', rawParsed, null, settings);
+
       return await Promise.all(rawParsed.map(async p => {
-        const { tagDetails, author, assistants } = await classifyPostTags(p.rawTags, p.source, '', settings, false, 'gelbooru');
+        const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'gelbooru');
         const seriesKey = extractSeriesKey({
           source: '',
           parentId: null,
@@ -295,6 +302,7 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
           hasSound: p.isVideo && p.hasSound,
           author,
           assistants: assistants || [],
+          authorTentative: !!authorTentative,
           tags: p.rawTags,
           tagDetails,
           score: p.score,
@@ -426,12 +434,29 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
       const html = await res.text();
 
       const extractTagsByClass = (htmlStr, cls) => {
-        const re = new RegExp(`class="[^"]*${cls}[^"]*"[^>]*>[\\s\\S]*?<a[^>]*>(?:\\?\\s*)?([^<]+)<\\/a>`, 'gi');
+        const blockRe = new RegExp(`<(?:li|div|span)\\s+class="[^"]*${cls}[^"]*"[^>]*>([\\s\\S]*?)<\\/(?:li|div|span)>`, 'gi');
         const matches = [];
-        let m;
-        while ((m = re.exec(htmlStr)) !== null) {
-          const raw = m[1].replace(/^[?+\s]+/, '').trim();
-          if (raw) matches.push(safeDecodeURIComponent(raw).replace(/\s+/g, '_'));
+        let blockMatch;
+        while ((blockMatch = blockRe.exec(htmlStr)) !== null) {
+          const block = blockMatch[1];
+          // Find the tag link (usually href contains tags=) or non-? anchor text
+          const aRe = /<a\s+[^>]*href="[^"]*tags=([^"&]+)"[^>]*>([^<]+)<\/a>/gi;
+          let aMatch = aRe.exec(block);
+          if (aMatch) {
+            const raw = safeDecodeURIComponent(aMatch[1] || aMatch[2]).replace(/^[?+\s]+/, '').trim();
+            if (raw) matches.push(raw.replace(/\s+/g, '_'));
+          } else {
+            // Fallback: any <a> with text other than '?' or '+'
+            const fallbackRe = /<a[^>]*>([^<]+)<\/a>/gi;
+            let fbMatch;
+            while ((fbMatch = fallbackRe.exec(block)) !== null) {
+              const text = fbMatch[1].replace(/^[?+\s]+/, '').trim();
+              if (text && text !== '?' && text !== '+') {
+                matches.push(safeDecodeURIComponent(text).replace(/\s+/g, '_'));
+                break;
+              }
+            }
+          }
         }
         return matches;
       };
@@ -441,6 +466,8 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
       const characterMatches = extractTagsByClass(html, 'tag-type-character');
       const metadataMatches = extractTagsByClass(html, 'tag-type-(?:metadata|meta)');
       const generalMatches = extractTagsByClass(html, 'tag-type-general');
+
+      artistMatches.forEach(a => setCachedTagType('gelbooru', a, TAG_TYPE.ARTIST));
 
       const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...metadataMatches, ...generalMatches, ...fallbackTags])];
 

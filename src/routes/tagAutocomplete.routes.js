@@ -7,6 +7,7 @@ import { loadGlobalTagSummary, getTagCategory, META_KEYWORDS } from '../utils/ta
 import { fetchSafe } from '../utils/network.js';
 import { getAllAliasesForName } from '../services/aliasService.js';
 import { parseRequestAuth, buildAuthCacheKey, resolveRequestSettings } from '../utils/settingsValidation.js';
+import { setCachedTagType, TAG_TYPE } from '../services/booruTagTypeService.js';
 
 const router = express.Router();
 
@@ -74,11 +75,18 @@ router.get('/tags/autocomplete', async (req, res) => {
               const val = typeof item === 'string' ? item : (item.value || item.label || '');
               const total = typeof item === 'object' ? (parseInt(item.total || item.count, 10) || 0) : 0;
               const type = typeof item === 'object' ? (item.type || 'general') : 'general';
+              const cleanType = type === 'tag' ? 'general' : type;
+              if (val) {
+                if (cleanType === 'artist') setCachedTagType('rule34', val, TAG_TYPE.ARTIST);
+                else if (cleanType === 'character') setCachedTagType('rule34', val, TAG_TYPE.CHARACTER);
+                else if (cleanType === 'copyright') setCachedTagType('rule34', val, TAG_TYPE.COPYRIGHT);
+                else if (cleanType === 'metadata' || cleanType === 'meta') setCachedTagType('rule34', val, TAG_TYPE.META);
+              }
               return {
                 value: val,
                 label: val.replace(/_/g, ' '),
                 count: total,
-                category: type === 'tag' ? 'general' : type
+                category: cleanType
               };
             });
           }
@@ -108,8 +116,16 @@ router.get('/tags/autocomplete', async (req, res) => {
               else if (rawCat === '4' || rawCat === 'character') cat = 'character';
               else if (rawCat === '5' || rawCat === '6' || rawCat === 'metadata' || rawCat === 'meta') cat = 'meta';
 
+              const val = item.value || item.label || '';
+              if (val) {
+                if (cat === 'artist') setCachedTagType('gelbooru', val, TAG_TYPE.ARTIST);
+                else if (cat === 'character') setCachedTagType('gelbooru', val, TAG_TYPE.CHARACTER);
+                else if (cat === 'copyright') setCachedTagType('gelbooru', val, TAG_TYPE.COPYRIGHT);
+                else if (cat === 'meta') setCachedTagType('gelbooru', val, TAG_TYPE.META);
+              }
+
               return {
-                value: item.value || item.label,
+                value: val,
                 label: (item.label || item.value || '').replace(/_/g, ' '),
                 count: parseInt(item.post_count || item.count, 10) || 0,
                 category: cat
