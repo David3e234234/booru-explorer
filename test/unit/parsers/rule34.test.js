@@ -329,4 +329,44 @@ test('Rule34 Parser Unit Tests (including Paheal integration)', async (t) => {
     assert.ok(post.tagDetails.artist.includes('nito_me') || post.tagDetails.artist.includes('nito me'));
     assert.ok(post.tagDetails.character.includes('norma_hollowell') || post.tagDetails.character.includes('norma hollowell'));
   });
+
+  await t.test('fetchRule34PostById resolves author from post tags and matches patreon source', async () => {
+    const apiClient = mockContext.agent.get('https://api.rule34.xxx');
+    apiClient.intercept({
+      path: (p) => p.includes('14259564'),
+      method: 'GET'
+    }).reply(404, 'Not found');
+
+    const html = `<!DOCTYPE html>
+      <html>
+        <body>
+          <video src="https://api-cdn-mp4.rule34.xxx/images/2755/1efdc6945a9440a582cfa687413b9a1a.mp4"></video>
+          <ul id="tag-sidebar">
+            <li class="tag-type-artist tag">
+              <a href="index.php?page=post&amp;s=list&amp;tags=sakura_night">sakura night</a>
+            </li>
+            <li class="tag-type-copyright tag">
+              <a href="index.php?page=post&amp;s=list&amp;tags=zenless_zone_zero">zenless zone zero</a>
+            </li>
+            <li class="tag-type-character tag">
+              <a href="index.php?page=post&amp;s=list&amp;tags=anby_demara">anby demara</a>
+            </li>
+          </ul>
+          <div>Source: <a href="https://www.patreon.com/SakuraNight377">https://www.patreon.com/SakuraNight377</a></div>
+          <div>Rating: Explicit</div>
+          <div>Score: 1191</div>
+        </body>
+      </html>`;
+    const htmlClient = mockContext.agent.get('https://rule34.xxx');
+    htmlClient.intercept({
+      path: (p) => p.includes('14259564') && p.includes('s=view'),
+      method: 'GET'
+    }).reply(200, html);
+
+    const post = await fetchRule34PostById('14259564', [], mockSettings);
+    assert.ok(post);
+    assert.equal(post.author, 'sakura_night');
+    assert.ok(!post.authorTentative);
+    assert.ok(post.tagDetails.artist.includes('sakura_night'));
+  });
 });

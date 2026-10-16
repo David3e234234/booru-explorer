@@ -4,7 +4,7 @@ import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtml
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
-import { resolveSearchAuthor } from '../services/booruTagTypeService.js';
+import { resolveSearchAuthor, setCachedTagType, TAG_TYPE } from '../services/booruTagTypeService.js';
 
 // Preview tiers from native board URLs: low (thumb180) is the small thumbnail,
 // medium (thumb360) is the sample image, high (thumb720) prefers the sample and
@@ -463,7 +463,6 @@ export async function fetchRule34(params, aiTagsList, settings) {
       }
 
       if (rawParsedItems.length > 0) {
-        await resolveBatchCandidateTags('rule34', rawParsedItems, null, settings);
         const settledParsed = await Promise.allSettled(rawParsedItems.map(async p => {
           const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
           const seriesKey = extractSeriesKey({
@@ -590,7 +589,6 @@ export async function fetchRule34(params, aiTagsList, settings) {
         }
 
         if (altItems.length > 0) {
-          await resolveBatchCandidateTags('rule34', altItems, null, settings);
           posts = await Promise.all(altItems.map(async p => {
             const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'rule34');
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl: p.thumbUrl, rawSampleUrl: p.sampleUrl, fileUrl: p.fileUrl, isVideo: p.isVideo });
@@ -693,7 +691,10 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: '', fileUrl: attrs.file_url, isVideo });
             const thumbSample = attrs.file_url;
             const thumbOriginal = attrs.file_url;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, attrs.source, '', settings, true, 'paheal');
+            const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(rawTags, attrs.source, '', settings, true, 'paheal');
+            const resolvedAuthor = (author && author !== '?' && !author.startsWith('@') && !author.startsWith('patreon:') && !author.startsWith('pixiv:') && !author.startsWith('fantia:'))
+              ? author
+              : (tagDetails.artist && tagDetails.artist.length > 0 ? tagDetails.artist.join(', ') : (author || ''));
             return {
               id: `paheal_${attrs.id}`,
               originalId: String(attrs.id),
@@ -711,8 +712,9 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
               isVideo,
               isGif,
               hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
-              author,
+              author: resolvedAuthor,
               assistants: assistants || [],
+              authorTentative: !!authorTentative,
               tags: rawTags,
               tagDetails,
               score: parseInt(attrs.score, 10) || 0,
@@ -773,7 +775,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true, 'rule34');
+            const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(rawTags, item.source, '', settings, true, 'rule34');
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
             const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -784,6 +786,10 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
               originalId: String(item.id),
               tags: rawTags
             }, 'rule34');
+
+            const resolvedAuthor = (author && author !== '?' && !author.startsWith('@') && !author.startsWith('patreon:') && !author.startsWith('pixiv:') && !author.startsWith('fantia:'))
+              ? author
+              : (tagDetails.artist && tagDetails.artist.length > 0 ? tagDetails.artist.join(', ') : (author || ''));
 
             return {
               id: `rule34_${item.id}`,
@@ -802,8 +808,9 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
               isVideo,
               isGif,
               hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
-              author,
+              author: resolvedAuthor,
               assistants: assistants || [],
+              authorTentative: !!authorTentative,
               tags: rawTags,
               tagDetails,
               score: parseInt(item.score, 10) || 0,
@@ -897,6 +904,8 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
         const metadataMatches = extractTagsByClass(html, 'tag-type-(?:metadata|meta)');
         const generalMatches = extractTagsByClass(html, 'tag-type-general');
 
+        artistMatches.forEach(a => setCachedTagType(isPaheal ? 'paheal' : 'rule34', a, TAG_TYPE.ARTIST));
+
         const sourceMatch = html.match(/Source:\s*<a[^>]+href="([^"]+)"/i) || html.match(/Source:\s*([^\s<]+)/i);
         const source = sourceMatch ? sourceMatch[1].trim().replace(/&amp;/g, '&') : '';
 
@@ -964,8 +973,13 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
           isVideo,
           isGif,
           hasSound: isVideo && (hasSound || allTags.includes('sound') || allTags.includes('audio')),
-          author: (author && author !== '?') ? author : ((initialAuthor && initialAuthor !== '?') ? initialAuthor : ''),
+          author: (author && author !== '?' && !author.startsWith('@') && !author.startsWith('patreon:') && !author.startsWith('pixiv:') && !author.startsWith('fantia:')) 
+            ? author 
+            : (tagDetails.artist && tagDetails.artist.length > 0 
+                ? tagDetails.artist.join(', ') 
+                : ((initialAuthor && initialAuthor !== '?') ? initialAuthor : (author || ''))),
           assistants: assistants || [],
+          authorTentative: !tagDetails.artist || tagDetails.artist.length === 0,
           tags: allTags,
           tagDetails,
           score,
@@ -990,7 +1004,10 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
 
   // 4. Fallback: classify from fallbackTags if provided
   if (Array.isArray(fallbackTags) && fallbackTags.length > 0) {
-    const { tagDetails, author, assistants } = await classifyPostTags(fallbackTags, '', '', settings, true, isPaheal ? 'paheal' : 'rule34');
+    const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(fallbackTags, '', '', settings, true, isPaheal ? 'paheal' : 'rule34');
+    const resolvedAuthor = (author && author !== '?' && !author.startsWith('@') && !author.startsWith('patreon:') && !author.startsWith('pixiv:') && !author.startsWith('fantia:'))
+      ? author
+      : (tagDetails.artist && tagDetails.artist.length > 0 ? tagDetails.artist.join(', ') : (author || ''));
     return {
       id: isPaheal ? `paheal_${cleanId}` : `rule34_${cleanId}`,
       originalId: cleanId,
@@ -1008,8 +1025,9 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
       isVideo: false,
       isGif: false,
       hasSound: false,
-      author,
+      author: resolvedAuthor,
       assistants: assistants || [],
+      authorTentative: !!authorTentative,
       tags: fallbackTags,
       tagDetails,
       score: 0,

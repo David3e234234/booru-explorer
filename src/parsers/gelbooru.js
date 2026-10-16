@@ -266,9 +266,6 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     }
 
     if (rawParsed.length > 0) {
-      // Pre-resolve unknown candidate artist tags for the batch
-      await resolveBatchCandidateTags('gelbooru', rawParsed, null, settings);
-
       return await Promise.all(rawParsed.map(async p => {
         const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'gelbooru');
         const seriesKey = extractSeriesKey({
@@ -365,7 +362,7 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
             const thumbSample = sampleUrl;
             const thumbOriginal = fileUrl;
-            const { tagDetails, author, assistants } = await classifyPostTags(rawTags, item.source, '', settings, true, 'gelbooru');
+            const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(rawTags, item.source, '', settings, true, 'gelbooru');
             const createdAt = normalizeDate(item.created_at || item.change);
             const parentId = item.parent_id && String(item.parent_id) !== '0' ? String(item.parent_id) : null;
             const hasChildren = item.has_children === 'true' || item.has_children === true;
@@ -376,6 +373,10 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
               originalId: String(item.id),
               tags: rawTags
             }, 'gelbooru');
+
+            const resolvedAuthor = (author && author !== '?' && !author.startsWith('@') && !author.startsWith('patreon:') && !author.startsWith('pixiv:') && !author.startsWith('fantia:'))
+              ? author
+              : (tagDetails.artist && tagDetails.artist.length > 0 ? tagDetails.artist.join(', ') : (author || ''));
 
             return {
               id: `gelbooru_${item.id}`,
@@ -394,8 +395,9 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
               isVideo,
               isGif,
               hasSound: isVideo && (hasSound || rawTags.includes('sound') || rawTags.includes('audio')),
-              author,
+              author: resolvedAuthor,
               assistants: assistants || [],
+              authorTentative: !!authorTentative,
               tags: rawTags,
               tagDetails,
               score: parseInt(item.score, 10) || 0,
