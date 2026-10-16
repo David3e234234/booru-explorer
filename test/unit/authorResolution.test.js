@@ -199,5 +199,39 @@ describe('author classification precision', () => {
     assert.ok(!r.tagDetails.character.includes('kok_(kokenn)'));
     assert.ok(r.tagDetails.character.includes('takagi-san'));
   });
+
+  it('never treats no_sound or material words as author or artist', async () => {
+    const { classifyPostTags } = await import('../../src/utils/tagClassifier.js');
+    const r = await classifyPostTags(
+      ['no_sound', 'tagme', 'feet', '1girl'],
+      '', '', {}, false, 'rule34'
+    );
+    assert.equal(r.author, '');
+    assert.ok(r.tagDetails.meta.includes('no_sound'));
+    assert.ok(!r.tagDetails.artist.includes('no_sound'));
+
+    const r2 = await classifyPostTags(
+      ['fog', 'nylon', 'wool', 'sadako_yamamura', '1girl'],
+      '', '', {}, false, 'rule34'
+    );
+    assert.equal(r2.author, '');
+    assert.ok(!r2.tagDetails.artist.includes('fog'));
+    assert.ok(!r2.tagDetails.artist.includes('nylon'));
+    assert.ok(r2.tagDetails.general.includes('fog'));
+    assert.ok(r2.tagDetails.general.includes('nylon'));
+  });
+
+  it('never promotes pure audio or music assistants to primary author when no visual artist is present', async () => {
+    const { classifyPostTags } = await import('../../src/utils/tagClassifier.js');
+    const r = await classifyPostTags(
+      ['muramura_villager', 'beep_block_skyway_(music)', 'ako_(blue_archive)', 'fap_to_beat'],
+      '', '', {}, false, 'rule34'
+    );
+    // In batch feed without dynamic lookup, music assistant should not be assigned as author
+    assert.equal(r.author, '');
+    assert.ok(r.tagDetails.assistant.includes('beep_block_skyway_(music)'));
+    assert.ok(!r.tagDetails.artist.includes('beep_block_skyway_(music)'));
+  });
 });
+
 

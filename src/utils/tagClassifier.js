@@ -267,6 +267,8 @@ export const LOCATION_BY_NOUNS = new Set([
 
 export const GENERIC_NON_ARTIST_TAGS = new Set([
   '2d', '3d', 'art', 'artwork', 'animation', 'video', 'sound', 'audio', 'highres', 'lowres', 
+  'no_sound', 'soundless', 'silent_video', 'has_sound', 'with_sound',
+  'fog', 'nylon', 'wool', 'cotton', 'silk', 'latex', 'leather', 'denim', 'rubber', 'smoke', 'steam', 'rain', 'snow', 'wind', 'shadow',
   'comic', 'parody', 'original', 'cosplay', 'edit', 'cg', 'illustration', 'sketch', 
   'webm', 'gif', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'psd', 'clip', 'sai', 'c4d', 'blend',
   'zip', 'rar', '7z', 'tar', 'pack', 'reward', 'tier', 'patreon', 'fanbox', 'fantia', 'boosty', 'gumroad', 'subscribestar',
@@ -291,6 +293,7 @@ export const META_KEYWORDS = new Set([
   
   // Media types and formats
   'sound', 'audio', 'video', 'animated', 'animation', 'ugoira', 'web_audio', 'has_sound', 'with_sound', 
+  'no_sound', 'soundless', 'silent_video',
   'muted', 'loop', 'silent', 'mp4', 'webm', 'gif', 'flash', 'swf', 'apng', 'interactive',
   
   // Text, language and translations
@@ -842,7 +845,18 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
       continue;
     }
 
-    // 2. Specific suffixes
+    // 2. Meta keywords and generic non-artist tags (e.g. no_sound, soundless, fog, nylon)
+    if (META_KEYWORDS.has(lower) || META_SUFFIXES.some(s => lower.endsWith(s))) {
+      addUnique(meta, originalTag);
+      continue;
+    }
+
+    if (GENERIC_NON_ARTIST_TAGS.has(lower)) {
+      general.push(originalTag);
+      continue;
+    }
+
+    // 2.1 Specific suffixes
     if (ARTIST_SUFFIXES.some(s => lower.endsWith(s))) {
       addUnique(artist, originalTag);
       continue;
@@ -850,11 +864,6 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
 
     if (COPYRIGHT_SUFFIXES.some(s => lower.endsWith(s))) {
       addUnique(copyright, originalTag);
-      continue;
-    }
-
-    if (META_SUFFIXES.some(s => lower.endsWith(s)) || META_KEYWORDS.has(lower)) {
-      addUnique(meta, originalTag);
       continue;
     }
 
@@ -1106,21 +1115,30 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
   }
 
   if (candidateList.length > 0) {
-    // Primary author is the first candidate that is not an audio/voice assistant
+    // Primary author is the first candidate that is not an audio/voice assistant.
+    // An audio/voice/music assistant tag must never become the primary author of an artwork.
     let primaryIndex = candidateList.findIndex(c => !ASSISTANT_ROLE_REGEX.test(c));
-    if (primaryIndex === -1) primaryIndex = 0;
+    if (primaryIndex !== -1) {
+      const rawMain = candidateList[primaryIndex];
+      author = rawMain.replace(/_?\((artist|creator|circle|studio|doujin|illustrator|animator)\)$/i, '').trim();
 
-    const rawMain = candidateList[primaryIndex];
-    author = rawMain.replace(/_?\((artist|creator|circle|studio|doujin|illustrator|animator)\)$/i, '').trim();
-
-    candidateList.forEach((c, idx) => {
-      if (idx !== primaryIndex) {
+      candidateList.forEach((c, idx) => {
+        if (idx !== primaryIndex) {
+          const cleanAssistant = c.trim();
+          if (cleanAssistant && !assistants.includes(cleanAssistant)) {
+            assistants.push(cleanAssistant);
+          }
+        }
+      });
+    } else {
+      // Only assistants/music exist, no visual creator found:
+      candidateList.forEach(c => {
         const cleanAssistant = c.trim();
         if (cleanAssistant && !assistants.includes(cleanAssistant)) {
           assistants.push(cleanAssistant);
         }
-      }
-    });
+      });
+    }
   }
 
   const visualArtists = [];
