@@ -7,6 +7,7 @@ import { showToast, copyToClipboard, escapeHtml, toSafeHttpUrl, getPostSiteUrl }
 import { CATEGORY_ORDER, CATEGORY_CONFIG, getTagCategory, formatRating } from '../viewer/viewerSidebar.js';
 import { handleAuthorFavToggle } from '../viewer/viewerMetadata.js';
 import { openCreatorResolverModal } from '../viewer/viewerCreatorResolver.js';
+import { formatSafePostContent } from '../viewer/viewerCloudLinks.js';
 
 export function initFeedSheet(hooks) {
   const sheet = document.createElement('div');
@@ -188,11 +189,20 @@ export function initFeedSheet(hooks) {
     links.appendChild(copyBtn);
     body.appendChild(links);
 
-    if (post.content) {
-      const desc = document.createElement('div');
-      desc.className = 'feed-sheet-desc';
-      desc.textContent = String(post.content);
-      body.appendChild(desc);
+    const rawContent = post?.content || post?.description || '';
+    if (rawContent && String(rawContent).trim()) {
+      const safeHtml = formatSafePostContent(String(rawContent));
+      if (safeHtml && safeHtml.trim()) {
+        const descSection = document.createElement('div');
+        descSection.className = 'feed-sheet-desc-section';
+        descSection.innerHTML = `
+          <div class="feed-sheet-desc-header">
+            <span class="feed-sheet-desc-title" data-i18n="viewer.contentHeading">${escapeHtml(t('viewer.contentHeading', 'Описание'))}</span>
+          </div>
+          <div class="viewer-post-content feed-sheet-desc">${safeHtml}</div>
+        `;
+        body.appendChild(descSection);
+      }
     }
   }
 

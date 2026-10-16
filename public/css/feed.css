@@ -999,13 +999,29 @@ body.feed-clean .mobile-bottom-nav {
   cursor: pointer;
 }
 
-.feed-sheet-desc {
-  margin-top: 14px;
-  font-size: 13px;
-  line-height: 1.5;
+.feed-sheet-desc-section {
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
+
+.feed-sheet-desc-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.feed-sheet-desc-title {
+  font-family: var(--font-display, var(--font-main));
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
   color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
+}
+
+.feed-sheet-desc {
+  margin-top: 0;
 }
 
 /* ── Reduced motion ── */
