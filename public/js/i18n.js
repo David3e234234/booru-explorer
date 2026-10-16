@@ -108,7 +108,7 @@ Object.assign(en, {
   'sidebar.clear.title': 'Clear search',
   'sidebar.refresh.title': 'Refresh results (busts cache)',
   'sidebar.searchBtn': 'Search',
-  'sidebar.searchBtn.title': 'Find posts by tags and filters (Enter)',
+  'sidebar.searchBtn.title': 'Find posts by tags and filters',
   'sidebar.presets': 'Search presets',
   'sidebar.savePreset.title': 'Save current tags as a preset',
   'sidebar.savePresetBtn': 'Save',

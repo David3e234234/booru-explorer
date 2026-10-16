@@ -2280,7 +2280,6 @@ function setupEventListeners() {
       state.hideFurry = checkHideFurry.checked;
       persistSettings({ hideFurry: state.hideFurry });
       updateFilterActiveDot();
-      performSearch(true);
     });
   }
 
@@ -2290,7 +2289,6 @@ function setupEventListeners() {
       state.hidePregnant = checkHidePregnant.checked;
       persistSettings({ hidePregnant: state.hidePregnant });
       updateFilterActiveDot();
-      performSearch(true);
     });
   }
 
@@ -2300,7 +2298,6 @@ function setupEventListeners() {
       state.hideLgbt = checkHideLgbt.checked;
       persistSettings({ hideLgbt: state.hideLgbt });
       updateFilterActiveDot();
-      performSearch(true);
     });
   }
 

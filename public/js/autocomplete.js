@@ -117,7 +117,6 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
         selectTag(searchInput.value.trim(), false);
       }
       hideDropdown();
-      onSearch();
     } else if (e.key === 'Escape') {
       hideDropdown();
     }
