@@ -207,6 +207,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - Caps cover compressed size, uncompressed total, per-entry size, entry count and zlib output. In-memory document inspection inflates through a separate smaller ceiling (`MAX_INFLATE_BYTES`), so a bomb cannot trade disk for RAM.
 - Extracted SVG files are not treated as gallery media and archive responses use `nosniff` plus a sandbox CSP.
 - Archive routes are rate-limited and host URLs are checked before download.
+- Archive downloads and inspections use `BOORU_USER_AGENT` to comply with Pawchive's anti-bot policy (`file.pawchive.pw` DDoS-Guard blocks browser User-Agents and generic `Mozilla/5.0` with 403), and segmented download concurrency for Pawchive is capped at 4 threads to stay within upstream limits.
 
 ### Storage
 

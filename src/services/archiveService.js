@@ -5,7 +5,7 @@ import zlib from 'zlib';
 import StreamZip from 'node-stream-zip';
 import { Readable, Transform } from 'stream';
 import { pipeline } from 'stream/promises';
-import { ARCHIVES_DIR } from '../config/constants.js';
+import { ARCHIVES_DIR, BOORU_USER_AGENT } from '../config/constants.js';
 import { fetchSafe, resolveSiteReferer, discardResponse } from '../utils/network.js';
 import { logError, logInfo } from '../utils/logger.js';
 import { getSettings } from './storageService.js';
@@ -382,7 +382,7 @@ async function downloadSegmented(zipUrl, destPath, totalBytes, threads, referer,
     const workerPromises = segments.map(async (seg) => {
       const segRes = await fetchSafe(zipUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0',
+          'User-Agent': BOORU_USER_AGENT,
           'Referer': referer,
           'Range': `bytes=${seg.start}-${seg.end}`
         },
@@ -456,7 +456,7 @@ async function downloadSingleStream(zipUrl, destPath, referer, options = {}) {
     timeout: DOWNLOAD_TIMEOUT_MS,
     streamBody: true,
     headers: {
-      'User-Agent': 'Mozilla/5.0',
+      'User-Agent': BOORU_USER_AGENT,
       'Referer': referer,
       'Accept': '*/*'
     },
@@ -504,7 +504,10 @@ async function downloadSingleStream(zipUrl, destPath, referer, options = {}) {
  * and downloads in parallel segments if enabled, falling back to single-stream.
  */
 async function downloadArchiveFromUrl(targetUrl, tmpPath, options, referer) {
-  const threads = Math.max(1, Math.min(16, parseInt(options.threads, 10) || 4));
+  const isPawchive = targetUrl.includes('pawchive');
+  const maxThreads = isPawchive ? 4 : 16;
+  const defaultThreads = isPawchive ? 2 : 4;
+  const threads = Math.max(1, Math.min(maxThreads, parseInt(options.threads, 10) || defaultThreads));
   const fetchOpts = resolveArchiveFetchOptions(targetUrl, options);
 
   // 1. Probe for Range support and total bytes
@@ -516,7 +519,7 @@ async function downloadArchiveFromUrl(targetUrl, tmpPath, options, referer) {
     probeRes = await fetchSafe(targetUrl, {
       method: 'GET',
       headers: {
-        'User-Agent': 'Mozilla/5.0',
+        'User-Agent': BOORU_USER_AGENT,
         'Referer': referer,
         'Range': 'bytes=0-0'
       },
@@ -786,10 +789,10 @@ export function buildArchiveAlbumItems(manifest, targetSite = 'pawchive') {
  */
 async function inspectArchiveRemoteSingle(zipUrl, key, options = {}) {
   const reqHeaders = {
-    'User-Agent': 'Mozilla/5.0',
+    'User-Agent': BOORU_USER_AGENT,
     'Accept': '*/*',
     'Accept-Encoding': 'identity',
-    'Referer': resolveSiteReferer(zipUrl) || 'https://kemono.cr/',
+    'Referer': resolveSiteReferer(zipUrl) || (zipUrl.includes('pawchive') ? 'https://pawchive.pw/' : 'https://kemono.cr/'),
     'Range': 'bytes=-65536'
   };
 
@@ -1461,7 +1464,7 @@ export async function downloadArchiveEntry(zipUrl, targetPathOrName, res, option
     // Probe local file header (first 256 bytes) to determine actual variable header lengths
     const probeRangeEnd = entry.localHeaderOffset + 256;
     const reqHeadersProbe = {
-      'User-Agent': 'Mozilla/5.0',
+      'User-Agent': BOORU_USER_AGENT,
       'Referer': resolveSiteReferer(zipUrl) || 'https://pawchive.pw/',
       'Range': `bytes=${entry.localHeaderOffset}-${probeRangeEnd}`
     };
@@ -1484,7 +1487,7 @@ export async function downloadArchiveEntry(zipUrl, targetPathOrName, res, option
           }
 
           const dataHeaders = {
-            'User-Agent': 'Mozilla/5.0',
+            'User-Agent': BOORU_USER_AGENT,
             'Referer': resolveSiteReferer(zipUrl) || 'https://pawchive.pw/',
             'Range': `bytes=${dataStart}-${dataEnd}`
           };

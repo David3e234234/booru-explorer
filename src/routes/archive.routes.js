@@ -42,8 +42,9 @@ router.get('/inspect', async (req, res) => {
     res.json(inspection);
   } catch (err) {
     const isNetworkErr = isArchiveNetworkError(err);
+    const siteName = zipUrl.includes('pawchive') ? 'Pawchive' : 'Kemono';
     const userMsg = isNetworkErr
-      ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
+      ? `Сервер архивов недоступен. Проверьте подключение или настройте прокси для ${siteName} в настройках.`
       : 'Не удалось проверить архив';
     logError('Archive', `Ошибка инспекции архива: ${err.message}`, err);
     res.json({ success: false, error: userMsg });
@@ -68,8 +69,9 @@ router.get('/list', async (req, res) => {
     res.json({ success: true, albumItems, albumCount: albumItems.length });
   } catch (err) {
     const isNetworkErr = isArchiveNetworkError(err);
+    const siteName = zipUrl.includes('pawchive') ? 'Pawchive' : 'Kemono';
     const userMsg = isNetworkErr
-      ? 'Сервер архивов недоступен. Проверьте подключение или настройте прокси для Kemono в настройках.'
+      ? `Сервер архивов недоступен. Проверьте подключение или настройте прокси для ${siteName} в настройках.`
       : 'Не удалось распаковать архив';
     logError('Archive', `Ошибка обработки архива: ${err.message}`, err);
     res.json({ success: false, error: userMsg });

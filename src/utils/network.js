@@ -522,8 +522,9 @@ export async function fetchSafe(url, options = {}) {
         hopPath = hopUrl.pathname;
       } catch {}
       const isDanbooru = hopSite === 'danbooru';
+      const isPawchive = hopSite === 'pawchive';
       const isKemonoApi = hopSite === 'kemono' && (hopPath.startsWith('/api/') || hopPath.startsWith('/api'));
-      const defaultUa = isDanbooru ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
+      const defaultUa = (isDanbooru || isPawchive) ? BOORU_USER_AGENT : BROWSER_USER_AGENT;
       const defaultAccept = isKemonoApi ? 'text/css' : (isDanbooru ? 'application/json, text/xml, text/html, */*' : '*/*');
 
       const fetchOptions = {
