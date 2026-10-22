@@ -561,6 +561,16 @@ describe('Express API Integration & Route Tests', () => {
     });
   });
 
+  describe('Album Series Routes (/api/posts/album)', () => {
+    it('GET /api/posts/album returns success: false for non-existent or single post', async () => {
+      const res = await fetch(`${baseUrl}/api/posts/album?site=danbooru&originalId=999999999`);
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+      assert.strictEqual(data.albumCount, 0);
+    });
+  });
+
   describe('Tag Autocomplete Routes (/api/tags/autocomplete)', () => {
     it('GET /api/tags/autocomplete returns empty array for empty query', async () => {
       const res = await fetch(`${baseUrl}/api/tags/autocomplete?q=`);

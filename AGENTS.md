@@ -165,6 +165,18 @@ Boards that only publish a short teaser in their feed add two optional fields:
 
 Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` case, all-sites capability use, frontend site metadata, settings UI metadata if site-specific, parser tests and documentation updates.
 
+### Album and Series Grouping
+
+- Posts are grouped into albums and series on search ingestion (`groupPostsIntoAlbums`) and on single post view (`/api/posts/album`).
+- A shared upstream key (`pixiv:<id>`, `twitter:<id>`, `fanbox:<id>`, `parent:<site>:<id>`) alone is insufficient to group posts: artists often publish monthly sketch dumps, Twitter logs, or miscellaneous collections (`いろいろ`) containing completely disparate characters and franchises under one external post ID.
+- `arePostsAlbumCompatible()` enforces content compatibility:
+  - **Author**: Both posts must belong to the same visual artist or assistant (`arePostsAuthorCompatible`).
+  - **Franchise / Copyright**: If both posts specify copyright tags (excluding `original` and `crossover`), their franchises must overlap unless tagged `crossover`.
+  - **Characters**: If both posts specify character tags, their base character names (`extractBaseCharacterName`, e.g. `hibiki_(cheerleader)_(blue_archive)` normalized to `hibiki`) must overlap, unless the work is tagged as sequential art (`comic`, `manga`, `4koma`, etc.). Disjoint character sets without comic tags (e.g. Hibiki vs Shigure) are strictly prohibited from merging.
+  - **Subject / Gender**: Solo girl vs solo boy posts without named characters are not merged into single-character albums unless tagged `genderbend` or `comic`.
+  - **Original Art**: For solo original characters with no character tags, disjoint solid hair colors (e.g. blonde vs black) prevent unrelated character illustrations from merging into false albums.
+- When compatibility fails, `/api/posts/album` returns `success: false, albumCount: 0` to preserve the post as a single item, and `groupPostsIntoAlbums` retains distinct card entries.
+
 ### Settings And Cache Keys
 
 - Incoming client settings use `x-booru-auth`; parse them only through `parseRequestAuth()`.

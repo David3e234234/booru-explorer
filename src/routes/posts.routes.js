@@ -22,7 +22,7 @@ import { fetchDanbooruPostById } from '../parsers/danbooru.js';
 import { fetchGelbooruPostById } from '../parsers/gelbooru.js';
 import { fetchSafebooruPostById } from '../parsers/safebooru.js';
 import { fetchMoebooruPostById } from '../parsers/moebooru.js';
-import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAuthorCompatible } from '../utils/albumHelper.js';
+import { groupPostsIntoAlbums, sortAlbumItems, extractAllSeriesKeys, arePostsAuthorCompatible, arePostsAlbumCompatible } from '../utils/albumHelper.js';
 import { fetchSafe, safeJsonParse, isSafeExternalUrlResolved, normalizeProxyUrl } from '../utils/network.js';
 import { requireOwner } from '../services/userService.js';
 import { sanitizeLogUrl } from '../utils/hostPolicy.js';
@@ -692,7 +692,7 @@ router.get('/posts/album', async (req, res) => {
     const serverSettings = getSettings();
     const authKey = buildAuthCacheKey(clientAuth, serverSettings);
 
-    const albumCacheKey = `album_v1:${site}:${seriesKey}:${parentId}:${originalId}:${postUrl}:${authKey}`;
+    const albumCacheKey = `album_v2:${site}:${seriesKey}:${parentId}:${originalId}:${postUrl}:${authKey}`;
     const cachedAlbum = apiPostsCache.get(albumCacheKey);
     if (cachedAlbum) {
       return res.json(cachedAlbum);
@@ -918,16 +918,19 @@ router.get('/posts/album', async (req, res) => {
       const isRelationValid = matchesSeries || isChildOfTarget || isParentOfTarget || isSiblingOfTarget || isTargetPost;
       if (!isRelationValid) continue;
 
-      // Author compatibility check (against target post)
-      if (targetPost && !arePostsAuthorCompatible(targetPost, p)) {
+      // Album compatibility check (author, character, franchise)
+      if (targetPost && !arePostsAlbumCompatible(targetPost, p)) {
         continue;
       }
 
       validItems.push(p);
     }
 
+    // Double check that all candidate items are compatible with targetPost
+    const compatibleItems = targetPost ? validItems.filter(p => arePostsAlbumCompatible(targetPost, p)) : validItems;
+
     // Sort the set pages using canonical page numbers
-    const items = sortAlbumItems(validItems);
+    const items = sortAlbumItems(compatibleItems);
 
     // A valid album must contain at least 2 items
     if (items.length > 1) {

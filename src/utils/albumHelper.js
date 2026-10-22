@@ -4,6 +4,7 @@
  */
 
 import { logInfo, logError } from './logger.js';
+import { classifyTags } from './tagHelpers.js';
 
 export function isValidRelationKey(key) {
   if (!key || typeof key !== 'string') return false;
@@ -297,6 +298,183 @@ export function sortAlbumItems(items) {
 }
 
 /**
+ * Comic and sequential art tag indicators.
+ * Sequential stories legitimately feature different characters across pages.
+ */
+export const COMIC_TAGS = new Set([
+  'comic',
+  'manga',
+  '4koma',
+  'four_koma',
+  'yonkoma',
+  'sequential_art',
+  'doujinshi',
+  'webcomic',
+  'comic_strip',
+  'story_arc',
+  'omake',
+  'silent_comic'
+]);
+
+/**
+ * Noise/request tags that should not be treated as distinct character identities.
+ */
+export const NOISE_CHARACTER_TAGS = new Set([
+  'character_request',
+  'unknown_character',
+  'unidentified_character',
+  'anonymous_character',
+  'faceless_character',
+  'multiple_characters',
+  'no_character',
+  'tagme',
+  'original_character',
+  'unspecified_character'
+]);
+
+const SOLID_HAIR_COLORS = new Set([
+  'blonde_hair', 'brown_hair', 'black_hair', 'blue_hair', 'green_hair',
+  'red_hair', 'pink_hair', 'purple_hair', 'white_hair', 'silver_hair',
+  'orange_hair', 'grey_hair', 'gray_hair'
+]);
+
+/**
+ * Extracts base character name before parenthesized variant/series annotations.
+ * E.g. "hibiki_(blue_archive)" -> "hibiki", "hibiki_(cheerleader)_(blue_archive)" -> "hibiki", "rem_(re:zero)" -> "rem"
+ */
+export function extractBaseCharacterName(tag) {
+  if (!tag || typeof tag !== 'string') return '';
+  let clean = tag.trim().toLowerCase().replace(/^character:/i, '');
+  const parenMatch = clean.match(/^([a-z0-9_]+?)_\([^)]+\)/i);
+  if (parenMatch && parenMatch[1]) {
+    return parenMatch[1].replace(/_+/g, '_').replace(/^_|_$/g, '');
+  }
+  return clean.replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+/**
+ * Normalizes copyright/franchise tags by stripping prefixes and series/game suffixes.
+ */
+export function normalizeCopyrightTag(tag) {
+  if (!tag || typeof tag !== 'string') return '';
+  let clean = tag.trim().toLowerCase().replace(/^(?:copyright|series):/i, '');
+  clean = clean.replace(/_?\((?:series|game|anime|manga|novel|franchise|project)\)$/i, '');
+  clean = clean.replace(/_(?:series|game|anime|manga|novel|franchise|project)$/i, '');
+  return clean.replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+/**
+ * Checks whether two posts truly belong to the same album/artwork.
+ * Prevents disparate illustrations in Pixiv logs, art dumps, and packs from false merging.
+ */
+export function arePostsAlbumCompatible(postA, postB) {
+  if (!postA || !postB) return true;
+
+  // 1. Author compatibility check (same visual creator)
+  if (!arePostsAuthorCompatible(postA, postB)) {
+    return false;
+  }
+
+  const getTags = (p) => {
+    if (Array.isArray(p.tags)) return p.tags;
+    if (typeof p.tag_string === 'string') return p.tag_string.split(/\s+/);
+    return [];
+  };
+
+  const tagsA = getTags(postA);
+  const tagsB = getTags(postB);
+  const tagsSetA = new Set(tagsA.map(t => String(t).toLowerCase()));
+  const tagsSetB = new Set(tagsB.map(t => String(t).toLowerCase()));
+
+  // 2. Comic / manga sequential exception
+  const isComicA = tagsA.some(t => COMIC_TAGS.has(String(t).toLowerCase()));
+  const isComicB = tagsB.some(t => COMIC_TAGS.has(String(t).toLowerCase()));
+  const isComic = isComicA || isComicB;
+
+  // 3. Copyright / Franchise compatibility
+  const getCopyrights = (p, tagsSet) => {
+    let list = p.tagDetails?.copyright;
+    if (!Array.isArray(list) || list.length === 0) {
+      list = classifyTags(Array.from(tagsSet)).copyright;
+    }
+    return (list || [])
+      .map(c => normalizeCopyrightTag(c))
+      .filter(c => c && c !== 'original' && c !== 'crossover');
+  };
+
+  const copyA = getCopyrights(postA, tagsSetA);
+  const copyB = getCopyrights(postB, tagsSetB);
+
+  const isCrossover = tagsSetA.has('crossover') || tagsSetB.has('crossover') ||
+                      tagsSetA.has('crossover_request') || tagsSetB.has('crossover_request');
+
+  if (!isCrossover && copyA.length > 0 && copyB.length > 0) {
+    const hasSharedCopy = copyA.some(ca =>
+      copyB.some(cb => ca === cb || ca.startsWith(`${cb}_`) || cb.startsWith(`${ca}_`) || ca.endsWith(`_${cb}`) || cb.endsWith(`_${ca}`))
+    );
+    if (!hasSharedCopy) {
+      // Disjoint non-empty franchises (e.g. blue_archive vs genshin_impact)
+      return false;
+    }
+  }
+
+  // 4. Character compatibility
+  const getCharacters = (p, tagsSet) => {
+    let list = p.tagDetails?.character;
+    if (!Array.isArray(list) || list.length === 0) {
+      list = classifyTags(Array.from(tagsSet)).character;
+    }
+    return (list || [])
+      .map(c => extractBaseCharacterName(c))
+      .filter(c => c && !NOISE_CHARACTER_TAGS.has(c));
+  };
+
+  const charsA = getCharacters(postA, tagsSetA);
+  const charsB = getCharacters(postB, tagsSetB);
+
+  if (!isComic && charsA.length > 0 && charsB.length > 0) {
+    const setCharsB = new Set(charsB);
+    const hasSharedChar = charsA.some(c => setCharsB.has(c));
+    if (!hasSharedChar) {
+      // Both posts feature identified characters, but have zero character overlap
+      // (e.g. Hibiki vs Shigure in a Pixiv "various/log" art dump)
+      return false;
+    }
+  }
+
+  // 5. Solo gender conflict (when no named characters are present)
+  if (!isComic && charsA.length === 0 && charsB.length === 0) {
+    const isSoloGirlA = (tagsSetA.has('1girl') || tagsSetA.has('solo')) && !tagsSetA.has('1boy') && !tagsSetA.has('2boys') && !tagsSetA.has('multiple_boys');
+    const isSoloBoyA = (tagsSetA.has('1boy') || tagsSetA.has('solo')) && !tagsSetA.has('1girl') && !tagsSetA.has('2girls') && !tagsSetA.has('multiple_girls');
+
+    const isSoloGirlB = (tagsSetB.has('1girl') || tagsSetB.has('solo')) && !tagsSetB.has('1boy') && !tagsSetB.has('2boys') && !tagsSetB.has('multiple_boys');
+    const isSoloBoyB = (tagsSetB.has('1boy') || tagsSetB.has('solo')) && !tagsSetB.has('1girl') && !tagsSetB.has('2girls') && !tagsSetB.has('multiple_girls');
+
+    if (tagsSetA.has('solo') && tagsSetB.has('solo')) {
+      if ((isSoloGirlA && isSoloBoyB) || (isSoloBoyA && isSoloGirlB)) {
+        return false;
+      }
+    }
+
+    // 6. Distinct solid hair colors for solo original characters
+    const isMultiColor = tagsSetA.has('alternate_color') || tagsSetB.has('alternate_color') ||
+                         tagsSetA.has('color_variant') || tagsSetB.has('color_variant') ||
+                         tagsSetA.has('multicolored_hair') || tagsSetB.has('multicolored_hair') ||
+                         tagsSetA.has('two-tone_hair') || tagsSetB.has('two-tone_hair');
+
+    if (!isMultiColor && tagsSetA.has('solo') && tagsSetB.has('solo')) {
+      const hairA = Array.from(tagsSetA).filter(t => SOLID_HAIR_COLORS.has(t));
+      const hairB = Array.from(tagsSetB).filter(t => SOLID_HAIR_COLORS.has(t));
+      if (hairA.length === 1 && hairB.length === 1 && hairA[0] !== hairB[0]) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
  * Checks whether two posts have compatible authors (i.e. not different creators)
  */
 export function arePostsAuthorCompatible(postA, postB) {
@@ -345,24 +523,28 @@ export function groupPostsIntoAlbums(posts, options = {}) {
     }
   }
 
-  const keyToPostIdx = new Map();
+  const keyToPostIndices = new Map();
   const postKeysList = [];
   const keysByPost = new Map();
 
-  // 1. Collect all relation keys for each post and union related posts (with author check)
+  // 1. Collect all relation keys for each post and union related posts (with album compatibility check)
   posts.forEach((post, idx) => {
     const keys = extractAllSeriesKeys(post, post.site);
     postKeysList[idx] = keys;
     keysByPost.set(post, keys);
 
     keys.forEach(key => {
-      if (keyToPostIdx.has(key)) {
-        const otherIdx = keyToPostIdx.get(key);
-        if (arePostsAuthorCompatible(post, posts[otherIdx])) {
-          union(idx, otherIdx);
+      if (keyToPostIndices.has(key)) {
+        const existingIndices = keyToPostIndices.get(key);
+        for (const otherIdx of existingIndices) {
+          if (arePostsAlbumCompatible(post, posts[otherIdx])) {
+            union(idx, otherIdx);
+            break;
+          }
         }
+        existingIndices.push(idx);
       } else {
-        keyToPostIdx.set(key, idx);
+        keyToPostIndices.set(key, [idx]);
       }
     });
   });
@@ -396,18 +578,18 @@ export function groupPostsIntoAlbums(posts, options = {}) {
         return;
       }
 
-      // Ensure all items in the cluster are author-compatible
-      let clusterAuthorConflict = false;
+      // Ensure all items in the cluster are mutually album-compatible
+      let clusterConflict = false;
       for (let i = 0; i < items.length; i++) {
         for (let j = i + 1; j < items.length; j++) {
-          if (!arePostsAuthorCompatible(items[i], items[j])) {
-            clusterAuthorConflict = true;
+          if (!arePostsAlbumCompatible(items[i], items[j])) {
+            clusterConflict = true;
             break;
           }
         }
-        if (clusterAuthorConflict) break;
+        if (clusterConflict) break;
       }
-      if (clusterAuthorConflict) {
+      if (clusterConflict) {
         items.forEach((item, itemIdx) => {
           resultMap.set(rootIndex + itemIdx * 0.001, item);
         });
