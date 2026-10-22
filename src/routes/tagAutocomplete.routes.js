@@ -8,6 +8,7 @@ import { fetchSafe } from '../utils/network.js';
 import { getAllAliasesForName } from '../services/aliasService.js';
 import { parseRequestAuth, buildAuthCacheKey, resolveRequestSettings } from '../utils/settingsValidation.js';
 import { setCachedTagType, TAG_TYPE } from '../services/booruTagTypeService.js';
+import { BROWSER_USER_AGENT } from '../config/constants.js';
 
 const router = express.Router();
 

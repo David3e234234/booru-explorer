@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { DATA_DIR } from '../config/constants.js';
+import { DATA_DIR, BROWSER_USER_AGENT } from '../config/constants.js';
 import { fetchSafe, discardResponse } from '../utils/network.js';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
 
@@ -204,7 +204,7 @@ async function findRule34TagMatch(candidates = [], settings = {}) {
       const res = await fetchSafe(url, {
         timeout: 4000,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'User-Agent': BROWSER_USER_AGENT,
           'Referer': 'https://rule34.xxx/'
         },
         settings,

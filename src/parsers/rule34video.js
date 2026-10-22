@@ -4,7 +4,7 @@ import { fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.
 import { checkIsAi, classifyTags, adaptTagsForSite } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { logError } from '../utils/logger.js';
-import { CACHE_DIR } from '../config/constants.js';
+import { CACHE_DIR, BROWSER_USER_AGENT } from '../config/constants.js';
 
 // Persistent disk cache for Rule34Video authors and videos
 const R34V_CACHE_FILE = path.join(CACHE_DIR, 'r34v_authors.json');
@@ -127,7 +127,7 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
     .replace(/[_+]+/g, ' ')
     .trim();
   
-  if (!clean) return null;
+  if (!clean || NON_AUTHOR_TAGS.has(clean.toLowerCase())) return null;
 
   // Already a numeric ID with a type
   const directModelIdMatch = authorQuery.match(/^(?:model|artist|author):(\d+)$/i);
@@ -164,8 +164,9 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
       const memberUrl = `https://rule34video.com/members/?mode=async&function=get_block&block_id=list_members_members&q=${encodeURIComponent(mq)}&from_members=1`;
       const resMember = await fetchSafe(memberUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'X-Requested-With': 'XMLHttpRequest'
+          'User-Agent': BROWSER_USER_AGENT,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Referer': 'https://rule34video.com/'
         },
         timeout: 5000,
         settings,
@@ -184,7 +185,7 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
           const isVerified = item[3].includes('verified-status');
           const mNorm = normalizeName(name);
 
-          if (mNorm === cleanNorm || (isVerified && (mNorm.includes(cleanNorm) || cleanNorm.includes(mNorm)))) {
+          if (mNorm === cleanNorm || (isVerified && cleanNorm.length >= 4 && (mNorm.includes(cleanNorm) || cleanNorm.includes(mNorm)))) {
             matchedCandidates.push({ id, name, isVerified });
           }
         }
@@ -197,7 +198,7 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
           for (const cand of matchedCandidates) {
             const memberPageUrl = `https://rule34video.com/members/${cand.id}/`;
             const resPage = await fetchSafe(memberPageUrl, {
-              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              headers: { 'User-Agent': BROWSER_USER_AGENT, 'Referer': 'https://rule34video.com/' },
               timeout: 4000,
               settings,
               site: 'rule34video'
@@ -227,8 +228,9 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
     const modelJsonUrl = `https://rule34video.com/models_json.php?advanced_search=true&q=${encodeURIComponent(clean)}`;
     const resModelJson = await fetchSafe(modelJsonUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'X-Requested-With': 'XMLHttpRequest'
+        'User-Agent': BROWSER_USER_AGENT,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://rule34video.com/'
       },
       timeout: 5000,
       settings,
@@ -257,8 +259,9 @@ export async function resolveRule34VideoAuthor(authorQuery, settings = {}) {
     const channelUrl = `https://rule34video.com/channels/?mode=async&function=get_block&block_id=custom_list_channels_common_channels_list&q=${encodeURIComponent(clean)}&from=1`;
     const resChannel = await fetchSafe(channelUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'X-Requested-With': 'XMLHttpRequest'
+        'User-Agent': BROWSER_USER_AGENT,
+        'X-Requested-With': 'XMLHttpRequest',
+        'Referer': 'https://rule34video.com/'
       },
       timeout: 5000,
       settings,
@@ -440,14 +443,16 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
     try {
       const res = await fetchSafe(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'X-Requested-With': 'XMLHttpRequest'
+          'User-Agent': BROWSER_USER_AGENT,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Referer': 'https://rule34video.com/'
         },
         timeout: 10000,
         settings,
         site: 'rule34video'
       });
       if (!res.ok) {
+        logError('Rule34Video Fetch', `HTTP ${res.status} for ${url}`);
         await discardResponse(res);
         return [];
       }
@@ -822,7 +827,7 @@ export async function resolveRule34VideoFullMedia(sourceUrl, id, settings = {}, 
 
   const requestOptions = {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      'User-Agent': BROWSER_USER_AGENT,
       'Referer': 'https://rule34video.com/'
     },
     timeout: 10000,
