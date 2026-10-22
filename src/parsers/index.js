@@ -103,7 +103,10 @@ function withDeadline(work, ms = SITE_FETCH_DEADLINE_MS) {
 
   const task = Promise.resolve()
     .then(() => runWithDeadlineSignal(controller.signal, factory))
-    .catch(() => []);
+    .catch((err) => {
+      if (err?.isRateLimit) throw err;
+      return [];
+    });
 
   return Promise.race([task, timeout]).finally(() => {
     if (timer) clearTimeout(timer);
@@ -251,10 +254,10 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   // The old Math.max(setting * 2, 6) raised every option the UI offers (1-5) back to
   // six, which is why the all-sites fan-out below - pinned to a depth of 1 - still
   // fired six requests per source instead of the single page it promises.
-  // Remote pages per single-site search. Cap web-scraped Rule34 without API credentials to 2 iterations
+  // Remote pages per single-site search. Cap Rule34 to 2 iterations (84 posts)
   // to avoid blasting Cloudflare rate limits on a single search query.
-  const isRule34Scraping = site === 'rule34' && !settings?.rule34ApiKey;
-  const maxIterations = isRule34Scraping
+  const isRule34 = site === 'rule34';
+  const maxIterations = isRule34
     ? Math.min(deepFetchPagesSetting === DEFAULT_DEEP_FETCH_DEPTH ? 2 : deepFetchPagesSetting, 2)
     : (deepFetchPagesSetting === DEFAULT_DEEP_FETCH_DEPTH ? 6 : deepFetchPagesSetting);
   // Respect the requested limit and make up depth with pipelined pages

@@ -10,9 +10,9 @@ import { resolveSearchAuthor, setCachedTagType, TAG_TYPE } from '../services/boo
 // Rule34.xxx is protected by Cloudflare which triggers rate limits / CAPTCHA (HTTP 403/429)
 // when outbound requests arrive in bursts or with high concurrency.
 // We serialize scraping requests and enforce a minimum spacing between them.
-let rule34LastRequestTime = 0;
+let rule34LastRequestEndTime = 0;
 let rule34ScraperQueue = Promise.resolve();
-const MIN_RULE34_REQUEST_INTERVAL_MS = 500;
+const MIN_RULE34_REST_MS = 650;
 
 export async function executePacedRule34Fetch(fetchFn) {
   if (process.env.NODE_ENV === 'test') {
@@ -21,12 +21,15 @@ export async function executePacedRule34Fetch(fetchFn) {
 
   const run = async () => {
     const now = Date.now();
-    const elapsed = now - rule34LastRequestTime;
-    if (elapsed < MIN_RULE34_REQUEST_INTERVAL_MS) {
-      await new Promise(r => setTimeout(r, MIN_RULE34_REQUEST_INTERVAL_MS - elapsed));
+    const elapsed = now - rule34LastRequestEndTime;
+    if (elapsed < MIN_RULE34_REST_MS) {
+      await new Promise(r => setTimeout(r, MIN_RULE34_REST_MS - elapsed));
     }
-    rule34LastRequestTime = Date.now();
-    return await fetchFn();
+    try {
+      return await fetchFn();
+    } finally {
+      rule34LastRequestEndTime = Date.now();
+    }
   };
 
   const nextPromise = rule34ScraperQueue.then(run, run);
@@ -418,7 +421,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
-        await new Promise(r => setTimeout(r, 1200 * attempt));
+        await new Promise(r => setTimeout(r, 2500 * attempt));
       }
 
       res = await executePacedRule34Fetch(() => fetchSafe(htmlUrl, {
