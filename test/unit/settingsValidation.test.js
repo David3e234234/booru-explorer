@@ -104,4 +104,25 @@ describe('Settings validation', () => {
     assert.strictEqual(invalid.enableAliasDiscovery, undefined);
     assert.strictEqual(invalid.ignoredAliases, undefined);
   });
+
+  it('validates and sanitizes siteMediaProxy configuration', () => {
+    const clean = sanitizeSettingsPatch({
+      siteMediaProxy: {
+        danbooru: 'server',
+        gelbooru: 'direct',
+        rule34: 'default',
+        invalidSite: 'unknown_mode',
+        123: 'server'
+      }
+    });
+
+    assert.deepStrictEqual(clean.siteMediaProxy, {
+      danbooru: 'server',
+      gelbooru: 'direct',
+      rule34: 'default'
+    });
+
+    const invalid = sanitizeSettingsPatch({ siteMediaProxy: 'not-an-object' });
+    assert.strictEqual(invalid.siteMediaProxy, undefined);
+  });
 });

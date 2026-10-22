@@ -138,6 +138,23 @@ export function sanitizeSettingsPatch(input, { anonymous = false } = {}) {
     }
   }
 
+  if (clean.siteMediaProxy !== undefined) {
+    if (!isPlainObject(clean.siteMediaProxy)) delete clean.siteMediaProxy;
+    else {
+      const allowedModes = new Set(['default', 'server', 'direct']);
+      const sanitized = {};
+      for (const [siteKey, mode] of Object.entries(clean.siteMediaProxy).slice(0, 50)) {
+        if (typeof siteKey !== 'string' || typeof mode !== 'string') continue;
+        const cleanSite = siteKey.trim().toLowerCase().slice(0, 40);
+        const cleanMode = mode.trim().toLowerCase();
+        if (/^[a-z][a-z0-9_-]*$/i.test(cleanSite) && allowedModes.has(cleanMode)) {
+          sanitized[cleanSite] = cleanMode;
+        }
+      }
+      clean.siteMediaProxy = sanitized;
+    }
+  }
+
   if (clean.searchPresets !== undefined) {
     clean.searchPresets = Array.isArray(clean.searchPresets) ? clean.searchPresets.slice(0, 100) : [];
   }

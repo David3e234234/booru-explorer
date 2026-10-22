@@ -240,6 +240,7 @@ export const DEFAULT_SETTINGS = {
   proxyVideos: true,
   proxyDownloads: true,
   proxyVideoDefault: true,
+  siteMediaProxy: {},
   enableJsDemuxing: true,
   rule34Provider: 'rule34xxx', // 'rule34xxx', 'paheal'
   enablePaheal: true,

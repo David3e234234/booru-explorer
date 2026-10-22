@@ -9,7 +9,7 @@
 // to the wrong post.
 import { t } from '../i18n.js';
 import { state } from '../state.js';
-import { fetchAlbumPosts, getProxiedUrl } from '../api.js';
+import { fetchAlbumPosts, getProxiedUrl, shouldProxyMedia } from '../api.js';
 import { escapeHtml } from '../modules/uiUtils.js';
 import { getMediaItemUrl, preloadSingleUrl } from '../viewer/viewerAlbum.js';
 import { createFeedVideoPlayer } from './video.js';
@@ -241,9 +241,7 @@ function createImageWithFallbacks(item, className) {
   img.decoding = 'async';
 
   const direct = item.sampleUrl || item.fileUrl || item.previewUrl || '';
-  const needsProxy = (item.site === 'danbooru' || direct.includes('donmai.us'))
-    ? true
-    : (state.settings?.proxyFullImages !== false);
+  const needsProxy = shouldProxyMedia({ site: item.site, url: direct, type: 'image' });
 
   const targetSrc = direct.startsWith('/api/') || !needsProxy ? direct : getProxiedUrl(direct);
   let errorAttempt = 0;
@@ -294,9 +292,7 @@ function buildSingleMedia(node, item) {
 
   // Still image: low-res placeholder first, then the full file.
   const thumbMedia = item.previewUrl || item.thumb360 || item.thumb180 || '';
-  const thumbNeedsProxy = (item.site === 'danbooru' || (typeof thumbMedia === 'string' && thumbMedia.includes('donmai.us')))
-    ? true
-    : (state.settings?.proxyThumbnails !== false);
+  const thumbNeedsProxy = shouldProxyMedia({ site: item.site, url: thumbMedia, type: 'thumbnail' });
   const placeholderSrc = thumbMedia
     ? (thumbMedia.startsWith('/api/') ? thumbMedia : (thumbNeedsProxy ? getProxiedUrl(thumbMedia) : thumbMedia))
     : '';

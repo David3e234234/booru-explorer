@@ -203,6 +203,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 ### Media And FFmpeg
 
 - Media proxy allows raster images, video and audio only. HTML, JavaScript, SVG and unknown content are rejected.
+- Per-source media proxying (`siteMediaProxy: { [site]: 'default' | 'server' | 'direct' }`) lets users configure direct CDN loading or server-proxied caching per board. `shouldProxyMedia({ site, url, type, settings })` in `public/js/api.js` is the single source of truth for routing client media requests.
 - Image bodies are streamed with a 30 MB byte cap, validated by signature, cached atomically and served with `nosniff` plus a sandbox CSP.
 - Disk image cache is LRU-by-access: cache hits update mtime through `touchCacheFile()`.
 - FFmpeg never receives a remote URL. Remote media is first downloaded through `fetchSafe()` into a bounded local temp file, then processed and cleaned up.

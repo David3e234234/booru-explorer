@@ -68,6 +68,7 @@ export const DEFAULT_CLIENT_SETTINGS = {
   proxyVideos: true,
   proxyDownloads: true,
   proxyVideoDefault: true,
+  siteMediaProxy: {},
   aiTags: [],
   blacklist: [],
   curvyTags: [],

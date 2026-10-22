@@ -1,5 +1,5 @@
 import { state, addSearchTag, setFavoriteAuthors } from '../state.js';
-import { deleteFavoriteAuthor, toggleFavoriteAuthor, fetchFavoriteAuthors, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchPosts, getProxiedUrl } from '../api.js';
+import { deleteFavoriteAuthor, toggleFavoriteAuthor, fetchFavoriteAuthors, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchPosts, getProxiedUrl, shouldProxyMedia } from '../api.js';
 import { showToast, haptic, toSafeHttpUrl, escapeHtml } from './uiUtils.js';
 import { t } from '../i18n.js';
 
@@ -136,8 +136,6 @@ function renderCoverPickerPosts(posts, author, site) {
   grid.innerHTML = '';
 
   const fragment = document.createDocumentFragment();
-  const shouldUseThumbProxy = state.settings?.proxyThumbnails !== false;
-
   posts.forEach(post => {
     let displayThumb = '';
     const hasStaticPreview = post.previewUrl && !isVideoUrl(post.previewUrl);
@@ -153,7 +151,7 @@ function renderCoverPickerPosts(posts, author, site) {
 
     if (!displayThumb) return;
 
-    const shouldUseProxy = (post.site === 'danbooru' || displayThumb.includes('donmai.us')) ? true : shouldUseThumbProxy;
+    const shouldUseProxy = shouldProxyMedia({ site: post.site, url: displayThumb, type: 'thumbnail' });
     const finalThumbUrl = toSafeHttpUrl(displayThumb.startsWith('/api/') ? displayThumb : (shouldUseProxy ? getProxiedUrl(displayThumb) : displayThumb));
     if (!finalThumbUrl) return;
 

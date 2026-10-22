@@ -529,6 +529,49 @@ export async function saveSettings(settings) {
   return await res.json();
 }
 
+export function shouldProxyMedia({ site = '', url = '', type = 'thumbnail', settings = null } = {}) {
+  if (!url || typeof url !== 'string') return false;
+  if (url.startsWith('/api/')) return false;
+
+  const effSettings = settings || state.settings || {};
+  const cleanSite = (site || '').trim().toLowerCase();
+  const siteMode = effSettings.siteMediaProxy?.[cleanSite];
+
+  if (siteMode === 'server') {
+    return true;
+  }
+  if (siteMode === 'direct') {
+    return false;
+  }
+
+  const isDanbooruMedia = cleanSite === 'danbooru' || url.includes('donmai.us');
+  if (isDanbooruMedia) {
+    return true;
+  }
+
+  if (type === 'video') {
+    const isR34Video = cleanSite === 'rule34video' || url.includes('rule34video.com') || url.includes('boomio-cdn.com');
+    if (isR34Video) return true;
+    return effSettings.proxyVideos !== false && effSettings.proxyVideoDefault !== false;
+  }
+
+  if (type === 'image') {
+    return effSettings.proxyFullImages !== false;
+  }
+
+  if (type === 'download') {
+    return effSettings.proxyDownloads !== false;
+  }
+
+  return effSettings.proxyThumbnails !== false;
+}
+
+export function getMediaUrl(targetUrl, { site = '', type = 'thumbnail', settings = null } = {}) {
+  if (!targetUrl || typeof targetUrl !== 'string') return '';
+  if (targetUrl.startsWith('/api/')) return targetUrl;
+  return shouldProxyMedia({ site, url: targetUrl, type, settings }) ? getProxiedUrl(targetUrl) : targetUrl;
+}
+
 export function getProxiedUrl(targetUrl) {
   if (!targetUrl) return '';
   // Same-origin endpoints (unpacked archive files) must not loop through the proxy

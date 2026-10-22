@@ -25,6 +25,7 @@
   "proxyVideos": true,
   "proxyDownloads": true,
   "proxyVideoDefault": true,
+  "siteMediaProxy": {},
   "enableJsDemuxing": true,
   "rule34Provider": "rule34xxx",
   "enablePaheal": true,

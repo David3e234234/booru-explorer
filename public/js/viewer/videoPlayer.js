@@ -1,4 +1,5 @@
 import { t } from '../i18n.js';
+import { shouldProxyMedia } from '../api.js';
 import { showToast, escapeHtml, toSafeHttpUrl, getPostSiteUrl, isFullMediaPending, isRule34VideoTeaserUrl } from '../modules/uiUtils.js';
 import { resolveRule34VideoMedia } from '../modules/rule34VideoResolve.js';
 import { isHevcSource, browserSupportsHevc } from '../modules/hevcCodec.js';
@@ -456,7 +457,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     });
   }
 
-  const needsProxy = currentPost.site === 'danbooru' || currentPost.site === 'rule34video' || directMedia.includes('donmai.us') || directMedia.includes('rule34video.com') || directMedia.includes('boomio-cdn.com') || (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+  const needsProxy = shouldProxyMedia({ site: currentPost.site, url: directMedia, type: 'video', settings: state.settings });
   let currentSource = needsProxy ? 'proxy' : 'direct';
   let isPreCaching = false;
   let iosTranscodeAbort = null;

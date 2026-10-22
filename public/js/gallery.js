@@ -10,7 +10,7 @@ import {
   excludeInterestTag,
   restoreInterestTag
 } from './state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
+import { getProxiedUrl, shouldProxyMedia, getMediaUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from './api.js';
 import { showToast, showActionToast, haptic, isVideoMediaUrl, getCardPreviewVideoUrl, upsertCardDurationBadge, escapeHtml, toSafeImageUrl, toSafeHttpUrl } from './modules/uiUtils.js';
 import { resolveRule34VideoMedia } from './modules/rule34VideoResolve.js';
 import { t } from './i18n.js';
@@ -149,7 +149,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             // fileUrl points at the 1080p file, while the teaser is the intended material.
             const videoTarget = getCardPreviewVideoUrl(post);
             if (videoTarget) {
-              const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+              const shouldUseProxy = shouldProxyMedia({ site: post.site, url: videoTarget, type: 'video' });
               card._videoProbe = false;
               videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
             }
@@ -190,7 +190,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             }
             const videoTarget = post.fileUrl || post.sampleUrl;
             if (videoTarget && !videoEl.src) {
-              const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+              const shouldUseProxy = shouldProxyMedia({ site: post.site, url: videoTarget, type: 'video' });
               // Mark as a background probe: its errors must not trigger proxy/transcode escalation
               card._videoProbe = true;
               videoEl.preload = 'metadata';
@@ -785,9 +785,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       }
     }
 
-    const shouldUseThumbProxy = (post.site === 'danbooru' || (directThumb && directThumb.includes('donmai.us')))
-      ? true
-      : (state.settings?.proxyThumbnails !== false);
+    const shouldUseThumbProxy = shouldProxyMedia({ site: post.site, url: directThumb, type: 'thumbnail' });
     let mainThumbSrc = toSafeImageUrl(directThumb ? (directThumb.startsWith('/api/') ? directThumb : (shouldUseThumbProxy ? getProxiedUrl(directThumb) : directThumb)) : '');
 
     // Archive-only posts have no source preview - show a generated ZIP placeholder
@@ -1409,7 +1407,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       if (!videoEl.src) {
         const videoTarget = getCardPreviewVideoUrl(post);
         if (videoTarget) {
-          const shouldUseProxy = (post.site === 'danbooru' || post.site === 'rule34video' || videoTarget.includes('donmai.us') || videoTarget.includes('rule34video.com') || videoTarget.includes('boomio-cdn.com')) ? true : (state.settings?.proxyVideos !== false && state.settings?.proxyVideoDefault !== false);
+          const shouldUseProxy = shouldProxyMedia({ site: post.site, url: videoTarget, type: 'video' });
           videoEl.src = shouldUseProxy ? getProxiedUrl(videoTarget) : videoTarget;
         }
       }
@@ -1685,7 +1683,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const siteObj = state.sites.find(s => s.id === author.site);
     const siteName = siteObj ? siteObj.name : (author.site ? author.site.toUpperCase() : 'Danbooru');
     const rawPreview = getAuthorPreviewByQuality(author);
-    const shouldUseThumbProxy = (author.site === 'danbooru' || (rawPreview && rawPreview.includes('donmai.us'))) ? true : (state.settings?.proxyThumbnails !== false);
+    const shouldUseThumbProxy = shouldProxyMedia({ site: author.site, url: rawPreview, type: 'thumbnail' });
     const preview = toSafeImageUrl(rawPreview ? (rawPreview.startsWith('/api/') ? rawPreview : (shouldUseThumbProxy ? getProxiedUrl(rawPreview) : rawPreview)) : '');
 
     let formattedDate = '';

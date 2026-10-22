@@ -4,7 +4,7 @@
 // quality menu and draggable status banner.
 import { t } from '../i18n.js';
 import { state } from '../state.js';
-import { getProxiedUrl } from '../api.js';
+import { getProxiedUrl, shouldProxyMedia } from '../api.js';
 import { isHevcSource, browserSupportsHevc } from '../modules/hevcCodec.js';
 import { isFullMediaPending, isRule34VideoTeaserUrl } from '../modules/uiUtils.js';
 import { resolveRule34VideoMedia, getCachedRule34VideoMedia } from '../modules/rule34VideoResolve.js';
@@ -148,9 +148,8 @@ export function createFeedVideoPlayer(post, options = {}) {
   const attachSource = (url) => {
     if (destroyed || !url) return;
     const isTranscode = url.startsWith('/api/transcode-video');
-    video.src = (url.startsWith('/api/') || !isTranscode && state.settings?.proxyVideos === false)
-      ? url
-      : (isTranscode ? url : getProxiedUrl(url));
+    const shouldUseProxy = isTranscode ? false : shouldProxyMedia({ site: post.site, url, type: 'video' });
+    video.src = (url.startsWith('/api/') || !shouldUseProxy) ? url : getProxiedUrl(url);
     if (desiredPlaying) safePlay();
   };
 

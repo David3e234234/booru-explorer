@@ -1,5 +1,5 @@
 import { state, getSimilarPostPlan, calculatePostSimilarityScore } from '../state.js';
-import { fetchPosts, getProxiedUrl } from '../api.js';
+import { fetchPosts, getProxiedUrl, shouldProxyMedia } from '../api.js';
 import { haptic, toSafeHttpUrl } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 
@@ -193,9 +193,7 @@ export function appendSimilarItems(targetPost, count = 24, options = {}) {
     const itemDiv = document.createElement('div');
     itemDiv.className = 'similar-filmstrip-item';
     const rawThumb = item.thumb360 || item.previewUrl || item.sampleUrl || item.thumb180 || item.fileUrl || '';
-    const needsProxyThumb = (item.site === 'danbooru' || (typeof rawThumb === 'string' && rawThumb.includes('donmai.us')))
-      ? true
-      : (state.settings?.proxyThumbnails !== false);
+    const needsProxyThumb = shouldProxyMedia({ site: item.site, url: rawThumb, type: 'thumbnail' });
     const thumbSrc = toSafeHttpUrl(rawThumb ? (rawThumb.startsWith('/api/') ? rawThumb : (needsProxyThumb ? getProxiedUrl(rawThumb) : rawThumb)) : '');
     const isHighMatch = score >= 65;
 

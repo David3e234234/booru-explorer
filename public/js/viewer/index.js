@@ -1,5 +1,5 @@
 import { state, isPostFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, recordSessionInteraction } from '../state.js';
-import { getProxiedUrl, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from '../api.js';
+import { getProxiedUrl, shouldProxyMedia, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
 import { createVideoPlayer } from './videoPlayer.js';
@@ -133,9 +133,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       container.className = 'viewer-image-container';
 
       const thumbMedia = item.previewUrl || item.thumb360 || item.thumb180 || item.sampleUrl || '';
-      const needsThumbProxy = (item.site === 'danbooru' || thumbMedia.includes('donmai.us'))
-        ? true
-        : (state.settings?.proxyThumbnails !== false);
+      const needsThumbProxy = shouldProxyMedia({ site: item.site, url: thumbMedia, type: 'thumbnail' });
       const placeholderSrc = thumbMedia ? (thumbMedia.startsWith('/api/') ? thumbMedia : (needsThumbProxy ? getProxiedUrl(thumbMedia) : thumbMedia)) : '';
 
       let placeholderImg = null;
@@ -154,9 +152,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
       const img = document.createElement('img');
       img.className = 'viewer-image';
-      const needsImgProxy = (item.site === 'danbooru' || (typeof directMedia === 'string' && directMedia.includes('donmai.us')))
-        ? true
-        : (state.settings?.proxyFullImages !== false);
+      const needsImgProxy = shouldProxyMedia({ site: item.site, url: directMedia, type: 'image' });
       const targetSrc = (directMedia.startsWith('/api/') || !needsImgProxy) ? directMedia : getProxiedUrl(directMedia);
       img.referrerPolicy = 'no-referrer';
       img.alt = 'Full View';

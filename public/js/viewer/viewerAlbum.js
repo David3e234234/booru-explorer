@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { fetchAlbumPosts, getProxiedUrl } from '../api.js';
+import { fetchAlbumPosts, getProxiedUrl, shouldProxyMedia } from '../api.js';
 import { downloadManager } from '../modules/downloadManager.js';
 import { showToast, haptic, toSafeHttpUrl, escapeHtml } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
@@ -47,9 +47,7 @@ export function getCurrentMediaItem(post, albumIndex) {
 export function getMediaItemUrl(item) {
   if (!item) return '';
   const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
-  const needsImgProxy = (item.site === 'danbooru' || directMedia.includes('donmai.us'))
-    ? true
-    : (state.settings?.proxyFullImages !== false);
+  const needsImgProxy = shouldProxyMedia({ site: item.site, url: directMedia, type: 'image' });
   return needsImgProxy ? getProxiedUrl(directMedia) : directMedia;
 }
 
@@ -167,9 +165,7 @@ export function renderAlbumFilmstrip(post, albumIndex, options = {}) {
       if (item.isVideo && thumbUrl.startsWith('/api/archive/file')) {
         thumbUrl = `/api/video-thumbnail?url=${encodeURIComponent(thumbUrl)}&quality=low`;
       }
-      const needsThumbProxy = (item.site === 'danbooru' || (typeof thumbUrl === 'string' && thumbUrl.includes('donmai.us')))
-        ? true
-        : (state.settings?.proxyThumbnails !== false);
+      const needsThumbProxy = shouldProxyMedia({ site: item.site, url: thumbUrl, type: 'thumbnail' });
       const thumbSrc = toSafeHttpUrl(thumbUrl ? (thumbUrl.startsWith('/api/') || !needsThumbProxy ? thumbUrl : getProxiedUrl(thumbUrl)) : '');
 
       itemDiv.innerHTML = `
@@ -501,7 +497,7 @@ export async function downloadSingleMedia(item, currentPost) {
     return fallbackExt || 'jpg';
   };
 
-  const shouldUseProxyDownload = activeItem.site === 'danbooru' || downloadTarget.includes('donmai.us') || state.settings?.proxyDownloads !== false;
+  const shouldUseProxyDownload = shouldProxyMedia({ site: activeItem.site, url: downloadTarget, type: 'download' });
 
   if (!shouldUseProxyDownload) {
     try {
