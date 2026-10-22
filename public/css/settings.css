@@ -1245,7 +1245,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md, 8px);
   transition: all var(--transition-fast);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .site-proxy-item:hover {
@@ -1257,47 +1257,51 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 150px;
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
-.site-proxy-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.site-proxy-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
+.site-proxy-meta .api-key-site-badge {
+  flex-shrink: 0;
 }
 
 .site-proxy-hint-text {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* 3-State Segmented Pill Control */
 .segmented-control {
   display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md, 8px);
   padding: 2px;
   gap: 2px;
+  box-sizing: border-box;
 }
 
 .segmented-pill {
   padding: 5px 11px;
   font-size: 11.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-secondary);
   background: transparent;
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast), background-color var(--transition-fast);
   white-space: nowrap;
+  flex-shrink: 0;
+  user-select: none;
+  box-sizing: border-box;
 }
 
 .segmented-pill:hover:not(.active) {
@@ -1308,8 +1312,31 @@
 .segmented-pill.active {
   background: var(--accent-primary);
   color: var(--text-inverse, #14110d);
-  font-weight: 700;
+  font-weight: 600;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 540px) {
+  .site-proxy-item {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .site-proxy-meta {
+    justify-content: space-between;
+    width: 100%;
+  }
+  .site-proxy-item .segmented-control {
+    display: flex;
+    width: 100%;
+  }
+  .site-proxy-item .segmented-pill {
+    flex: 1;
+    text-align: center;
+    padding: 6px 4px;
+    font-size: 11px;
+  }
 }
 
 /* Upstream site proxy active editor block */

@@ -199,12 +199,12 @@ export const SITES_MEDIA_PROXY_CONFIG = [
 
 function getSiteProxyHintText(site, mode) {
   if (mode === 'server') {
-    return t('settings.proxyModeServerHint', 'Всегда через сервер (кэш на диск и обход блокировок)');
+    return t('settings.proxyModeServerHint', 'Через сервер (кэш)');
   }
   if (mode === 'direct') {
-    return t('settings.proxyModeDirectHint', 'Всегда напрямую (быстрый CDN без нагрузки на сервер)');
+    return t('settings.proxyModeDirectHint', 'Напрямую с CDN');
   }
-  return t('settings.proxyModeDefaultHint', 'По умолчанию: ') + site.defaultHint;
+  return site.defaultHint;
 }
 
 export function renderSiteMediaProxyUI() {
@@ -224,10 +224,7 @@ export function renderSiteMediaProxyUI() {
     meta.className = 'site-proxy-meta';
     meta.innerHTML = `
       <span class="api-key-site-badge ${site.badgeClass}">${escapeHtml(site.name)}</span>
-      <div class="site-proxy-info">
-        <span class="site-proxy-title">${escapeHtml(site.name)}</span>
-        <span class="site-proxy-hint-text" id="siteProxyHint_${site.id}">${escapeHtml(getSiteProxyHintText(site, currentMode))}</span>
-      </div>
+      <span class="site-proxy-hint-text" id="siteProxyHint_${site.id}">${escapeHtml(getSiteProxyHintText(site, currentMode))}</span>
     `;
 
     const controls = document.createElement('div');
