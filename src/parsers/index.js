@@ -70,6 +70,7 @@ async function fetchSingleSiteBatch(site, params, aiTagsList, settings) {
     }
   } catch (err) {
     logError('Parser Batch', `Ошибка выполнения парсера [${site}]`, err);
+    if (err?.isRateLimit) throw err;
     return [];
   }
 }
@@ -250,9 +251,12 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
   // The old Math.max(setting * 2, 6) raised every option the UI offers (1-5) back to
   // six, which is why the all-sites fan-out below - pinned to a depth of 1 - still
   // fired six requests per source instead of the single page it promises.
-  const maxIterations = deepFetchPagesSetting === DEFAULT_DEEP_FETCH_DEPTH
-    ? 6
-    : deepFetchPagesSetting;
+  // Remote pages per single-site search. Cap web-scraped Rule34 without API credentials to 2 iterations
+  // to avoid blasting Cloudflare rate limits on a single search query.
+  const isRule34Scraping = site === 'rule34' && !settings?.rule34ApiKey;
+  const maxIterations = isRule34Scraping
+    ? Math.min(deepFetchPagesSetting === DEFAULT_DEEP_FETCH_DEPTH ? 2 : deepFetchPagesSetting, 2)
+    : (deepFetchPagesSetting === DEFAULT_DEEP_FETCH_DEPTH ? 6 : deepFetchPagesSetting);
   // Respect the requested limit and make up depth with pipelined pages
   const batchLimit = Math.min(200, Math.max(targetLimit, 25));
 
@@ -260,11 +264,17 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
 
   const accumulatedPosts = [];
   const seenIds = new Set();
+  let rateLimitError = null;
 
   // Pipeline: fetch the next page while the current one is still being processed
   const launchPage = (remotePage) =>
     withDeadline(() => fetchSingleSiteBatch(site, { ...params, page: remotePage, limit: batchLimit }, aiTagsList, settings))
-      .catch(() => []);
+      .catch((err) => {
+        if (err?.isRateLimit) {
+          rateLimitError = err;
+        }
+        return [];
+      });
 
   let inflight = launchPage(startRemotePage);
   let nextRemotePage = startRemotePage;
@@ -300,6 +310,10 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
 
     nextRemotePage += 1;
     inflight = launchPage(nextRemotePage);
+  }
+
+  if (accumulatedPosts.length === 0 && rateLimitError) {
+    throw rateLimitError;
   }
 
   if (params.category === 'top' && site !== 'all') {

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockAgent, restoreDispatcher, assertNormalizedPost } from './harness.js';
-import { fetchRule34, fetchRule34PostById } from '../../../src/parsers/rule34.js';
+import { fetchRule34, fetchRule34PostById, isRule34RateLimited } from '../../../src/parsers/rule34.js';
 
 test('Rule34 Parser Unit Tests (including Paheal integration)', async (t) => {
   let mockContext = null;
@@ -368,5 +368,47 @@ test('Rule34 Parser Unit Tests (including Paheal integration)', async (t) => {
     assert.equal(post.author, 'sakura_night');
     assert.ok(!post.authorTentative);
     assert.ok(post.tagDetails.artist.includes('sakura_night'));
+  });
+
+  await t.test('isRule34RateLimited detects status codes and captcha content', () => {
+    assert.equal(isRule34RateLimited({ status: 429 }), true);
+    assert.equal(isRule34RateLimited({ status: 403 }), true);
+    assert.equal(isRule34RateLimited({ status: 200 }, '<title>Rule34.xxx CAPTCHA</title>'), true);
+    assert.equal(isRule34RateLimited({ status: 200 }, '<div>cf-mitigated challenge</div>'), true);
+    assert.equal(isRule34RateLimited({ status: 200 }, '<html>Normal page</html>'), false);
+    assert.equal(isRule34RateLimited({ status: 500 }), false);
+  });
+
+  await t.test('fetchRule34 throws rateLimit error when HTML scraper hits 429', async () => {
+    const htmlClient = mockContext.agent.get('https://rule34.xxx');
+    htmlClient.intercept({
+      path: (p) => p.includes('s=list'),
+      method: 'GET'
+    }).reply(429, 'Too Many Requests');
+
+    await assert.rejects(
+      async () => fetchRule34({ tags: 'test' }, [], {}),
+      (err) => {
+        assert.equal(err.isRateLimit, true);
+        assert.equal(err.status, 429);
+        return true;
+      }
+    );
+  });
+
+  await t.test('fetchRule34 throws rateLimit error when HTML scraper receives Cloudflare CAPTCHA', async () => {
+    const htmlClient = mockContext.agent.get('https://rule34.xxx');
+    htmlClient.intercept({
+      path: (p) => p.includes('s=list'),
+      method: 'GET'
+    }).reply(200, '<html><head><title>Rule34.xxx CAPTCHA</title></head><body>Please verify</body></html>');
+
+    await assert.rejects(
+      async () => fetchRule34({ tags: 'test' }, [], {}),
+      (err) => {
+        assert.equal(err.isRateLimit, true);
+        return true;
+      }
+    );
   });
 });

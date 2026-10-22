@@ -345,7 +345,8 @@ function ensureFeed() {
         },
         onLoadMore: () => {
           const now = Date.now();
-          if (now - lastLoadMoreTime < 450) return;
+          const throttleMs = state.currentSite === 'rule34' ? 650 : 450;
+          if (now - lastLoadMoreTime < throttleMs) return;
           if (!state.isLoading && state.hasMore) {
             lastLoadMoreTime = now;
             state.page++;
@@ -529,7 +530,8 @@ async function init() {
     },
     onLoadMore: () => {
       const now = Date.now();
-      if (now - lastLoadMoreTime < 450) return;
+      const throttleMs = state.currentSite === 'rule34' ? 650 : 450;
+      if (now - lastLoadMoreTime < throttleMs) return;
       if (!state.isLoading && state.hasMore) {
         lastLoadMoreTime = now;
         state.page++;
@@ -2036,7 +2038,9 @@ async function performSearch(reset = false, options = {}) {
 
     // Speculatively prefetch next page into server cache during idle for seamless infinite scroll
     if (state.hasMore && state.currentCategory !== 'random' && state.currentCategory !== 'favorites' && state.currentCategory !== 'following') {
-      scheduleNextPagePrefetch();
+      if (state.currentSite !== 'rule34' || state.settings?.rule34ApiKey) {
+        scheduleNextPagePrefetch();
+      }
     }
     return { success: true };
   } catch (err) {
@@ -2046,10 +2050,16 @@ async function performSearch(reset = false, options = {}) {
     if (reset) {
       state.posts = [];
       state.lastSearchFailed = true;
+      if (err.message?.includes('429')) {
+        showToast(t('app.rateLimitSearch', 'Превышен лимит запросов к источнику. Пожалуйста, подождите немного.'), 'warning');
+      }
     } else {
       // Roll the page back so infinite scroll does not keep a permanent gap
       state.page--;
       state.hasMore = true;
+      if (err.message?.includes('429') || state.currentSite === 'rule34') {
+        showToast(t('app.rateLimitScroll', 'Лимит запросов Rule34. Подождите пару секунд и продолжите прокрутку.'), 'warning');
+      }
     }
     galleryInstance.renderGallery(false);
     return { success: false, error: err };

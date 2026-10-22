@@ -667,13 +667,15 @@ router.get('/posts', async (req, res) => {
   } catch (err) {
     logError('Search', `Ошибка при поиске`, err);
     if (!res.headersSent) {
-      res.status(502).json({
+      const statusCode = err?.isRateLimit ? 429 : 502;
+      res.status(statusCode).json({
         success: false,
         site: req.query.site || 'danbooru',
-        page: 1,
+        page: parseInt(req.query.page, 10) || 1,
         count: 0,
         posts: [],
-        error: 'Ошибка при загрузке постов'
+        error: err?.isRateLimit ? 'Превышен лимит запросов к источнику. Пожалуйста, подождите немного.' : 'Ошибка при загрузке постов',
+        isRateLimit: Boolean(err?.isRateLimit)
       });
     }
   }

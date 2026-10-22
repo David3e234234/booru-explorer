@@ -162,6 +162,7 @@ Boards that only publish a short teaser in their feed add two optional fields:
 - The board only serves `/video/<id>/<slug>/`; the bare id form answers 404. `resolveRule34VideoFullMedia()` reuses the post page link when it has one and otherwise makes a single manual redirect hop, which must stay on the board host.
 
 - Rule34 operates with an explicit provider setting (`rule34Provider`: `'rule34xxx'` or `'paheal'`). Automatic fallback from Rule34.xxx to Paheal is disabled; switching between the two databases is strictly manual via settings.
+- Rule34.xxx public scraping is protected by Cloudflare bot management: outbound requests are serialized and paced via `executePacedRule34Fetch` (minimum 500ms spacing between outbound request starts). Transient rate limits (HTTP 429, 403, Cloudflare CAPTCHA) trigger exponential backoff retries and throw rate-limit errors (HTTP 429) rather than returning a false empty list (`[]`), preserving infinite scroll state (`state.page--`, `state.hasMore: true`). Deep-fetch for scraping Rule34 without API keys is capped to at most 2 iterations, and client-side speculative prefetch is disabled for Rule34 without API keys to conserve upstream rate-limit budget.
 
 Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` case, all-sites capability use, frontend site metadata, settings UI metadata if site-specific, parser tests and documentation updates.
 

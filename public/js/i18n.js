@@ -677,6 +677,8 @@ Object.assign(en, {
   'app.authorSearch': 'Searching works by:',
   'app.searchRefreshed': 'Results refreshed',
   'app.searchRefreshFailed': 'Failed to refresh results',
+  'app.rateLimitSearch': 'Upstream rate limit reached. Please wait a few seconds.',
+  'app.rateLimitScroll': 'Rule34 rate limit reached. Wait a few seconds and continue scrolling.',
   'app.shuffleNotEnough': 'Not enough posts to shuffle',
   'app.feedShuffled': 'Feed shuffled',
   'app.similarNotFound': 'Could not identify similar tags for this post',

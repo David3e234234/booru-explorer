@@ -3,8 +3,49 @@ import { BROWSER_USER_AGENT } from '../config/constants.js';
 import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite, decodeHtmlEntities } from '../utils/tagHelpers.js';
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
-import { logError } from '../utils/logger.js';
+import { logError, logWarn } from '../utils/logger.js';
 import { resolveSearchAuthor, setCachedTagType, TAG_TYPE } from '../services/booruTagTypeService.js';
+
+// Pacer for outbound scraping requests to rule34.xxx.
+// Rule34.xxx is protected by Cloudflare which triggers rate limits / CAPTCHA (HTTP 403/429)
+// when outbound requests arrive in bursts or with high concurrency.
+// We serialize scraping requests and enforce a minimum spacing between them.
+let rule34LastRequestTime = 0;
+let rule34ScraperQueue = Promise.resolve();
+const MIN_RULE34_REQUEST_INTERVAL_MS = 500;
+
+export async function executePacedRule34Fetch(fetchFn) {
+  if (process.env.NODE_ENV === 'test') {
+    return await fetchFn();
+  }
+
+  const run = async () => {
+    const now = Date.now();
+    const elapsed = now - rule34LastRequestTime;
+    if (elapsed < MIN_RULE34_REQUEST_INTERVAL_MS) {
+      await new Promise(r => setTimeout(r, MIN_RULE34_REQUEST_INTERVAL_MS - elapsed));
+    }
+    rule34LastRequestTime = Date.now();
+    return await fetchFn();
+  };
+
+  const nextPromise = rule34ScraperQueue.then(run, run);
+  rule34ScraperQueue = nextPromise.catch(() => {});
+  return nextPromise;
+}
+
+export function isRule34RateLimited(res, html = '') {
+  if (res && (res.status === 429 || res.status === 403)) return true;
+  if (typeof html === 'string' && (
+    html.includes('Rule34.xxx CAPTCHA') ||
+    html.includes('cf-mitigated') ||
+    html.includes('challenge-running') ||
+    (html.includes('Cloudflare') && html.includes('Just a moment'))
+  )) {
+    return true;
+  }
+  return false;
+}
 
 // Preview tiers from native board URLs: low (thumb180) is the small thumbnail,
 // medium (thumb360) is the sample image, high (thumb720) prefers the sample and
@@ -241,7 +282,7 @@ export async function fetchRule34(params, aiTagsList, settings) {
 
     const url = `https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(dapiTags)}&pid=${pid}&limit=${limit}&api_key=${encodeURIComponent(settings.rule34ApiKey)}&user_id=${encodeURIComponent(settings.rule34UserId)}`;
     try {
-      const res = await fetchSafe(url, {
+      let res = await fetchSafe(url, {
         headers: {
           'User-Agent': BROWSER_USER_AGENT,
           'Referer': 'https://rule34.xxx/'
@@ -250,7 +291,20 @@ export async function fetchRule34(params, aiTagsList, settings) {
         settings,
         site: 'rule34'
       });
-      if (res.ok) {
+      if (res && res.status === 429 && process.env.NODE_ENV !== 'test') {
+        await discardResponse(res);
+        await new Promise(r => setTimeout(r, 600));
+        res = await fetchSafe(url, {
+          headers: {
+            'User-Agent': BROWSER_USER_AGENT,
+            'Referer': 'https://rule34.xxx/'
+          },
+          timeout: 9000,
+          settings,
+          site: 'rule34'
+        });
+      }
+      if (res && res.ok) {
         const text = await res.text();
         if (!text.includes('Missing authentication')) {
           const data = safeJsonParse(text, null);
@@ -355,18 +409,60 @@ export async function fetchRule34(params, aiTagsList, settings) {
     .replace(/\border:score_asc\b/gi, 'sort:score:asc');
 
   const htmlUrl = `https://rule34.xxx/index.php?page=post&s=list&tags=${encodeURIComponent(htmlFormattedTags)}&pid=${pid * 42}`;
+  const maxAttempts = process.env.NODE_ENV === 'test' ? 1 : 2;
+  let isRateLimited = false;
+
   try {
-    const res = await fetchSafe(htmlUrl, {
-      headers: {
-        'User-Agent': BROWSER_USER_AGENT,
-        'Referer': 'https://rule34.xxx/'
-      },
-      timeout: 14000,
-      settings,
-      site: 'rule34'
-    });
-    if (res.ok) {
-      const html = await res.text();
+    let res = null;
+    let html = '';
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) {
+        await new Promise(r => setTimeout(r, 1200 * attempt));
+      }
+
+      res = await executePacedRule34Fetch(() => fetchSafe(htmlUrl, {
+        headers: {
+          'User-Agent': BROWSER_USER_AGENT,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Referer': 'https://rule34.xxx/'
+        },
+        timeout: 14000,
+        settings,
+        site: 'rule34'
+      }));
+
+      if (res && isRule34RateLimited(res)) {
+        isRateLimited = true;
+        await discardResponse(res);
+        logWarn('Rule34.xxx HTML', `Лимит запросов Rule34 (HTTP ${res.status}), попытка ${attempt + 1}/${maxAttempts}`);
+        continue;
+      }
+
+      if (res && res.ok) {
+        html = await res.text();
+        if (isRule34RateLimited(res, html)) {
+          isRateLimited = true;
+          logWarn('Rule34.xxx HTML', `Обнаружена Cloudflare CAPTCHA Rule34, попытка ${attempt + 1}/${maxAttempts}`);
+          continue;
+        }
+        isRateLimited = false;
+        break;
+      } else {
+        if (res) await discardResponse(res);
+        break;
+      }
+    }
+
+    if (isRateLimited) {
+      const rateLimitErr = new Error('Rule34.xxx rate limit or CAPTCHA challenge (HTTP 429)');
+      rateLimitErr.isRateLimit = true;
+      rateLimitErr.status = 429;
+      throw rateLimitErr;
+    }
+
+    if (res && res.ok) {
       let posts = [];
       // Universal match for preview blocks: <span class="thumb" id="s123"> or <span id="s123" class="thumb">
       const spanRegex = /<span\b[^>]*?(?:class="[^"]*\bthumb\b[^"]*"[^>]*?id="s?(\d+)"|id="s?(\d+)"[^>]*?class="[^"]*\bthumb\b[^"]*")[^>]*>([\s\S]*?)<\/span>/gi;
@@ -636,10 +732,12 @@ export async function fetchRule34(params, aiTagsList, settings) {
         }
         return posts.slice(0, limit);
       }
-    } else {
-      await discardResponse(res);
+      return [];
     }
   } catch (err) {
+    if (err?.isRateLimit) {
+      throw err;
+    }
     logError('Rule34.xxx HTML', 'Ошибка веб-парсинга Rule34.xxx', err);
   }
 
@@ -839,7 +937,7 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
   if (!isPaheal) {
     try {
       const viewUrl = `https://rule34.xxx/index.php?page=post&s=view&id=${cleanId}`;
-      const res = await fetchSafe(viewUrl, {
+      const res = await executePacedRule34Fetch(() => fetchSafe(viewUrl, {
         headers: {
           'User-Agent': BROWSER_USER_AGENT,
           'Referer': 'https://rule34.xxx/'
@@ -847,9 +945,9 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
         timeout: 12000,
         settings,
         site: 'rule34'
-      });
+      }));
 
-      if (res.ok) {
+      if (res && res.ok) {
         const html = await res.text();
 
         const extractTagsByClass = (htmlStr, cls) => {
