@@ -1212,6 +1212,14 @@ async function performSearch(reset = false, options = {}) {
     favoritesHeaderBar.style.display = state.currentCategory === 'favorites' ? 'flex' : 'none';
   }
 
+  // The profile stats tab fills the page with its own cards; the gallery
+  // surface below (grid, search empty state, load-more) must not show there
+  const galleryContainer = document.querySelector('.gallery-container');
+  if (galleryContainer) {
+    const hideGalleryChrome = state.currentCategory === 'profile' && state.profileSubTab === 'analytics';
+    galleryContainer.style.display = hideGalleryChrome ? 'none' : '';
+  }
+
   if (reset) {
     state.page = 1;
     state.posts = [];
