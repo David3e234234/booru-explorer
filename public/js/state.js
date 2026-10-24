@@ -149,6 +149,7 @@ export const STORAGE_KEYS = {
   LIKES: 'booru_likes_v1',
   DISLIKES: 'booru_dislikes_v1',
   VIEWED: 'booru_viewed_v1',
+  HISTORY: 'booru_view_history_v1',
   AUTH_TOKEN: 'booru_auth_token_v1',
   ADMIN_TOKEN: 'booru_admin_token_v1',
   CURRENT_USER: 'booru_current_user_v1',
@@ -203,6 +204,7 @@ export const state = {
   dislikes: [],
   dislikedIds: new Set(),
   viewedIds: new Set(),
+  viewHistory: [], // compact { i, s, t, v, ts } entries, client-side only, capped
   favoritesSubTab: 'posts', // 'posts' | 'authors'
   profileSubTab: 'likes', // 'likes' | 'favorites' | 'authors' | 'analytics'
   currentUser: null, // { id, username, createdAt, ... }
@@ -290,10 +292,12 @@ export function clearLocalAuth() {
   state.favoriteAuthors = [];
   state.favoriteAuthorNames = new Set();
   state.viewedIds = new Set();
+  state.viewHistory = [];
   clearSessionInterests();
   invalidateInterestCache();
   try {
     localStorage.removeItem(STORAGE_KEYS.VIEWED);
+    localStorage.removeItem(STORAGE_KEYS.HISTORY);
     localStorage.removeItem(STORAGE_KEYS.FAVORITES);
     localStorage.removeItem(STORAGE_KEYS.LIKES);
     localStorage.removeItem(STORAGE_KEYS.DISLIKES);
@@ -427,6 +431,65 @@ export function markPostViewed(id) {
       localStorage.setItem(STORAGE_KEYS.VIEWED, JSON.stringify(arr));
     } catch (e) {}
   }, 500);
+}
+
+// Client-side view history. Entries are kept minimal ({ i, s, t, v, ts }, ~150 B)
+// and never leave the browser: unlike likes/favorites they are not synced to the
+// server, so the Telegram backup size stays unaffected. The cap is intentional:
+// it is a recency list, not an append-only user collection.
+const VIEW_HISTORY_CAP = 500;
+let historyWriteTimer = null;
+
+export function recordPostHistory(post) {
+  if (!post || !post.id || !post.site) return;
+  const thumb = post.thumb360 || post.previewUrl || post.sampleUrl || '';
+  const entry = {
+    i: post.id,
+    s: post.site,
+    t: thumb,
+    v: post.isVideo ? 1 : 0,
+    ts: Date.now()
+  };
+  if (post.originalId && post.originalId !== post.id) {
+    entry.o = post.originalId;
+  }
+  state.viewHistory = state.viewHistory.filter(e => e.i !== entry.i);
+  state.viewHistory.unshift(entry);
+  if (state.viewHistory.length > VIEW_HISTORY_CAP) {
+    state.viewHistory.length = VIEW_HISTORY_CAP;
+  }
+  if (historyWriteTimer) clearTimeout(historyWriteTimer);
+  historyWriteTimer = setTimeout(() => {
+    historyWriteTimer = null;
+    try {
+      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(state.viewHistory));
+    } catch (e) {}
+  }, 500);
+}
+
+export function loadViewHistory() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.HISTORY);
+    const arr = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(arr)) {
+      state.viewHistory = arr.filter(e => e && e.i && e.s);
+    }
+    return state.viewHistory;
+  } catch (e) {
+    state.viewHistory = [];
+    return [];
+  }
+}
+
+export function clearViewHistory() {
+  state.viewHistory = [];
+  if (historyWriteTimer) {
+    clearTimeout(historyWriteTimer);
+    historyWriteTimer = null;
+  }
+  try {
+    localStorage.removeItem(STORAGE_KEYS.HISTORY);
+  } catch (e) {}
 }
 
 export function loadLocalSettings() {

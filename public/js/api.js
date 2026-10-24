@@ -311,6 +311,21 @@ export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', paren
   return readJsonOrThrow(res);
 }
 
+// View-history helper: re-fetches a full post from its board by id. Returns
+// null on any failure so the caller can fall back to the stored thumbnail.
+export async function resolvePostById(site, postId) {
+  try {
+    const params = new URLSearchParams({ site, id: postId });
+    const res = await fetchWithTimeout(`/api/resolve-post?${params.toString()}`, {
+      headers: getAuthHeaders()
+    });
+    const data = await readJsonOrThrow(res);
+    return (data && data.success && data.post) ? data.post : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 export async function fetchArchiveList(zipUrl, options = {}) {
   const threads = options.threads ?? state.settings?.archiveDownloadThreads ?? 4;
   const res = await fetchWithTimeout(`/api/archive/list?url=${encodeURIComponent(zipUrl)}&threads=${threads}`, {

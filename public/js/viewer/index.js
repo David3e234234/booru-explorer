@@ -1,4 +1,4 @@
-import { state, isPostFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, recordSessionInteraction } from '../state.js';
+import { state, isPostFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, recordPostHistory, recordSessionInteraction } from '../state.js';
 import { getProxiedUrl, shouldProxyMedia, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
@@ -256,6 +256,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     if (currentPost.id) {
       markPostViewed(currentPost.id);
+      recordPostHistory(currentPost);
       recordSessionInteraction(currentPost, 'view');
     }
 

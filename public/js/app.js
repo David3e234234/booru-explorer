@@ -12,6 +12,7 @@ import {
   loadLocalDislikes,
   setDislikes,
   loadLocalViewed,
+  loadViewHistory,
   loadLocalAuth,
   saveLocalAuth,
   clearLocalAuth,
@@ -45,6 +46,7 @@ import {
   fetchPawchiveServices,
   fetchKemonoServices,
   fetchAliasesMap,
+  resolvePostById,
   apiGetMe
 } from './api.js';
 import { initAutocomplete } from './autocomplete.js';
@@ -178,6 +180,19 @@ function ensureProfileUI() {
     profileUIPromise = importOnce('profileUI', () => import('./modules/profileUI.js')).then((m) => {
       profileUIInstance = m.initProfileUI({
         onOpenAuth: (mode) => authModalInstance?.openAuthModal(mode),
+        onOpenHistoryPost: async (entry) => {
+          const fallbackPost = {
+            id: entry.i,
+            originalId: entry.o || entry.i,
+            site: entry.s,
+            previewUrl: entry.t,
+            thumb360: entry.t,
+            sampleUrl: entry.t,
+            isVideo: Boolean(entry.v)
+          };
+          const resolved = await resolvePostById(entry.s, entry.o || entry.i);
+          openPostOverlay(-1, { directPost: resolved || fallbackPost });
+        },
         onTabChange: (type, val) => {
           if (type === 'search-tag') {
             state.searchTags = [];
@@ -633,6 +648,7 @@ async function init() {
     loadLikes(),
     loadDislikes(),
     loadLocalViewed(),
+    loadViewHistory(),
     loadAuthorAliasesMap(),
     loadBooruSites({ onSelectSite: selectSite })
   ]);

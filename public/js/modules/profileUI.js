@@ -1,25 +1,16 @@
-import { state, clearLocalAuth, getUserInterestTags, excludeInterestTag, restoreInterestTag, resetExcludedInterestTags, saveLocalSettings, clearDislikesLocally } from '../state.js';
-import { markAuthHeadersDirty } from '../api.js';
+import { state, clearLocalAuth, clearViewHistory, getUserInterestTags, excludeInterestTag, restoreInterestTag, resetExcludedInterestTags, saveLocalSettings, clearDislikesLocally } from '../state.js';
+import { markAuthHeadersDirty, shouldProxyMedia, getProxiedUrl } from '../api.js';
 import { apiLogout, saveSettings, clearDislikesApi } from '../api.js';
-import { showToast, escapeHtml } from './uiUtils.js';
+import { showToast, escapeHtml, toSafeImageUrl } from './uiUtils.js';
 import { t } from '../i18n.js';
 
-export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
+export function initProfileUI({ onOpenAuth, onTabChange, onReloadState, onOpenHistoryPost }) {
   const profileSection = document.getElementById('userProfileSection');
   const profileUsername = document.getElementById('profileUsername');
   const profileBadgeStatus = document.getElementById('profileBadgeStatus');
   const profileJoinedDate = document.getElementById('profileJoinedDate');
   const profileAvatar = document.getElementById('profileAvatar');
   const profileHeaderActions = document.getElementById('profileHeaderActions');
-  
-  const statLikesCount = document.getElementById('statLikesCount');
-  const statFavsCount = document.getElementById('statFavsCount');
-  const statAuthorsCount = document.getElementById('statAuthorsCount');
-  const statViewsCount = document.getElementById('statViewsCount');
-  
-  const profileTabLikesCount = document.getElementById('profileTabLikesCount');
-  const profileTabFavsCount = document.getElementById('profileTabFavsCount');
-  const profileTabAuthorsCount = document.getElementById('profileTabAuthorsCount');
 
   const btnTabLikes = document.getElementById('btnProfileTabLikes');
   const btnTabFavs = document.getElementById('btnProfileTabFavs');
@@ -27,6 +18,13 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   const btnTabAnalytics = document.getElementById('btnProfileTabAnalytics');
   const analyticsPane = document.getElementById('profileAnalyticsPane');
   const btnEditInterests = document.getElementById('btnEditInterests');
+
+  const statLikesEl = document.getElementById('profileStatLikes');
+  const statFavsEl = document.getElementById('profileStatFavs');
+  const statAuthorsEl = document.getElementById('profileStatAuthors');
+  const statViewsEl = document.getElementById('profileStatViews');
+  const historyGrid = document.getElementById('profileViewHistoryGrid');
+  const btnClearHistory = document.getElementById('btnClearViewHistory');
 
   let isEditingInterests = false;
 
@@ -93,27 +91,16 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       }
     }
 
-    // Update counters
-    const likesCount = state.likes?.length || 0;
-    const favsCount = state.favorites?.length || 0;
-    const authorsCount = state.favoriteAuthors?.length || 0;
-    const viewsCount = state.viewedIds?.size || 0;
+    const statViews = state.viewedIds?.size || 0;
+    if (statLikesEl) statLikesEl.textContent = state.likes?.length || 0;
+    if (statFavsEl) statFavsEl.textContent = state.favorites?.length || 0;
+    if (statAuthorsEl) statAuthorsEl.textContent = state.favoriteAuthors?.length || 0;
+    if (statViewsEl) statViewsEl.textContent = statViews;
 
-    if (statLikesCount) statLikesCount.textContent = likesCount;
-    if (statFavsCount) statFavsCount.textContent = favsCount;
-    if (statAuthorsCount) statAuthorsCount.textContent = authorsCount;
-    if (statViewsCount) statViewsCount.textContent = viewsCount;
-
-    if (profileTabLikesCount) profileTabLikesCount.textContent = likesCount;
-    if (profileTabFavsCount) profileTabFavsCount.textContent = favsCount;
-    if (profileTabAuthorsCount) profileTabAuthorsCount.textContent = authorsCount;
-
-    const profileAuthorsToolbar = document.getElementById('profileAuthorsToolbar');
-    if (profileAuthorsToolbar) {
-      profileAuthorsToolbar.style.display = state.profileSubTab === 'authors' ? 'flex' : 'none';
-    }
+    applySubTabUi(state.profileSubTab || 'likes');
 
     renderInterestsCloud();
+    renderViewHistory();
   }
 
   function renderInterestsCloud() {
@@ -215,6 +202,51 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
     });
   }
 
+  // The history list is a recency view: render only the newest slice so the
+  // profile pane never holds hundreds of thumbnail nodes at once
+  const HISTORY_RENDER_LIMIT = 60;
+  let historyEntriesCache = [];
+
+  function formatHistoryWhen(ts) {
+    const mins = Math.floor((Date.now() - (ts || 0)) / 60000);
+    if (mins < 1) return t('profile.historyJustNow', 'только что');
+    if (mins < 60) return t('profile.historyMinsAgo', '{n} мин. назад').replace('{n}', mins);
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return t('profile.historyHoursAgo', '{n} ч. назад').replace('{n}', hours);
+    return t('profile.historyDaysAgo', '{n} дн. назад').replace('{n}', Math.floor(hours / 24));
+  }
+
+  function renderViewHistory() {
+    if (!historyGrid) return;
+    const entries = Array.isArray(state.viewHistory) ? state.viewHistory.slice(0, HISTORY_RENDER_LIMIT) : [];
+    historyEntriesCache = entries;
+
+    if (btnClearHistory) btnClearHistory.disabled = entries.length === 0;
+
+    if (entries.length === 0) {
+      historyGrid.innerHTML = `<div class="history-empty">${escapeHtml(t('profile.historyEmpty', 'История пуста. Открытые вами посты появятся здесь.'))}</div>`;
+      return;
+    }
+
+    historyGrid.innerHTML = entries.map((entry) => {
+      const site = (state.sites || []).find((s) => s.id === entry.s);
+      const siteName = (site && site.name) || entry.s;
+      const raw = entry.t || '';
+      const mediaSrc = raw && !raw.startsWith('/api/') && shouldProxyMedia({ site: entry.s, url: raw, type: 'thumbnail' })
+        ? getProxiedUrl(raw)
+        : raw;
+      const safeSrc = escapeHtml(toSafeImageUrl(mediaSrc));
+      const when = formatHistoryWhen(entry.ts);
+      return `
+        <button type="button" class="history-card" data-i="${escapeHtml(String(entry.i))}" title="${escapeHtml(siteName)} · ${escapeHtml(when)}">
+          ${safeSrc ? `<img class="history-thumb" src="${safeSrc}" alt="" loading="lazy" decoding="async">` : ''}
+          ${entry.v ? '<span class="history-video-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg></span>' : ''}
+          <span class="history-site-badge">${escapeHtml(siteName)}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
   async function handleLogout() {
     await apiLogout();
     clearLocalAuth();
@@ -223,8 +255,10 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
     if (typeof onReloadState === 'function') onReloadState();
   }
 
-  function setProfileSubTab(subTab) {
-    state.profileSubTab = subTab;
+  // Shared by setProfileSubTab() and renderProfile(): URL restores land in
+  // renderProfile() without a tab click, so the pane and the active button
+  // must sync from state.profileSubTab there too
+  function applySubTabUi(subTab) {
     [btnTabLikes, btnTabFavs, btnTabAuthors, btnTabAnalytics].forEach(btn => btn?.classList.remove('active'));
 
     const profileAuthorsToolbar = document.getElementById('profileAuthorsToolbar');
@@ -232,18 +266,21 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
       profileAuthorsToolbar.style.display = subTab === 'authors' ? 'flex' : 'none';
     }
 
-    if (subTab === 'likes') {
-      btnTabLikes?.classList.add('active');
-      if (analyticsPane) analyticsPane.style.display = 'none';
-    } else if (subTab === 'favorites') {
-      btnTabFavs?.classList.add('active');
-      if (analyticsPane) analyticsPane.style.display = 'none';
-    } else if (subTab === 'authors') {
-      btnTabAuthors?.classList.add('active');
-      if (analyticsPane) analyticsPane.style.display = 'none';
-    } else if (subTab === 'analytics') {
-      btnTabAnalytics?.classList.add('active');
-      if (analyticsPane) analyticsPane.style.display = 'block';
+    if (analyticsPane) analyticsPane.style.display = subTab === 'analytics' ? 'block' : 'none';
+
+    const activeBtn = subTab === 'favorites' ? btnTabFavs
+      : subTab === 'authors' ? btnTabAuthors
+        : subTab === 'analytics' ? btnTabAnalytics
+          : btnTabLikes;
+    activeBtn?.classList.add('active');
+  }
+
+  function setProfileSubTab(subTab) {
+    state.profileSubTab = subTab;
+    applySubTabUi(subTab);
+
+    if (subTab === 'analytics') {
+      renderViewHistory();
     }
 
     if (typeof onTabChange === 'function') {
@@ -265,10 +302,20 @@ export function initProfileUI({ onOpenAuth, onTabChange, onReloadState }) {
   btnTabAuthors?.addEventListener('click', () => setProfileSubTab('authors'));
   btnTabAnalytics?.addEventListener('click', () => setProfileSubTab('analytics'));
 
-  document.getElementById('statLikesItem')?.addEventListener('click', () => setProfileSubTab('likes'));
-  document.getElementById('statFavsItem')?.addEventListener('click', () => setProfileSubTab('favorites'));
-  document.getElementById('statAuthorsItem')?.addEventListener('click', () => setProfileSubTab('authors'));
-  document.getElementById('statViewsItem')?.addEventListener('click', () => setProfileSubTab('analytics'));
+  if (historyGrid) {
+    historyGrid.addEventListener('click', (e) => {
+      const card = e.target.closest('.history-card');
+      if (!card) return;
+      const entry = historyEntriesCache.find((en) => en.i === card.dataset.i);
+      if (entry && typeof onOpenHistoryPost === 'function') onOpenHistoryPost(entry);
+    });
+  }
+
+  btnClearHistory?.addEventListener('click', () => {
+    clearViewHistory();
+    showToast(t('profile.historyCleared', 'История просмотров очищена'), 'info');
+    renderViewHistory();
+  });
 
   return {
     renderProfile,

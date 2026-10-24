@@ -8,24 +8,24 @@
   <meta name="apple-mobile-web-app-title" content="Booru Explorer">
   <meta name="theme-color" content="#14110d">
   <title data-i18n="app.title">Booru Explorer: медиа и видео поисковик</title>
-  <link rel="manifest" href="manifest.json?v=12.4">
-  <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon.png?v=12.4">
-  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=12.4">
-  <link rel="apple-touch-icon-precomposed" href="icons/apple-touch-icon.png?v=12.4">
+  <link rel="manifest" href="manifest.json?v=12.5">
+  <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon.png?v=12.5">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=12.5">
+  <link rel="apple-touch-icon-precomposed" href="icons/apple-touch-icon.png?v=12.5">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="modulepreload" href="dist/app.js?v=12.4">
+  <link rel="modulepreload" href="dist/app.js?v=12.5">
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>.mobile-only{display:none!important;}</style>
-  <link rel="stylesheet" href="css/variables.css?v=12.4">
-  <link rel="stylesheet" href="css/main.css?v=12.4">
-  <link rel="stylesheet" href="css/components.css?v=12.4">
-  <link rel="stylesheet" href="css/settings.css?v=12.4">
-  <link rel="stylesheet" href="css/authors.css?v=12.4">
-  <link rel="stylesheet" href="css/profile.css?v=12.4">
-  <link rel="stylesheet" href="css/viewer.css?v=12.4">
-  <link rel="stylesheet" href="css/archive-inspect.css?v=12.4">
-  <link rel="stylesheet" href="css/feed.css?v=12.4">
+  <link rel="stylesheet" href="css/variables.css?v=12.5">
+  <link rel="stylesheet" href="css/main.css?v=12.5">
+  <link rel="stylesheet" href="css/components.css?v=12.5">
+  <link rel="stylesheet" href="css/settings.css?v=12.5">
+  <link rel="stylesheet" href="css/authors.css?v=12.5">
+  <link rel="stylesheet" href="css/profile.css?v=12.5">
+  <link rel="stylesheet" href="css/viewer.css?v=12.5">
+  <link rel="stylesheet" href="css/archive-inspect.css?v=12.5">
+  <link rel="stylesheet" href="css/feed.css?v=12.5">
 </head>
 <body>
 
@@ -61,7 +61,7 @@
 
       <div class="brand" id="btnLogo">
         <div class="brand-icon">
-          <img src="icons/favicon.png?v=12.4" alt="Booru Explorer" class="brand-logo-img">
+          <img src="icons/favicon.png?v=12.5" alt="Booru Explorer" class="brand-logo-img">
         </div>
         <span class="brand-title">Booru<span class="brand-accent">Explorer</span></span>
       </div>
@@ -388,41 +388,6 @@
             </div>
           </div>
 
-          <!-- Statistics counters -->
-          <div class="profile-stats-bar">
-            <div class="profile-stat-item" id="statLikesItem" title="Понравившиеся посты" data-i18n-title="profile.statsLikes.title">
-              <span class="profile-stat-value" id="statLikesCount">0</span>
-              <span class="profile-stat-label">
-                <span class="profile-stat-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>
-                <span data-i18n="profile.statsLikes">Лайки</span>
-              </span>
-            </div>
-            <div class="profile-stat-divider"></div>
-            <div class="profile-stat-item" id="statFavsItem" title="Сохраненное в закладки" data-i18n-title="profile.statsFavs.title">
-              <span class="profile-stat-value" id="statFavsCount">0</span>
-              <span class="profile-stat-label">
-                <span class="profile-stat-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg></span>
-                <span data-i18n="profile.statsFavs">Избранное</span>
-              </span>
-            </div>
-            <div class="profile-stat-divider"></div>
-            <div class="profile-stat-item" id="statAuthorsItem" title="Отслеживаемые авторы" data-i18n-title="profile.statsAuthors.title">
-              <span class="profile-stat-value" id="statAuthorsCount">0</span>
-              <span class="profile-stat-label">
-                <span class="profile-stat-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></span>
-                <span data-i18n="profile.statsAuthors">Подписки</span>
-              </span>
-            </div>
-            <div class="profile-stat-divider"></div>
-            <div class="profile-stat-item" id="statViewsItem" title="Изучено постов" data-i18n-title="profile.statsViews.title">
-              <span class="profile-stat-value" id="statViewsCount">0</span>
-              <span class="profile-stat-label">
-                <span class="profile-stat-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></span>
-                <span data-i18n="profile.statsViews">Просмотры</span>
-              </span>
-            </div>
-          </div>
-
           <!-- Profile sub-tabs (TikTok-style tabs) -->
           <div class="profile-tabs-nav">
             <button class="profile-tab-btn active" data-profile-tab="likes" id="btnProfileTabLikes">
@@ -439,7 +404,7 @@
             </button>
             <button class="profile-tab-btn" data-profile-tab="analytics" id="btnProfileTabAnalytics">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/></svg>
-              <span data-i18n="profile.tabAnalytics">Интересы</span>
+              <span data-i18n="profile.tabAnalytics">Статистика</span>
             </button>
           </div>
 
@@ -456,8 +421,42 @@
           </div>
         </div>
 
-        <!-- Container for the interests analytics tab -->
+        <!-- Stats tab: counters, view history and the interests map -->
         <div class="profile-analytics-pane" id="profileAnalyticsPane" style="display: none;">
+          <div class="analytics-card">
+            <div class="profile-stats-grid" id="profileStatsGrid">
+              <div class="profile-stat-cell">
+                <span class="profile-stat-num" id="profileStatLikes">0</span>
+                <span class="profile-stat-name" data-i18n="profile.statLikes">Лайки</span>
+              </div>
+              <div class="profile-stat-cell">
+                <span class="profile-stat-num" id="profileStatFavs">0</span>
+                <span class="profile-stat-name" data-i18n="profile.statFavs">Закладки</span>
+              </div>
+              <div class="profile-stat-cell">
+                <span class="profile-stat-num" id="profileStatAuthors">0</span>
+                <span class="profile-stat-name" data-i18n="profile.statAuthors">Подписки</span>
+              </div>
+              <div class="profile-stat-cell">
+                <span class="profile-stat-num" id="profileStatViews">0</span>
+                <span class="profile-stat-name" data-i18n="profile.statViews">Просмотрено</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="analytics-card">
+            <div class="analytics-header">
+              <div class="analytics-header-content">
+                <h3 class="analytics-title" data-i18n="profile.historyTitle">История просмотров</h3>
+                <p class="analytics-desc" data-i18n="profile.historyDesc">Последние открытые посты. Хранится только в этом браузере.</p>
+              </div>
+              <button type="button" class="btn-icon btn-clear-history" id="btnClearViewHistory" title="Очистить историю просмотров" data-i18n-title="profile.historyClear.title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+            <div class="history-grid" id="profileViewHistoryGrid"></div>
+          </div>
+
           <div class="analytics-card">
             <div class="analytics-header">
               <div class="analytics-header-content">
@@ -2819,6 +2818,6 @@
 
   <div class="toast-container" id="toastContainer"></div>
 
-  <script type="module" src="dist/app.js?v=12.4"></script>
+  <script type="module" src="dist/app.js?v=12.5"></script>
 </body>
 </html>

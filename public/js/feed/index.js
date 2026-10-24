@@ -2,7 +2,7 @@
 // replaces the modal viewer on small screens. Chrome is a light layer over the
 // media: a right action rail, a bottom info block and a topbar. Gestures:
 // swipe to move between posts, tap to toggle chrome, double tap to like.
-import { state, isPostLiked, isPostFavorite, toggleLikeLocally, toggleDislikeLocally, markPostViewed, recordSessionInteraction } from '../state.js';
+import { state, isPostLiked, isPostFavorite, toggleLikeLocally, toggleDislikeLocally, markPostViewed, recordPostHistory, recordSessionInteraction } from '../state.js';
 import { toggleLikePost, toggleFavoritePost, toggleDislikeApi } from '../api.js';
 import { showToast, haptic, escapeHtml, copyToClipboard, getPostSiteUrl } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
@@ -616,6 +616,7 @@ export function initFeed(hooks) {
         if (post) {
           if (post.id) {
             markPostViewed(post.id);
+            recordPostHistory(post);
             recordSessionInteraction(post, 'view');
           }
           if (openedInitialized && post.originalId != null && post.originalId !== lastNotifiedId) {
