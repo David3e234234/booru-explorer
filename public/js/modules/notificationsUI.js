@@ -128,7 +128,7 @@ export function renderNotificationsList() {
       <div class="notification-item ${isUnread ? 'unread' : ''}" data-id="${item.id}" role="button" tabindex="0">
         <div class="notif-avatar-col">
           ${avatarUrl ? `
-            <img src="${avatarUrl}" alt="${authorName}" class="notif-avatar-img" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+            <img src="${avatarUrl}" alt="${authorName}" class="notif-avatar-img" loading="lazy">
             <div class="notif-avatar-placeholder" style="display: none;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
             </div>
@@ -214,6 +214,21 @@ export function renderNotificationsList() {
         deleteNotificationApi(id).catch(() => {});
       }
     });
+  });
+
+  // Attach safe, CSP-compliant error handlers to avatar and preview images
+  container.querySelectorAll('.notif-avatar-img').forEach(img => {
+    img.addEventListener('error', () => {
+      img.style.display = 'none';
+      const placeholder = img.nextElementSibling;
+      if (placeholder) placeholder.style.display = 'flex';
+    }, { once: true });
+  });
+
+  container.querySelectorAll('.notif-post-thumb').forEach(img => {
+    img.addEventListener('error', () => {
+      if (img.parentElement) img.parentElement.style.display = 'none';
+    }, { once: true });
   });
 }
 
@@ -335,6 +350,31 @@ export async function triggerManualCheck() {
 }
 
 /**
+ * Calculate dynamic position for fixed dropdown relative to bell button
+ */
+export function positionNotificationsDropdown() {
+  const btn = document.getElementById('btnNotifications');
+  const dropdown = document.getElementById('notificationsDropdown');
+  if (!btn || !dropdown) return;
+
+  const rect = btn.getBoundingClientRect();
+  const dropdownWidth = Math.min(360, window.innerWidth - 20);
+
+  if (window.innerWidth <= 800) {
+    dropdown.style.top = `${Math.round(rect.bottom + 8)}px`;
+    dropdown.style.left = '10px';
+    dropdown.style.right = '10px';
+    dropdown.style.width = 'auto';
+  } else {
+    const rightOffset = Math.max(12, Math.round(window.innerWidth - rect.right));
+    dropdown.style.top = `${Math.round(rect.bottom + 8)}px`;
+    dropdown.style.right = `${rightOffset}px`;
+    dropdown.style.left = 'auto';
+    dropdown.style.width = `${dropdownWidth}px`;
+  }
+}
+
+/**
  * Open / close dropdown
  */
 export function toggleNotificationsDropdown() {
@@ -355,6 +395,7 @@ export function openNotificationsDropdown() {
   const btn = document.getElementById('btnNotifications');
   if (!dropdown) return;
 
+  positionNotificationsDropdown();
   dropdown.style.display = 'flex';
   if (btn) {
     btn.classList.add('active');
@@ -401,10 +442,19 @@ export function initNotifications({ onOpenPost, onSwitchToFollowing } = {}) {
     });
   }
 
-  // Close when clicking outside
+  // Close when clicking outside dropdown or bell button
   document.addEventListener('click', (e) => {
-    if (wrapper && !wrapper.contains(e.target)) {
-      closeNotificationsDropdown();
+    if (dropdown && dropdown.style.display !== 'none') {
+      if (!dropdown.contains(e.target) && !btnNotifications?.contains(e.target)) {
+        closeNotificationsDropdown();
+      }
+    }
+  });
+
+  // Reposition on window resize if open
+  window.addEventListener('resize', () => {
+    if (dropdown && dropdown.style.display !== 'none') {
+      positionNotificationsDropdown();
     }
   });
 

@@ -102,37 +102,6 @@
           </svg>
           <span class="notifications-badge" id="notificationsBadge" style="display: none;">0</span>
         </button>
-
-        <div class="notifications-dropdown" id="notificationsDropdown" style="display: none;" role="dialog" aria-modal="false" aria-label="Уведомления">
-          <div class="notifications-dropdown-header">
-            <div class="notifications-header-title">
-              <span class="notifications-title-text" data-i18n="notifications.title">Уведомления</span>
-              <span class="notifications-unread-pill" id="notificationsUnreadPill" style="display: none;">0</span>
-            </div>
-            <div class="notifications-header-actions">
-              <button type="button" class="btn-icon-subtle" id="btnCheckNotifications" title="Проверить новые посты" data-i18n-title="notifications.check">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-              </button>
-              <button type="button" class="btn-icon-subtle" id="btnMarkAllRead" title="Отметить все как прочитанные" data-i18n-title="notifications.markAllRead">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="notifications-tabs">
-            <button type="button" class="notif-tab active" data-filter="all" id="notifTabAll" data-i18n="notifications.all">Все</button>
-            <button type="button" class="notif-tab" data-filter="unread" id="notifTabUnread" data-i18n="notifications.unread">Непрочитанные</button>
-          </div>
-
-          <div class="notifications-list" id="notificationsList">
-            <!-- Dynamic notifications loaded via notificationsUI.js -->
-          </div>
-
-          <div class="notifications-dropdown-footer">
-            <button type="button" class="btn-notif-clear" id="btnClearAllNotifications" data-i18n="notifications.clear">Очистить историю</button>
-            <button type="button" class="btn-notif-following" id="btnOpenFollowingFeed" data-i18n="notifications.following">К подпискам</button>
-          </div>
-        </div>
       </div>
 
       <div class="header-status-info" id="headerStatusBox" title="Нажмите для смены источника" data-i18n-title="header.site.title">
@@ -189,6 +158,38 @@
       </button>
     </div>
   </header>
+
+  <!-- In-app notifications popover dropdown (positioned fixed, immune to header overflow) -->
+  <div class="notifications-dropdown" id="notificationsDropdown" style="display: none;" role="dialog" aria-modal="false" aria-label="Уведомления">
+    <div class="notifications-dropdown-header">
+      <div class="notifications-header-title">
+        <span class="notifications-title-text" data-i18n="notifications.title">Уведомления</span>
+        <span class="notifications-unread-pill" id="notificationsUnreadPill" style="display: none;">0</span>
+      </div>
+      <div class="notifications-header-actions">
+        <button type="button" class="btn-icon-subtle" id="btnCheckNotifications" title="Проверить новые посты" data-i18n-title="notifications.check">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        </button>
+        <button type="button" class="btn-icon-subtle" id="btnMarkAllRead" title="Отметить все как прочитанные" data-i18n-title="notifications.markAllRead">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="notifications-tabs">
+      <button type="button" class="notif-tab active" data-filter="all" id="notifTabAll" data-i18n="notifications.all">Все</button>
+      <button type="button" class="notif-tab" data-filter="unread" id="notifTabUnread" data-i18n="notifications.unread">Непрочитанные</button>
+    </div>
+
+    <div class="notifications-list" id="notificationsList">
+      <!-- Dynamic notifications loaded via notificationsUI.js -->
+    </div>
+
+    <div class="notifications-dropdown-footer">
+      <button type="button" class="btn-notif-clear" id="btnClearAllNotifications" data-i18n="notifications.clear">Очистить историю</button>
+      <button type="button" class="btn-notif-following" id="btnOpenFollowingFeed" data-i18n="notifications.following">К подпискам</button>
+    </div>
+  </div>
 
   <!-- Dimming overlay for mobile sheets and the sidebar -->
   <div class="drawer-backdrop" id="drawerBackdrop"></div>
