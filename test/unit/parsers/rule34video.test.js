@@ -87,7 +87,8 @@ test('Rule34Video Parser Unit Tests', async (t) => {
         </div>
       </body></html>`;
 
-    client.intercept({ path: (p) => p.includes('search') || p.includes('latest-updates'), method: 'GET' }).reply(200, html);
+    client.intercept({ path: (p) => p.includes('models_json.php'), method: 'GET' }).reply(200, { items: [] });
+    client.intercept({ path: (p) => p.startsWith('/search/') || p.includes('latest-updates'), method: 'GET' }).reply(200, html);
 
     const posts = await fetchRule34Video({ tags: 'genshin', limit: 1 }, [], {});
     assert.equal(posts.length, 1);
@@ -214,5 +215,54 @@ test('Rule34Video Parser Unit Tests', async (t) => {
     const post = await resolveRule34VideoFullMedia('https://rule34video.com/video/70005/genshin-animation-4k/', '70005', {});
     assert.ok(post);
     assert.equal(post.fullVideoUrl, 'https://cdn.rule34video.com/videos/70005_1080p.mp4');
+  });
+
+  await t.test('extracts lazy-loaded thumbnails (data-rd-src/jpg) and rejects data: URIs', async () => {
+    const client = mockContext.agent.get('https://rule34video.com');
+    const html = `<!DOCTYPE html>
+      <html><body>
+        <div class="item">
+          <a href="/video/80001/cool-clip/" title="Cool Clip">
+            <img class="thumb rd-lz" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                 data-rd-src="https://rule34video.com/contents/videos_screenshots/80000/80001/336x189/1.jpg"
+                 data-rd-jpg="https://rule34video.com/contents/videos_screenshots/80000/80001/320x180/1.jpg"
+                 alt="Cool Clip" />
+          </a>
+          <div class="video-preview" data-preview="https://rule34video.com/get_file/80001_preview.mp4/"></div>
+        </div>
+      </body></html>`;
+
+    client.intercept({ path: (p) => p.includes('models_json.php'), method: 'GET' }).reply(200, { items: [] });
+    client.intercept({ path: (p) => p.startsWith('/search/') || p.includes('latest-updates'), method: 'GET' }).reply(200, html);
+
+    const posts = await fetchRule34Video({ tags: 'clip', limit: 1 }, [], {});
+    assert.equal(posts.length, 1);
+    const post = posts[0];
+    assert.equal(post.previewUrl, 'https://rule34video.com/contents/videos_screenshots/80000/80001/336x189/1.jpg');
+    assert.equal(post.thumb180, 'https://rule34video.com/contents/videos_screenshots/80000/80001/336x189/1.jpg');
+    assert.notEqual(post.previewUrl.startsWith('data:'), true);
+  });
+
+  await t.test('single-token author query resolves model and preserves videos without author in title', async () => {
+    const client = mockContext.agent.get('https://rule34video.com');
+    const html = `<!DOCTYPE html>
+      <html><body>
+        <div class="item">
+          <a href="/video/80002/my-cool-work/" title="My Cool Work">
+            <img src="https://rule34video.com/contents/thumb.jpg" />
+          </a>
+          <div class="video-preview" data-preview="https://rule34video.com/get_file/80002_preview.mp4/"></div>
+        </div>
+      </body></html>`;
+
+    client.intercept({ path: (p) => p.includes('models_json.php'), method: 'GET' })
+      .reply(200, { items: [{ id: '30845', title: 'HoyoCinema', total: '144' }] });
+    client.intercept({ path: (p) => p.includes('model_ids=30845'), method: 'GET' })
+      .reply(200, html);
+
+    const posts = await fetchRule34Video({ tags: 'hoyocinema', limit: 1 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].author, 'HoyoCinema');
+    assert.equal(posts[0].title, 'My Cool Work');
   });
 });

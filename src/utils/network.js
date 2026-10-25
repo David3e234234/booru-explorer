@@ -659,7 +659,7 @@ export function resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo) {
     return clean.endsWith('.mp4') || clean.endsWith('.webm') || clean.endsWith('.mkv') || clean.endsWith('.mov') || clean.endsWith('.m4v');
   };
 
-  if (!previewUrl || isVideoExt(previewUrl)) {
+  if (!previewUrl || isVideoExt(previewUrl) || (typeof previewUrl === 'string' && previewUrl.startsWith('data:'))) {
     if (isVideo && (fileUrl || sampleUrl)) {
       return `/api/video-thumbnail?url=${encodeURIComponent(fileUrl || sampleUrl)}`;
     }
