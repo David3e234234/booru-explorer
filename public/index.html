@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="css/viewer.css?v=12.6">
   <link rel="stylesheet" href="css/archive-inspect.css?v=12.6">
   <link rel="stylesheet" href="css/feed.css?v=12.6">
+  <link rel="stylesheet" href="css/notifications.css?v=12.6">
 </head>
 <body>
 
@@ -91,6 +92,48 @@
         </div>
         <span class="user-name-label desktop-only" id="headerUserName" data-i18n="header.profile">Профиль</span>
       </button>
+
+      <!-- Notifications (Civitai-style in-app updates for followed authors) -->
+      <div class="notifications-wrapper" id="notificationsWrapper">
+        <button class="btn-icon btn-notifications" id="btnNotifications" title="Уведомления" aria-label="Уведомления" aria-expanded="false" aria-haspopup="dialog" data-i18n-title="notifications.title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="notifications-badge" id="notificationsBadge" style="display: none;">0</span>
+        </button>
+
+        <div class="notifications-dropdown" id="notificationsDropdown" style="display: none;" role="dialog" aria-modal="false" aria-label="Уведомления">
+          <div class="notifications-dropdown-header">
+            <div class="notifications-header-title">
+              <span class="notifications-title-text" data-i18n="notifications.title">Уведомления</span>
+              <span class="notifications-unread-pill" id="notificationsUnreadPill" style="display: none;">0</span>
+            </div>
+            <div class="notifications-header-actions">
+              <button type="button" class="btn-icon-subtle" id="btnCheckNotifications" title="Проверить новые посты" data-i18n-title="notifications.check">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              </button>
+              <button type="button" class="btn-icon-subtle" id="btnMarkAllRead" title="Отметить все как прочитанные" data-i18n-title="notifications.markAllRead">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="notifications-tabs">
+            <button type="button" class="notif-tab active" data-filter="all" id="notifTabAll" data-i18n="notifications.all">Все</button>
+            <button type="button" class="notif-tab" data-filter="unread" id="notifTabUnread" data-i18n="notifications.unread">Непрочитанные</button>
+          </div>
+
+          <div class="notifications-list" id="notificationsList">
+            <!-- Dynamic notifications loaded via notificationsUI.js -->
+          </div>
+
+          <div class="notifications-dropdown-footer">
+            <button type="button" class="btn-notif-clear" id="btnClearAllNotifications" data-i18n="notifications.clear">Очистить историю</button>
+            <button type="button" class="btn-notif-following" id="btnOpenFollowingFeed" data-i18n="notifications.following">К подпискам</button>
+          </div>
+        </div>
+      </div>
 
       <div class="header-status-info" id="headerStatusBox" title="Нажмите для смены источника" data-i18n-title="header.site.title">
         <span class="active-site-badge" id="currentSiteLabel">Danbooru</span>
@@ -1037,6 +1080,43 @@
                   <span class="toggle-name" data-i18n="settings.enableSimilarPosts">Похожие работы в просмотрщике</span>
                 </label>
               </div>
+            </div>
+          </div>
+
+          <!-- Card: Notifications & Author Updates -->
+          <div class="settings-section-card">
+            <div class="settings-card-header">
+              <h4 class="settings-card-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                <span data-i18n="settings.cardNotifications">Внутренние уведомления</span>
+              </h4>
+              <p class="settings-card-hint" data-i18n="settings.notificationsHint">Фоновое отслеживание новых публикаций авторов, на которых вы подписаны.</p>
+            </div>
+
+            <div class="settings-group">
+              <div class="toggles-list">
+                <label class="toggle-row" title="Автоматически проверять новые работы отслеживаемых авторов" data-i18n-title="settings.notificationsEnabled.title">
+                  <input type="checkbox" id="checkNotificationsEnabled" checked>
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-name" data-i18n="settings.notificationsEnabled">Включить уведомления о новых публикациях</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-group">
+              <label class="settings-label" for="selectNotificationsInterval" data-i18n="settings.notificationsInterval">Интервал фоновой проверки:</label>
+              <select id="selectNotificationsInterval" class="input-setting">
+                <option value="15" selected data-i18n="settings.interval15m">Каждые 15 минут</option>
+                <option value="30" data-i18n="settings.interval30m">Каждые 30 минут</option>
+                <option value="60" data-i18n="settings.interval60m">Каждый час</option>
+              </select>
+            </div>
+
+            <div class="settings-group" style="margin-top: 10px;">
+              <button type="button" class="btn-primary" id="btnSettingsCheckNotifications" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                <span data-i18n="notifications.check">Проверить новые посты сейчас</span>
+              </button>
             </div>
           </div>
 

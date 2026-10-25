@@ -31,6 +31,7 @@ export const FAVORITE_AUTHORS_FILE = path.join(DATA_DIR, 'favorite_authors.json'
 export const LIKES_FILE = path.join(DATA_DIR, 'likes.json');
 export const DISLIKES_FILE = path.join(DATA_DIR, 'dislikes.json');
 export const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+export const NOTIFICATIONS_FILE = path.join(DATA_DIR, 'notifications.json');
 
 // Favorite-author check state (key site:name -> knownIds/newIds)
 export const AUTHOR_FEED_STATE_FILE = path.join(DATA_DIR, 'author_feed_state.json');
@@ -281,7 +282,9 @@ export const DEFAULT_SETTINGS = {
   telegramBackupInterval: 'daily', // 'daily', 'every_3_days', 'weekly'
   telegramLastBackupAt: null,
   recommendationMode: 'tags-only', // 'tags-only', 'off'
-  enableRecommendations: true
+  enableRecommendations: true,
+  notificationsEnabled: true,
+  notificationsInterval: 15
 };
 
 // Credentials and session tokens. These are never returned to an unauthenticated

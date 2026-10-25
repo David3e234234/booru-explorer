@@ -544,6 +544,56 @@ export async function saveSettings(settings) {
   return await res.json();
 }
 
+export async function fetchNotifications() {
+  const res = await fetchWithTimeout('/api/notifications', {
+    headers: getAuthHeaders()
+  });
+  return await res.json();
+}
+
+export async function markNotificationRead(id) {
+  const res = await fetchWithTimeout('/api/notifications/read', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ id })
+  });
+  return await res.json();
+}
+
+export async function markAllNotificationsRead() {
+  const res = await fetchWithTimeout('/api/notifications/read', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ all: true })
+  });
+  return await res.json();
+}
+
+export async function deleteNotificationApi(id) {
+  const res = await fetchWithTimeout(`/api/notifications/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  return await res.json();
+}
+
+export async function clearNotificationsApi() {
+  const res = await fetchWithTimeout('/api/notifications', {
+    method: 'DELETE',
+    headers: getAuthHeaders()
+  });
+  return await res.json();
+}
+
+export async function checkNotificationsApi(authors = null) {
+  const res = await fetchWithTimeout('/api/notifications/check', {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ authors: Array.isArray(authors) ? authors : undefined })
+  });
+  return await res.json();
+}
+
 export function shouldProxyMedia({ site = '', url = '', type = 'thumbnail', settings = null } = {}) {
   if (!url || typeof url !== 'string') return false;
   if (url.startsWith('/api/')) return false;

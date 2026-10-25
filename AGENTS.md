@@ -105,6 +105,8 @@ Large files must be split by responsibility when touched. Preferred existing bou
 - `mediaJobSupervisor.js`: FFmpeg concurrency and queue limits
 - `siteSessionService.js`: session-token normalization for the Kemono-family boards
 - `tagAutocomplete.routes.js`: autocomplete endpoint, independent from search routes
+- `notificationService.js`: background author scanning, new post detection, and scheduler
+- `notifications.routes.js`: in-app notifications endpoints (GET, POST /read, DELETE, POST /check)
 - `rateLimit.js`: per-instance fixed-window limiter; every limiter gets its own budget
 - `public/js/modules/*`: UI subsystems loaded by `app.js`
 
@@ -258,6 +260,16 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - Backups call `sanitizeStoredPost(post, { rawCompact: true })`: internal viewer state never leaves the server, but every stored field is kept so a restore is complete. `rawCompact` also disables the redundant URL tier elision, which would otherwise make an exported record depend on a reconstruction step.
 - A document above 45 MB is rejected with a named cause before the Telegram call. Telegram's own 50 MB cap answers with an opaque error, and the scheduled backup would otherwise fail silently every run.
 - The scheduler is single-flight per user and cannot overlap runs.
+
+### In-App Notifications & Author Feed Scanner
+
+- `notificationService.js` manages periodic background scanning of followed authors for users (`scanFollowedAuthors`).
+- State is tracked in `author_feed_state.json` (`knownPostIds`, `latestPostId`, `lastCheckedAt`) per user.
+- On the first scan of an author, existing post IDs are seeded without creating notifications to prevent notification spam for historical works. On subsequent scans, any post ID not present in `knownPostIds` is recognized as a new post.
+- Notifications are stored in `notifications.json` (per user or root data dir) capped at 100 items. Each notification embeds a sanitized post (`sanitizeStoredPost`), allowing instant viewer or vertical feed launch without requiring a secondary network roundtrip.
+- Outbound requests are sequentially paced (350ms delay between authors) to respect upstream rate limits.
+- Background scheduler (`initNotificationScheduler`) executes checks based on `notificationsInterval` (default 15 minutes) and can be triggered on-demand via `POST /api/notifications/check` (rate-limited via `createRateLimiter`).
+- Frontend notifications module `public/js/modules/notificationsUI.js` mounts the bell in `.header-right`, renders Civitai-style unread counter badge, popover dropdown with tabs ("Все" / "Непрочитанные"), click-to-open viewer routing via `openPostOverlay(-1, { directPost: post })`, live in-app toasts for new arrivals, and periodic 60s/visibility polling.
 
 ## 7. Frontend Architecture
 

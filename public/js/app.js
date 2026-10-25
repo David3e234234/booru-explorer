@@ -90,6 +90,7 @@ import { renderSidebarPageTags } from './modules/sidebarTags.js';
 import { initSearchPresets, renderPresetsList, updatePresetActiveState } from './modules/searchPresetsUI.js';
 import { initSidebarCollapse } from './modules/sidebarCollapse.js';
 import { initModalAccessibility } from './modules/modalAccessibility.js';
+import { initNotifications } from './modules/notificationsUI.js';
 import { t, applyStaticTranslations } from './i18n.js';
 
 // Heavy subsystems (settings modal, profile, downloads, viewer) load lazily so
@@ -2751,6 +2752,18 @@ function setupEventListeners() {
       state.settings.videoDefaultQuality = selectVideoDefaultQuality.value;
     });
   }
+
+  // In-app notifications subsystem
+  initNotifications({
+    onOpenPost: (post) => {
+      openPostOverlay(-1, { directPost: post });
+    },
+    onSwitchToFollowing: () => {
+      state.currentCategory = 'following';
+      updateCategoryTabsUI();
+      performSearch(true);
+    }
+  });
 
   // Close modals on Escape
   const settingsModal = document.getElementById('settingsModal');

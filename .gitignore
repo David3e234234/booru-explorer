@@ -15,6 +15,7 @@ data/ai_embeddings.json
 data/users.json
 data/users/
 data/author_feed_state.json
+data/notifications.json
 data/discovered_aliases.json
 data/.session_secret*
 data/cache/

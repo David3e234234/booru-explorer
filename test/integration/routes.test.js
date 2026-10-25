@@ -11,6 +11,7 @@ const testDataDir = ownsDataDir
   ? await fs.mkdtemp(path.join(os.tmpdir(), 'booru-explorer-integration-'))
   : process.env.BOORU_DATA_DIR;
 if (ownsDataDir) process.env.BOORU_DATA_DIR = testDataDir;
+if (!process.env.BOORU_ADMIN_TOKEN) process.env.BOORU_ADMIN_TOKEN = 'integration-admin-token';
 
 let app;
 let flushPendingWrites;
@@ -586,6 +587,74 @@ describe('Express API Integration & Route Tests', () => {
       assert.strictEqual(res.status, 200);
       const data = await res.json();
       assert.ok(Array.isArray(data.tags));
+    });
+  });
+
+  describe('Notifications Routes (/api/notifications)', () => {
+    it('GET /api/notifications returns 200 with notifications array and unreadCount', async () => {
+      const res = await fetch(`${baseUrl}/api/notifications`, {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, true);
+      assert.ok(Array.isArray(data.notifications));
+      assert.strictEqual(typeof data.unreadCount, 'number');
+    });
+
+    it('POST /api/notifications/read validates request body', async () => {
+      const res = await fetch(`${baseUrl}/api/notifications/read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({})
+      });
+      assert.strictEqual(res.status, 400);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+    });
+
+    it('POST /api/notifications/read with all: true succeeds', async () => {
+      const res = await fetch(`${baseUrl}/api/notifications/read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({ all: true })
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.unreadCount, 0);
+    });
+
+    it('DELETE /api/notifications clears notifications', async () => {
+      const res = await fetch(`${baseUrl}/api/notifications`, {
+        method: 'DELETE',
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.unreadCount, 0);
+    });
+
+    it('POST /api/notifications/check triggers check with rate limiting and bounds', async () => {
+      const res = await fetch(`${baseUrl}/api/notifications/check`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {})
+        },
+        body: JSON.stringify({ authors: [] })
+      });
+      assert.strictEqual(res.status, 200);
+      const data = await res.json();
+      assert.strictEqual(data.success, true);
+      assert.strictEqual(data.newCount, 0);
     });
   });
 });

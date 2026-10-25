@@ -9,6 +9,7 @@ import {
   LIKES_FILE,
   DISLIKES_FILE,
   AUTHOR_FEED_STATE_FILE,
+  NOTIFICATIONS_FILE,
   BROWSER_USER_AGENT,
   DATA_DIR,
   SECRET_SETTING_FIELDS
@@ -195,6 +196,70 @@ export function getAuthorFeedState(userId = null) {
 export function saveAuthorFeedState(state, userId = null) {
   const filePath = getUserFilePath(userId, AUTHOR_FEED_STATE_FILE, 'author_feed_state.json');
   writeJsonFileAsync(filePath, state);
+}
+
+const MAX_NOTIFICATIONS = 100;
+
+export function getNotifications(userId = null) {
+  const filePath = getUserFilePath(userId, NOTIFICATIONS_FILE, 'notifications.json');
+  const data = readJsonFile(filePath, []);
+  return Array.isArray(data) ? data : [];
+}
+
+export function saveNotifications(notifications, userId = null) {
+  const filePath = getUserFilePath(userId, NOTIFICATIONS_FILE, 'notifications.json');
+  const list = Array.isArray(notifications) ? notifications.slice(0, MAX_NOTIFICATIONS) : [];
+  writeJsonFileAsync(filePath, list);
+}
+
+export function addNotification(notification, userId = null) {
+  if (!notification || !notification.id) return;
+  const list = getNotifications(userId);
+  const exists = list.some(n => n.id === notification.id || (n.post?.id && notification.post?.id && n.post.id === notification.post.id && n.author?.name === notification.author?.name));
+  if (exists) return;
+  list.unshift(notification);
+  saveNotifications(list, userId);
+}
+
+export function markNotificationRead(notificationId, userId = null) {
+  const list = getNotifications(userId);
+  let changed = false;
+  for (const item of list) {
+    if (item.id === notificationId && !item.read) {
+      item.read = true;
+      changed = true;
+      break;
+    }
+  }
+  if (changed) saveNotifications(list, userId);
+  return list;
+}
+
+export function markAllNotificationsRead(userId = null) {
+  const list = getNotifications(userId);
+  let changed = false;
+  for (const item of list) {
+    if (!item.read) {
+      item.read = true;
+      changed = true;
+    }
+  }
+  if (changed) saveNotifications(list, userId);
+  return list;
+}
+
+export function deleteNotification(notificationId, userId = null) {
+  const list = getNotifications(userId);
+  const filtered = list.filter(item => item.id !== notificationId);
+  if (filtered.length !== list.length) {
+    saveNotifications(filtered, userId);
+  }
+  return filtered;
+}
+
+export function clearNotifications(userId = null) {
+  saveNotifications([], userId);
+  return [];
 }
 
 const MOEBOORU_PASSWORD_SALT = 'So-I-Heard-You-Like-Mupkids-?--';

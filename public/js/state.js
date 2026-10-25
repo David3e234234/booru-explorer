@@ -123,6 +123,8 @@ export const DEFAULT_CLIENT_SETTINGS = {
   recommendationDecayDays: 25, // half-life for temporal interest decay
   recommendationEnableSkipPenalty: true,
   enableRecommendations: true,
+  notificationsEnabled: true,
+  notificationsInterval: 15,
   postSort: 'new',
   siteSortTags: {}
 };
@@ -153,7 +155,8 @@ export const STORAGE_KEYS = {
   AUTH_TOKEN: 'booru_auth_token_v1',
   ADMIN_TOKEN: 'booru_admin_token_v1',
   CURRENT_USER: 'booru_current_user_v1',
-  SIDEBAR_COLLAPSED: 'booru_sidebar_collapsed_v1'
+  SIDEBAR_COLLAPSED: 'booru_sidebar_collapsed_v1',
+  NOTIFICATIONS: 'booru_notifications_v1'
 };
 
 export function getInitialSettings() {
@@ -212,6 +215,8 @@ export const state = {
   favoriteAuthors: [],
   favoriteAuthorNames: new Set(),
   authorAliases: {}, // lowercased alias/name -> Array of lowercased alias variants
+  notifications: [],
+  unreadNotificationsCount: 0,
   settings: getInitialSettings(),
   currentViewerIndex: -1,
   isLoading: false,

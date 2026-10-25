@@ -21,6 +21,8 @@ import mediaRoutes from './src/routes/media.routes.js';
 import userRoutes, { stopActiveTunnel } from './src/routes/user.routes.js';
 import authRoutes from './src/routes/auth.routes.js';
 import archiveRoutes from './src/routes/archive.routes.js';
+import notificationsRoutes from './src/routes/notifications.routes.js';
+import { initNotificationScheduler, stopNotificationScheduler } from './src/services/notificationService.js';
 import { initBackupScheduler } from './src/services/backupService.js';
 import { flushPendingWrites, flushPendingWritesSync, compactStoredCollections } from './src/services/storageService.js';
 import { cleanupStaleUserArtifacts } from './src/services/userService.js';
@@ -70,6 +72,7 @@ async function handleShutdown(signal) {
   shuttingDown = true;
   try {
     stopActiveTunnel();
+    stopNotificationScheduler();
     await flushPendingWrites();
   } catch (err) {
     console.error('[Shutdown] Не удалось сбросить отложенные записи:', err);
@@ -169,6 +172,7 @@ app.use('/api', postsRoutes);
 app.use('/api', tagAutocompleteRoutes);
 app.use('/api', mediaRoutes);
 app.use('/api', userRoutes);
+app.use('/api', notificationsRoutes);
 
 app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
@@ -264,6 +268,7 @@ const isMainModule = process.argv[1] && fileURLToPath(import.meta.url) === path.
 if (!isServerless && process.env.NODE_ENV !== 'test' && isMainModule) {
   await ensureClientBundle();
   initBackupScheduler();
+  initNotificationScheduler();
   await runStartupMaintenance();
   startServer(Number(PORT));
 }
