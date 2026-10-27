@@ -4,6 +4,7 @@ import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 import { parseDapiXmlPosts } from './gelbooru.js';
+import { buildThumbTiers } from '../utils/searchCompat.js';
 
 function safeDecodeURIComponent(str) {
   try {
@@ -11,15 +12,6 @@ function safeDecodeURIComponent(str) {
   } catch {
     return String(str || '');
   }
-}
-
-function getRecentDateFilter(days = 30) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `date:>=${year}-${month}-${day}`;
 }
 
 let cachedSafebooruMaxId = 7100000;
@@ -124,9 +116,7 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-      const thumb360 = sampleUrl || previewUrl || fileUrl || '';
-      const thumb720 = sampleUrl || fileUrl || previewUrl || '';
+      const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
       const thumbOriginal = fileUrl;
       const isAi = checkIsAi(rawTags, aiTagsList);
@@ -271,9 +261,7 @@ export async function fetchSafebooruPostById(id, aiTagsList = [], settings = {},
 
   const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', collectedTags);
   const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-  const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-  const thumb360 = sampleUrl || previewUrl || fileUrl || '';
-  const thumb720 = sampleUrl || fileUrl || previewUrl || '';
+  const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
   const thumbSample = sampleUrl;
   const thumbOriginal = fileUrl;
 

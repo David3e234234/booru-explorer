@@ -286,6 +286,17 @@ export async function resolvePawchiveAuthor(authorQuery, preferredService = null
 }
 
 /**
+ * Returns the creator's display name, or '' when neither the directory nor the
+ * per-post profile names them. `user_<database id>` is a storage key, not an
+ * author: inventing it polluted favourite authors and the cross-site resolver.
+ */
+export function resolvePawchiveAuthorName(item, creatorMap, resolvedCreator) {
+  const creatorInfo = creatorMap ? creatorMap.get(`${item?.service}:${item?.user}`) : null;
+  const name = creatorInfo?.name || resolvedCreator?.name || '';
+  return String(name).trim();
+}
+
+/**
  * Normalizes a single Pawchive post item into standard BooruExp post structure
  */
 export async function normalizePawchivePost(item, creatorMap, resolvedCreator, aiTagsList = [], settings = {}) {
@@ -320,22 +331,25 @@ export async function normalizePawchivePost(item, creatorMap, resolvedCreator, a
 
   if (mediaFiles.length === 0 && archiveAttachments.length === 0) return null;
 
-  const creatorInfo = creatorMap ? creatorMap.get(`${item.service}:${item.user}`) : null;
-  const authorName = creatorInfo ? creatorInfo.name : (resolvedCreator?.name || `user_${item.user}`);
+  const authorName = resolvePawchiveAuthorName(item, creatorMap, resolvedCreator);
   const authorTag = authorName.toLowerCase().replace(/[\s_.-]+/g, '_');
   const postUrl = `https://pawchive.pw/${item.service}/user/${item.user}/post/${item.id}`;
 
   // Clean tags: primary author signal + platform meta tag
-  const extractedTags = [
-    `artist:${authorTag}`
-  ];
+  const extractedTags = [];
+  if (authorTag) {
+    extractedTags.push(`artist:${authorTag}`);
+  }
   if (item.service) {
     extractedTags.push(`service:${item.service.toLowerCase()}`);
   }
 
   const isAi = checkIsAi(extractedTags, aiTagsList);
   const { tagDetails } = await classifyPostTags(extractedTags, postUrl, authorName, settings);
-  tagDetails.artist = [authorName];
+  if (authorName) {
+    // The platform profile is authoritative; it outranks tag heuristics.
+    tagDetails.artist = [authorName];
+  }
   if (item.service && !tagDetails.meta.includes(item.service.toLowerCase())) {
     tagDetails.meta.push(item.service.toLowerCase());
   }
@@ -673,9 +687,19 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
     return [];
   }
 
-  let offset = Math.max(0, (page - 1) * 50);
+  // The API serves at most 50 posts per request. Page N must start where the
+  // previous page stopped, so the step is the requested limit capped at that
+  // raw page size: asking for 40 must not skip 40-49, and asking for 200 must
+  // not jump over the unread raw pages between 50 and 199 (the deep-fetch loop
+  // fills those with subsequent 50-item pages).
+  const pageSize = Math.min(
+    Math.max(1, Number.parseInt(limit, 10) || 40),
+    PAWCHIVE_RAW_PAGE_SIZE
+  );
+  const pageNumber = Math.max(1, Number.parseInt(page, 10) || 1);
+  let offset = (pageNumber - 1) * pageSize;
   if (params.category === 'random' && !tags) {
-    offset = Math.floor(Math.random() * 200) * 50;
+    offset = Math.floor(Math.random() * 200) * PAWCHIVE_RAW_PAGE_SIZE;
   }
 
   // Parse query tags for creator or service filters
@@ -748,6 +772,14 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
       try {
         const res = await fetchSafe(apiUrl, { timeout: 20000, headers: authHeaders, settings, site: 'pawchive' });
         if (!res.ok) {
+          // Upstream anti-flood answers 429 in bursts. One paced retry recovers
+          // the page; returning null made the feed look empty instead.
+          if ((res.status === 429 || res.status >= 500) && attempt === 0) {
+            await discardResponse(res);
+            const waitMs = process.env.NODE_ENV === 'test' ? 0 : (res.status === 429 ? 900 : 300);
+            await new Promise(resolve => setTimeout(resolve, waitMs));
+            continue;
+          }
           if (res.status === 401 && attempt === 0) {
             await discardResponse(res);
             invalidateSiteSession('pawchive', settings);
@@ -798,7 +830,7 @@ export async function fetchPawchive(params, aiTagsList, settings = {}) {
       // Platform filter without a specific author: the feed has no server-side
       // service filter, so scan a fixed window of raw pages per app page and
       // keep only matching posts. Page N maps to raw pages [N*K, N*K+K).
-      const windowStart = Math.max(0, (page - 1) * PAWCHIVE_RAW_PAGE_SIZE * PAWCHIVE_SERVICE_SCAN_PAGES);
+      const windowStart = Math.max(0, (pageNumber - 1) * PAWCHIVE_RAW_PAGE_SIZE * PAWCHIVE_SERVICE_SCAN_PAGES);
       const scanPromises = Array.from({ length: PAWCHIVE_SERVICE_SCAN_PAGES }, (_, i) =>
         fetchJsonPage(`https://pawchive.pw/api/v1/posts?${qPart}o=${windowStart + i * PAWCHIVE_RAW_PAGE_SIZE}`)
       );

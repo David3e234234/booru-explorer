@@ -35,6 +35,7 @@ import { showToast, formatBytes, escapeHtml, syncThemeColor } from './uiUtils.js
 import { t, getLang, setLang } from '../i18n.js';
 import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updatePawchiveServiceUI, updateKemonoServiceUI } from './filtersUI.js';
 import { updateHeaderAuthUI } from './authModal.js';
+import { lockBodyScroll, unlockBodyScroll } from './scrollLock.js';
 import {
   normalizeProxyString,
   DEFAULT_AI_TAGS,
@@ -849,6 +850,9 @@ export function switchSettingsTab(tabId) {
 }
 
 export function openSettingsModal() {
+  // Full-screen modal over the phone feed: playback must stop underneath it,
+  // otherwise the video keeps streaming and decoding behind the dialog.
+  document.dispatchEvent(new CustomEvent('booru:settings-opened'));
   const settingsModal = document.getElementById('settingsModal');
   const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
   const inputRule34UserId = document.getElementById('inputRule34UserId');
@@ -1023,7 +1027,10 @@ export function openSettingsModal() {
   renderSiteMediaProxyUI();
   switchSettingsTab('general');
 
+  if (settingsModal && settingsModal.style.display !== 'none') return;
   if (settingsModal) settingsModal.style.display = 'flex';
+  document.body.classList.add('settings-open');
+  lockBodyScroll();
   document.querySelectorAll('.mobile-nav-item').forEach(item => {
     item.classList.toggle('active', item.dataset.nav === 'settings');
   });
@@ -1031,8 +1038,14 @@ export function openSettingsModal() {
 
 export function closeSettingsModal() {
   const settingsModal = document.getElementById('settingsModal');
+  const wasOpen = settingsModal && settingsModal.style.display !== 'none';
   if (settingsModal) settingsModal.style.display = 'none';
+  if (wasOpen) {
+    document.body.classList.remove('settings-open');
+    unlockBodyScroll();
+  }
   updateCategoryTabsUI();
+  document.dispatchEvent(new CustomEvent('booru:settings-closed'));
 }
 
 export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateFavoritesBadge }) {

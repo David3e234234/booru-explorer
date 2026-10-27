@@ -1,4 +1,4 @@
-import { state, isPostFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, markPostViewed, recordPostHistory, recordSessionInteraction } from '../state.js';
+import { state, isPostFavorite, isPostLiked, isPostDisliked, toggleLikeLocally, toggleDislikeLocally, toggleFavoriteLocally, markPostViewed, recordPostHistory, recordSessionInteraction } from '../state.js';
 import { getProxiedUrl, shouldProxyMedia, toggleFavoritePost, toggleLikePost, toggleDislikeApi } from '../api.js';
 import { showToast, haptic, getPostSiteUrl, copyToClipboard } from '../modules/uiUtils.js';
 import { setupImageZoom } from './imageZoom.js';
@@ -15,6 +15,7 @@ import { renderSidebarCloudLinks, renderSidebarContent } from './viewerCloudLink
 import { renderSidebarSimilarPosts, configureSimilar, initSimilarEvents } from './viewerSimilar.js';
 import { getCurrentMediaItem, renderAlbumFilmstrip, switchAlbumSlide, preloadAdjacentMedia, loadFullAlbumForPost, downloadFullAlbum, downloadSingleMedia, configureAlbum } from './viewerAlbum.js';
 import { setupViewerGestures } from './viewerGestures.js';
+import { lockBodyScroll, unlockBodyScroll } from '../modules/scrollLock.js';
 
 export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onAuthorSelect, onDislikeToggle, onFindSimilar, onSwitchSiteAndSearch } = {}) {
   const modal = document.getElementById('viewerModal');
@@ -334,8 +335,9 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
 
     renderViewerPost();
     if (viewerMainColumn) viewerMainColumn.scrollTop = 0;
+    const wasHidden = !modal || modal.style.display === 'none';
     if (modal) modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
+    if (wasHidden) lockBodyScroll();
 
     if (currentPost && currentPost.originalId != null) {
       if (opts.move) {
@@ -351,7 +353,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (modal) modal.style.display = 'none';
     closeArchiveInspectModal();
     closeCreatorResolverModal();
-    document.body.style.overflow = '';
+    unlockBodyScroll();
     if (viewerSidebar) viewerSidebar.classList.remove('open');
     if (viewerContent) {
       viewerContent.classList.remove('ui-hidden');
@@ -401,8 +403,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
 
     try {
-      const result = await toggleDislikeApi(targetPost, isDislikedNow);
-      if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить скрытие');
+      if (state.currentUser) {
+        const result = await toggleDislikeApi(targetPost, isDislikedNow);
+        if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить скрытие');
+      }
     } catch (e) {
       toggleDislikeLocally(targetPost);
       if (currentPost?.id === targetPost.id) {
@@ -431,8 +435,10 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     }
     const optimisticToast = showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
     try {
-      const result = await toggleLikePost(targetPost, isLikedNow);
-      if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить лайк');
+      if (state.currentUser) {
+        const result = await toggleLikePost(targetPost, isLikedNow);
+        if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить лайк');
+      }
     } catch (e) {
       toggleLikeLocally(targetPost);
       if (currentPost?.id === targetPost.id) {
@@ -454,29 +460,26 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     pendingViewerMutations.add(key);
     const targetPost = currentPost;
     haptic([15, 25, 15]);
+    const wasFavorite = isPostFavorite(targetPost.id);
+    const isFavoriteNow = toggleFavoriteLocally(targetPost);
+    if (currentPost?.id === targetPost.id) {
+      btnFavModal?.classList.toggle('active', isFavoriteNow);
+      btnFavModal?.querySelector('svg')?.setAttribute('fill', isFavoriteNow ? 'currentColor' : 'none');
+    }
+    showToast(isFavoriteNow ? t('vw.savedToFavs', 'Сохранено в закладки') : t('vw.removedFromFavs', 'Удалено из закладок'));
+    if (onFavoriteToggle) onFavoriteToggle();
     try {
-      const res = await toggleFavoritePost(targetPost, !isPostFavorite(targetPost.id));
-      if (res?.success) {
-        if (res.isFavorite) {
-          state.favoriteIds.add(targetPost.id);
-          state.favorites.unshift({ ...targetPost, favoritedAt: new Date().toISOString() });
-          if (currentPost?.id === targetPost.id) {
-            btnFavModal?.classList.add('active');
-            btnFavModal?.querySelector('svg')?.setAttribute('fill', 'currentColor');
-          }
-          showToast(t('vw.savedToFavs', 'Сохранено в закладки'));
-        } else {
-          state.favoriteIds.delete(targetPost.id);
-          state.favorites = state.favorites.filter(f => f.id !== targetPost.id);
-          if (currentPost?.id === targetPost.id) {
-            btnFavModal?.classList.remove('active');
-            btnFavModal?.querySelector('svg')?.setAttribute('fill', 'none');
-          }
-          showToast(t('vw.removedFromFavs', 'Удалено из закладок'));
-        }
-        if (onFavoriteToggle) onFavoriteToggle();
+      if (state.currentUser) {
+        const res = await toggleFavoritePost(targetPost, isFavoriteNow);
+        if (!res?.success) throw new Error(res?.message || 'Не удалось изменить закладки');
       }
     } catch (err) {
+      toggleFavoriteLocally(targetPost);
+      if (currentPost?.id === targetPost.id) {
+        btnFavModal?.classList.toggle('active', wasFavorite);
+        btnFavModal?.querySelector('svg')?.setAttribute('fill', wasFavorite ? 'currentColor' : 'none');
+      }
+      if (onFavoriteToggle) onFavoriteToggle();
       showToast(t('vw.favoriteFailed', 'Не удалось изменить закладки'), 'error');
       console.error(err);
     } finally {

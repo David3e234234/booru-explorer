@@ -96,6 +96,41 @@ test('Gelbooru Parser Unit Tests', async (t) => {
     assert.equal(post.rating, 'g');
   });
 
+  await t.test('fetchGelbooru keeps a caller-supplied rating tag and never appends a second', async () => {
+    const client = mockContext.agent.get('https://gelbooru.com');
+    let requestedPath = '';
+    client.intercept({
+      path: (p) => {
+        if (p.includes('page=dapi') && p.includes('json=1')) requestedPath = p;
+        return p.includes('page=dapi') && p.includes('json=1');
+      },
+      method: 'GET'
+    }).reply(200, { post: [] });
+
+    await fetchGelbooru({ tags: 'touhou rating:general', ratingFilter: 'nsfw', limit: 5 }, [], mockSettings);
+    const sentTags = new URL(`https://gelbooru.com${requestedPath}`).searchParams.get('tags');
+    // The explicit `rating:general` wins; appending `rating:explicit` would make
+    // the query contain two contradictory rating constraints.
+    assert.equal(sentTags, 'touhou rating:general');
+  });
+
+  await t.test('fetchGelbooru sends a rating-only query when the tag field is empty', async () => {
+    const client = mockContext.agent.get('https://gelbooru.com');
+    let requestedPath = '';
+    client.intercept({
+      path: (p) => {
+        if (p.includes('page=dapi') && p.includes('json=1')) requestedPath = p;
+        return p.includes('page=dapi') && p.includes('json=1');
+      },
+      method: 'GET'
+    }).reply(200, { post: [] });
+
+    const posts = await fetchGelbooru({ tags: '', ratingFilter: 'nsfw', limit: 5 }, [], mockSettings);
+    assert.deepEqual(posts, []);
+    const sentTags = new URL(`https://gelbooru.com${requestedPath}`).searchParams.get('tags');
+    assert.equal(sentTags, 'rating:explicit');
+  });
+
   await t.test('fetchGelbooru keeps healthy posts when one DAPI item is malformed', async () => {
     // The malformed item used to reject the whole page and push the parser into the
     // HTML fallback, losing every valid post of the batch

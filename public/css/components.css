@@ -1673,11 +1673,20 @@ input.wiki-search-input {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 1200;
+  /* Above the viewer (100000) so downloads started inside it stay visible,
+     below archive inspection/creator resolver (100010) and toasts (100200). */
+  z-index: 100005;
   max-width: 420px;
   width: calc(100vw - 32px);
   pointer-events: none;
   font-family: var(--font-sans);
+}
+
+/* Fullscreen surfaces own their chrome; a floating downloads pill would sit on
+   top of the feed scrub bar or the settings dialog. */
+body.feed-open .dl-manager-dock,
+body.settings-open .dl-manager-dock {
+  display: none !important;
 }
 
 .dl-manager-dock * {

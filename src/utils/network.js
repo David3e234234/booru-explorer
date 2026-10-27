@@ -572,13 +572,13 @@ export async function fetchSafe(url, options = {}) {
 
         if (hop >= MAX_REDIRECTS) {
           await discardResponse(response);
-          logError('Fetch', `Слишком много редиректов: ${url}`);
+          logError('Fetch', `Слишком много редиректов: ${sanitizeLogUrl(url)}`);
           return new Response('Слишком много редиректов', { status: 502 });
         }
 
         if (!(await isSafeExternalUrlResolved(nextUrl))) {
           await discardResponse(response);
-          logError('Fetch', `Редирект на внутренний адрес заблокирован: ${nextUrl}`);
+          logError('Fetch', `Редирект на внутренний адрес заблокирован: ${sanitizeLogUrl(nextUrl)}`);
           return new Response('URL не разрешён', { status: 403 });
         }
 

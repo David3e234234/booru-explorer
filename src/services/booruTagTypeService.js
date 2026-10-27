@@ -34,6 +34,8 @@ export const TAG_TYPE = {
   META: 5
 };
 
+const CANONICAL_TYPES = new Set(Object.values(TAG_TYPE));
+
 // Raw numbers differ per board: Gelbooru uses 5 for metatags, while Rule34
 // (e621 lineage) uses 5 for "invalid" and 6 for metatags.
 const RAW_TYPE_MAP = {
@@ -110,13 +112,18 @@ function scheduleDiskSave(site) {
       const map = memoryCache.get(s);
       if (!map || map.size === 0) continue;
       try {
-        const entries = Array.from(map.entries())
-          .slice(0, MAX_DISK_ENTRIES)
-          .map(([tag, v]) => [tag, [v.type, v.at]]);
+        let entries = Array.from(map.entries());
+        if (entries.length > MAX_DISK_ENTRIES) {
+          // Keep the newest answers. Slicing from the front kept the oldest 200k
+          // entries forever, so a long-lived install stopped persisting new tags.
+          entries.sort((a, b) => (a[1]?.at || 0) - (b[1]?.at || 0));
+          entries = entries.slice(-MAX_DISK_ENTRIES);
+        }
+        const serialized = entries.map(([tag, v]) => [tag, [v.type, v.at]]);
         if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
         await fs.promises.writeFile(
           cacheFileFor(s),
-          JSON.stringify({ version: DISK_CACHE_VERSION, entries }),
+          JSON.stringify({ version: DISK_CACHE_VERSION, entries: serialized }),
           'utf8'
         );
       } catch {
@@ -131,7 +138,7 @@ export function setCachedTagType(site, tag, type) {
   const normalizedSite = normalizeSite(site);
   if (!normalizedSite || !tag || type === null || type === undefined) return;
   const canonical = typeof type === 'number' ? type : normalizeBooruTagType(normalizedSite, type);
-  if (canonical === null || canonical === undefined) return;
+  if (!CANONICAL_TYPES.has(canonical)) return;
   const map = loadDiskCache(normalizedSite);
   const low = String(tag).toLowerCase().trim();
   map.set(low, { type: canonical, at: Date.now() });
@@ -141,13 +148,16 @@ export function setCachedTagType(site, tag, type) {
 export function getCachedTagType(site, tag) {
   const normalizedSite = normalizeSite(site);
   if (!normalizedSite || !tag) return null;
-  const entry = getMemoryMap(normalizedSite).get(String(tag).toLowerCase());
+  // Read through the disk cache: on a fresh boot the memory map is empty and the
+  // persisted 7-day answers are the whole point of the cache. Using getMemoryMap
+  // here made every search ignore it until a single-post lookup warmed the map.
+  const entry = loadDiskCache(normalizedSite).get(String(tag).toLowerCase());
   return entry ? entry.type : null;
 }
 
 export function getBooruTagCacheSize(site) {
   const normalizedSite = normalizeSite(site);
-  return normalizedSite ? getMemoryMap(normalizedSite).size : 0;
+  return normalizedSite ? loadDiskCache(normalizedSite).size : 0;
 }
 
 let activeLookups = 0;

@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { SECRET_SETTING_FIELDS } from '../config/constants.js';
+import { isSafeExternalUrl, normalizeProxyUrl } from './network.js';
 
 export const AUTH_CACHE_FIELDS = [
   'blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags',
@@ -47,6 +48,23 @@ const INTEGER_RANGES = {
 
 const TAG_LIST_FIELDS = ['blacklist', 'curvyTags', 'petiteTags', 'furryTags', 'pregnantTags', 'lgbtTags', 'aiTags', 'excludedInterestTags', 'ignoredAliases'];
 
+const PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks:', 'socks4:', 'socks5:', 'socks5h:']);
+
+// Proxy support includes SOCKS, which isSafeExternalUrl() rejects because it only
+// accepts http(s) targets. Check the proxy's own host with the same literal guard
+// instead, so a public SOCKS relay stays usable and a private one does not.
+function isPublicProxyUrl(rawValue) {
+  let parsed;
+  try {
+    parsed = new URL(normalizeProxyUrl(rawValue));
+  } catch {
+    return false;
+  }
+  if (!PROXY_PROTOCOLS.has(parsed.protocol)) return false;
+  if (!parsed.hostname) return false;
+  return isSafeExternalUrl(`http://${parsed.host}/`);
+}
+
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -78,7 +96,27 @@ export function parseClientAuthValue(rawValue) {
 }
 
 export function parseRequestAuth(req) {
-  return parseClientAuthValue(req?.headers?.['x-booru-auth']);
+  const parsed = parseClientAuthValue(req?.headers?.['x-booru-auth']);
+  // Request-scoped settings come from an untrusted header. Normalizing them here
+  // keeps a caller from raising server budgets (deep fetch, archive threads) or
+  // sending malformed list fields into every route that merges this object.
+  const clean = sanitizeSettingsPatch(parsed);
+
+  // A request may carry the caller's own proxy, which every outbound fetch would
+  // connect through. Private and loopback proxy hosts are an SSRF bypass around
+  // isSafeExternalUrl, so a header-supplied proxy must be public. An operator's
+  // stored global proxy stays trusted and is resolved from settings instead.
+  for (const field of Object.keys(clean)) {
+    if (field === 'siteMediaProxy') continue;
+    if (field !== 'globalProxy' && !field.endsWith('Proxy')) continue;
+    if (typeof clean[field] !== 'string' || !clean[field].trim()) {
+      delete clean[field];
+      continue;
+    }
+    if (!isPublicProxyUrl(clean[field])) delete clean[field];
+  }
+
+  return clean;
 }
 
 export function resolveRequestSettings(baseSettings, clientAuth) {
@@ -94,8 +132,16 @@ export function sanitizeSettingsPatch(input, { anonymous = false } = {}) {
     for (const field of Object.keys(clean)) {
       if (field.endsWith('Proxy')) delete clean[field];
     }
+    // Anonymous callers share the root data namespace. Server budgets and shared
+    // collections must not be writable through that namespace: a single visitor
+    // could otherwise raise the deep-fetch depth or replace every preset.
     delete clean.maxServerCacheMb;
     delete clean.telegramBackupEnabled;
+    delete clean.deepFetchPages;
+    delete clean.archiveDownloadThreads;
+    delete clean.siteMediaProxy;
+    delete clean.customAliases;
+    delete clean.searchPresets;
   }
 
   for (const [field, allowed] of Object.entries(STRING_ENUMS)) {
@@ -164,7 +210,7 @@ export function sanitizeSettingsPatch(input, { anonymous = false } = {}) {
 
 export function buildAuthCacheKey(clientAuth, serverSettings) {
   const merged = resolveRequestSettings(serverSettings, clientAuth);
-  const canonical = AUTH_CACHE_FIELDS
+  const canonical = [...AUTH_CACHE_FIELDS]
     .sort()
     .map(field => [field, merged[field] ?? null]);
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 24);

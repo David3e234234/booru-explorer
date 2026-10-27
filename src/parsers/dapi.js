@@ -4,6 +4,7 @@ import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 import { parseDapiXmlPosts } from './gelbooru.js';
+import { appendRatingTag, buildThumbTiers } from '../utils/searchCompat.js';
 
 export function normalizeDapiRating(raw, defaultRating = 'e') {
   const r = String(raw || '').toLowerCase().trim();
@@ -19,15 +20,6 @@ function safeDecode(str) {
   } catch {
     return String(str || '');
   }
-}
-
-function getRecentDateFilter(days = 30) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `date:>=${year}-${month}-${day}`;
 }
 
 let cachedXbooruMaxId = 1270000;
@@ -107,14 +99,8 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
     searchTags = searchTags ? `${searchTags} ${settings.siteSortTags.xbooru.new}` : settings.siteSortTags.xbooru.new;
   }
 
-  // Rating filter
-  if (ratingFilter === 'nsfw') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
-  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:q` : 'rating:q';
-  } else if (ratingFilter === 'sfw') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
-  }
+  // Rating filter. A caller-supplied `rating:*` always wins over the UI filter.
+  searchTags = appendRatingTag(searchTags, ratingFilter, 'dapi');
 
   const pid = Math.max(0, page - 1);
   const url = `https://xbooru.com/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
@@ -151,9 +137,7 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-      const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-      const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+      const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
       const thumbOriginal = fileUrl;
 
@@ -247,14 +231,8 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
     searchTags = searchTags ? `${searchTags} ${settings.siteSortTags.hypnohub.new}` : settings.siteSortTags.hypnohub.new;
   }
 
-  // Rating filter
-  if (ratingFilter === 'nsfw') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:e` : 'rating:e';
-  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:q` : 'rating:q';
-  } else if (ratingFilter === 'sfw') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:s` : 'rating:s';
-  }
+  // Rating filter. A caller-supplied `rating:*` always wins over the UI filter.
+  searchTags = appendRatingTag(searchTags, ratingFilter, 'dapi');
 
   const pid = Math.max(0, page - 1);
   const url = `https://hypnohub.net/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
@@ -291,9 +269,7 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-      const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-      const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+      const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
       const thumbOriginal = fileUrl;
 
@@ -387,13 +363,7 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
   }
 
   // Rating filter: TBIB only accepts full words (rating:safe etc.)
-  if (ratingFilter === 'nsfw') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:explicit` : 'rating:explicit';
-  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:questionable` : 'rating:questionable';
-  } else if (ratingFilter === 'sfw') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:safe` : 'rating:safe';
-  }
+  searchTags = appendRatingTag(searchTags, ratingFilter, 'gelbooru');
 
   const pid = Math.max(0, page - 1);
   const url = `https://tbib.org/index.php?page=dapi&s=post&q=index&json=1&tags=${encodeURIComponent(searchTags)}&pid=${pid}&limit=${limit}`;
@@ -428,9 +398,7 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-      const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-      const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-      const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+      const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
       const thumbOriginal = fileUrl;
 
@@ -594,9 +562,7 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-    const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-    const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-    const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+    const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
     const thumbSample = sampleUrl;
     const thumbOriginal = fileUrl;
 
@@ -742,9 +708,7 @@ export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, 
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-    const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-    const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-    const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+    const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
     const thumbSample = sampleUrl;
     const thumbOriginal = fileUrl;
 
@@ -890,9 +854,7 @@ export async function fetchTbibPostById(id, aiTagsList = [], settings = {}, fall
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
-    const thumb180 = previewUrl || sampleUrl || fileUrl || '';
-    const thumb360 = isVideo ? previewUrl : (sampleUrl || previewUrl || fileUrl || '');
-    const thumb720 = isVideo ? previewUrl : (sampleUrl || fileUrl || previewUrl || '');
+    const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
     const thumbSample = sampleUrl;
     const thumbOriginal = fileUrl;
 

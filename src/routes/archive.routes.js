@@ -9,7 +9,12 @@ import { parseRequestAuth } from '../utils/settingsValidation.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
-router.use(createRateLimiter({ windowMs: 60000, max: 120 }));
+// Download and extraction routes are expensive and get the normal budget. Status
+// polling runs every ~300 ms while a job is alive, so it needs its own, larger
+// bucket: sharing the 120/min one throttled the progress indicator after ~36 s
+// and turned a running download into a stalled-looking dialog.
+const archiveLimiter = createRateLimiter({ windowMs: 60000, max: 120 });
+const statusLimiter = createRateLimiter({ windowMs: 60000, max: 600 });
 
 function getRequestSettings(req) {
   return parseRequestAuth(req);
@@ -27,7 +32,7 @@ function isArchiveNetworkError(err) {
 }
 
 // GET /api/archive/inspect?url=<zip-url> - inspect zip file structure, list all files, and scan for cloud links/passwords
-router.get('/inspect', async (req, res) => {
+router.get('/inspect', archiveLimiter, async (req, res) => {
   const zipUrl = req.query.url;
   if (!zipUrl) return res.json({ success: false, error: 'URL не указан' });
   if (!isAllowedArchiveUrl(zipUrl)) {
@@ -52,7 +57,7 @@ router.get('/inspect', async (req, res) => {
 });
 
 // GET /api/archive/list?url=<zip-url> - download, unpack (cached) and list media inside
-router.get('/list', async (req, res) => {
+router.get('/list', archiveLimiter, async (req, res) => {
   const zipUrl = req.query.url;
   if (!zipUrl) return res.json({ success: false, error: 'URL не указан' });
   if (!isAllowedArchiveUrl(zipUrl)) {
@@ -79,10 +84,13 @@ router.get('/list', async (req, res) => {
 });
 
 // GET /api/archive/status?url=<zip-url> - download/extract progress for the loading indicator
-router.get('/status', (req, res) => {
+router.get('/status', statusLimiter, (req, res) => {
   const zipUrl = req.query.url;
-  if (!zipUrl || !isAllowedArchiveUrl(zipUrl)) {
-    return res.json({ active: false });
+  if (!zipUrl) {
+    return res.status(400).json({ active: false, error: 'URL не указан' });
+  }
+  if (!isAllowedArchiveUrl(zipUrl)) {
+    return res.status(400).json({ active: false, error: 'Недопустимый источник архива' });
   }
   const status = getArchiveJobStatus(zipUrl);
   if (!status) {
@@ -115,7 +123,7 @@ router.get('/status', (req, res) => {
 });
 
 // GET /api/archive/file?key=<md5>&n=<idx> - serve one extracted file from cache
-router.get('/file', async (req, res) => {
+router.get('/file', archiveLimiter, async (req, res) => {
   const key = String(req.query.key || '');
   const n = parseInt(req.query.n, 10);
 
@@ -147,7 +155,7 @@ router.get('/file', async (req, res) => {
 });
 
 // GET /api/archive/download-file?url=<zip-url>&name=<entry-name>&threads=<threads> - download an individual file from archive
-router.get('/download-file', async (req, res) => {
+router.get('/download-file', archiveLimiter, async (req, res) => {
   const zipUrl = String(req.query.url || '');
   const targetName = String(req.query.name || req.query.path || req.query.file || '');
   const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
@@ -171,7 +179,7 @@ router.get('/download-file', async (req, res) => {
 });
 
 // GET /api/archive/download-archive?url=<zip-url>&name=<entry-name>&threads=<threads> - download full archive with multi-threaded acceleration
-router.get('/download-archive', async (req, res) => {
+router.get('/download-archive', archiveLimiter, async (req, res) => {
   const zipUrl = String(req.query.url || '');
   const threads = Math.max(1, Math.min(16, parseInt(req.query.threads, 10) || 4));
   const name = String(req.query.name || '');

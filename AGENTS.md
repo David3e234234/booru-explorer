@@ -52,8 +52,11 @@ npm run test:unit                          # test/unit
 npm run test:integration                   # test/integration/routes.test.js
 npm run verify                             # alias for npm test
 npm run build:client                       # esbuild: public/js/app.js -> public/dist
+npm install                                # also builds the client via the postinstall script
 node --check path/to/file.js               # every touched JS file
 ```
+
+`npm install` runs `postinstall` (`node scripts/buildClient.mjs`), so a fresh checkout and the `--omit=dev` deploys on Alwaysdata/Vercel have `public/dist` even before `server.js` starts. The explicit `npm run build:client` in CI remains the guarantee if lifecycle scripts are ever skipped.
 
 `test/run-all.js` discovers `*.test.js` under `test/unit` and `test/integration` at runtime and imports unit suites before integration ones. Never reintroduce a hardcoded suite list: a stale list silently skips new tests, which is how regressions reach `main`.
 
@@ -83,10 +86,12 @@ src/parsers/                   one module per source plus aggregation in index.j
 src/routes/                    HTTP endpoints grouped by domain
 src/services/                  storage, cache, media, auth, backup, archives
 src/utils/                     network, tag logic, logging, host policy, settings policy
+src/utils/searchCompat.js      shared rating-tag, preview-tier and pagination helpers
 public/index.html              static application shell and SVG sprite
 public/js/                     ES modules loaded by the esbuild bundle entry (app.js)
 public/js/feed/                phone feed subsystem (vertical snap feed: slides, video, gestures, sheets)
-public/dist/                   esbuild output (git-ignored, rebuilt by server.js)
+public/js/modules/scrollLock.js shared reference-counted body scroll lock
+public/dist/                   esbuild output (git-ignored, rebuilt by postinstall/server.js)
 scripts/buildClient.mjs        esbuild bundle script behind `npm run build:client`
 public/css/                    theme tokens and component styles
 test/unit/                     pure unit and mocked parser suites
@@ -114,7 +119,7 @@ Large files must be split by responsibility when touched. Preferred existing bou
 
 ### Search Flow
 
-1. `GET /api/posts` in `posts.routes.js` parses and validates the query, resolves effective settings, and builds a cache key.
+1. `GET /api/posts` in `posts.routes.js` parses and validates the query, resolves effective settings, and builds a cache key. Unknown site ids are a `400`, `page` is clamped to 1–1000 and the route is limited to 60 requests/min per IP.
 2. `fetchPosts()` in `parsers/index.js` is the only aggregation entrypoint.
 3. Single-site mode runs the parser and a bounded deep-fetch loop.
 4. All-sites mode uses `Promise.allSettled`, a per-site deadline, `Promise.allSettled` fan-out, round-robin merge and a final `limit` slice.
@@ -276,10 +281,12 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 ## 7. Frontend Architecture
 
 - No framework. `public/` is served statically and bundled by esbuild (`public/js/app.js` → `public/dist`, code-splitting keeps dynamic `import()` boundaries). Heavy subsystems (viewer stack, settings modal, profile, downloads, wiki, aliases) stay lazy; do not add static imports of them from `app.js`, or they rejoin the critical path. Variable-specifier dynamic imports do not bundle — always use literal specifiers in `importOnce` loaders.
-- `public/dist/` is git-ignored and rebuilt by `server.js` when sources change (mtime check); `npm run build:client` rebuilds manually. esbuild is a runtime dependency so `npm install --omit=dev` deploys still build.
+- `public/dist/` is git-ignored and rebuilt by `postinstall` on `npm install` and by `server.js` when sources change (mtime check); `npm run build:client` rebuilds manually. esbuild is a runtime dependency so `npm install --omit=dev` deploys still build.
 - `state.js` owns mutable state, local persistence and import/export. `api.js` owns HTTP and auth headers. `app.js` coordinates search and routing.
 - `router.js` is the only writer of search and viewer URL state. Missing URL parameters restore canonical defaults.
 - The phone feed (`public/js/feed/`) is a fullscreen vertical snap feed for viewports up to 800 px. `openPostOverlay()` in `app.js` routes every "open post" action: phones get the feed, desktops keep the viewer; archive posts (`isArchive`, `zip`, `archiveUrls`) always open the viewer. `view=feed` mirrors a feed session in the URL; `notifyFeedOpened/Moved/Closed` in `router.js` own those history entries. The track keeps a shell for every index (scroll geometry is always listLength screens); the content of a small window is populated lazily. A tap toggles video playback (or the chrome on still slides), a long press opens the "more" sheet with the Clean screen mode, the sound toggle sits in the rail on video posts, and the bottom bar scrubs. Player rules (HEVC, teasers, scrubbing) live in `public/js/feed/video.js`. Long-press on a phone grid card opens the quick actions sheet; per-card action buttons stay hidden below 800 px.
+- Album carousel pages mount lazily around the visible page; only the current page plays, far video players are destroyed and an album lookup is aborted when its slide leaves the window. `syncList()` may rebuild a shorter list and must keep the current post by id, because removing a disliked post shifts every index.
+- Viewer, feed and settings share `modules/scrollLock.js`; never write `body.style.overflow` directly. The reference count keeps a lower surface from unlocking the page when a higher one is still open, and the settings/feed `*-open` body classes hide the floating download dock.
 - Omitting a default in `buildQuery()` and normalizing it in `applyUrlToState()` must be symmetric. Compare canonical values, never param presence: `if ((p.site || 'danbooru') !== state.currentSite)`, not `p.site !== state.currentSite`. A false `changed` re-runs `performSearch(true)`, which re-renders the gallery without `preserveScroll` and jumps the feed back to the top, so Back from the viewer silently loses the scroll position. Cover new fields in `test/unit/routerUrlState.test.js`.
 - Gallery cards are delegated on `#galleryGrid`; per-card listeners are allowed only for media error and metadata events.
 - Cards open with click, Enter or Space and expose an accessible name.
@@ -317,9 +324,9 @@ There is no linter. Do not claim verification for a check that was not executed.
 
 ## 9. Deployment And Operations
 
-- `.github/workflows/deploy.yml` runs `npm test` on pushes and pull requests. The Alwaysdata deploy job depends on the verify job.
+- `.github/workflows/deploy.yml` runs `npm test` on pushes and pull requests. The Alwaysdata deploy job depends on the verify job. Verify installs dependencies, builds the client bundle explicitly, then runs the tests; the deploy repeats the install and build on the host.
 - Push to `main` or `master` deploys immediately after verification.
-- Alwaysdata deploy runs `git reset --hard origin/main`, `npm install --omit=dev` and touches `tmp/restart.txt` for Passenger.
+- Alwaysdata deploy runs `git reset --hard origin/<branch>`, `npm install --omit=dev` (which builds the client via `postinstall`), an explicit `npm run build:client`, and touches `tmp/restart.txt` for Passenger. The branch is `github.ref_name`, so a push to `master` deploys `master` instead of resetting the host to `main`.
 - `tmp/restart.txt` is generated at deploy time and must not be tracked.
 - Vercel uses `vercel.json`; serverless data is ephemeral and multi-user persistence is not supported there.
 - Never add `engines` to `vercel.json`: its schema rejects unknown top-level properties and the whole build fails. Vercel resolves the Node version from `engines` in `package.json`.

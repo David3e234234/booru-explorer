@@ -8,16 +8,22 @@ import {
   LGBT_TAGS
 } from '../config/constants.js';
 import { safeJsonParse, fetchSafe, resolvePreviewUrl, discardResponse } from '../utils/network.js';
-import { checkIsAi, checkMediaTypes, isPostMatchingFilters, adaptTagsForSite } from '../utils/tagHelpers.js';
+import { checkIsAi, checkMediaTypes, isPostMatchingFilters, adaptTagsForSite, hasUserPositiveConstraint } from '../utils/tagHelpers.js';
+import { appendRatingTag } from '../utils/searchCompat.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { separateAuthorAndAssistants } from '../utils/tagClassifier.js';
 import { logInfo, logError } from '../utils/logger.js';
 
 export async function fetchDanbooru(params, aiTagsList, settings) {
-  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all' } = params;
-  const adaptedTags = adaptTagsForSite('danbooru', tags, ratingFilter, typeFilter, settings);
+  const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
+  const adaptedTags = adaptTagsForSite('danbooru', tags, ageFilter, typeFilter, settings);
   const userTagList = adaptedTags.trim().split(/\s+/).filter(Boolean);
   const queryTags = [];
+
+  // Danbooru limits anonymous searches to two tags. Authenticated callers may
+  // send the whole query, so never drop a tag when API credentials exist.
+  const hasCredentials = Boolean(settings?.danbooruLogin && settings?.danbooruApiKey);
+  const maxQueryTags = hasCredentials ? Number.POSITIVE_INFINITY : 2;
   
   const prioritizeUserTags = settings?.prioritizeUserTags === true;
   const deepFetchPagesSetting = settings?.deepFetchPages ? parseInt(settings.deepFetchPages, 10) : 2;
@@ -25,30 +31,30 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   // When manual tags take priority, add them first
   if (prioritizeUserTags) {
     for (const t of userTagList) {
-      if (queryTags.length < 2) queryTags.push(t);
+      if (queryTags.length < maxQueryTags) queryTags.push(t);
     }
   }
 
   // Priority: video/sound
   if (typeFilter === 'audio' || typeFilter === 'sound') {
-    if (queryTags.length < 2) queryTags.push('sound');
+    if (queryTags.length < maxQueryTags) queryTags.push('sound');
   } else if (typeFilter === 'video') {
-    if (queryTags.length < 2) queryTags.push('animated');
+    if (queryTags.length < maxQueryTags) queryTags.push('animated');
   }
 
   // When manual tags are not prioritized, add them after the media filter
   if (!prioritizeUserTags) {
     for (const t of userTagList) {
-      if (queryTags.length < 2) queryTags.push(t);
+      if (queryTags.length < maxQueryTags) queryTags.push(t);
     }
   }
 
   // Priority: sorting
   const customDanbooruTag = settings?.siteSortTags?.danbooru?.[category];
-  if (queryTags.length < 2) {
+  if (queryTags.length < maxQueryTags) {
     if (customDanbooruTag) {
       customDanbooruTag.split(/\s+/).forEach(t => {
-        if (queryTags.length < 2 && t) queryTags.push(t);
+        if (queryTags.length < maxQueryTags && t) queryTags.push(t);
       });
     } else if (category === 'top') {
       if (userTagList.length > 0) {
@@ -70,16 +76,20 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
       queryTags.push('order:random');
     } else if (category === 'new' && settings?.siteSortTags?.danbooru?.new) {
       settings.siteSortTags.danbooru.new.split(/\s+/).forEach(t => {
-        if (queryTags.length < 2 && t) queryTags.push(t);
+        if (queryTags.length < maxQueryTags && t) queryTags.push(t);
       });
     }
   }
 
-  // Priority: rating
-  if (queryTags.length < 2) {
-    if (ratingFilter === 'nsfw') queryTags.push('rating:e');
-    else if (ratingFilter === 'questionable' || ratingFilter === '16+') queryTags.push('rating:q,s');
-    else if (ratingFilter === 'sfw') queryTags.push('rating:g');
+  // Priority: rating. The local matcher below enforces the rating too, but the
+  // remote tag narrows the result set. Anonymous callers can only spend a slot
+  // when one is free; authenticated callers always get it.
+  if (hasCredentials || queryTags.length < maxQueryTags) {
+    const ratedQuery = appendRatingTag(queryTags.join(' '), ratingFilter, 'danbooru');
+    if (ratedQuery) {
+      queryTags.length = 0;
+      queryTags.push(...ratedQuery.split(/\s+/).filter(Boolean));
+    }
   }
 
   const targetLimit = parseInt(params.limit, 10) || 40;
@@ -87,7 +97,7 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     .split(/\s+/)
     .filter(t => t.startsWith('-') && t.length > 1)
     .map(t => t.substring(1).toLowerCase().replace(/_/g, ' '));
-  const hasUserPositiveTags = Boolean(userTagList.some(t => !t.startsWith('-') && !t.includes(':')));
+  const hasUserPositiveTags = hasUserPositiveConstraint(adaptedTags);
 
   const filterCriteria = {
     typeFilter: params.typeFilter || 'all',
@@ -162,10 +172,10 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
 
     if (params.ageFilter === 'adult') {
       if (CURVY_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
-      if (!userTagList.length && !activeCurvy.some(t => rawTags.includes(t))) return false;
+      if (!hasUserPositiveTags && !activeCurvy.some(t => rawTags.includes(t))) return false;
     } else if (params.ageFilter === 'young') {
       if (PETITE_EXCLUDE_TAGS.some(t => rawTags.includes(t))) return false;
-      if (!userTagList.length && !activePetite.some(t => rawTags.includes(t))) return false;
+      if (!hasUserPositiveTags && !activePetite.some(t => rawTags.includes(t))) return false;
     }
     if (filterCriteria.aiFilter === 'no-ai') {
       const isAi = checkIsAi(rawTags, aiTagsList) || (item.tag_string_meta && item.tag_string_meta.includes('ai_generated'));

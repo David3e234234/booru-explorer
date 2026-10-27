@@ -52,7 +52,7 @@ import {
 import { initAutocomplete } from './autocomplete.js';
 import { initGallery } from './gallery.js';
 import { consumeInitialUrl, initRouter, syncSearchUrl } from './router.js';
-import { isMyLiveDemoHost, isVercelHost, showToast, haptic } from './modules/uiUtils.js';
+import { showToast, haptic } from './modules/uiUtils.js';
 import { openDrawer, closeAllDrawers, setDrawerCallbacks } from './modules/drawers.js';
 import { 
   updateSiteCapabilitiesUI,
@@ -404,7 +404,7 @@ function openPostOverlay(index, opts = {}) {
   }
 }
 
-export { isMyLiveDemoHost, isVercelHost, showToast, openDrawer, closeAllDrawers };
+export { showToast, openDrawer, closeAllDrawers };
 
 let autocompleteInstance = null;
 let galleryInstance = null;
@@ -446,6 +446,7 @@ async function init() {
       if (me && me.user) {
         state.currentUser = me.user;
         saveLocalAuth(state.authToken, me.user);
+        document.dispatchEvent(new CustomEvent('booru:user-changed'));
       } else {
         clearLocalAuth();
         await refreshAllUserData();
@@ -1197,6 +1198,16 @@ async function refreshAllUserData() {
   renderPresetsList();
   updatePresetActiveState();
   if (profileUIInstance) profileUIInstance.renderProfile();
+  document.dispatchEvent(new CustomEvent('booru:user-changed'));
+}
+
+// ApiError carries the HTTP status; parser messages are free-form Russian
+// text. Reading `status` first keeps a URL that merely contains "429" from
+// being reported as a rate limit.
+function isRateLimitError(err) {
+  if (!err) return false;
+  if (err.status === 429) return true;
+  return /\b429\b/.test(String(err.message || ''));
 }
 
 async function performSearch(reset = false, options = {}) {
@@ -1240,7 +1251,7 @@ async function performSearch(reset = false, options = {}) {
     
     if (state.profileSubTab === 'authors') {
       renderFavoriteAuthors();
-      return;
+      return { success: true };
     }
 
     if (state.profileSubTab === 'favorites') {
@@ -1261,7 +1272,7 @@ async function performSearch(reset = false, options = {}) {
     state.hasMore = false;
     galleryInstance.renderGallery(false);
     renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
-    return;
+    return { success: true };
   }
 
   if (state.currentCategory === 'favorites') {
@@ -1270,7 +1281,7 @@ async function performSearch(reset = false, options = {}) {
     if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
     if (state.favoritesSubTab === 'authors') {
       renderFavoriteAuthors();
-      return;
+      return { success: true };
     }
     state.posts = [...state.favorites];
     if (state.searchTags.length > 0) {
@@ -1282,7 +1293,7 @@ async function performSearch(reset = false, options = {}) {
     state.hasMore = false;
     galleryInstance.renderGallery(false);
     renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
-    return;
+    return { success: true };
   }
 
   // "Following" / Subscriptions feed (posts strictly from followed favorite authors)
@@ -1327,7 +1338,7 @@ async function performSearch(reset = false, options = {}) {
         state.hasMore = false;
         galleryInstance.renderGallery(false);
         renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
-        return;
+        return { success: true };
       }
 
       // Helper to find aliases for a given author name
@@ -1407,7 +1418,7 @@ async function performSearch(reset = false, options = {}) {
         state.hasMore = false;
         galleryInstance.renderGallery(false);
         renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
-        return;
+        return { success: true };
       }
 
       const searchQueryStr = state.searchTags.length > 0 ? state.searchTags.join(' ').trim() : '';
@@ -1574,7 +1585,7 @@ async function performSearch(reset = false, options = {}) {
       renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
     } catch (err) {
       console.error('Ошибка загрузки ленты подписок:', err);
-      if (seq !== searchSeq) return;
+      if (seq !== searchSeq) return { success: false, superseded: true };
       if (reset) {
         state.posts = [];
       } else {
@@ -1582,6 +1593,7 @@ async function performSearch(reset = false, options = {}) {
         state.hasMore = true;
       }
       galleryInstance.renderGallery(false);
+      return { success: false, error: err };
     } finally {
       if (seq === searchSeq) {
         state.isLoading = false;
@@ -1589,7 +1601,7 @@ async function performSearch(reset = false, options = {}) {
         if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
       }
     }
-    return;
+    return { success: true };
   }
 
   // "For you" recommendations section
@@ -1997,7 +2009,7 @@ async function performSearch(reset = false, options = {}) {
       renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
     } catch (err) {
       console.error('Ошибка рекомендаций:', err);
-      if (seq !== searchSeq) return;
+      if (seq !== searchSeq) return { success: false, superseded: true };
       if (reset) {
         state.posts = [];
       } else {
@@ -2005,6 +2017,7 @@ async function performSearch(reset = false, options = {}) {
         state.hasMore = true;
       }
       galleryInstance.renderGallery(false);
+      return { success: false, error: err };
     } finally {
       if (seq === searchSeq) {
         state.isLoading = false;
@@ -2012,7 +2025,7 @@ async function performSearch(reset = false, options = {}) {
         if (btnRefreshSearch) btnRefreshSearch.classList.remove('refreshing');
       }
     }
-    return;
+    return { success: true };
   }
 
   try {
@@ -2040,7 +2053,7 @@ async function performSearch(reset = false, options = {}) {
       bustCache: options.bustCache || false
     });
 
-    if (seq !== searchSeq) return;
+    if (seq !== searchSeq) return { success: false, superseded: true };
 
     if (res.success && Array.isArray(res.posts)) {
       state.lastSearchFailed = false;
@@ -2075,14 +2088,14 @@ async function performSearch(reset = false, options = {}) {
     if (reset) {
       state.posts = [];
       state.lastSearchFailed = true;
-      if (err.message?.includes('429')) {
+      if (isRateLimitError(err)) {
         showToast(t('app.rateLimitSearch', 'Превышен лимит запросов к источнику. Пожалуйста, подождите немного.'), 'warning');
       }
     } else {
       // Roll the page back so infinite scroll does not keep a permanent gap
       state.page--;
       state.hasMore = true;
-      if (err.message?.includes('429') || state.currentSite === 'rule34') {
+      if (isRateLimitError(err) || state.currentSite === 'rule34') {
         showToast(t('app.rateLimitScroll', 'Лимит запросов Rule34. Подождите пару секунд и продолжите прокрутку.'), 'warning');
       }
     }

@@ -232,6 +232,47 @@ describe('author classification precision', () => {
     assert.ok(r.tagDetails.assistant.includes('beep_block_skyway_(music)'));
     assert.ok(!r.tagDetails.artist.includes('beep_block_skyway_(music)'));
   });
+
+  it('matches an initial author only as a whole token', async () => {
+    const { classifyPostTags } = await import('../../src/utils/tagClassifier.js');
+    // The old substring check saw "abc" inside "abcdef" and promoted the
+    // character tag to an artist.
+    const r = await classifyPostTags(
+      ['abc_(some_franchise)', '1girl', 'solo'],
+      '',
+      'abcdef',
+      {}
+    );
+    assert.ok(!r.tagDetails.artist.includes('abc_(some_franchise)'));
+    assert.ok(r.tagDetails.character.includes('abc_(some_franchise)'));
+  });
+
+  it('does not cache a failed board lookup as a general tag', async () => {
+    const { agent, originalDispatcher } = createMockAgent();
+    try {
+      const tag = 'zqcachemiss';
+      agent.get('https://api.rule34.xxx')
+        .intercept({ path: /page=dapi/, method: 'GET' })
+        .reply(500, 'temporary failure');
+      agent.get('https://api.rule34.xxx')
+        .intercept({ path: /page=dapi/, method: 'GET' })
+        .reply(200, `<?xml version="1.0"?><tag type="1" count="1" name="${tag}" />`);
+
+      const settings = { rule34ApiKey: 'key', rule34UserId: '42' };
+      const { classifyPostTags } = await import('../../src/utils/tagClassifier.js');
+
+      // First attempt: upstream fails, so the tag stays a plain general tag.
+      const first = await classifyPostTags([tag], '', '', settings, true, '');
+      assert.ok(!first.tagDetails.artist.includes(tag));
+
+      // Second attempt: upstream answers. A poisoned type-0 cache entry would
+      // make the resolver skip this request and keep the tag general forever.
+      const second = await classifyPostTags([tag], '', '', settings, true, '');
+      assert.ok(second.tagDetails.artist.includes(tag));
+    } finally {
+      await restoreDispatcher(originalDispatcher, agent);
+    }
+  });
 });
 
 

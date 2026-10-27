@@ -1,5 +1,3 @@
-export const isMyLiveDemoHost = false;
-
 export const DEFAULT_SITES = [
   { id: 'danbooru', name: 'Danbooru', accentColor: '#3b82f6', rating: 'all', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportsSort: true, supportedCategories: ['feed', 'following', 'recommended'] },
   { id: 'gelbooru', name: 'Gelbooru', accentColor: '#6366f1', rating: 'all', supportsVideo: true, supportsImages: true, supportsTags: true, supportsAiFilter: true, supportsShapesFilter: true, supportsContentHiding: true, supportsSort: true, supportedCategories: ['feed', 'following', 'recommended'] },
@@ -792,6 +790,26 @@ export function addFavoriteId(id) {
     _mediaPrefsCache = null;
     _mediaPrefsCacheKey = '';
   }
+}
+
+export function toggleFavoriteLocally(post) {
+  if (!post || !post.id) return false;
+  if (state.favoriteIds.has(post.id)) {
+    state.favoriteIds.delete(post.id);
+    state.favorites = state.favorites.filter(f => f.id !== post.id);
+    saveLocalFavorites(state.favorites);
+    invalidateInterestCache();
+    _mediaPrefsCache = null;
+    _mediaPrefsCacheKey = '';
+    return false;
+  }
+  state.favoriteIds.add(post.id);
+  state.favorites.unshift({ ...post, favoritedAt: new Date().toISOString() });
+  saveLocalFavorites(state.favorites);
+  invalidateInterestCache();
+  _mediaPrefsCache = null;
+  _mediaPrefsCacheKey = '';
+  return true;
 }
 
 export function removeFavoriteId(id) {

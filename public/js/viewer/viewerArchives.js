@@ -1,6 +1,6 @@
 import { fetchArchiveList, fetchArchiveStatus } from '../api.js';
 import { downloadManager } from '../modules/downloadManager.js';
-import { showToast, escapeHtml } from '../modules/uiUtils.js';
+import { showToast, escapeHtml, formatBytes } from '../modules/uiUtils.js';
 import { state } from '../state.js';
 import { t } from '../i18n.js';
 import { unpackAndViewArchive, openArchiveInspectModal } from './viewerArchiveInspect.js';
@@ -10,7 +10,7 @@ export const activeArchiveDownloads = new Map();
 // Reactive tracker for archive server jobs (downloading / extracting / inspecting)
 export const activeArchiveJobs = new Map(); // url -> { active, phase, percent, received, total, error, completed }
 export const archiveJobListeners = new Map(); // url -> Set of callbacks
-export const activeArchivePollers = new Map(); // url -> intervalId
+export const activeArchivePollers = new Map(); // url -> { timer, cancelled, failures }
 
 // Unsubscribe functions for subscriptions created by rendered archive cards.
 // Cards are recreated on every render, so stale subscriptions are flushed there
@@ -82,52 +82,82 @@ export function notifyArchiveJob(url, jobState) {
 
 /**
  * Starts periodic status polling for an active archive extraction/download job.
+ * The next request is scheduled only after the previous one settled: a slow
+ * status endpoint must not stack overlapping requests every 300 ms.
  * @param {string} url
  */
 export function startArchivePolling(url) {
   if (!url || activeArchivePollers.has(url)) return;
+  const ARCHIVE_POLL_MS = 400;
+  const MAX_CONSECUTIVE_FAILURES = 8;
 
-  const poll = async () => {
-    try {
-      const status = await fetchArchiveStatus(url);
-      if (status) {
-        if (status.active) {
-          const pct = status.percent !== undefined
-            ? status.percent
-            : (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0);
-          notifyArchiveJob(url, {
-            active: true,
-            phase: status.phase,
-            received: status.received || 0,
-            total: status.total || 0,
-            percent: pct,
-            extractedFiles: status.extractedFiles || 0,
-            scannedFiles: status.scannedFiles || 0,
-            totalFiles: status.totalFiles || 0,
-            currentFile: status.currentFile || ''
-          });
-        } else if (status.completed) {
-          notifyArchiveJob(url, {
-            active: false,
-            completed: true,
-            phase: status.phase || 'completed',
-            percent: 100,
-            extractedFiles: status.extractedFiles || 0,
-            totalFiles: status.totalFiles || 0
-          });
-          stopArchivePolling(url);
-        } else {
-          stopArchivePolling(url);
-        }
-      } else {
-        stopArchivePolling(url);
-      }
-    } catch {}
+  const poller = { timer: null, cancelled: false, failures: 0 };
+  activeArchivePollers.set(url, poller);
+
+  const finish = () => {
+    if (poller.timer) clearTimeout(poller.timer);
+    poller.timer = null;
+    poller.cancelled = true;
+    activeArchivePollers.delete(url);
   };
 
-  poll();
-  const id = setInterval(poll, 300);
-  activeArchivePollers.set(url, id);
+  const schedule = (delay) => {
+    if (poller.cancelled) return;
+    poller.timer = setTimeout(run, delay);
+  };
+
+  const run = async () => {
+    poller.timer = null;
+    if (poller.cancelled) return;
+    try {
+      const status = await fetchArchiveStatus(url);
+      if (poller.cancelled) return;
+      poller.failures = 0;
+
+      if (status?.active) {
+        const pct = status.percent !== undefined
+          ? status.percent
+          : (status.total > 0 ? Math.min(100, Math.round((status.received / status.total) * 100)) : 0);
+        notifyArchiveJob(url, {
+          active: true,
+          phase: status.phase,
+          received: status.received || 0,
+          total: status.total || 0,
+          percent: pct,
+          extractedFiles: status.extractedFiles || 0,
+          scannedFiles: status.scannedFiles || 0,
+          totalFiles: status.totalFiles || 0,
+          currentFile: status.currentFile || ''
+        });
+        schedule(ARCHIVE_POLL_MS);
+        return;
+      }
+
+      if (status?.completed) {
+        notifyArchiveJob(url, {
+          active: false,
+          completed: true,
+          phase: status.phase || 'completed',
+          percent: 100,
+          extractedFiles: status.extractedFiles || 0,
+          totalFiles: status.totalFiles || 0
+        });
+      }
+      finish();
+    } catch {
+      if (poller.cancelled) return;
+      poller.failures += 1;
+      // A transient 5xx/network error is not a completed job: retry with a
+      // small backoff, then give up instead of polling a dead endpoint forever.
+      if (poller.failures >= MAX_CONSECUTIVE_FAILURES) {
+        finish();
+      } else {
+        schedule(ARCHIVE_POLL_MS * poller.failures);
+      }
+    }
+  };
+
+  run();
 }
 
 /**
@@ -136,9 +166,10 @@ export function startArchivePolling(url) {
  */
 export function stopArchivePolling(url) {
   if (!url) return;
-  const id = activeArchivePollers.get(url);
-  if (id) {
-    clearInterval(id);
+  const poller = activeArchivePollers.get(url);
+  if (poller) {
+    poller.cancelled = true;
+    if (poller.timer) clearTimeout(poller.timer);
     activeArchivePollers.delete(url);
   }
 }
@@ -154,8 +185,11 @@ export function cancelAllArchiveDownloads() {
     activeArchiveDownloads.clear();
   }
   if (activeArchivePollers && activeArchivePollers.size > 0) {
-    activeArchivePollers.forEach((id) => {
-      try { clearInterval(id); } catch {}
+    activeArchivePollers.forEach((poller) => {
+      try {
+        poller.cancelled = true;
+        if (poller.timer) clearTimeout(poller.timer);
+      } catch {}
     });
     activeArchivePollers.clear();
   }
@@ -164,15 +198,10 @@ export function cancelAllArchiveDownloads() {
 
 /**
  * Helper to format byte count into human-readable representation.
- * @param {number} bytes
- * @returns {string}
+ * Shared implementation lives in uiUtils; re-exported for the archive
+ * inspector, which has always imported it from this module.
  */
-export function formatBytes(bytes) {
-  if (!bytes || isNaN(bytes) || bytes <= 0) return '';
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-}
+export { formatBytes };
 
 /**
  * Creates a reactive archive card component with live progress bars,
@@ -681,7 +710,17 @@ export function createArchiveCardComponent({ url, name, size = 0, isSidebar = fa
           for (let i = 0; i < res.albumItems.length; i++) {
             if (abortCtrl.signal.aborted || !isServerUnpacking) break;
             const item = res.albumItems[i];
-            const downloadUrl = `${item.fileUrl}&download=1`;
+            // Build the link instead of gluing "&download=1" on: a URL without
+            // a query string would become "...zip&download=1" and 404, and an
+            // URL that already has a download param must stay idempotent.
+            let downloadUrl = item.fileUrl;
+            try {
+              const parsed = new URL(item.fileUrl, window.location.origin);
+              parsed.searchParams.set('download', '1');
+              downloadUrl = parsed.origin === window.location.origin
+                ? `${parsed.pathname}${parsed.search}`
+                : parsed.href;
+            } catch { /* keep the raw URL */ }
             const a = document.createElement('a');
             a.href = downloadUrl;
             a.download = item.title || `file_${i + 1}.${item.fileExt || 'jpg'}`;

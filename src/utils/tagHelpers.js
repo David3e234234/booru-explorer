@@ -843,6 +843,30 @@ export function classifyTags(rawTags = [], author = '') {
   return { artist, copyright, character, general, meta };
 }
 
+// A prefixed tag such as `artist:foo` is still a positive content constraint.
+// Treating it as "no user tags" made the body-type filters demand a curvy/petite
+// tag on top of an author search, which emptied the whole artist feed.
+const POSITIVE_CONSTRAINT_PREFIXES = new Set([
+  'artist', 'creator', 'author', 'draw', 'channel', 'uploader',
+  'character', 'copyright', 'series', 'id', 'post', 'user',
+  'service', 'model', 'member', 'tag', 'general'
+]);
+
+export function hasUserPositiveConstraint(rawTags = '') {
+  const tokens = typeof rawTags === 'string'
+    ? rawTags.split(/\s+/)
+    : (Array.isArray(rawTags) ? rawTags : []);
+  return tokens.some(rawToken => {
+    if (typeof rawToken !== 'string') return false;
+    const token = rawToken.trim();
+    if (!token || token.startsWith('-')) return false;
+    const lower = token.toLowerCase();
+    const colon = lower.indexOf(':');
+    if (colon === -1) return true;
+    return POSITIVE_CONSTRAINT_PREFIXES.has(lower.slice(0, colon));
+  });
+}
+
 export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilter = 'all', settings = null) {
   let tags = '';
   if (typeof rawTags === 'string') {

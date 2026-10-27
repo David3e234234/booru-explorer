@@ -2,15 +2,16 @@
 // replaces the modal viewer on small screens. Chrome is a light layer over the
 // media: a right action rail, a bottom info block and a topbar. Gestures:
 // swipe to move between posts, tap to toggle chrome, double tap to like.
-import { state, isPostLiked, isPostFavorite, toggleLikeLocally, toggleDislikeLocally, markPostViewed, recordPostHistory, recordSessionInteraction } from '../state.js';
+import { state, isPostLiked, isPostFavorite, toggleLikeLocally, toggleDislikeLocally, toggleFavoriteLocally, markPostViewed, recordPostHistory, recordSessionInteraction } from '../state.js';
 import { toggleLikePost, toggleFavoritePost, toggleDislikeApi } from '../api.js';
 import { showToast, haptic, escapeHtml, copyToClipboard, getPostSiteUrl } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
 import { notifyFeedOpened, notifyFeedMoved, notifyFeedClosed, adoptFeedUrl } from '../router.js';
 import { downloadSingleMedia } from '../viewer/viewerAlbum.js';
-import { initSlides, rebuildFeed, setActiveIndex, getActiveIndex, getPostList, getActiveMediaItem, disposeAll, syncList, renderSlideContent, getActiveVideoPlayer } from './slides.js';
+import { initSlides, rebuildFeed, setActiveIndex, getActiveIndex, getPostList, getVisibleMediaItem, disposeAll, syncList, renderSlideContent, getActiveVideoPlayer, setSlidePlaying } from './slides.js';
 import { createFeedGestures } from './gestures.js';
 import { initFeedSheet } from './sheet.js';
+import { lockBodyScroll, unlockBodyScroll } from '../modules/scrollLock.js';
 
 const RATING_SHORT = {
   g: '0+', general: '0+', safe: '0+',
@@ -41,6 +42,8 @@ let openedInitialized = false;
 let scrollRaf = false;
 let lastNotifiedId = null;
 const pendingMutations = new Set();
+const playbackSuspendReasons = new Set();
+let playbackWasPlaying = false;
 
 function currentPost() {
   const list = getPostList();
@@ -239,6 +242,12 @@ function buildOverlay() {
 
   document.addEventListener('keydown', onKeydown);
   document.addEventListener('booru:langchange', refreshLabels);
+  document.addEventListener('booru:settings-opened', () => suspendFeedPlayback('settings'));
+  document.addEventListener('booru:settings-closed', () => resumeFeedPlayback('settings'));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) suspendFeedPlayback('hidden');
+    else resumeFeedPlayback('hidden');
+  });
 }
 
 function applyStaticLabels() {
@@ -279,6 +288,26 @@ function updateSoundButton() {
   const label = muted ? t('feed.sound.on', 'Включить звук') : t('feed.sound.off', 'Выключить звук');
   btn.title = label;
   btn.setAttribute('aria-label', label);
+}
+
+// Playback pauses while a full-screen surface (settings) or another tab owns
+// the screen. The reason set keeps settings and visibility from resuming each
+// other too early.
+function suspendFeedPlayback(reason) {
+  if (!isOpen) return;
+  playbackSuspendReasons.add(reason);
+  if (playbackSuspendReasons.size !== 1) return;
+  const player = getActiveVideoPlayer();
+  playbackWasPlaying = Boolean(player && !player.isPaused());
+  setSlidePlaying(track?.querySelector('.feed-slide.is-active'), false);
+}
+
+function resumeFeedPlayback(reason) {
+  playbackSuspendReasons.delete(reason);
+  if (!isOpen || playbackSuspendReasons.size > 0) return;
+  const shouldPlay = playbackWasPlaying;
+  playbackWasPlaying = false;
+  if (shouldPlay) setSlidePlaying(track?.querySelector('.feed-slide.is-active'), true);
 }
 
 function refreshLabels() {
@@ -346,8 +375,10 @@ async function performLike(post) {
   updateRailStates(post);
   const toast = showToast(isLikedNow ? t('vw.likedToast', 'Понравилось (рекомендации обновлены)') : t('vw.likeRemovedToast', 'Лайк удален'));
   try {
-    const result = await toggleLikePost(post, isLikedNow);
-    if (!result?.success) throw new Error(result?.message || 'save failed');
+    if (state.currentUser) {
+      const result = await toggleLikePost(post, isLikedNow);
+      if (!result?.success) throw new Error(result?.message || 'save failed');
+    }
   } catch {
     toggleLikeLocally(post);
     updateRailStates(post);
@@ -364,26 +395,24 @@ async function performFav(post) {
   if (pendingMutations.has(key)) return;
   pendingMutations.add(key);
   haptic([15, 25, 15]);
+  const wasFavorite = isPostFavorite(post.id);
+  const isFavoriteNow = toggleFavoriteLocally(post);
+  updateRailStates(post);
+  showToast(isFavoriteNow ? t('vw.savedToFavs', 'Сохранено в закладки') : t('vw.removedFromFavs', 'Удалено из закладок'));
+  if (deps.onFavoriteToggle) deps.onFavoriteToggle();
   try {
-    const desired = !isPostFavorite(post.id);
-    const res = await toggleFavoritePost(post, desired);
-    if (res?.success) {
-      if (res.isFavorite) {
-        state.favoriteIds.add(post.id);
-        state.favorites.unshift({ ...post, favoritedAt: new Date().toISOString() });
-        showToast(t('vw.savedToFavs', 'Сохранено в закладки'));
-      } else {
-        state.favoriteIds.delete(post.id);
-        state.favorites = state.favorites.filter(f => f.id !== post.id);
-      }
-      updateRailStates(post);
+    if (state.currentUser) {
+      const res = await toggleFavoritePost(post, isFavoriteNow);
+      if (!res?.success) throw new Error(res?.message || 'favorite failed');
     }
   } catch {
+    toggleFavoriteLocally(post);
+    updateRailStates(post);
+    if (deps.onFavoriteToggle) deps.onFavoriteToggle();
     showToast(t('gal.favoriteFailed', 'Не удалось изменить закладки'), 'error');
   } finally {
     pendingMutations.delete(key);
   }
-  deps.onFavoriteToggle?.();
 }
 
 async function performDislike(post) {
@@ -391,20 +420,47 @@ async function performDislike(post) {
   if (pendingMutations.has(key)) return;
   pendingMutations.add(key);
   haptic(20);
+
+  const previousPosts = state.posts;
+  const previousDisplayed = state.displayedPosts;
+  const previousIndex = getActiveIndex();
   const isDislikedNow = toggleDislikeLocally(post);
   const toast = showToast(isDislikedNow
     ? t('vw.postHiddenToast', 'Пост скрыт (рекомендации обновлены)')
     : t('vw.unhiddenToast', 'Скрытие отменено'));
+
   if (isDislikedNow) {
-    state.posts = (state.posts || []).filter(p => p && p.id !== post.id);
+    // The feed list is derived from displayedPosts, and the gallery reads
+    // state.posts. Remove from both or the hidden post comes back on the next
+    // gallery render.
+    const withoutPost = (list) => (Array.isArray(list) ? list.filter(p => p && p.id !== post.id) : list);
+    state.posts = withoutPost(previousPosts);
+    state.displayedPosts = withoutPost(previousDisplayed);
+    deps.onDislikeToggle?.(post, true);
+    if (isOpen) {
+      const next = deps.getList() || [];
+      rebuildFeed(next, Math.min(Math.max(previousIndex, 0), Math.max(0, next.length - 1)));
+    }
   }
-  deps.onDislikeToggle?.(post, isDislikedNow);
+
   try {
-    const result = await toggleDislikeApi(post, isDislikedNow);
-    if (!result?.success) throw new Error(result?.message || 'hide failed');
+    // Anonymous visitors keep dislikes in localStorage only: the server
+    // collection is shared by every visitor of the root data namespace.
+    if (state.currentUser) {
+      const result = await toggleDislikeApi(post, isDislikedNow);
+      if (!result?.success) throw new Error(result?.message || 'hide failed');
+    }
   } catch {
     toggleDislikeLocally(post);
-    if (isDislikedNow && !state.posts.some(p => p.id === post.id)) state.posts.unshift(post);
+    if (isDislikedNow) {
+      state.posts = previousPosts;
+      state.displayedPosts = previousDisplayed;
+      deps.onDislikeToggle?.(post, false);
+      if (isOpen) {
+        const restored = deps.getList() || [];
+        rebuildFeed(restored, Math.min(Math.max(previousIndex, 0), Math.max(0, restored.length - 1)));
+      }
+    }
     toast?.dismiss?.();
     showToast(t('vw.hideFailed', 'Не удалось скрыть пост'), 'error');
   } finally {
@@ -413,7 +469,7 @@ async function performDislike(post) {
 }
 
 function performDownload(post) {
-  const item = getActiveMediaItem(post);
+  const item = getVisibleMediaItem(post);
   downloadSingleMedia(item, post);
 }
 
@@ -607,9 +663,9 @@ export function initFeed(hooks) {
         node._feedImg = null;
       },
       onActiveChange: (idx, prevNode) => {
-        if (prevNode?._feedVideo) prevNode._feedVideo.setPlaying(false);
+        setSlidePlaying(prevNode, false);
         const cur = track.querySelector(`.feed-slide[data-index="${idx}"]`);
-        if (cur?._feedVideo) cur._feedVideo.setPlaying(true);
+        setSlidePlaying(cur, true);
         gestures?.onActiveSlideChange(cur);
         updateChromeForIndex(idx);
         const post = getPostList()[idx];
@@ -679,12 +735,15 @@ export function openFeed(index = 0, opts = {}) {
   isOpen = true;
   openedInitialized = false;
   lastNotifiedId = null;
+  playbackSuspendReasons.clear();
+  playbackWasPlaying = false;
   closeActionSheet();
 
   overlay.classList.add('open');
   overlay.classList.remove('chrome-hidden');
   document.body.classList.remove('feed-clean');
-  document.body.style.overflow = 'hidden';
+  document.body.classList.add('feed-open');
+  if (!wasOpen) lockBodyScroll();
 
   rebuildFeed(list, Math.max(0, Math.min(startIndex, Math.max(0, list.length - 1))));
 
@@ -716,12 +775,15 @@ export function closeFeed(options = {}) {
   openedInitialized = false;
   overlay.classList.remove('open');
   document.body.classList.remove('feed-clean');
-  document.body.style.overflow = '';
+  document.body.classList.remove('feed-open');
+  unlockBodyScroll();
   feedSheet.close();
   closeActionSheet();
   gestures?.onActiveSlideChange(null);
   disposeAll();
   lastNotifiedId = null;
+  playbackSuspendReasons.clear();
+  playbackWasPlaying = false;
   notifyFeedClosed(options);
 }
 

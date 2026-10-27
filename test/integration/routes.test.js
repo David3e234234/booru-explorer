@@ -122,6 +122,18 @@ describe('Express API Integration & Route Tests', () => {
       assert.doesNotMatch(data.message, /is not defined/);
     });
 
+    it('rejects prototype-key site names', async () => {
+      const res = await fetch(`${baseUrl}/api/sites/auth-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site: '__proto__' })
+      });
+      assert.strictEqual(res.status, 400);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+      assert.match(data.message, /Неизвестный сайт/);
+    });
+
     it('keeps the route free of removed credential fields', async () => {
       const source = await fs.readFile(
         new URL('../../src/routes/posts.routes.js', import.meta.url),
@@ -131,6 +143,25 @@ describe('Express API Integration & Route Tests', () => {
       // must not be referenced inside the board branch.
       const boardBranch = source.slice(source.indexOf("site === 'pawchive'"), source.indexOf('runAuthTest', source.indexOf("site === 'pawchive'") + 1) + 400);
       assert.doesNotMatch(boardBranch, /\$\{\s*username\s*\}/);
+    });
+  });
+
+  describe('Search validation (/api/posts)', () => {
+    it('rejects an unknown site instead of returning an empty success page', async () => {
+      const res = await fetch(`${baseUrl}/api/posts?site=not-a-board&limit=5`);
+      assert.strictEqual(res.status, 400);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+      assert.deepStrictEqual(data.posts, []);
+    });
+
+    it('rejects prototype keys as site ids', async () => {
+      for (const site of ['__proto__', 'constructor']) {
+        const res = await fetch(`${baseUrl}/api/posts?site=${encodeURIComponent(site)}&limit=5`);
+        assert.strictEqual(res.status, 400, `${site} must not reach a parser`);
+        const data = await res.json();
+        assert.strictEqual(data.success, false);
+      }
     });
   });
 

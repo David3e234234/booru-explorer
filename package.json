@@ -13,7 +13,8 @@
     "test:unit": "node --test test/unit",
     "test:integration": "node --test test/integration/routes.test.js",
     "verify": "npm test",
-    "build:client": "node scripts/buildClient.mjs"
+    "build:client": "node scripts/buildClient.mjs",
+    "postinstall": "node scripts/buildClient.mjs"
   },
   "dependencies": {
     "adm-zip": "^0.6.1",

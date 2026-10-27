@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   buildAuthCacheKey,
   parseClientAuthValue,
+  parseRequestAuth,
   sanitizeSettingsPatch,
   AUTH_CACHE_FIELDS
 } from '../../src/utils/settingsValidation.js';
@@ -23,7 +24,11 @@ describe('Settings validation', () => {
       globalProxy: 'http://user:pass@proxy.example:8080',
       danbooruApiKey: 'secret',
       telegramBotToken: 'token',
-      deepFetchPages: 99
+      deepFetchPages: 99,
+      archiveDownloadThreads: 8,
+      siteMediaProxy: { danbooru: 'server' },
+      customAliases: { alice: 'bob' },
+      searchPresets: [{ name: 'preset' }]
     }, { anonymous: true });
 
     assert.strictEqual(clean.theme, 'warm-paper');
@@ -31,7 +36,44 @@ describe('Settings validation', () => {
     assert.strictEqual(clean.globalProxy, undefined);
     assert.strictEqual(clean.danbooruApiKey, undefined);
     assert.strictEqual(clean.telegramBotToken, undefined);
+    // Shared root settings: budgets and collections must not be writable by an
+    // anonymous visitor, otherwise one guest changes every other guest's feed.
     assert.strictEqual(clean.deepFetchPages, undefined);
+    assert.strictEqual(clean.archiveDownloadThreads, undefined);
+    assert.strictEqual(clean.siteMediaProxy, undefined);
+    assert.strictEqual(clean.customAliases, undefined);
+    assert.strictEqual(clean.searchPresets, undefined);
+  });
+
+  it('sanitizes request-scoped settings from the auth header', () => {
+    const header = encodeURIComponent(JSON.stringify({
+      deepFetchPages: 999,
+      archiveDownloadThreads: 999,
+      gelbooruApiKey: 'user-key',
+      globalProxy: 'http://127.0.0.1:7890',
+      gelbooruProxy: 'https://proxy.example.com:3128',
+      danbooruProxy: 'socks5://relay.example.net:1080',
+      siteMediaProxy: { danbooru: 'server', rule34: 'bogus' }
+    }));
+    const auth = parseRequestAuth({ headers: { 'x-booru-auth': header } });
+
+    // Budgets are clamped by removal: the route falls back to the server value.
+    assert.strictEqual(auth.deepFetchPages, undefined);
+    assert.strictEqual(auth.archiveDownloadThreads, undefined);
+    // A request may still carry its own credentials and a public proxy...
+    assert.strictEqual(auth.gelbooruApiKey, 'user-key');
+    assert.strictEqual(auth.gelbooruProxy, 'https://proxy.example.com:3128');
+    assert.strictEqual(auth.danbooruProxy, 'socks5://relay.example.net:1080');
+    // ...but a loopback proxy is an SSRF bypass around the outbound URL guard.
+    assert.strictEqual(auth.globalProxy, undefined);
+    assert.deepStrictEqual(auth.siteMediaProxy, { danbooru: 'server' });
+  });
+
+  it('does not mutate AUTH_CACHE_FIELDS while building a cache key', () => {
+    const before = [...AUTH_CACHE_FIELDS];
+    buildAuthCacheKey({}, {});
+    buildAuthCacheKey({ deepFetchPages: 3 }, { deepFetchPages: 3 });
+    assert.deepStrictEqual(AUTH_CACHE_FIELDS, before);
   });
 
   it('clamps resource budgets for authenticated writes', () => {

@@ -7,7 +7,7 @@ import { fetchRule34Video } from './rule34video.js';
 import { fetchXbooru, fetchHypnohub, fetchTbib, fetchXbooruPostById } from './dapi.js';
 import { fetchPawchive } from './pawchive.js';
 import { fetchKemono } from './kemono.js';
-import { isPostMatchingFilters } from '../utils/tagHelpers.js';
+import { isPostMatchingFilters, hasUserPositiveConstraint } from '../utils/tagHelpers.js';
 import { runWithDeadlineSignal } from '../utils/network.js';
 import { 
   CURVY_INCLUDE_TAGS, 
@@ -214,7 +214,7 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     .filter(t => t.startsWith('-') && t.length > 1)
     .map(t => t.substring(1).toLowerCase().replace(/_/g, ' '));
 
-  const hasUserPositiveTags = Boolean((params.tags || '').split(/\s+/).some(t => t && !t.startsWith('-') && !t.includes(':')));
+  const hasUserPositiveTags = hasUserPositiveConstraint(params.tags || '');
 
   const filterCriteria = {
     typeFilter: params.typeFilter || 'all',

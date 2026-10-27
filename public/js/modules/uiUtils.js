@@ -1,8 +1,5 @@
 import { t } from '../i18n.js';
 
-export const isMyLiveDemoHost = false;
-export const isVercelHost = false;
-
 export function syncThemeColor() {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (!meta) return;

@@ -38,12 +38,51 @@ import {
 import { resolveAuthorCreators } from '../services/creatorResolverService.js';
 import { parseRequestAuth, buildAuthCacheKey } from '../utils/settingsValidation.js';
 import { extractSessionToken } from '../services/siteSessionService.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
 
 // Hard ceiling for /api/posts?limit=. The frontend asks for 40; anything above this
 // is either a mistake or an attempt to make the server fan out on purpose
 const MAX_POSTS_LIMIT = 200;
+// Deep pagination multiplies upstream requests just like a large limit does.
+// Real browsing stays far below this; a synthetic page=1e9 must not reach the
+// boards at all.
+const MAX_POSTS_PAGE = 1000;
+
+// Search is the most expensive public endpoint: each call can fan out to every
+// source and deep-fetch several pages. A per-IP budget keeps one client from
+// consuming the shared upstream rate limits.
+const searchLimiter = createRateLimiter({
+  windowMs: 60000,
+  max: 60,
+  message: 'Слишком много поисковых запросов. Подождите немного.'
+});
+
+function hasOwnSite(id) {
+  return Object.prototype.hasOwnProperty.call(SITES, id);
+}
+
+// Accepts a single site, `all`, `custom`, or a comma-separated list of known
+// sites. Unknown values used to flow into fetchPosts() and silently answer an
+// empty success page; they are a client error instead.
+function resolveRequestedSite(rawSite) {
+  const raw = Array.isArray(rawSite) ? rawSite.join(',') : String(rawSite ?? 'danbooru');
+  const site = raw.trim().toLowerCase();
+  if (!site) return '';
+  if (site === 'all' || site === 'custom') return site;
+  const parts = site.split(',').map(part => part.trim()).filter(Boolean);
+  if (parts.length === 0 || parts.length > 32) return '';
+  if (!parts.every(hasOwnSite)) return '';
+  return [...new Set(parts)].join(',');
+}
+
+function parsePageNumber(rawPage) {
+  const value = Array.isArray(rawPage) ? rawPage[0] : rawPage;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return Math.min(parsed, MAX_POSTS_PAGE);
+}
 
 // POST /api/sites/auth-test - validate board credentials typed in the settings modal
 const AUTH_TEST_TIMEOUT_MS = 8000;
@@ -418,7 +457,7 @@ router.get('/resolve-author-creators', async (req, res) => {
 router.post('/sites/auth-test', async (req, res) => {
   try {
     const { site } = req.body || {};
-    if (!site || !SITES[site]) {
+    if (!site || typeof site !== 'string' || !hasOwnSite(site)) {
       return res.status(400).json({ success: false, message: 'Неизвестный сайт' });
     }
     const settings = { ...getSettings(), ...parseRequestAuth(req) };
@@ -439,7 +478,7 @@ router.post('/proxy/test', requireOwner, async (req, res) => {
     }
 
     const cleanProxy = normalizeProxyUrl(proxyUrl.trim());
-    const siteConfig = site && SITES[site] ? SITES[site] : null;
+    const siteConfig = typeof site === 'string' && hasOwnSite(site) ? SITES[site] : null;
     const testTargetUrl = siteConfig ? `${siteConfig.baseUrl}/` : 'https://danbooru.donmai.us/';
     const targetName = siteConfig ? siteConfig.name : 'интернет';
 
@@ -566,11 +605,21 @@ router.post('/aliases/clear-discovered', requireOwner, (req, res) => {
 });
 
 // GET /api/posts
-router.get('/posts', async (req, res) => {
+router.get('/posts', searchLimiter, async (req, res) => {
   try {
-    const site = req.query.site || 'danbooru';
+    const site = resolveRequestedSite(req.query.site);
+    if (!site) {
+      return res.status(400).json({
+        success: false,
+        site: '',
+        page: 1,
+        count: 0,
+        posts: [],
+        error: 'Неизвестный источник'
+      });
+    }
     const tags = req.query.tags || '';
-    const page = parseInt(req.query.page, 10) || 1;
+    const page = parsePageNumber(req.query.page);
     // The limit fans out to every selected site, each deep-fetching several pages -
     // an unclamped value turns one request into tens of thousands of upstream posts
     const requestedLimit = parseInt(req.query.limit, 10);
@@ -670,8 +719,8 @@ router.get('/posts', async (req, res) => {
       const statusCode = err?.isRateLimit ? 429 : 502;
       res.status(statusCode).json({
         success: false,
-        site: req.query.site || 'danbooru',
-        page: parseInt(req.query.page, 10) || 1,
+        site: resolveRequestedSite(req.query.site) || 'danbooru',
+        page: parsePageNumber(req.query.page),
         count: 0,
         posts: [],
         error: err?.isRateLimit ? 'Превышен лимит запросов к источнику. Пожалуйста, подождите немного.' : 'Ошибка при загрузке постов',

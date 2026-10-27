@@ -59,15 +59,27 @@ function populateSlide(i) {
 function depopulateSlide(i) {
   const node = slideNodes[i];
   if (!node || !node._populated) return;
+  abortAlbumRequest(postList[i]);
   node._populated = false;
   if (renderCallbacks.onSlideDispose) renderCallbacks.onSlideDispose(node);
   node.innerHTML = '';
   node._feedVideo = null;
   node._feedCarousel = null;
   node._feedCarouselPages = null;
+  node._feedCarouselItems = null;
   node._carouselIndex = 0;
   node._feedImg = null;
+  node._feedPostId = null;
   node._feedNoMedia = false;
+}
+
+// Album lookups die with the slide: scrolling away must not keep a request
+// alive that cannot render anywhere, and the post stays retryable.
+function abortAlbumRequest(post) {
+  if (!post || !post._feedAlbumAbort) return;
+  try { post._feedAlbumAbort.abort(); } catch (_) { /* already settled */ }
+  post._feedAlbumAbort = null;
+  post._feedAlbumRequested = false;
 }
 
 function flushDepopulateQueue() {
@@ -146,6 +158,37 @@ export function getActiveMediaItem(post) {
 }
 
 /**
+ * The media item the viewer is actually looking at: the current carousel page
+ * for an album slide, the post itself otherwise. `getActiveMediaItem()` always
+ * returns the first album page and is only safe for preloading.
+ */
+export function getVisibleMediaItem(post = null) {
+  const node = activeIdx >= 0 ? slideNodes[activeIdx] : null;
+  const activePost = postList[activeIdx];
+  if (!node || !activePost) return post ? getActiveMediaItem(post) : null;
+  if (post && post.id !== activePost.id) return getActiveMediaItem(post);
+  if (Array.isArray(node._feedCarouselPages) && Array.isArray(node._feedCarouselItems)) {
+    return node._feedCarouselItems[node._carouselIndex || 0] || activePost;
+  }
+  return getActiveMediaItem(activePost);
+}
+
+/**
+ * Starts or stops the media of one slide. Carousel slides own a player per
+ * album page, so touching `_feedVideo` alone would never pause them.
+ */
+export function setSlidePlaying(node, playing) {
+  if (!node) return;
+  if (node._feedVideo) {
+    node._feedVideo.setPlaying(Boolean(playing));
+    return;
+  }
+  if (Array.isArray(node._feedCarouselPages)) {
+    updateCarouselWindow(node, node._carouselIndex || 0, Boolean(playing));
+  }
+}
+
+/**
  * Rebuilds the feed for a new post list, opening at `startIndex`.
  */
 export function rebuildFeed(list, startIndex) {
@@ -175,15 +218,40 @@ export function rebuildFeed(list, startIndex) {
 }
 
 /**
- * Extends the track after infinite-scroll appends new posts: new indices get
- * fresh shells at the end. Shrinking lists are ignored (removing entries
- * mid-scroll would shift every index).
+ * Reconciles the track with the current results list. Appends only add
+ * shells; a shorter list (a hidden/removed post, a new search) is rebuilt at
+ * the same post when it survived, so indices never point at stale media.
  */
 export function syncList(newList) {
   if (!Array.isArray(newList) || newList === postList) return;
-  if (newList.length < postList.length) return;
+  if (newList.length === 0) {
+    rebuildFeed([], 0);
+    return;
+  }
+  if (newList.length < postList.length) {
+    const currentPost = activeIdx >= 0 ? postList[activeIdx] : null;
+    const keptIndex = currentPost && currentPost.id
+      ? newList.findIndex(p => p && p.id === currentPost.id)
+      : -1;
+    const target = keptIndex >= 0 ? keptIndex : Math.min(Math.max(activeIdx, 0), newList.length - 1);
+    rebuildFeed(newList, target);
+    return;
+  }
+
   postList = newList;
   for (let i = slideNodes.length; i < postList.length; i++) createShell(i);
+
+  // Same index, different post: a new search replaced the list under an open
+  // feed. Refresh mounted slides so no stale player keeps streaming.
+  for (let i = 0; i < slideNodes.length; i++) {
+    const node = slideNodes[i];
+    if (!node || !node._populated) continue;
+    const post = postList[i];
+    if (node._feedPostId !== (post?.id ?? null)) {
+      renderSlideContent(node, post);
+      if (node.classList.contains('is-active')) setSlidePlaying(node, true);
+    }
+  }
 }
 
 /**
@@ -335,7 +403,8 @@ function buildSingleMedia(node, item) {
 
 /**
  * Album carousel: one horizontal scroll-snap strip per slide, so the vertical
- * feed swipe keeps moving between posts.
+ * feed swipe keeps moving between posts. Album pages mount lazily: a 40-image
+ * post must not create 40 video players the moment its slide is built.
  */
 function buildCarousel(node, post) {
   const stage = node.querySelector('.feed-stage');
@@ -348,31 +417,13 @@ function buildCarousel(node, post) {
     const page = document.createElement('div');
     page.className = 'feed-carousel-item';
     page.dataset.page = String(idx);
-    if (item.isVideo && (item.fileUrl || item.sampleUrl)) {
-      const player = createFeedVideoPlayer(item, { onMediaState: notifyMediaStateChange });
-      if (player) {
-        page.appendChild(player.wrap);
-        page.appendChild(player.progress);
-        page.appendChild(player.stateEl);
-        page._feedVideo = player;
-      } else {
-        page.appendChild(createImageWithFallbacks(item, 'feed-media feed-img'));
-      }
-    } else if (isArchiveItem(item)) {
-      page.appendChild(fallbackCard({
-        icon: archiveIcon(),
-        title: t('vw.archiveZip', 'ZIP архив'),
-        text: t('feed.archiveInFeed', 'Архив нельзя показать в ленте'),
-        actionLabel: t('feed.openInViewer', 'Открыть в просмотрщике'),
-        action: 'open'
-      }));
-    } else {
-      page.appendChild(createImageWithFallbacks(item, 'feed-media feed-img'));
-    }
     carousel.appendChild(page);
     pages.push(page);
   });
   node._feedCarouselPages = pages;
+  node._feedCarouselItems = items;
+  node._carouselIndex = 0;
+  fillCarouselPage(pages[0], items[0]);
 
   const counter = document.createElement('div');
   counter.className = 'feed-carousel-counter mono';
@@ -393,16 +444,11 @@ function buildCarousel(node, post) {
     requestAnimationFrame(() => {
       raf = false;
       const w = carousel.clientWidth || 1;
-      const page = Math.round(carousel.scrollLeft / w);
-      node._carouselIndex = Math.max(0, Math.min(items.length - 1, page));
-      counter.textContent = `${Math.min(items.length, page + 1)} / ${items.length}`;
+      const page = Math.max(0, Math.min(items.length - 1, Math.round(carousel.scrollLeft / w)));
+      node._carouselIndex = page;
+      counter.textContent = `${page + 1} / ${items.length}`;
       dots.querySelectorAll('.feed-carousel-dot').forEach((d, i) => d.classList.toggle('active', i === page));
-      // Only the visible page may play a video, and only on the active slide.
-      carousel.querySelectorAll('.feed-carousel-item').forEach((p, i) => {
-        if (p._feedVideo) {
-          p._feedVideo.setPlaying(i === page && node.classList.contains('is-active'));
-        }
-      });
+      updateCarouselWindow(node, page);
     });
   }, { passive: true });
 
@@ -413,16 +459,90 @@ function buildCarousel(node, post) {
   node._feedNoMedia = false;
 }
 
+function destroyPagePlayer(page) {
+  if (!page || !page._feedVideo) return;
+  page._feedVideo.destroy();
+  page._feedVideo = null;
+  page._filled = false;
+}
+
+function destroyNodePlayers(node) {
+  if (!node) return;
+  if (node._feedVideo) {
+    node._feedVideo.destroy();
+    node._feedVideo = null;
+  }
+  if (Array.isArray(node._feedCarouselPages)) {
+    node._feedCarouselPages.forEach((page) => destroyPagePlayer(page));
+  }
+}
+
+function fillCarouselPage(page, item) {
+  if (!page || page._filled) return;
+  page._filled = true;
+  if (!item) return;
+  if (item.isVideo && (item.fileUrl || item.sampleUrl || item.teaserUrl)) {
+    const player = createFeedVideoPlayer(item, { onMediaState: notifyMediaStateChange });
+    if (player) {
+      page.appendChild(player.wrap);
+      page.appendChild(player.progress);
+      page.appendChild(player.stateEl);
+      page._feedVideo = player;
+      return;
+    }
+  }
+  if (isArchiveItem(item)) {
+    page.appendChild(fallbackCard({
+      icon: archiveIcon(),
+      title: t('vw.archiveZip', 'ZIP архив'),
+      text: t('feed.archiveInFeed', 'Архив нельзя показать в ленте'),
+      actionLabel: t('feed.openInViewer', 'Открыть в просмотрщике'),
+      action: 'open'
+    }));
+    return;
+  }
+  page.appendChild(createImageWithFallbacks(item, 'feed-media feed-img'));
+}
+
+/**
+ * Keeps the mounted window around the visible page: the current and adjacent
+ * pages exist, only the visible page plays, and videos further away are
+ * disposed instead of streaming in the background.
+ */
+function updateCarouselWindow(node, page, forcePlaying = null) {
+  const pages = node._feedCarouselPages;
+  if (!Array.isArray(pages)) return;
+  const items = node._feedCarouselItems || [];
+  const current = Math.max(0, Math.min(pages.length - 1, page));
+  const playing = forcePlaying == null ? node.classList.contains('is-active') : forcePlaying;
+
+  pages.forEach((p, i) => {
+    const near = Math.abs(i - current) <= 1;
+    if (near) {
+      fillCarouselPage(p, items[i]);
+    } else if (p._feedVideo) {
+      p._feedVideo.setPlaying(false);
+      destroyPagePlayer(p);
+      p.innerHTML = '';
+      return;
+    }
+    if (p._feedVideo) p._feedVideo.setPlaying(playing && i === current);
+  });
+}
+
 /**
  * Renders one slide. Called by the virtualization layer for every slide that
  * enters the mounted window.
  */
 export function renderSlideContent(node, post) {
+  destroyNodePlayers(node);
   node._feedVideo = null;
   node._feedCarousel = null;
   node._feedCarouselPages = null;
+  node._feedCarouselItems = null;
   node._carouselIndex = 0;
   node._feedImg = null;
+  node._feedPostId = post?.id ?? null;
   node._feedNoMedia = false;
   node.innerHTML = '';
 
@@ -470,7 +590,9 @@ async function maybeFetchAlbum(post) {
     (post.seriesKey && !post.seriesKey.startsWith('pawchive:') && !post.seriesKey.startsWith('kemono:')) ||
     post.pixiv_id);
   if (!canFetch) return false;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
   post._feedAlbumRequested = true;
+  post._feedAlbumAbort = controller;
   try {
     const res = await fetchAlbumPosts({
       site: post.site,
@@ -478,7 +600,7 @@ async function maybeFetchAlbum(post) {
       parentId: post.parentId || '',
       originalId: post.originalId || '',
       postUrl: post.postUrl || ''
-    });
+    }, { signal: controller?.signal });
     if (res?.success && Array.isArray(res.albumItems) && res.albumItems.length > 1) {
       const prevCount = Array.isArray(post.albumItems) ? post.albumItems.length : 1;
       post.isAlbum = true;
@@ -487,8 +609,14 @@ async function maybeFetchAlbum(post) {
       post._feedAlbumResolved = true;
       return prevCount <= 1;
     }
-  } catch {
-    // Keep the single-media view; the slide is still fully usable.
+  } catch (err) {
+    // A slide that left the mounted window cancels its lookup; the post stays
+    // retryable the next time it is shown.
+    if (err?.name !== 'AbortError') {
+      // Keep the single-media view; the slide is still fully usable.
+    }
+  } finally {
+    if (post._feedAlbumAbort === controller) post._feedAlbumAbort = null;
   }
   return false;
 }

@@ -265,4 +265,43 @@ test('Rule34Video Parser Unit Tests', async (t) => {
     assert.equal(posts[0].author, 'HoyoCinema');
     assert.equal(posts[0].title, 'My Cool Work');
   });
+
+  await t.test('paginates at 20 videos per page and requests pages sequentially', async () => {
+    const client = mockContext.agent.get('https://rule34video.com');
+    const requestTimes = [];
+    const seenPages = new Set();
+
+    const feedPage = (id) => `<div class="item">
+      <a href="/video/${id}/alpha-beta-clip-${id}/" title="Alpha Beta Clip ${id}">
+        <img src="https://rule34video.com/contents/${id}.jpg" />
+      </a>
+      <div class="video-preview" data-preview="https://rule34video.com/get_file/${id}_preview.mp4/"></div>
+    </div>`;
+
+    for (const [i, id] of [90001, 90002, 90003].entries()) {
+      const interceptor = client.intercept({
+        path: (p) => {
+          const match = p.includes(`from_videos=${i + 1}`) && p.includes('q=alpha');
+          if (match && !seenPages.has(i + 1)) {
+            seenPages.add(i + 1);
+            requestTimes.push(Date.now());
+          }
+          return match;
+        },
+        method: 'GET'
+      }).reply(200, feedPage(id));
+      // Holding the first response open makes a parallel fan-out visible in the
+      // timestamps: the next request must not start before this one resolves.
+      if (i === 0) interceptor.delay(80);
+    }
+
+    // 60 requested / 20 per KVS page = 3 pages. Dividing by 30 requested only two.
+    const posts = await fetchRule34Video({ tags: 'alpha beta', limit: 60 }, [], {});
+    assert.deepEqual(posts.map(post => post.originalId), ['90001', '90002', '90003']);
+    assert.equal(requestTimes.length, 3, 'limit 60 must cover three 20-item pages');
+    assert.ok(
+      requestTimes[1] - requestTimes[0] >= 50,
+      `page 2 started ${requestTimes[1] - requestTimes[0]}ms after page 1; pages must not be fetched in parallel`
+    );
+  });
 });

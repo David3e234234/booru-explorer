@@ -113,6 +113,112 @@ test('Pawchive Parser Unit Tests', async (t) => {
     assert.equal(post.previewUrl, post.thumb180);
   });
 
+  await t.test('unknown creator id is not invented as an author', async () => {
+    const client = mockContext.agent.get('https://pawchive.pw');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: '4001',
+        user: '918273',
+        service: 'patreon',
+        title: 'Unlisted creator',
+        file: { name: 'art.jpg', path: '/aa/bb/art.jpg' },
+        attachments: []
+      }
+    ]);
+    client.intercept({
+      path: (p) => p.includes('/api/v1/creators'),
+      method: 'GET'
+    }).reply(200, []);
+
+    const posts = await fetchPawchive({ tags: '', limit: 10, page: 1 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].author, '');
+    assert.deepEqual(posts[0].tagDetails.artist, []);
+    assert.ok(!posts[0].tags.some(tag => tag.startsWith('artist:user_')));
+  });
+
+  await t.test('page offset advances by the requested limit', async () => {
+    const client = mockContext.agent.get('https://pawchive.pw');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts') && p.includes('o=10'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: '4002',
+        user: 'artguy',
+        service: 'patreon',
+        title: 'Page two',
+        file: { name: 'art2.jpg', path: '/aa/bb/art2.jpg' },
+        attachments: []
+      }
+    ]);
+    client.intercept({
+      path: (p) => p.includes('/api/v1/creators'),
+      method: 'GET'
+    }).reply(200, [{ id: 'artguy', name: 'Art Guy', service: 'patreon' }]);
+
+    const posts = await fetchPawchive({ tags: '', page: 2, limit: 10 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].author, 'Art Guy');
+  });
+
+  await t.test('a page larger than the raw API page keeps the offset at the raw page size', async () => {
+    const client = mockContext.agent.get('https://pawchive.pw');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts') && p.includes('o=50'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: '4004',
+        user: 'artguy',
+        service: 'patreon',
+        title: 'Raw page two',
+        file: { name: 'art4.jpg', path: '/aa/bb/art4.jpg' },
+        attachments: []
+      }
+    ]);
+    client.intercept({
+      path: (p) => p.includes('/api/v1/creators'),
+      method: 'GET'
+    }).reply(200, [{ id: 'artguy', name: 'Art Guy', service: 'patreon' }]);
+
+    const posts = await fetchPawchive({ tags: '', page: 2, limit: 60 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].originalId, '4004');
+  });
+
+  await t.test('a 429 page is retried once instead of returning an empty feed', async () => {
+    const client = mockContext.agent.get('https://pawchive.pw');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts'),
+      method: 'GET'
+    }).reply(429, 'Too Many Requests');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: '4003',
+        user: 'artguy',
+        service: 'patreon',
+        title: 'Recovered',
+        file: { name: 'art3.jpg', path: '/aa/bb/art3.jpg' },
+        attachments: []
+      }
+    ]);
+    client.intercept({
+      path: (p) => p.includes('/api/v1/creators'),
+      method: 'GET'
+    }).reply(200, [{ id: 'artguy', name: 'Art Guy', service: 'patreon' }]);
+
+    const posts = await fetchPawchive({ tags: '', limit: 10, page: 1 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].originalId, '4003');
+  });
+
   await t.test('fetchPawchivePostById resolves single post and creator profile', async () => {
     const client = mockContext.agent.get('https://pawchive.pw');
     client.intercept({

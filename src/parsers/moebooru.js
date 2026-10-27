@@ -4,6 +4,7 @@ import { checkIsAi, checkMediaTypes, normalizeDate, adaptTagsForSite } from '../
 import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
+import { appendRatingTag, buildThumbTiers } from '../utils/searchCompat.js';
 
 // Moebooru API auth: password_hash is SHA1 of a fixed-salted password,
 // see "Logging In" on the site help/api page
@@ -73,13 +74,8 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     finalTags = finalTags ? `${finalTags} ${settings.siteSortTags[siteId].new}` : settings.siteSortTags[siteId].new;
   }
 
-  if (ratingFilter === 'nsfw') {
-    finalTags += ' rating:explicit';
-  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
-    finalTags += ' rating:questionable';
-  } else if (ratingFilter === 'sfw') {
-    finalTags += ' rating:safe';
-  }
+  // A user-supplied `rating:*` always wins, and the tag is appended at most once
+  finalTags = appendRatingTag(finalTags, ratingFilter, 'moebooru');
 
   if (!url) {
     url = `${effectiveSiteUrl}/post.json?tags=${encodeURIComponent(finalTags.trim())}&page=${page}&limit=${limit}`;
@@ -99,10 +95,14 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
 
   try {
     res = await fetchSafe(url, { timeout: requestTimeout, settings, site: siteId });
-    if (!res.ok && siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
+    // Fail over only for connectivity/blocking errors. A 404 or a malformed
+    // query means the request itself was wrong, and konachan.net would answer
+    // the same way; retrying there only doubled the latency.
+    const shouldFailover = !res.ok && (res.status === 403 || res.status === 429 || res.status >= 500);
+    if (shouldFailover && siteId === 'konachan' && ratingFilter !== 'nsfw' && ratingFilter !== 'questionable' && ratingFilter !== '16+') {
       preferredKonachanHost = 'konachan.net';
       lastKonachanFailureTime = Date.now();
-      const altRes = await fetchSafe(toAltKonachanUrl(url), { settings, site: siteId });
+      const altRes = await fetchSafe(toAltKonachanUrl(url), { timeout: 3500, settings, site: siteId });
       if (altRes.ok) {
         await discardResponse(res);
         res = altRes;
@@ -115,7 +115,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
       preferredKonachanHost = 'konachan.net';
       lastKonachanFailureTime = Date.now();
       try {
-        res = await fetchSafe(toAltKonachanUrl(url), { settings, site: siteId });
+        res = await fetchSafe(toAltKonachanUrl(url), { timeout: 3500, settings, site: siteId });
       } catch (err) {}
     }
   }
@@ -153,9 +153,7 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
       tags: rawTags
     }, siteId);
 
-    const thumb180 = previewUrl || item.preview_url || sampleUrl || fileUrl || '';
-    const thumb360 = isVideo ? previewUrl : (item.preview_url || previewUrl || sampleUrl || fileUrl || '');
-    const thumb720 = isVideo ? previewUrl : (sampleUrl || item.jpeg_url || fileUrl || previewUrl || '');
+    const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
     const thumbSample = sampleUrl || item.jpeg_url || '';
     const thumbOriginal = item.file_url || fileUrl || '';
 
@@ -284,9 +282,7 @@ export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTag
   const sampleUrl = postItem?.sample_url || postItem?.jpeg_url || htmlSampleUrl || fileUrl || '';
   const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
   const previewUrl = resolvePreviewUrl(postItem?.preview_url || htmlPreviewUrl, fileUrl, sampleUrl, isVideo);
-  const thumb180 = previewUrl || postItem?.preview_url || sampleUrl || fileUrl || '';
-  const thumb360 = isVideo ? previewUrl : (postItem?.preview_url || previewUrl || sampleUrl || fileUrl || '');
-  const thumb720 = isVideo ? previewUrl : (sampleUrl || postItem?.jpeg_url || fileUrl || previewUrl || '');
+  const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
   const thumbSample = sampleUrl || postItem?.jpeg_url || '';
   const thumbOriginal = postItem?.file_url || fileUrl || '';
   const isAi = checkIsAi(rawTags, aiTagsList);

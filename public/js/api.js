@@ -1,8 +1,5 @@
 import { state, STORAGE_KEYS, SECRET_SETTING_FIELDS } from './state.js';
 
-export const isMyLiveDemoHost = false;
-
-
 const DEFAULT_FETCH_TIMEOUT_MS = 30000;
 
 // Long-running endpoints (archive inspection, telegram backups, upstream auth
@@ -297,7 +294,7 @@ export async function fetchPosts({
   return await res.json();
 }
 
-export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', parentId = '', originalId = '', postUrl = '' }) {
+export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', parentId = '', originalId = '', postUrl = '' }, options = {}) {
   const params = new URLSearchParams();
   if (site) params.set('site', site);
   if (seriesKey) params.set('seriesKey', seriesKey);
@@ -306,7 +303,8 @@ export async function fetchAlbumPosts({ site = 'danbooru', seriesKey = '', paren
   if (postUrl) params.set('postUrl', postUrl);
 
   const res = await fetchWithTimeout(`/api/posts/album?${params.toString()}`, {
-    headers: getAuthHeaders()
+    headers: getAuthHeaders(),
+    signal: options.signal
   });
   return readJsonOrThrow(res);
 }
@@ -335,15 +333,12 @@ export async function fetchArchiveList(zipUrl, options = {}) {
 }
 
 export async function fetchArchiveStatus(zipUrl) {
-  try {
-    const res = await fetchWithTimeout(`/api/archive/status?url=${encodeURIComponent(zipUrl)}`, {
-      headers: getAuthHeaders()
-    });
-    if (!res.ok) return { active: false };
-    return await res.json();
-  } catch {
-    return { active: false };
-  }
+  const res = await fetchWithTimeout(`/api/archive/status?url=${encodeURIComponent(zipUrl)}`, {
+    headers: getAuthHeaders()
+  });
+  // A failed request is not a finished job: throwing lets the poller retry
+  // instead of freezing the card at the last known percentage.
+  return readJsonOrThrow(res);
 }
 
 export async function fetchArchiveInspect(zipUrl, options = {}) {

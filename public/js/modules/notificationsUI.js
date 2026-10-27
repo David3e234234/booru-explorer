@@ -9,10 +9,13 @@ import {
   saveSettings
 } from '../api.js';
 import { t } from '../i18n.js';
-import { showToast } from './uiUtils.js';
+import { showToast, showActionToast, escapeHtml, toSafeImageUrl } from './uiUtils.js';
 
 let activeFilter = 'all'; // 'all' | 'unread'
 let isChecking = false;
+let loadInFlight = false;
+let pollTimer = null;
+const POLL_MS = 60 * 1000;
 let openPostCallback = null;
 let switchTabCallback = null;
 let previousUnreadIds = new Set();
@@ -44,7 +47,7 @@ export function formatRelativeTime(isoString) {
     return t('notifications.yesterday', 'Вчера');
   }
   if (diffDays < 7) {
-    return `${diffDays} дн назад`;
+    return t('notifications.daysAgo', '{n} дн назад').replace('{n}', diffDays);
   }
   return new Date(date).toLocaleDateString();
 }
@@ -115,20 +118,25 @@ export function renderNotificationsList() {
   container.innerHTML = filtered.map(item => {
     const author = item.author || {};
     const post = item.post || {};
-    const authorName = author.displayName || author.name || t('viewer.authorNotSpecified', 'Автор');
+    const authorLabel = author.displayName || author.name || t('viewer.authorNotSpecified', 'Автор');
+    const authorName = escapeHtml(authorLabel);
     const isUnread = !item.read;
-    const timeStr = formatRelativeTime(item.createdAt);
+    const timeStr = escapeHtml(formatRelativeTime(item.createdAt));
 
-    const thumbUrl = post.thumb180 || post.previewUrl || post.thumb360 || author.previewUrl || '';
-    const avatarUrl = author.previewUrl || thumbUrl;
-
-    const postSubtitle = post.site ? `${post.site} • ${post.rating ? post.rating.toUpperCase() : 'POST'}` : 'Новая публикация';
+    const thumbUrl = toSafeImageUrl(post.thumb180 || post.previewUrl || post.thumb360 || author.previewUrl || '');
+    const avatarUrl = toSafeImageUrl(author.previewUrl || thumbUrl);
+    const postSite = post.site ? String(post.site) : '';
+    const postRating = post.rating ? String(post.rating).toUpperCase() : '';
+    const postSubtitle = postSite
+      ? `${postSite}${postRating ? ` • ${postRating}` : ''}`
+      : t('notifications.postFallback', 'Новая публикация');
+    const itemId = escapeHtml(item.id);
 
     return `
-      <div class="notification-item ${isUnread ? 'unread' : ''}" data-id="${item.id}" role="button" tabindex="0">
+      <div class="notification-item ${isUnread ? 'unread' : ''}" data-id="${itemId}" role="button" tabindex="0">
         <div class="notif-avatar-col">
           ${avatarUrl ? `
-            <img src="${avatarUrl}" alt="${authorName}" class="notif-avatar-img" loading="lazy">
+            <img src="${escapeHtml(avatarUrl)}" alt="${authorName}" class="notif-avatar-img" loading="lazy">
             <div class="notif-avatar-placeholder" style="display: none;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
             </div>
@@ -142,19 +150,19 @@ export function renderNotificationsList() {
         <div class="notif-content-col">
           <div class="notif-header-line">
             <span class="notif-author-title">${authorName}</span>
-            ${isUnread ? '<span class="notif-dot" title="Не прочитано"></span>' : ''}
+            ${isUnread ? `<span class="notif-dot" title="${t('notifications.unreadDot', 'Не прочитано')}"></span>` : ''}
           </div>
-          <div class="notif-desc-line">${t('notifications.newPostFrom', 'Новый пост').replace('{name}', authorName)} • <span class="notif-site-badge">${postSubtitle}</span></div>
+          <div class="notif-desc-line">${escapeHtml(t('notifications.newPostFrom', 'Новый пост от {name}').replace('{name}', authorLabel))} • <span class="notif-site-badge">${escapeHtml(postSubtitle)}</span></div>
           <div class="notif-time-line">${timeStr}</div>
         </div>
 
         ${thumbUrl ? `
           <div class="notif-thumb-col">
-            <img src="${thumbUrl}" alt="Post thumbnail" class="notif-post-thumb" loading="lazy">
+            <img src="${escapeHtml(thumbUrl)}" alt="" class="notif-post-thumb" loading="lazy">
           </div>
         ` : ''}
 
-        <button type="button" class="notif-btn-dismiss" data-delete-id="${item.id}" title="${t('modal.close', 'Удалить')}">
+        <button type="button" class="notif-btn-dismiss" data-delete-id="${itemId}" title="${t('notifications.delete', 'Удалить')}" aria-label="${t('notifications.delete', 'Удалить')}">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
         </button>
       </div>
@@ -236,12 +244,18 @@ export function renderNotificationsList() {
  * Fetch notifications from server and update state
  */
 export async function loadNotifications({ silent = false } = {}) {
+  // Guests have no server notifications; polling them would only produce 401s.
+  // authToken is checked too because the token validation runs concurrently
+  // with startup and may not have filled currentUser yet.
+  if (!state.currentUser && !state.authToken) return;
+  if (loadInFlight) return;
+  loadInFlight = true;
   try {
     const data = await fetchNotifications();
     if (data && data.success && Array.isArray(data.notifications)) {
       state.notifications = data.notifications;
-      state.unreadNotificationsCount = typeof data.unreadCount === 'number' 
-        ? data.unreadCount 
+      state.unreadNotificationsCount = typeof data.unreadCount === 'number'
+        ? data.unreadCount
         : data.notifications.filter(n => !n.read).length;
 
       updateNotificationsBadge();
@@ -252,7 +266,7 @@ export async function loadNotifications({ silent = false } = {}) {
         const newlyArrived = currentUnread.filter(n => !previousUnreadIds.has(n.id));
         if (newlyArrived.length > 0) {
           const first = newlyArrived[0];
-          const authorName = first.author?.displayName || first.author?.name || 'Автор';
+          const authorName = first.author?.displayName || first.author?.name || t('viewer.authorNotSpecified', 'Автор');
           showLiveNotificationToast(first, authorName);
         }
       }
@@ -269,6 +283,8 @@ export async function loadNotifications({ silent = false } = {}) {
     if (!silent) {
       console.warn('[Notifications] Ошибка загрузки уведомлений:', err);
     }
+  } finally {
+    loadInFlight = false;
   }
 }
 
@@ -277,18 +293,15 @@ export async function loadNotifications({ silent = false } = {}) {
  */
 function showLiveNotificationToast(notif, authorName) {
   const toastMsg = `${t('notifications.newPostFrom', 'Новый пост от {name}').replace('{name}', authorName)}`;
-  showToast(toastMsg, {
-    actionText: t('notifications.viewPost', 'Смотреть'),
-    onAction: () => {
-      if (!notif.read) {
-        notif.read = true;
-        state.unreadNotificationsCount = Math.max(0, (state.unreadNotificationsCount || 1) - 1);
-        updateNotificationsBadge();
-        markNotificationRead(notif.id).catch(() => {});
-      }
-      if (openPostCallback && notif.post) {
-        openPostCallback(notif.post);
-      }
+  showActionToast(toastMsg, t('notifications.viewPost', 'Смотреть'), () => {
+    if (!notif.read) {
+      notif.read = true;
+      state.unreadNotificationsCount = Math.max(0, (state.unreadNotificationsCount || 1) - 1);
+      updateNotificationsBadge();
+      markNotificationRead(notif.id).catch(() => {});
+    }
+    if (openPostCallback && notif.post) {
+      openPostCallback(notif.post);
     }
   });
 }
@@ -298,6 +311,10 @@ function showLiveNotificationToast(notif, authorName) {
  */
 export async function triggerManualCheck() {
   if (isChecking) return;
+  if (!state.currentUser) {
+    showToast(t('notifications.loginRequired', 'Войдите в аккаунт, чтобы отслеживать авторов'), 'warning');
+    return;
+  }
   isChecking = true;
 
   const btnCheck = document.getElementById('btnCheckNotifications');
@@ -415,6 +432,22 @@ export function closeNotificationsDropdown() {
     btn.classList.remove('active');
     btn.setAttribute('aria-expanded', 'false');
   }
+}
+
+/**
+ * Self-scheduling badge refresh. One timer for the app lifetime; a hidden tab
+ * or a guest reschedules without issuing a request.
+ */
+function scheduleNotificationsPoll() {
+  if (pollTimer) clearTimeout(pollTimer);
+  pollTimer = setTimeout(async () => {
+    pollTimer = null;
+    const shouldPoll = document.visibilityState !== 'hidden'
+      && state.settings?.notificationsEnabled !== false
+      && Boolean(state.currentUser || state.authToken);
+    if (shouldPoll) await loadNotifications({ silent: true });
+    scheduleNotificationsPoll();
+  }, POLL_MS);
 }
 
 /**
@@ -558,15 +591,29 @@ export function initNotifications({ onOpenPost, onSwitchToFollowing } = {}) {
   // Initial load
   loadNotifications({ silent: true });
 
-  // Periodic poll every 60 seconds
-  setInterval(() => {
-    loadNotifications({ silent: true });
-  }, 60 * 1000);
+  // Polling is opt-in, idle while the tab is hidden and stops entirely for
+  // guests. The 60 s cadence is fixed: notificationsInterval configures the
+  // server-side author scan, not this badge refresh.
+  scheduleNotificationsPoll();
 
-  // Poll when user switches back to this tab
+  // Poll when the tab becomes visible again (or after login/logout).
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      loadNotifications({ silent: true });
+    if (document.visibilityState !== 'visible') return;
+    if (state.settings?.notificationsEnabled === false) return;
+    if (!state.currentUser && !state.authToken) return;
+    loadNotifications({ silent: true });
+  });
+
+  document.addEventListener('booru:user-changed', () => {
+    previousUnreadIds = new Set();
+    isFirstLoad = true;
+    if (!state.currentUser && !state.authToken) {
+      state.notifications = [];
+      state.unreadNotificationsCount = 0;
+      updateNotificationsBadge();
+      renderNotificationsList();
+      return;
     }
+    loadNotifications({ silent: true });
   });
 }

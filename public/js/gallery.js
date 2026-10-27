@@ -4,7 +4,8 @@ import {
   isAuthorFavorite, 
   isPostLiked, 
   toggleLikeLocally, 
-  toggleDislikeLocally, 
+  toggleDislikeLocally,
+  toggleFavoriteLocally,
   isPostDisliked,
   recordPostImpressionSkip,
   excludeInterestTag,
@@ -1473,8 +1474,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         }
         showToast(t('gal.hideUndone', 'Скрытие отменено'));
         try {
-          const result = await toggleDislikeApi(post, false);
-          if (!result?.success) throw new Error(result?.message || 'Не удалось отменить скрытие');
+          if (state.currentUser) {
+            const result = await toggleDislikeApi(post, false);
+            if (!result?.success) throw new Error(result?.message || 'Не удалось отменить скрытие');
+          }
         } catch (err) {
           console.error('Ошибка отмены скрытого поста:', err);
         } finally {
@@ -1485,8 +1488,13 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     );
 
     try {
-      const result = await toggleDislikeApi(post, true);
-      if (!result?.success) throw new Error(result?.message || 'Не удалось скрыть пост');
+      // Anonymous visitors keep dislikes in localStorage only. Calling the
+      // server here wrote into the shared root collection and made the post
+      // disappear for every other visitor.
+      if (state.currentUser) {
+        const result = await toggleDislikeApi(post, true);
+        if (!result?.success) throw new Error(result?.message || 'Не удалось скрыть пост');
+      }
     } catch (err) {
       clearTimeout(removalTimer);
       toggleDislikeLocally(post);
@@ -1519,8 +1527,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
     if (onFavoriteToggle) onFavoriteToggle();
     try {
-      const result = await toggleLikePost(post, isLikedNow);
-      if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить лайк');
+      if (state.currentUser) {
+        const result = await toggleLikePost(post, isLikedNow);
+        if (!result?.success) throw new Error(result?.message || 'Не удалось сохранить лайк');
+      }
     } catch (err) {
       toggleLikeLocally(post);
       btn.classList.toggle('active', !isLikedNow);
@@ -1540,28 +1550,34 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     const mutationKey = `favorite:${post.id}`;
     if (pendingMutations.has(mutationKey)) return;
     pendingMutations.set(mutationKey, true);
+    const wasFavorite = isPostFavorite(post.id);
+    const isFavoriteNow = toggleFavoriteLocally(post);
+    const useEl = btn.querySelector('use');
+    btn.classList.toggle('active', isFavoriteNow);
+    if (useEl) useEl.setAttribute('href', isFavoriteNow ? '#ic-bookmark-filled' : '#ic-bookmark');
+    let removedFromList = false;
+    if (!isFavoriteNow && (state.currentCategory === 'favorites' || (state.currentCategory === 'profile' && state.profileSubTab === 'favorites'))) {
+      state.posts = state.posts.filter(p => p.id !== post.id);
+      removedFromList = true;
+      renderGallery(false, { preserveScroll: true });
+    }
+    if (onFavoriteToggle) onFavoriteToggle();
     try {
-      const res = await toggleFavoritePost(post, !isPostFavorite(post.id));
-      if (res.success) {
-        const useEl = btn.querySelector('use');
-        if (res.isFavorite) {
-          state.favoriteIds.add(post.id);
-          state.favorites.unshift({ ...post, favoritedAt: new Date().toISOString() });
-          btn.classList.add('active');
-          if (useEl) useEl.setAttribute('href', '#ic-bookmark-filled');
-        } else {
-          state.favoriteIds.delete(post.id);
-          state.favorites = state.favorites.filter(f => f.id !== post.id);
-          btn.classList.remove('active');
-          if (useEl) useEl.setAttribute('href', '#ic-bookmark');
-          if (state.currentCategory === 'favorites' || (state.currentCategory === 'profile' && state.profileSubTab === 'favorites')) {
-            state.posts = state.posts.filter(p => p.id !== post.id);
-            renderGallery(false, { preserveScroll: true });
-          }
-        }
-        if (onFavoriteToggle) onFavoriteToggle();
+      // Anonymous favourites are already persisted to localStorage above; the
+      // server route would write them into the shared root collection.
+      if (state.currentUser) {
+        const res = await toggleFavoritePost(post, isFavoriteNow);
+        if (!res?.success) throw new Error(res?.message || 'Не удалось изменить закладки');
       }
     } catch (err) {
+      toggleFavoriteLocally(post);
+      btn.classList.toggle('active', wasFavorite);
+      if (useEl) useEl.setAttribute('href', wasFavorite ? '#ic-bookmark-filled' : '#ic-bookmark');
+      if (removedFromList && !state.posts.some(p => p.id === post.id)) {
+        state.posts.unshift(post);
+        renderGallery(false, { preserveScroll: true });
+      }
+      if (onFavoriteToggle) onFavoriteToggle();
       showToast(t('gal.favoriteFailed', 'Не удалось изменить закладки'), 'error');
       console.error('Ошибка избранного:', err);
     } finally {

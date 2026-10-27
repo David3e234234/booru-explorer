@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMockAgent, restoreDispatcher, assertNormalizedPost } from './harness.js';
-import { fetchKemono, fetchKemonoPostById, getKemonoAuthHeaders } from '../../../src/parsers/kemono.js';
+import { fetchKemono, fetchKemonoPostById, getKemonoAuthHeaders, normalizeKemonoPost } from '../../../src/parsers/kemono.js';
 import { clearSiteSessionCache } from '../../../src/services/siteSessionService.js';
 
 test('Kemono Parser Unit Tests', async (t) => {
@@ -54,6 +54,121 @@ test('Kemono Parser Unit Tests', async (t) => {
     assert.equal(post.thumb720, post.previewUrl);
     assert.equal(post.thumbSample, post.previewUrl);
     assert.equal(post.thumbOriginal, post.fileUrl);
+  });
+
+  await t.test('unknown creator id is not invented as an author', async () => {
+    const creatorMap = new Map();
+    const post = await normalizeKemonoPost({
+      id: '5001',
+      user: '918273',
+      service: 'patreon',
+      title: 'Unlisted creator',
+      file: { name: 'art.jpg', path: '/aa/bb/art.jpg' },
+      attachments: []
+    }, creatorMap, null, [], {});
+
+    assert.ok(post);
+    assert.equal(post.author, '');
+    assert.deepEqual(post.tagDetails.artist, []);
+    assert.ok(!post.tags.some(tag => tag.startsWith('artist:user_')));
+  });
+
+  await t.test('video posts share one thumbnail URL across all quality tiers', async () => {
+    const creatorMap = new Map([['patreon:789', { id: '789', name: 'TestArtist', service: 'patreon' }]]);
+    const post = await normalizeKemonoPost({
+      id: '5002',
+      user: '789',
+      service: 'patreon',
+      title: 'Clip',
+      file: { name: 'clip.mp4', path: '/aa/bb/clip.mp4' },
+      attachments: []
+    }, creatorMap, null, [], {});
+
+    assert.ok(post);
+    assert.equal(post.isVideo, true);
+    assert.ok(post.thumb180.includes('quality=medium'));
+    assert.equal(post.thumb180, post.thumb360);
+    assert.equal(post.thumb360, post.thumb720);
+    assert.equal(post.previewUrl, post.thumb180);
+  });
+
+  await t.test('page offset advances by the requested limit', async () => {
+    const client = mockContext.agent.get('https://kemono.cr');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts') && p.includes('o=10'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: '5003',
+        user: '789',
+        service: 'patreon',
+        title: 'Page two',
+        file: { name: 'art2.jpg', path: '/aa/bb/art2.jpg' },
+        attachments: []
+      }
+    ]);
+    client.intercept({
+      path: (p) => p.includes('/api/v1/creators'),
+      method: 'GET'
+    }).reply(200, [{ id: '789', name: 'TestArtist', service: 'patreon' }]);
+
+    const posts = await fetchKemono({ tags: '', page: 2, limit: 10 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].author, 'TestArtist');
+  });
+
+  await t.test('a page larger than the raw API page keeps the offset at the raw page size', async () => {
+    const client = mockContext.agent.get('https://kemono.cr');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts') && p.includes('o=50'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: '5005',
+        user: '789',
+        service: 'patreon',
+        title: 'Raw page two',
+        file: { name: 'art4.jpg', path: '/aa/bb/art4.jpg' },
+        attachments: []
+      }
+    ]);
+    client.intercept({
+      path: (p) => p.includes('/api/v1/creators'),
+      method: 'GET'
+    }).reply(200, [{ id: '789', name: 'TestArtist', service: 'patreon' }]);
+
+    const posts = await fetchKemono({ tags: '', page: 2, limit: 60 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].originalId, '5005');
+  });
+
+  await t.test('a 429 page is retried once instead of returning an empty feed', async () => {
+    const client = mockContext.agent.get('https://kemono.cr');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts'),
+      method: 'GET'
+    }).reply(429, 'Too Many Requests');
+    client.intercept({
+      path: (p) => p.includes('/api/v1/posts'),
+      method: 'GET'
+    }).reply(200, [
+      {
+        id: '5004',
+        user: '789',
+        service: 'patreon',
+        title: 'Recovered',
+        file: { name: 'art3.jpg', path: '/aa/bb/art3.jpg' },
+        attachments: []
+      }
+    ]);
+    client.intercept({
+      path: (p) => p.includes('/api/v1/creators'),
+      method: 'GET'
+    }).reply(200, [{ id: '789', name: 'TestArtist', service: 'patreon' }]);
+
+    const posts = await fetchKemono({ tags: '', limit: 10, page: 1 }, [], {});
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].originalId, '5004');
   });
 
   await t.test('fetchKemonoPostById resolves single post and attachments', async () => {

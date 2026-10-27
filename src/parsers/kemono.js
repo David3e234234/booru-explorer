@@ -308,6 +308,17 @@ export async function resolveKemonoAuthor(authorQuery, preferredService = null, 
   return creators[0] || null;
 }
 
+/**
+ * Returns the creator's display name, or '' when the directory and the
+ * per-post profile both failed to name them. `user_<id>` is a database key,
+ * not an author.
+ */
+export function resolveKemonoAuthorName(item, creatorMap, resolvedCreator) {
+  const creatorInfo = creatorMap ? creatorMap.get(`${item?.service}:${item?.user}`) : null;
+  const name = creatorInfo?.name || resolvedCreator?.name || '';
+  return String(name).trim();
+}
+
 export async function normalizeKemonoPost(item, creatorMap, resolvedCreator, aiTagsList = [], settings = {}) {
   if (!item || !item.id) return null;
 
@@ -337,21 +348,24 @@ export async function normalizeKemonoPost(item, creatorMap, resolvedCreator, aiT
 
   if (mediaFiles.length === 0 && archiveAttachments.length === 0) return null;
 
-  const creatorInfo = creatorMap ? creatorMap.get(`${item.service}:${item.user}`) : null;
-  const authorName = creatorInfo ? creatorInfo.name : (resolvedCreator?.name || `user_${item.user}`);
+  const authorName = resolveKemonoAuthorName(item, creatorMap, resolvedCreator);
   const authorTag = authorName.toLowerCase().replace(/[\s_.-]+/g, '_');
   const postUrl = `https://kemono.cr/${item.service}/user/${item.user}/post/${item.id}`;
 
-  const extractedTags = [
-    `artist:${authorTag}`
-  ];
+  const extractedTags = [];
+  if (authorTag) {
+    extractedTags.push(`artist:${authorTag}`);
+  }
   if (item.service) {
     extractedTags.push(`service:${item.service.toLowerCase()}`);
   }
 
   const isAi = checkIsAi(extractedTags, aiTagsList);
   const { tagDetails } = await classifyPostTags(extractedTags, postUrl, authorName, settings);
-  tagDetails.artist = [authorName];
+  if (authorName) {
+    // The platform profile is authoritative; it outranks tag heuristics.
+    tagDetails.artist = [authorName];
+  }
   if (item.service && !tagDetails.meta.includes(item.service.toLowerCase())) {
     tagDetails.meta.push(item.service.toLowerCase());
   }
@@ -458,14 +472,17 @@ export async function normalizeKemonoPost(item, creatorMap, resolvedCreator, aiT
     const fileUrl = (isPrevOnly && !isVid)
       ? `https://img.kemono.cr/thumbnail/data${m.path}`
       : `${baseServer}/data${m.path}?f=${encodeURIComponent(rawFileName)}`;
+    const videoThumbUrl = `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium`;
     const previewUrlRaw = isVid
-      ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium`
+      ? videoThumbUrl
       : `https://img.kemono.cr/thumbnail/data${m.path}`;
     const sampleUrl = !isVid ? previewUrlRaw : fileUrl;
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVid);
-    const thumb180 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=low` : previewUrl;
-    const thumb360 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=medium` : previewUrl;
-    const thumb720 = isVid ? `/api/video-thumbnail?url=${encodeURIComponent(fileUrl)}&quality=high` : previewUrl;
+    // One generated thumbnail serves every tier. Three quality variants meant
+    // three full remote video downloads per card.
+    const thumb180 = isVid ? videoThumbUrl : previewUrl;
+    const thumb360 = isVid ? videoThumbUrl : previewUrl;
+    const thumb720 = isVid ? videoThumbUrl : previewUrl;
     const thumbSample = isVid ? '' : previewUrl;
     const thumbOriginal = isVid ? '' : fileUrl;
 
@@ -678,9 +695,19 @@ export async function fetchKemono(params, aiTagsList, settings = {}) {
     return [];
   }
 
-  let offset = Math.max(0, (page - 1) * 50);
+  // The API serves at most 50 posts per request. Page N must start where the
+  // previous page stopped, so the step is the requested limit capped at that
+  // raw page size: asking for 40 must not skip 40-49, and asking for 200 must
+  // not jump over the unread raw pages between 50 and 199 (the deep-fetch loop
+  // fills those with subsequent 50-item pages).
+  const pageSize = Math.min(
+    Math.max(1, Number.parseInt(limit, 10) || 40),
+    KEMONO_RAW_PAGE_SIZE
+  );
+  const pageNumber = Math.max(1, Number.parseInt(page, 10) || 1);
+  let offset = (pageNumber - 1) * pageSize;
   if (params.category === 'random' && !tags) {
-    offset = Math.floor(Math.random() * 200) * 50;
+    offset = Math.floor(Math.random() * 200) * KEMONO_RAW_PAGE_SIZE;
   }
 
   const adaptedTags = adaptTagsForSite('kemono', tags, ratingFilter, typeFilter, settings);
@@ -760,7 +787,12 @@ export async function fetchKemono(params, aiTagsList, settings = {}) {
           }
           if (res.status === 429 && attempt === 0) {
             await discardResponse(res);
-            await new Promise(r => setTimeout(r, 1200));
+            await new Promise(r => setTimeout(r, process.env.NODE_ENV === 'test' ? 0 : 1200));
+            continue;
+          }
+          if (res.status >= 500 && attempt === 0) {
+            await discardResponse(res);
+            await new Promise(r => setTimeout(r, process.env.NODE_ENV === 'test' ? 0 : 300));
             continue;
           }
           await discardResponse(res);
@@ -802,7 +834,7 @@ export async function fetchKemono(params, aiTagsList, settings = {}) {
     } else if (serviceFilter && userFilter) {
       items = (await fetchJsonPage(`https://kemono.cr/api/v1/${serviceFilter}/user/${userFilter}/posts?o=${offset}`)) || [];
     } else if (serviceFilter) {
-      const windowStart = Math.max(0, (page - 1) * KEMONO_RAW_PAGE_SIZE * KEMONO_SERVICE_SCAN_PAGES);
+      const windowStart = Math.max(0, (pageNumber - 1) * KEMONO_RAW_PAGE_SIZE * KEMONO_SERVICE_SCAN_PAGES);
       const scanPromises = Array.from({ length: KEMONO_SERVICE_SCAN_PAGES }, (_, i) =>
         fetchJsonPage(`https://kemono.cr/api/v1/posts?${qPart}o=${windowStart + i * KEMONO_RAW_PAGE_SIZE}`)
       );

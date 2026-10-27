@@ -156,6 +156,35 @@
   color: var(--accent-primary);
 }
 
+/* Touch devices have no hover: the dismiss button must stay visible and the
+   pointer-sized controls need a real tap target. */
+@media (hover: none) {
+  .btn-icon-subtle {
+    width: 44px;
+    height: 44px;
+  }
+
+  .notif-tab {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 14px;
+  }
+
+  .notification-item {
+    padding-right: 52px;
+  }
+
+  .notif-btn-dismiss {
+    display: flex;
+    top: 50%;
+    right: 4px;
+    width: 44px;
+    height: 44px;
+    transform: translateY(-50%);
+  }
+}
+
 @keyframes notifSpin {
   100% {
     transform: rotate(360deg);

@@ -4,15 +4,7 @@ import { classifyPostTags } from '../utils/tagClassifier.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { logError } from '../utils/logger.js';
 import { resolveSearchAuthor, setCachedTagType, TAG_TYPE } from '../services/booruTagTypeService.js';
-
-function getRecentDateFilter(days = 30) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `date:>=${year}-${month}-${day}`;
-}
+import { appendRatingTag, buildThumbTiers } from '../utils/searchCompat.js';
 
 export function normalizeGelbooruRating(rawRating) {
   if (!rawRating) return 'g';
@@ -56,21 +48,6 @@ function safeDecodeURIComponent(str) {
 // original is the full file. The medium tier must never fall back to the full
 // file while a smaller preview exists: that aliasing made medium/high feel
 // identical to original and forced the gallery to download multi-MB files.
-function buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo }) {
-  const preview = previewUrl || '';
-  const rawSample = rawSampleUrl || '';
-  const file = fileUrl || '';
-  if (isVideo) {
-    const pv = preview || rawSample || file;
-    return { thumb180: pv, thumb360: pv, thumb720: pv };
-  }
-  return {
-    thumb180: preview || rawSample || file,
-    thumb360: (rawSample && rawSample !== file) ? rawSample : (preview || rawSample || file),
-    thumb720: rawSample || file || preview
-  };
-}
-
 export async function fetchGelbooru(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
   
@@ -103,14 +80,8 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     searchTags = searchTags ? `${searchTags} ${settings.siteSortTags.gelbooru.new}` : settings.siteSortTags.gelbooru.new;
   }
 
-  // Rating filter
-  if (ratingFilter === 'nsfw') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:explicit` : 'rating:explicit';
-  } else if (ratingFilter === 'questionable' || ratingFilter === '16+') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:questionable` : 'rating:questionable';
-  } else if (ratingFilter === 'sfw') {
-    if (!searchTags.includes('rating:')) searchTags = searchTags ? `${searchTags} rating:general` : 'rating:general';
-  }
+  // Rating filter. A caller-supplied `rating:*` always wins over the UI filter.
+  searchTags = appendRatingTag(searchTags, ratingFilter, 'gelbooru');
 
   const pid = Math.max(0, page - 1);
   const searchAuthor = resolveSearchAuthor('gelbooru', tags);
@@ -266,7 +237,9 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
     }
 
     if (rawParsed.length > 0) {
-      return await Promise.all(rawParsed.map(async p => {
+      // One malformed card must not blank the whole HTML page: settle each post
+      // independently and drop only the rejections.
+      const settled = await Promise.allSettled(rawParsed.map(async p => {
         const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(p.rawTags, p.source, searchAuthor, settings, false, 'gelbooru');
         const seriesKey = extractSeriesKey({
           source: '',
@@ -315,6 +288,8 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
           isAi: checkIsAi(p.rawTags, aiTagsList)
         };
       }));
+      settled.forEach(r => { if (r.status === 'rejected') logError('Gelbooru HTML', 'Пропущен битый элемент апстрима', r.reason); });
+      return settled.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
     }
 
     return [];

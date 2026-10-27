@@ -40,7 +40,7 @@ test('Safebooru Parser Unit Tests', async (t) => {
     assertNormalizedPost(post, 'safebooru');
     assert.equal(post.rating, 's');
     assert.equal(post.thumb180, 'https://safebooru.org/thumbnails/sample_dir/thumbnail_img_3001.jpg');
-    assert.equal(post.thumb360, 'https://safebooru.org/images/sample_dir/img_3001.jpg');
+    assert.equal(post.thumb360, 'https://safebooru.org/thumbnails/sample_dir/thumbnail_img_3001.jpg');
     assert.equal(post.thumb720, 'https://safebooru.org/images/sample_dir/img_3001.jpg');
     assert.equal(post.thumbOriginal, 'https://safebooru.org/images/sample_dir/img_3001.jpg');
   });

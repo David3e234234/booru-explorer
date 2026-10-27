@@ -4,7 +4,8 @@ import { fetchSafe, discardResponse } from './network.js';
 import { extractAuthor as extractAuthorFromSource, decodeHtmlEntities, isNoiseHandle } from './tagHelpers.js';
 import { resolveBooruTagTypes, getCachedTagType, TAG_TYPE } from '../services/booruTagTypeService.js';
 import { getSettings } from '../services/storageService.js';
-import { CACHE_DIR } from '../config/constants.js';
+import { readJsonFile } from '../services/jsonFileStore.js';
+import { CACHE_DIR, DATA_DIR, FAVORITE_AUTHORS_FILE } from '../config/constants.js';
 
 // Cache of the global tag map (1 = artist, 3 = copyright, 4 = character, 0 = general, 6 = meta)
 let globalTagMap = null;
@@ -480,14 +481,11 @@ async function fetchSingleTagType(tName, apiKey, userId, effectiveSettings) {
       } else if (res) {
         await discardResponse(res);
       }
-      if (globalTagMap) {
-        globalTagMap.set(tName.toLowerCase(), 0);
-      }
+      // A failed lookup is not evidence that the tag is a general tag. Caching
+      // it as type 0 poisoned the dictionary for the whole process lifetime and
+      // demoted real artists that the API simply failed to answer for.
       return null;
     } catch {
-      if (globalTagMap) {
-        globalTagMap.set(tName.toLowerCase(), 0);
-      }
       return null;
     } finally {
       releaseTagLookupSlot();
@@ -618,8 +616,8 @@ async function fetchAndCacheSummary(settings = {}) {
 function seedFavoriteAuthors(map) {
   if (!map) return;
   try {
-    const candidateFiles = [path.resolve('data/favorite_authors.json')];
-    const usersDir = path.resolve('data/users');
+    const candidateFiles = [FAVORITE_AUTHORS_FILE];
+    const usersDir = path.join(DATA_DIR, 'users');
     if (fs.existsSync(usersDir)) {
       const uDirs = fs.readdirSync(usersDir);
       for (const ud of uDirs) {
@@ -627,14 +625,14 @@ function seedFavoriteAuthors(map) {
       }
     }
     for (const file of candidateFiles) {
-      if (fs.existsSync(file)) {
-        const raw = fs.readFileSync(file, 'utf8');
-        const list = JSON.parse(raw);
-        if (Array.isArray(list)) {
-          for (const a of list) {
-            if (a.name) map.set(String(a.name).toLowerCase().trim(), 1);
-            if (a.id) map.set(String(a.id).toLowerCase().trim(), 1);
-          }
+      if (!fs.existsSync(file)) continue;
+      // Collections are gzip-compressed; readJsonFile detects that by magic
+      // bytes, while readFileSync('utf8') produced mojibake and threw.
+      const list = readJsonFile(file, []);
+      if (Array.isArray(list)) {
+        for (const a of list) {
+          if (a.name) map.set(String(a.name).toLowerCase().trim(), 1);
+          if (a.id) map.set(String(a.id).toLowerCase().trim(), 1);
         }
       }
     }
@@ -734,6 +732,46 @@ export function isAuthorResolutionConfident(classified) {
   // A tag the source handle confirms is a real attribution.
   if (classified.authorSource === 'source' || classified.authorSource === 'ground-truth') return true;
   return false;
+}
+
+function normalizeTagKey(value) {
+  return String(value || '').toLowerCase().trim().replace(/^(?:@|pixiv:)+/i, '').replace(/[\s.-]+/g, '_');
+}
+
+/**
+ * Whole tokens an author value may legitimately match: the handle itself plus
+ * the name and qualifier of a parenthesized form. Substring matching is
+ * forbidden here; it turned `eula` into a Genshin artist because an unrelated
+ * author value happened to contain those letters.
+ */
+function authorMatchTokens(value) {
+  const tokens = new Set();
+  for (const raw of String(value || '').split(',')) {
+    const token = normalizeTagKey(raw);
+    if (!token) continue;
+    tokens.add(token);
+    const paren = token.match(/^(.+?)_\(([^)]+)\)$/);
+    if (paren) {
+      tokens.add(paren[1]);
+      tokens.add(paren[2]);
+    }
+    const stripped = token.replace(/_?\((?:artist|creator|circle|studio|illustrator|animator|mangaka)\)$/i, '');
+    if (stripped) tokens.add(stripped);
+  }
+  return tokens;
+}
+
+function tagMatchTokens(value) {
+  const tokens = new Set();
+  const low = normalizeTagKey(value);
+  if (!low) return tokens;
+  tokens.add(low);
+  const paren = low.match(/^(.+?)_\(([^)]+)\)$/);
+  if (paren) {
+    tokens.add(paren[1]);
+    tokens.add(paren[2]);
+  }
+  return tokens;
 }
 
 export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuthor = '', settings = {}, allowDynamicLookup = false, site = '') {
@@ -957,16 +995,16 @@ export async function classifyPostTags(rawTags = [], sourceUrl = '', initialAuth
                                copyright.some(c => c.toLowerCase() === suffix) || 
                                (tagMap && (tagMap.get(suffix) === 3 || tagMap.get(suffix) === 6));
       const matchesPostTag = tags.some(t => {
-        const tLow = t.toLowerCase();
-        return tLow !== lower && (tLow === suffix || tLow.includes(suffix));
+        if (String(t).toLowerCase() === lower) return false;
+        return tagMatchTokens(t).has(suffix);
       });
 
       // Distinguish social handle / artist alias in parentheses: e.g. name_(handle) or name_(twitter)
-      const matchesInitialAuthor = !!(initialAuthor && (
-        initialAuthor.toLowerCase().includes(lower) ||
-        initialAuthor.toLowerCase().includes(prefix) ||
-        initialAuthor.toLowerCase().includes(suffix)
-      ));
+      const initialTokens = authorMatchTokens(initialAuthor);
+      const matchesInitialAuthor = initialTokens.has(prefix) ||
+        initialTokens.has(suffix) ||
+        initialTokens.has(lower) ||
+        initialTokens.has(normalizeTagKey(originalTag));
       const isSocialHandle = /^(?:twitter|pixiv|fanbox|patreon|fantia|coconala|skeb|deviantart|artstation)$/i.test(suffix) ||
                              (/\d/.test(suffix) && /^[a-z0-9_]{3,20}$/i.test(suffix) && !isKnownFranchise && !matchesPostTag);
       // The tag must match the handle the source URL actually resolved to, as a

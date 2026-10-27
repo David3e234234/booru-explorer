@@ -435,7 +435,9 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
   }
   
   const targetLimit = parseInt(params.limit, 10) || 40;
-  const pagesPerBatch = Math.min(4, Math.max(1, Math.ceil(targetLimit / 30)));
+  // KVS returns 20 videos per page. Dividing by 30 under-fetched every page
+  // above 60, so the feed silently stopped short of the requested limit.
+  const pagesPerBatch = Math.min(4, Math.max(1, Math.ceil(targetLimit / 20)));
   const startFrom = (page - 1) * pagesPerBatch + 1;
   const pageNumbers = Array.from({ length: pagesPerBatch }, (_, i) => startFrom + i);
 
@@ -466,7 +468,7 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
     sortByParam = '&sort_by=post_date';
   }
 
-  const fetchPromises = pageNumbers.map(async (p) => {
+  const fetchPage = async (p) => {
     if (p > maxAuthorPages) {
       return [];
     }
@@ -527,6 +529,10 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
 
       const blocks = html.split('<div class="item').slice(1);
       const pageResults = [];
+      // One cache read and one author-entry list per page instead of per card:
+      // the previous loop allocated Object.entries for every video block.
+      const r34vCache = loadR34vAuthorsCache();
+      const knownAuthors = Object.entries(r34vCache.authors || {}).filter(([key]) => key.length >= 3);
 
       for (const block of blocks) {
         const linkMatch = block.match(/href="([^"]*video\/(\d+)\/([^"]*))"[^>]*title="([^"]*)"/i) ||
@@ -568,7 +574,6 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         else if (thumb.startsWith('/')) thumb = 'https://rule34video.com' + thumb;
 
         // 1. Check if this video ID is already known in our persistent disk cache
-        const r34vCache = loadR34vAuthorsCache();
         let author = r34vCache.videos[id] || '';
 
         // 2. Extract the author from the account/channel/uploader link in the block HTML
@@ -587,9 +592,9 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
         }
 
         // 3. Match against known authors in persistent cache
-        if (!author && r34vCache.authors) {
+        if (!author && knownAuthors.length > 0) {
           const lowerTitle = title.toLowerCase();
-          for (const [key, origName] of Object.entries(r34vCache.authors)) {
+          for (const [key, origName] of knownAuthors) {
             if (key.length >= 3 && (lowerTitle.includes(`[${key}]`) || lowerTitle.includes(`by ${key}`) || lowerTitle.includes(`${key} -`) || lowerTitle.includes(`- ${key}`) || lowerTitle.includes(`| ${key}`))) {
               author = origName;
               break;
@@ -860,9 +865,14 @@ export async function fetchRule34Video(params, aiTagsList, settings = {}) {
       logError('Rule34Video', `Ошибка загрузки страницы ${p}`, err);
       return [];
     }
-  });
+  };
 
-  const batchResults = await Promise.all(fetchPromises);
+  // Sequential pages: the previous parallel fan-out hit KVS with up to four
+  // simultaneous requests per search and tripped its rate limiter.
+  const batchResults = [];
+  for (const p of pageNumbers) {
+    batchResults.push(await fetchPage(p));
+  }
   for (const pagePosts of batchResults) {
     for (const post of pagePosts) {
       if (!seenIds.has(post.originalId)) {

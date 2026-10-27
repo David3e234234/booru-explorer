@@ -20,6 +20,8 @@ jobs:
           node-version: "22.19.0"
       - name: Install dependencies
         run: npm install --omit=dev --no-audit --no-fund
+      - name: Build client bundle
+        run: npm run build:client
       - name: Run tests
         run: npm test
 
@@ -36,8 +38,10 @@ jobs:
           password: ${{ secrets.ALWAYS_PASSWORD }}
           script: |
             set -e
+            BRANCH="${{ github.ref_name }}"
             cd ~/booru-explorer
-            git fetch origin main
-            git reset --hard origin/main
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
             npm install --omit=dev --no-audit --no-fund
+            npm run build:client
             mkdir -p tmp && touch tmp/restart.txt

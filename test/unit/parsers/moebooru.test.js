@@ -42,7 +42,7 @@ test('Moebooru Parser Unit Tests (Yande.re & Konachan)', async (t) => {
     assert.equal(post.siteName, 'Yande.re');
     assert.equal(post.rating, 's');
     assert.equal(post.thumb180, 'https://files.yande.re/preview/4001/preview.jpg');
-    assert.equal(post.thumb360, 'https://files.yande.re/preview/4001/preview.jpg');
+    assert.equal(post.thumb360, 'https://files.yande.re/sample/4001/sample.jpg');
     assert.equal(post.thumb720, 'https://files.yande.re/sample/4001/sample.jpg');
   });
 
@@ -180,5 +180,99 @@ test('Moebooru Parser Unit Tests (Yande.re & Konachan)', async (t) => {
     const posts = await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', { tags: 'brokentest', limit: 5 }, [], {});
     assert.equal(posts.length, 1);
     assert.equal(posts[0].originalId, '4101');
+  });
+
+  await t.test('fetchMoebooru applies the rating filter exactly once', async () => {
+    const client = mockContext.agent.get('https://yande.re');
+    let requestedPath = '';
+    client.intercept({
+      path: (p) => {
+        if (p.includes('/post.json')) requestedPath = p;
+        return p.includes('/post.json');
+      },
+      method: 'GET'
+    }).reply(200, []);
+
+    await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', {
+      tags: 'rem rating:safe',
+      ratingFilter: 'nsfw',
+      limit: 5
+    }, [], {});
+
+    const sentTags = new URL(`https://yande.re${requestedPath}`).searchParams.get('tags');
+    assert.equal(sentTags, 'rem rating:safe');
+  });
+
+  await t.test('fetchMoebooru sends a rating-only query when the tag field is empty', async () => {
+    const client = mockContext.agent.get('https://yande.re');
+    let requestedPath = '';
+    client.intercept({
+      path: (p) => {
+        if (p.includes('/post.json')) requestedPath = p;
+        return p.includes('/post.json');
+      },
+      method: 'GET'
+    }).reply(200, []);
+
+    await fetchMoebooru('yandere', 'https://yande.re', 'Yande.re', {
+      tags: '',
+      ratingFilter: 'questionable',
+      limit: 5
+    }, [], {});
+
+    const sentTags = new URL(`https://yande.re${requestedPath}`).searchParams.get('tags');
+    assert.equal(sentTags, 'rating:questionable');
+  });
+
+  await t.test('Konachan 404 does not trigger the mirror failover', async () => {
+    // Only blocking/connectivity errors justify the mirror. A 404 is a bad query
+    // and would 404 on konachan.net as well, so retrying there doubled latency.
+    const client = mockContext.agent.get('https://konachan.com');
+    client.intercept({
+      path: (p) => p.includes('/post.json') && p.includes('notfoundtest'),
+      method: 'GET'
+    }).reply(404, 'Not found');
+
+    const mirror = mockContext.agent.get('https://konachan.net');
+    mirror.intercept({
+      path: (p) => p.includes('/post.json') && p.includes('notfoundtest'),
+      method: 'GET'
+    }).reply(200, [
+      { id: 4901, tags: 'original', rating: 's', score: 1, file_url: 'https://konachan.net/image/4901/f.jpg' }
+    ]);
+
+    const posts = await fetchMoebooru('konachan', 'https://konachan.com', 'Konachan', {
+      tags: 'notfoundtest',
+      limit: 5
+    }, [], {});
+    assert.deepEqual(posts, []);
+  });
+
+  await t.test('Konachan 403 fails over to the konachan.net mirror', async () => {
+    const primary = mockContext.agent.get('https://konachan.com');
+    primary.intercept({
+      path: (p) => p.includes('/post.json') && p.includes('failovertest'),
+      method: 'GET'
+    }).reply(403, 'Forbidden');
+
+    let mirrorAsked = false;
+    const mirror = mockContext.agent.get('https://konachan.net');
+    mirror.intercept({
+      path: (p) => {
+        if (p.includes('/post.json') && p.includes('failovertest')) mirrorAsked = true;
+        return p.includes('/post.json') && p.includes('failovertest');
+      },
+      method: 'GET'
+    }).reply(200, [
+      { id: 4902, tags: 'original', rating: 's', score: 1, file_url: 'https://konachan.net/image/4902/f.jpg' }
+    ]);
+
+    const posts = await fetchMoebooru('konachan', 'https://konachan.com', 'Konachan', {
+      tags: 'failovertest',
+      limit: 5
+    }, [], {});
+    assert.equal(mirrorAsked, true, 'the blocked mirror must be tried');
+    assert.equal(posts.length, 1);
+    assert.equal(posts[0].originalId, '4902');
   });
 });
