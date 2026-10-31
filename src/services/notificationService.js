@@ -9,6 +9,7 @@ import {
 import { getUsersList } from './userService.js';
 import { fetchPosts } from '../parsers/index.js';
 import { sanitizeStoredPost } from './storedPostSchema.js';
+import { groupPostsIntoAlbums } from '../utils/albumHelper.js';
 import { logInfo, logError, logWarn } from '../utils/logger.js';
 import { DEFAULT_AI_TAGS } from '../config/constants.js';
 
@@ -17,8 +18,8 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 /**
  * Build tag query string for an author based on target booru/archive
  */
-export function buildAuthorQuery(author) {
-  const site = author.site || 'danbooru';
+export function buildAuthorQuery(author, targetSite = null) {
+  const site = targetSite || author.site || 'danbooru';
   const rawName = String(author.name || '').trim();
   const cleanName = rawName
     .replace(/^@+/, '')
@@ -47,7 +48,7 @@ export function buildAuthorQuery(author) {
 }
 
 /**
- * Scan a single author for newly published posts
+ * Scan a single author for newly published posts across their configured notification sources
  * @returns {Promise<{ newPosts: Array, isInitialSeed: boolean }>}
  */
 export async function checkAuthorNewPosts(author, userId = null, { settings: customSettings = null } = {}) {
@@ -55,99 +56,145 @@ export async function checkAuthorNewPosts(author, userId = null, { settings: cus
     return { newPosts: [], isInitialSeed: false };
   }
 
-  const { site, tags } = buildAuthorQuery(author);
   const settings = customSettings || getSettings(userId);
   const aiTags = settings.aiTags || DEFAULT_AI_TAGS;
 
-  let posts = [];
-  try {
-    posts = await fetchPosts(
-      site, 
-      { 
-        tags, 
-        page: 1, 
-        limit: 10, 
-        ratingFilter: 'all', 
-        typeFilter: 'all', 
-        aiFilter: 'all',
-        hideFurry: false,
-        hidePregnant: false,
-        hideLgbt: false
-      }, 
-      aiTags, 
-      settings
-    );
-  } catch (err) {
-    logWarn('NotificationService', `Не удалось получить посты автора "${author.name}" с ${site}: ${err.message}`);
-    return { newPosts: [], isInitialSeed: false };
-  }
+  const targetSites = (Array.isArray(author.notificationSites) && author.notificationSites.length > 0)
+    ? author.notificationSites
+    : [author.site || 'danbooru'];
 
-  if (!Array.isArray(posts) || posts.length === 0) {
-    return { newPosts: [], isInitialSeed: false };
-  }
-
-  const authorKey = `${site}:${author.name}`.toLowerCase();
   const feedState = getAuthorFeedState(userId);
-  const authorState = feedState[authorKey];
+  let allNewPosts = [];
+  let isAnyInitialSeed = false;
 
-  // First time tracking this author: seed existing posts without spamming notifications
-  if (!authorState || !Array.isArray(authorState.knownPostIds)) {
-    feedState[authorKey] = {
-      lastCheckedAt: new Date().toISOString(),
-      knownPostIds: posts.map(p => String(p.id)),
-      latestPostId: posts[0] ? String(posts[0].id) : null
+  for (const site of targetSites) {
+    const { tags } = buildAuthorQuery(author, site);
+
+    let rawPosts = [];
+    try {
+      rawPosts = await fetchPosts(
+        site, 
+        { 
+          tags, 
+          page: 1, 
+          limit: 10, 
+          ratingFilter: 'all', 
+          typeFilter: 'all', 
+          aiFilter: 'all',
+          hideFurry: false,
+          hidePregnant: false,
+          hideLgbt: false
+        }, 
+        aiTags, 
+        settings
+      );
+    } catch (err) {
+      logWarn('NotificationService', `Не удалось получить посты автора "${author.name}" с ${site}: ${err.message}`);
+      continue;
+    }
+
+    if (!Array.isArray(rawPosts) || rawPosts.length === 0) {
+      continue;
+    }
+
+    // Group multi-image / multi-file series and sets into unified albums
+    const posts = groupPostsIntoAlbums(rawPosts, { enabled: true });
+    if (!Array.isArray(posts) || posts.length === 0) {
+      continue;
+    }
+
+    const authorKey = `${site}:${author.name}`.toLowerCase();
+    const authorState = feedState[authorKey];
+
+    // Collect all post and album item IDs for tracking
+    const extractAllIds = (postList) => {
+      const ids = new Set();
+      for (const p of postList) {
+        if (!p) continue;
+        if (p.id) ids.add(String(p.id));
+        if (p.originalId) ids.add(String(p.originalId));
+        if (p.isAlbum && Array.isArray(p.albumItems)) {
+          p.albumItems.forEach(it => {
+            if (it?.id) ids.add(String(it.id));
+            if (it?.originalId) ids.add(String(it.originalId));
+          });
+        }
+      }
+      return Array.from(ids);
     };
-    saveAuthorFeedState(feedState, userId);
-    return { newPosts: [], isInitialSeed: true };
-  }
 
-  const knownSet = new Set(authorState.knownPostIds.map(String));
-  const newPosts = [];
-
-  for (const post of posts) {
-    const idStr = String(post.id);
-    const origIdStr = post.originalId ? String(post.originalId) : null;
-    if (!knownSet.has(idStr) && (!origIdStr || !knownSet.has(origIdStr))) {
-      newPosts.push(post);
-    }
-  }
-
-  if (newPosts.length > 0) {
-    // Cap notifications created in one check to max 5 to prevent feed flood
-    const toNotify = newPosts.slice(0, 5);
-    for (const post of toNotify) {
-      const notif = {
-        id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        type: 'author_new_post',
-        author: {
-          id: author.id || author.name,
-          name: author.name,
-          displayName: author.displayName || author.name,
-          site: author.site || post.site || site,
-          previewUrl: author.previewUrl || post.previewUrl || post.thumb180 || ''
-        },
-        post: sanitizeStoredPost(post),
-        createdAt: new Date().toISOString(),
-        read: false
+    // First time tracking this author on this site: seed existing posts without spamming notifications
+    if (!authorState || !Array.isArray(authorState.knownPostIds)) {
+      feedState[authorKey] = {
+        lastCheckedAt: new Date().toISOString(),
+        knownPostIds: extractAllIds(posts),
+        latestPostId: posts[0] ? String(posts[0].id) : null
       };
-      addNotification(notif, userId);
+      saveAuthorFeedState(feedState, userId);
+      isAnyInitialSeed = true;
+      continue;
     }
 
-    const updatedKnown = [...newPosts.map(p => String(p.id)), ...authorState.knownPostIds].slice(0, 200);
-    authorState.knownPostIds = updatedKnown;
-    authorState.lastCheckedAt = new Date().toISOString();
-    if (posts[0]) authorState.latestPostId = String(posts[0].id);
-    feedState[authorKey] = authorState;
-    saveAuthorFeedState(feedState, userId);
+    const knownSet = new Set(authorState.knownPostIds.map(String));
+    const newPostsForSite = [];
 
-    logInfo('NotificationService', `Обнаружено ${newPosts.length} новых постов автора "${author.name}" (${site})`);
-  } else {
-    authorState.lastCheckedAt = new Date().toISOString();
-    feedState[authorKey] = authorState;
-    saveAuthorFeedState(feedState, userId);
+    for (const post of posts) {
+      const idStr = String(post.id);
+      const origIdStr = post.originalId ? String(post.originalId) : null;
+      let isKnown = knownSet.has(idStr) || (origIdStr && knownSet.has(origIdStr));
+
+      // For albums: if all items are already known, treat the album as known
+      if (!isKnown && post.isAlbum && Array.isArray(post.albumItems) && post.albumItems.length > 0) {
+        const allItemsKnown = post.albumItems.every(it => 
+          knownSet.has(String(it.id)) || (it.originalId && knownSet.has(String(it.originalId)))
+        );
+        if (allItemsKnown) isKnown = true;
+      }
+
+      if (!isKnown) {
+        newPostsForSite.push(post);
+      }
+    }
+
+    if (newPostsForSite.length > 0) {
+      // Cap notifications created in one check per site to max 5 to prevent feed flood
+      const toNotify = newPostsForSite.slice(0, 5);
+      for (const post of toNotify) {
+        const notif = {
+          id: `notif_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          type: 'author_new_post',
+          author: {
+            id: author.id || author.name,
+            name: author.name,
+            displayName: author.displayName || author.name,
+            site: post.site || site,
+            previewUrl: author.previewUrl || post.previewUrl || post.thumb180 || ''
+          },
+          post: sanitizeStoredPost(post, { keepAlbumItems: true }),
+          createdAt: new Date().toISOString(),
+          read: false
+        };
+        addNotification(notif, userId);
+      }
+
+      const newlyKnownIds = extractAllIds(newPostsForSite);
+      const updatedKnown = [...new Set([...newlyKnownIds, ...authorState.knownPostIds])].slice(0, 300);
+      authorState.knownPostIds = updatedKnown;
+      authorState.lastCheckedAt = new Date().toISOString();
+      if (posts[0]) authorState.latestPostId = String(posts[0].id);
+      feedState[authorKey] = authorState;
+      saveAuthorFeedState(feedState, userId);
+
+      allNewPosts.push(...newPostsForSite);
+      logInfo('NotificationService', `Обнаружено ${newPostsForSite.length} новых публикаций автора "${author.name}" (${site})`);
+    } else {
+      authorState.lastCheckedAt = new Date().toISOString();
+      feedState[authorKey] = authorState;
+      saveAuthorFeedState(feedState, userId);
+    }
   }
 
-  return { newPosts, isInitialSeed: false };
+  return { newPosts: allNewPosts, isInitialSeed: isAnyInitialSeed };
 }
 
 /**

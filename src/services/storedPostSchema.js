@@ -43,7 +43,7 @@ const STORED_POST_FIELDS = new Set([
  * `rawCompact` opts out of the redundant URL tier elision: the backup builder
  * needs it so an exported document is a faithful, self-contained copy.
  */
-export function sanitizeStoredPost(post, { rawCompact = false } = {}) {
+export function sanitizeStoredPost(post, { rawCompact = false, keepAlbumItems = false } = {}) {
   if (!post || typeof post !== 'object' || Array.isArray(post)) return post;
 
   const clean = {};
@@ -51,6 +51,17 @@ export function sanitizeStoredPost(post, { rawCompact = false } = {}) {
     if (!STORED_POST_FIELDS.has(key)) continue;
     if (value === undefined) continue;
     clean[key] = value;
+  }
+
+  if (keepAlbumItems && Array.isArray(post.albumItems)) {
+    clean.albumItems = post.albumItems
+      .filter(item => item && typeof item === 'object')
+      .slice(0, 100)
+      .map(item => {
+        const itemCopy = { ...item };
+        delete itemCopy.albumItems;
+        return sanitizeStoredPost(itemCopy, { rawCompact });
+      });
   }
 
   if (rawCompact) return clean;

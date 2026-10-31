@@ -2,7 +2,7 @@ import express from 'express';
 import { ah } from '../utils/asyncHandler.js';
 import fs from 'fs';
 import { spawn } from 'child_process';
-import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR } from '../config/constants.js';
+import { THUMBS_DIR, VIDEOS_DIR, ARCHIVES_DIR, SITES } from '../config/constants.js';
 import { getRuntimePort } from '../utils/runtimeState.js';
 import { 
   getSettings, 
@@ -165,6 +165,9 @@ router.post('/favorite-authors', (req, res) => {
   const site = body.site || 'danbooru';
   const service = body.service || '';
   const user = body.user ? String(body.user) : '';
+  const notificationSites = Array.isArray(body.notificationSites)
+    ? body.notificationSites.filter(s => typeof s === 'string' && SITES[s.toLowerCase()]).map(s => s.toLowerCase())
+    : [site];
 
   const userId = req.user?.id || null;
   const authors = getFavoriteAuthors(userId);
@@ -187,6 +190,7 @@ router.post('/favorite-authors', (req, res) => {
       site: site,
       service: service,
       user: user,
+      notificationSites: notificationSites.length > 0 ? notificationSites : [site],
       createdAt: new Date().toISOString()
     };
     authors.unshift(newAuthor);
@@ -194,6 +198,41 @@ router.post('/favorite-authors', (req, res) => {
     sendBooruAuthorFollow(site, newAuthor, true, settings).catch(() => {});
     return res.json({ success: true, isFavorite: true, count: authors.length, authors, author: newAuthor });
   }
+});
+
+// POST /api/favorite-authors/notification-sites
+router.post('/favorite-authors/notification-sites', (req, res) => {
+  const { name, sites } = req.body || {};
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ success: false, message: 'Имя автора не указано' });
+  }
+  if (!Array.isArray(sites)) {
+    return res.status(400).json({ success: false, message: 'Ожидается массив сайтов' });
+  }
+
+  const rawName = name.trim();
+  const cleanName = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_').toLowerCase();
+  const validSites = sites
+    .filter(s => typeof s === 'string')
+    .map(s => s.trim().toLowerCase())
+    .filter(s => Boolean(SITES[s]))
+    .slice(0, 20);
+
+  const userId = req.user?.id || null;
+  const authors = getFavoriteAuthors(userId);
+  const target = authors.find(a => 
+    (a.name || '').toLowerCase() === cleanName || 
+    (a.id || '').toLowerCase() === cleanName ||
+    (a.displayName || '').toLowerCase() === cleanName
+  );
+
+  if (!target) {
+    return res.status(404).json({ success: false, message: 'Автор не найден в избранном' });
+  }
+
+  target.notificationSites = validSites.length > 0 ? validSites : [target.site || 'danbooru'];
+  saveFavoriteAuthors(authors, userId);
+  return res.json({ success: true, author: target, authors });
 });
 
 // POST /api/favorite-authors/sync
@@ -209,7 +248,17 @@ router.post('/favorite-authors/sync', (req, res) => {
   const current = getFavoriteAuthors(userId);
   const map = new Map();
   current.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
-  authors.forEach(a => { if (a && a.name) map.set((a.name || '').toLowerCase(), a); });
+  authors.forEach(a => {
+    if (a && a.name) {
+      const key = (a.name || '').toLowerCase();
+      const existing = map.get(key);
+      if (existing) {
+        map.set(key, { ...existing, ...a, notificationSites: a.notificationSites || existing.notificationSites });
+      } else {
+        map.set(key, a);
+      }
+    }
+  });
   const merged = Array.from(map.values());
 
   saveFavoriteAuthors(merged, userId);
@@ -275,6 +324,7 @@ router.post('/favorite-authors/preview', (req, res) => {
       site: site || 'danbooru',
       service: req.body?.service || '',
       user: req.body?.user ? String(req.body.user) : '',
+      notificationSites: [site || 'danbooru'],
       createdAt: new Date().toISOString()
     };
     authors.unshift(target);

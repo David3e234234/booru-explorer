@@ -81,6 +81,7 @@ import {
   renderFavoriteAuthorsList, 
   initAddAuthorModal,
   initCoverPickerModal,
+  initAuthorNotifSourcesModal,
   openAddAuthorModal
 } from './modules/favoriteAuthorsUI.js';
 import {
@@ -622,6 +623,8 @@ async function init() {
       }
     }
   });
+
+  initAuthorNotifSourcesModal();
 
   ensureSettingsModal().catch(() => {});
   ensureAliasManagerModal().catch(() => {});
@@ -2768,8 +2771,8 @@ function setupEventListeners() {
 
   // In-app notifications subsystem
   initNotifications({
-    onOpenPost: (post) => {
-      openPostOverlay(-1, { directPost: post });
+    onOpenPost: (post, opts = {}) => {
+      openPostOverlay(-1, { directPost: post, initialAlbumIndex: opts?.initialAlbumIndex ?? 0, forceViewer: opts?.forceViewer });
     },
     onSwitchToFollowing: () => {
       state.currentCategory = 'following';

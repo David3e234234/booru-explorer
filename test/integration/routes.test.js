@@ -540,6 +540,20 @@ describe('Express API Integration & Route Tests', () => {
       assert.strictEqual(previewData.success, true);
       assert.strictEqual(previewData.author.previewUrl, 'https://cdn.example.com/artist.jpg');
 
+      // Update notification sources
+      const notifSitesRes = await fetch(`${baseUrl}/api/favorite-authors/notification-sites`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({ name: 'artist_test', sites: ['gelbooru', 'kemono', 'danbooru'] })
+      });
+      assert.strictEqual(notifSitesRes.status, 200);
+      const notifSitesData = await notifSitesRes.json();
+      assert.strictEqual(notifSitesData.success, true);
+      assert.deepStrictEqual(notifSitesData.author.notificationSites, ['gelbooru', 'kemono', 'danbooru']);
+
       // Delete
       const delRes = await fetch(`${baseUrl}/api/favorite-authors/artist_test`, {
         method: 'DELETE',

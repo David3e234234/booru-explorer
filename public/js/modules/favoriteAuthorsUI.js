@@ -1,11 +1,16 @@
 import { state, addSearchTag, setFavoriteAuthors } from '../state.js';
-import { deleteFavoriteAuthor, toggleFavoriteAuthor, fetchFavoriteAuthors, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchPosts, getProxiedUrl, shouldProxyMedia } from '../api.js';
-import { showToast, haptic, toSafeHttpUrl, escapeHtml } from './uiUtils.js';
+import { deleteFavoriteAuthor, toggleFavoriteAuthor, fetchFavoriteAuthors, updateFavoriteAuthorPreview, syncFavoriteAuthors, fetchPosts, getProxiedUrl, shouldProxyMedia, updateAuthorNotificationSites } from '../api.js';
+import { showToast, haptic, toSafeHttpUrl, toSafeCssColor, escapeHtml } from './uiUtils.js';
 import { t } from '../i18n.js';
 
 let currentPickerAuthor = null;
 let coverPickerSeq = 0;
 let onCoverUpdatedCallback = null;
+
+let currentNotifAuthor = null;
+let tempNotifSites = [];
+let notifModalCallbacks = null;
+let addAuthorNotifSites = new Set();
 
 export function switchFavoritesSubTab(tab, { onSearch, onRenderAuthors }) {
   const btnFavSubPosts = document.getElementById('btnFavSubPosts');
@@ -39,6 +44,7 @@ export function renderFavoriteAuthorsList(galleryInstance, { onExploreAuthor, on
     onExplore: onExploreAuthor,
     onAddAuthor: openAddAuthorModal,
     onChangePreview: openCoverPickerModal,
+    onConfigureNotifications: (author) => openAuthorNotifSourcesModal(author, galleryInstance, { onExploreAuthor, onUpdateBadge }),
     onDelete: async (author) => {
       if (!author || !author.name) return;
       try {
@@ -263,19 +269,211 @@ export function initCoverPickerModal({ onCoverUpdated }) {
   }
 }
 
+export function openAuthorNotifSourcesModal(author, galleryInstance, callbacks = {}) {
+  if (!author) return;
+  currentNotifAuthor = author;
+  notifModalCallbacks = { galleryInstance, ...callbacks };
+
+  const modalBackdrop = document.getElementById('modalAuthorNotifSourcesBackdrop');
+  const infoBox = document.getElementById('authorNotifModalAuthorInfo');
+  if (!modalBackdrop) return;
+
+  const currentSites = Array.isArray(author.notificationSites) && author.notificationSites.length > 0
+    ? [...author.notificationSites]
+    : [author.site || 'danbooru'];
+  tempNotifSites = [...currentSites];
+
+  if (infoBox) {
+    const rawPreview = author.thumb180 || author.previewUrl || author.thumb360 || '';
+    const shouldUseThumbProxy = shouldProxyMedia({ site: author.site, url: rawPreview, type: 'thumbnail' });
+    const avatarUrl = toSafeHttpUrl(rawPreview ? (rawPreview.startsWith('/api/') ? rawPreview : (shouldUseThumbProxy ? getProxiedUrl(rawPreview) : rawPreview)) : '');
+    const siteObj = (state.sites || []).find(s => s.id === author.site);
+    const siteName = siteObj ? siteObj.name : (author.site ? author.site.toUpperCase() : 'Danbooru');
+
+    infoBox.innerHTML = `
+      ${avatarUrl ? `
+        <img src="${escapeHtml(avatarUrl)}" alt="" class="author-notif-modal-avatar">
+      ` : `
+        <div class="author-notif-modal-avatar" style="display:flex;align-items:center;justify-content:center;color:var(--text-muted);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="7" r="4"/><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/></svg>
+        </div>
+      `}
+      <div class="author-notif-modal-names">
+        <span class="author-notif-modal-display-name">${escapeHtml(author.displayName || author.name)}</span>
+        <span class="author-notif-modal-tag">@${escapeHtml(author.name)}</span>
+      </div>
+      <span class="author-card-site-badge" title="${escapeHtml(t('addAuthor.siteLabel', 'Предпочитаемый Booru-источник:'))}">${escapeHtml(siteName)}</span>
+    `;
+  }
+
+  renderAuthorNotifSourcesGrid();
+  modalBackdrop.style.display = 'flex';
+}
+
+export function closeAuthorNotifSourcesModal() {
+  const modalBackdrop = document.getElementById('modalAuthorNotifSourcesBackdrop');
+  if (modalBackdrop) modalBackdrop.style.display = 'none';
+  currentNotifAuthor = null;
+  notifModalCallbacks = null;
+}
+
+function renderAuthorNotifSourcesGrid() {
+  const grid = document.getElementById('authorNotifSourcesGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  const sites = state.sites || [];
+  sites.forEach(site => {
+    const isChecked = tempNotifSites.includes(site.id);
+    const card = document.createElement('label');
+    card.className = `author-notif-site-card ${isChecked ? 'selected' : ''}`;
+    card.innerHTML = `
+      <input type="checkbox" class="author-notif-site-checkbox" data-site="${escapeHtml(site.id)}" ${isChecked ? 'checked' : ''}>
+      <span class="source-dot" style="background-color: ${toSafeCssColor(site.accentColor)}; width: 8px; height: 8px; border-radius: 50%;"></span>
+      <div class="author-notif-site-info">
+        <span class="author-notif-site-name">${escapeHtml(site.name)}</span>
+        <span class="author-notif-site-rating">${escapeHtml(site.rating === 'nsfw' ? '18+' : (site.rating === 'safe' ? 'SFW' : 'MIX'))}</span>
+      </div>
+    `;
+
+    const input = card.querySelector('input');
+    input.addEventListener('change', () => {
+      if (input.checked) {
+        if (!tempNotifSites.includes(site.id)) tempNotifSites.push(site.id);
+        card.classList.add('selected');
+      } else {
+        tempNotifSites = tempNotifSites.filter(id => id !== site.id);
+        card.classList.remove('selected');
+      }
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+export function initAuthorNotifSourcesModal() {
+  const modalBackdrop = document.getElementById('modalAuthorNotifSourcesBackdrop');
+  const btnClose = document.getElementById('btnCloseAuthorNotifSourcesModal');
+  const btnCancel = document.getElementById('btnCancelAuthorNotifSources');
+  const btnSave = document.getElementById('btnSaveAuthorNotifSources');
+  const btnSelectAll = document.getElementById('btnAuthorNotifSelectAll');
+  const btnPrimaryOnly = document.getElementById('btnAuthorNotifPrimaryOnly');
+
+  if (btnClose) btnClose.addEventListener('click', closeAuthorNotifSourcesModal);
+  if (btnCancel) btnCancel.addEventListener('click', closeAuthorNotifSourcesModal);
+
+  if (modalBackdrop) {
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) closeAuthorNotifSourcesModal();
+    });
+  }
+
+  if (btnSelectAll) {
+    btnSelectAll.addEventListener('click', () => {
+      const allIds = (state.sites || []).map(s => s.id);
+      const isAllSelected = allIds.length > 0 && allIds.every(id => tempNotifSites.includes(id));
+      if (isAllSelected) {
+        tempNotifSites = [currentNotifAuthor?.site || 'danbooru'];
+      } else {
+        tempNotifSites = [...allIds];
+      }
+      renderAuthorNotifSourcesGrid();
+    });
+  }
+
+  if (btnPrimaryOnly) {
+    btnPrimaryOnly.addEventListener('click', () => {
+      tempNotifSites = [currentNotifAuthor?.site || 'danbooru'];
+      renderAuthorNotifSourcesGrid();
+    });
+  }
+
+  if (btnSave) {
+    btnSave.addEventListener('click', async () => {
+      if (!currentNotifAuthor) return;
+      haptic(10);
+      const targetSites = tempNotifSites.length > 0 ? [...tempNotifSites] : [currentNotifAuthor.site || 'danbooru'];
+      currentNotifAuthor.notificationSites = targetSites;
+
+      const cleanName = (currentNotifAuthor.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      const inState = (state.favoriteAuthors || []).find(a => 
+        (a.name || '').toLowerCase().replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_') === cleanName
+      );
+      if (inState) inState.notificationSites = targetSites;
+
+      setFavoriteAuthors([...state.favoriteAuthors]);
+      const authorToSave = currentNotifAuthor;
+      const callbacks = notifModalCallbacks;
+      closeAuthorNotifSourcesModal();
+
+      showToast(t('fav.notifSourcesSaved', 'Источники уведомлений автора {name} сохранены').replace('{name}', authorToSave.displayName || authorToSave.name));
+
+      if (callbacks?.galleryInstance) {
+        renderFavoriteAuthorsList(callbacks.galleryInstance, {
+          onExploreAuthor: callbacks.onExploreAuthor,
+          onUpdateBadge: callbacks.onUpdateBadge
+        });
+      }
+
+      try {
+        await updateAuthorNotificationSites(authorToSave.name, targetSites);
+        await syncFavoriteAuthors(state.favoriteAuthors);
+      } catch (err) {
+        console.warn('Сервер не ответил, источники уведомлений сохранены локально:', err);
+      }
+    });
+  }
+}
+
 export function openAddAuthorModal() {
   const modalAddAuthorBackdrop = document.getElementById('modalAddAuthorBackdrop');
   const inputAuthorName = document.getElementById('inputAuthorName');
+  const selectAuthorSite = document.getElementById('selectAuthorSite');
+
   if (modalAddAuthorBackdrop) modalAddAuthorBackdrop.style.display = 'flex';
   if (inputAuthorName) {
     inputAuthorName.value = '';
     setTimeout(() => inputAuthorName.focus(), 60);
   }
+
+  const initialSite = selectAuthorSite?.value || 'danbooru';
+  addAuthorNotifSites = new Set([initialSite]);
+  renderAddAuthorNotifChips();
 }
 
 export function closeAddAuthorModal() {
   const modalAddAuthorBackdrop = document.getElementById('modalAddAuthorBackdrop');
   if (modalAddAuthorBackdrop) modalAddAuthorBackdrop.style.display = 'none';
+}
+
+function renderAddAuthorNotifChips() {
+  const container = document.getElementById('addAuthorNotifSitesContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const sites = state.sites || [];
+  sites.forEach(site => {
+    const isSelected = addAuthorNotifSites.has(site.id);
+    const chip = document.createElement('div');
+    chip.className = `author-notif-chip ${isSelected ? 'selected' : ''}`;
+    chip.innerHTML = `
+      <span class="source-dot" style="background-color: ${toSafeCssColor(site.accentColor)}; width: 7px; height: 7px; border-radius: 50%;"></span>
+      <span>${escapeHtml(site.name)}</span>
+    `;
+
+    chip.addEventListener('click', () => {
+      if (addAuthorNotifSites.has(site.id)) {
+        if (addAuthorNotifSites.size > 1) {
+          addAuthorNotifSites.delete(site.id);
+        }
+      } else {
+        addAuthorNotifSites.add(site.id);
+      }
+      renderAddAuthorNotifChips();
+    });
+
+    container.appendChild(chip);
+  });
 }
 
 export function initAddAuthorModal({ onAuthorSaved }) {
@@ -287,6 +485,16 @@ export function initAddAuthorModal({ onAuthorSaved }) {
   const btnCancelAddAuthor = document.getElementById('btnCancelAddAuthor');
   const btnAddAuthorModalOpen = document.getElementById('btnAddAuthorModalOpen');
   const btnProfileAddAuthor = document.getElementById('btnProfileAddAuthor');
+
+  if (selectAuthorSite) {
+    selectAuthorSite.addEventListener('change', () => {
+      const chosen = selectAuthorSite.value;
+      if (chosen && addAuthorNotifSites.size <= 1) {
+        addAuthorNotifSites = new Set([chosen]);
+        renderAddAuthorNotifChips();
+      }
+    });
+  }
 
   if (btnAddAuthorModalOpen) {
     btnAddAuthorModalOpen.addEventListener('click', () => {
@@ -328,12 +536,14 @@ export function initAddAuthorModal({ onAuthorSaved }) {
       if (!rawName) return;
 
       const cleanTag = rawName.replace(/^@/, '').replace(/^pixiv:/i, '').replace(/\s+/g, '_');
+      const notificationSites = addAuthorNotifSites.size > 0 ? Array.from(addAuthorNotifSites) : [site];
 
       try {
         const res = await toggleFavoriteAuthor({
           name: cleanTag,
           displayName: rawName,
-          site
+          site,
+          notificationSites
         });
 
         if (res.success) {

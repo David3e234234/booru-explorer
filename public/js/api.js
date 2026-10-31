@@ -514,6 +514,23 @@ export async function updateFavoriteAuthorPreview(name, previewUrl, site = 'danb
   }
 }
 
+export async function updateAuthorNotificationSites(name, sites) {
+  try {
+    const res = await fetchWithTimeout('/api/favorite-authors/notification-sites', {
+      method: 'POST',
+      headers: getAuthHeaders(true),
+      body: JSON.stringify({ name, sites })
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    return { success: false, message: `Ошибка сервера: ${res.status}` };
+  } catch (err) {
+    console.warn('Сервер недоступен при сохранении источников уведомлений:', err);
+    return { success: true, fallback: true };
+  }
+}
+
 export async function syncFavoriteAuthors(authors) {
   const res = await fetchWithTimeout('/api/favorite-authors/sync', {
     method: 'POST',

@@ -215,7 +215,32 @@ export function saveNotifications(notifications, userId = null) {
 export function addNotification(notification, userId = null) {
   if (!notification || !notification.id) return;
   const list = getNotifications(userId);
-  const exists = list.some(n => n.id === notification.id || (n.post?.id && notification.post?.id && n.post.id === notification.post.id && n.author?.name === notification.author?.name));
+  const notifPost = notification.post || {};
+  const notifAuthor = (notification.author?.name || '').toLowerCase();
+  const notifIds = new Set();
+  if (notifPost.id) notifIds.add(String(notifPost.id));
+  if (notifPost.originalId) notifIds.add(String(notifPost.originalId));
+  if (Array.isArray(notifPost.albumItems)) {
+    notifPost.albumItems.forEach(it => {
+      if (it?.id) notifIds.add(String(it.id));
+      if (it?.originalId) notifIds.add(String(it.originalId));
+    });
+  }
+
+  const exists = list.some(n => {
+    if (n.id === notification.id) return true;
+    const authorMatches = (n.author?.name || '').toLowerCase() === notifAuthor;
+    if (!authorMatches) return false;
+    const p = n.post || {};
+    if (p.id && notifIds.has(String(p.id))) return true;
+    if (p.originalId && notifIds.has(String(p.originalId))) return true;
+    if (p.seriesKey && notifPost.seriesKey && p.seriesKey === notifPost.seriesKey) return true;
+    if (Array.isArray(p.albumItems)) {
+      return p.albumItems.some(it => (it?.id && notifIds.has(String(it.id))) || (it?.originalId && notifIds.has(String(it.originalId))));
+    }
+    return false;
+  });
+
   if (exists) return;
   list.unshift(notification);
   saveNotifications(list, userId);

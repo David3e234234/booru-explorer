@@ -1585,7 +1585,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     }
   }
 
-  function renderAuthorCards(authorsList, { onExplore, onDelete, onAddAuthor, onChangePreview } = {}) {
+  function renderAuthorCards(authorsList, { onExplore, onDelete, onAddAuthor, onChangePreview, onConfigureNotifications } = {}) {
     stopHoverPreview();
     resetVirtualization();
     galleryGrid.innerHTML = '';
@@ -1627,7 +1627,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
 
     const fragment = document.createDocumentFragment();
     authorsList.forEach(author => {
-      const card = createAuthorCard(author, { onExplore, onDelete, onChangePreview });
+      const card = createAuthorCard(author, { onExplore, onDelete, onChangePreview, onConfigureNotifications });
       fragment.appendChild(card);
     });
     galleryGrid.appendChild(fragment);
@@ -1691,7 +1691,7 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
     return candidate;
   }
 
-  function createAuthorCard(author, { onExplore, onDelete, onChangePreview } = {}) {
+  function createAuthorCard(author, { onExplore, onDelete, onChangePreview, onConfigureNotifications } = {}) {
     const card = document.createElement('div');
     card.className = 'author-card';
     card.dataset.authorName = author.name;
@@ -1709,6 +1709,11 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
         if (!isNaN(d.getTime())) formattedDate = d.toLocaleDateString(document.documentElement.lang === 'en' ? 'en-US' : 'ru-RU');
       } catch (e) {}
     }
+
+    const notifSites = Array.isArray(author.notificationSites) && author.notificationSites.length > 0 
+      ? author.notificationSites 
+      : [author.site || 'danbooru'];
+    const notifBtnTitle = escapeHtml(t('fav.authorNotifBtnTitle', 'Источники уведомлений автора'));
 
     const safeDisplayName = escapeHtml(author.displayName || author.name || '');
     const safeName = escapeHtml(author.name || '');
@@ -1740,6 +1745,10 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
             <span>${escapeHtml(t('gal.viewWorks', 'Смотреть работы'))}</span>
           </button>
+          <button type="button" class="btn-author-notifs ${notifSites.length > 1 || (author.notificationSites && author.notificationSites.length > 0) ? 'has-custom-sources' : ''}" title="${notifBtnTitle}">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            ${notifSites.length > 1 ? `<span class="btn-author-notifs-badge">${notifSites.length}</span>` : ''}
+          </button>
           <button class="btn-author-delete" title="${escapeHtml(t('gal.removeAuthor.title', 'Удалить из избранных'))}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
           </button>
@@ -1760,6 +1769,14 @@ export function initGallery({ onOpenViewer, onFavoriteToggle, onTagClick, onTagS
       btnExplore.addEventListener('click', (e) => {
         e.stopPropagation();
         if (onExplore) onExplore(author);
+      });
+    }
+
+    const btnNotifs = card.querySelector('.btn-author-notifs');
+    if (btnNotifs) {
+      btnNotifs.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (onConfigureNotifications) onConfigureNotifications(author);
       });
     }
 

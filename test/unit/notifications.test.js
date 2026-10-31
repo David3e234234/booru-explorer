@@ -16,6 +16,8 @@ import {
   checkAuthorNewPosts,
   scanFollowedAuthors
 } from '../../src/services/notificationService.js';
+import { sanitizeStoredPost } from '../../src/services/storedPostSchema.js';
+import { createMockAgent, restoreDispatcher } from './parsers/harness.js';
 import { formatRelativeTime } from '../../public/js/modules/notificationsUI.js';
 
 describe('Notifications Subsystem Unit Tests', () => {
@@ -82,6 +84,35 @@ describe('Notifications Subsystem Unit Tests', () => {
 
       const list = getNotifications(testUserId);
       assert.strictEqual(list.length, 1);
+    });
+
+    it('deduplicates notifications by seriesKey and albumItems for the same author', () => {
+      const albumNotif = {
+        id: 'notif_album_1',
+        type: 'author_new_post',
+        author: { name: 'artist_album' },
+        post: { 
+          id: 'post_100', 
+          seriesKey: 'pixiv:99999',
+          isAlbum: true,
+          albumItems: [{ id: 'post_100' }, { id: 'post_101' }, { id: 'post_102' }]
+        },
+        read: false
+      };
+      addNotification(albumNotif, testUserId);
+
+      // Attempt adding child item as separate notification
+      const childNotif = {
+        id: 'notif_child_1',
+        type: 'author_new_post',
+        author: { name: 'artist_album' },
+        post: { id: 'post_101', seriesKey: 'pixiv:99999' },
+        read: false
+      };
+      addNotification(childNotif, testUserId);
+
+      const list = getNotifications(testUserId);
+      assert.strictEqual(list.length, 1); // albumNotif added, childNotif blocked as duplicate
     });
 
     it('caps notifications to 100 items', () => {
@@ -158,6 +189,21 @@ describe('Notifications Subsystem Unit Tests', () => {
       const res = buildAuthorQuery({ name: '@pixiv: cool artist ', site: 'danbooru' });
       assert.strictEqual(res.tags, 'cool_artist');
     });
+
+    it('supports explicit targetSite override independent of author.site', () => {
+      const author = { name: 'ciloru', site: 'danbooru' };
+      const resKemono = buildAuthorQuery(author, 'kemono');
+      assert.strictEqual(resKemono.site, 'kemono');
+      assert.strictEqual(resKemono.tags, 'artist:ciloru');
+
+      const resR34v = buildAuthorQuery(author, 'rule34video');
+      assert.strictEqual(resR34v.site, 'rule34video');
+      assert.strictEqual(resR34v.tags, 'artist:ciloru');
+
+      const resGel = buildAuthorQuery(author, 'gelbooru');
+      assert.strictEqual(resGel.site, 'gelbooru');
+      assert.strictEqual(resGel.tags, 'ciloru');
+    });
   });
 
   describe('Relative Time Formatting', () => {
@@ -193,6 +239,61 @@ describe('Notifications Subsystem Unit Tests', () => {
       });
       assert.strictEqual(result.newCount, 0);
       assert.strictEqual(result.checkedAuthors, 0);
+    });
+
+    it('scans author across notificationSites instead of author.site', async () => {
+      const mockContext = createMockAgent();
+      try {
+        const safeClient = mockContext.agent.get('https://safebooru.org');
+        safeClient.intercept({
+          path: (p) => p.includes('page=dapi') && p.includes('json=1'),
+          method: 'GET'
+        }).reply(200, [
+          {
+            id: 3001,
+            directory: 'sample_dir',
+            image: 'img_3001.jpg',
+            tags: 'artist_safe solo',
+            rating: 'safe',
+            width: 1000,
+            height: 1000
+          }
+        ]);
+
+        const author = {
+          name: 'artist_safe',
+          site: 'danbooru', // search preference
+          notificationSites: ['safebooru'] // individual notification sources
+        };
+        const seedResult = await checkAuthorNewPosts(author, testUserId);
+        assert.strictEqual(seedResult.isInitialSeed, true);
+
+        const feedState = getAuthorFeedState(testUserId);
+        assert.ok(feedState['safebooru:artist_safe']);
+        assert.strictEqual(feedState['danbooru:artist_safe'], undefined);
+      } finally {
+        restoreDispatcher(mockContext.originalDispatcher, mockContext.agent);
+      }
+    });
+
+    it('preserves album items in notification post when keepAlbumItems is true', () => {
+      const albumPost = {
+        id: 'post_100',
+        site: 'danbooru',
+        isAlbum: true,
+        albumCount: 2,
+        albumItems: [
+          { id: 'item_1', fileUrl: 'https://example.com/1.jpg' },
+          { id: 'item_2', fileUrl: 'https://example.com/2.jpg' }
+        ]
+      };
+      const regular = sanitizeStoredPost(albumPost);
+      assert.strictEqual(regular.albumItems, undefined);
+
+      const notifPost = sanitizeStoredPost(albumPost, { keepAlbumItems: true });
+      assert.ok(Array.isArray(notifPost.albumItems));
+      assert.strictEqual(notifPost.albumItems.length, 2);
+      assert.strictEqual(notifPost.albumItems[0].id, 'item_1');
     });
   });
 });

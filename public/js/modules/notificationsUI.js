@@ -130,6 +130,11 @@ export function renderNotificationsList() {
     const postSubtitle = postSite
       ? `${postSite}${postRating ? ` • ${postRating}` : ''}`
       : t('notifications.postFallback', 'Новая публикация');
+    const isAlbum = Boolean(post.isAlbum && ((post.albumCount && post.albumCount > 1) || (Array.isArray(post.albumItems) && post.albumItems.length > 1)));
+    const albumCount = post.albumCount || (Array.isArray(post.albumItems) ? post.albumItems.length : 0);
+    const albumBadgeHtml = isAlbum
+      ? ` • <span class="notif-album-pill"><svg width="10" height="10" viewBox="0 0 24 24"><use href="#ic-album"/></svg> ${albumCount}</span>`
+      : '';
     const itemId = escapeHtml(item.id);
 
     return `
@@ -152,13 +157,14 @@ export function renderNotificationsList() {
             <span class="notif-author-title">${authorName}</span>
             ${isUnread ? `<span class="notif-dot" title="${t('notifications.unreadDot', 'Не прочитано')}"></span>` : ''}
           </div>
-          <div class="notif-desc-line">${escapeHtml(t('notifications.newPostFrom', 'Новый пост от {name}').replace('{name}', authorLabel))} • <span class="notif-site-badge">${escapeHtml(postSubtitle)}</span></div>
+          <div class="notif-desc-line">${escapeHtml(t('notifications.newPostFrom', 'Новый пост от {name}').replace('{name}', authorLabel))} • <span class="notif-site-badge">${escapeHtml(postSubtitle)}</span>${albumBadgeHtml}</div>
           <div class="notif-time-line">${timeStr}</div>
         </div>
 
         ${thumbUrl ? `
           <div class="notif-thumb-col">
             <img src="${escapeHtml(thumbUrl)}" alt="" class="notif-post-thumb" loading="lazy">
+            ${isAlbum ? `<span class="notif-thumb-album-badge"><svg width="9" height="9" viewBox="0 0 24 24"><use href="#ic-album"/></svg> ${albumCount}</span>` : ''}
           </div>
         ` : ''}
 
@@ -190,9 +196,9 @@ export function renderNotificationsList() {
       // Close dropdown
       closeNotificationsDropdown();
 
-      // Open post directly
+      // Open post directly from the beginning (index 0)
       if (openPostCallback && notif.post) {
-        openPostCallback(notif.post);
+        openPostCallback(notif.post, { initialAlbumIndex: 0 });
       }
     });
 
