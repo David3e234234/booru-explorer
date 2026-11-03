@@ -1,270 +1,44 @@
-import { 
-  state, 
-  saveLocalSettings, 
-  saveLocalAuth,
-  exportUserData, 
-  importUserData,
-  getUserInterestTags,
-  excludeInterestTag,
-  restoreInterestTag,
-  resetExcludedInterestTags,
-  clearSessionInterests,
+import {
+  state,
+  saveLocalSettings,
   invalidateInterestCache
 } from '../state.js';
-import { 
-  saveSettings, 
-  fetchCacheInfo,
-  markAuthHeadersDirty,
-  clearCache, 
-  syncFavorites, 
-  syncLikes, 
-  syncDislikes, 
-  syncFavoriteAuthors,
-  testTelegramConnection,
-  testSiteAuth,
-  testProxyConnection,
-  sendTelegramBackupNow,
-  fetchTelegramBackupStatus,
-  apiExportAccount,
-  apiRestoreAccount,
-  syncExternalAccounts,
-  fetchAliasesInfo,
-  clearDiscoveredAliasesApi
+import {
+  saveSettings,
+  markAuthHeadersDirty
 } from '../api.js';
-import { showToast, formatBytes, escapeHtml, syncThemeColor } from './uiUtils.js';
+import {
+  showToast,
+  syncThemeColor
+} from './uiUtils.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updatePawchiveServiceUI, updateKemonoServiceUI } from './filtersUI.js';
-import { updateHeaderAuthUI } from './authModal.js';
+
 import { lockBodyScroll, unlockBodyScroll } from './scrollLock.js';
 import {
-  normalizeProxyString,
-  DEFAULT_AI_TAGS,
-  DEFAULT_BLACKLIST,
-  DEFAULT_CURVY_TAGS,
-  DEFAULT_PETITE_TAGS,
-  DEFAULT_FURRY_TAGS,
-  DEFAULT_PREGNANT_TAGS,
-  DEFAULT_PREGNANCY_TAGS,
-  DEFAULT_LGBT_TAGS,
-  DEFAULT_SITE_SORT_TAGS,
-  SITE_SORT_METADATA
+  normalizeProxyString
 } from './settingsConstants.js';
 
-export {
-  normalizeProxyString,
-  DEFAULT_AI_TAGS,
-  DEFAULT_BLACKLIST,
-  DEFAULT_CURVY_TAGS,
-  DEFAULT_PETITE_TAGS,
-  DEFAULT_FURRY_TAGS,
-  DEFAULT_PREGNANT_TAGS,
-  DEFAULT_PREGNANCY_TAGS,
-  DEFAULT_LGBT_TAGS,
-  DEFAULT_SITE_SORT_TAGS,
-  SITE_SORT_METADATA
-};
-
-let tempBlacklist = [];
-let tempAiTags = [];
-let tempCurvyTags = [];
-let tempPetiteTags = [];
-let tempFurryTags = [];
-let tempPregnantTags = [];
-let tempLgbtTags = [];
-let tempIgnoredAliases = [];
-let tempSiteSortTags = {};
-let currentSortEditingSite = 'gelbooru';
-let tempSiteMediaProxy = {};
-
-export function addIgnoredAliasTag(tag) {
-  if (!tag || typeof tag !== 'string') return;
-  const clean = tag.trim().toLowerCase();
-  if (!clean) return;
-  if (!tempIgnoredAliases.includes(clean)) {
-    tempIgnoredAliases.push(clean);
-  }
-  const currentList = Array.isArray(state.settings?.ignoredAliases) ? [...state.settings.ignoredAliases] : [];
-  if (!currentList.includes(clean)) {
-    currentList.push(clean);
-    persistSettings({ ignoredAliases: currentList });
-  }
-  renderSettingsChips();
-}
-
-function saveCurrentSiteSortInputs() {
-  const inputHot = document.getElementById('inputSiteSortHot');
-  const inputViews = document.getElementById('inputSiteSortViews');
-  const inputTop = document.getElementById('inputSiteSortTop');
-  const inputNew = document.getElementById('inputSiteSortNew');
-  if (!currentSortEditingSite) return;
-
-  const hot = inputHot ? inputHot.value.trim() : '';
-  const views = inputViews ? inputViews.value.trim() : '';
-  const top = inputTop ? inputTop.value.trim() : '';
-  const newTag = inputNew ? inputNew.value.trim() : '';
-
-  if (hot || views || top || newTag) {
-    tempSiteSortTags[currentSortEditingSite] = { hot, views, top, new: newTag };
-  } else {
-    delete tempSiteSortTags[currentSortEditingSite];
-  }
-}
-
-export function renderSiteSortTagsUI(siteId) {
-  if (!siteId) siteId = 'gelbooru';
-  currentSortEditingSite = siteId;
-
-  const meta = SITE_SORT_METADATA[siteId] || SITE_SORT_METADATA.gelbooru;
-  const currentTags = tempSiteSortTags[siteId] || {};
-
-  const inputHot = document.getElementById('inputSiteSortHot');
-  const inputViews = document.getElementById('inputSiteSortViews');
-  const inputTop = document.getElementById('inputSiteSortTop');
-  const inputNew = document.getElementById('inputSiteSortNew');
-
-  const badgeHot = document.getElementById('siteSortHotDefaultBadge');
-  const badgeViews = document.getElementById('siteSortViewsDefaultBadge');
-  const badgeTop = document.getElementById('siteSortTopDefaultBadge');
-  const badgeNew = document.getElementById('siteSortNewDefaultBadge');
-  const presetsContainer = document.getElementById('siteSortHotPresets');
-
-  if (inputHot) {
-    inputHot.value = currentTags.hot || '';
-    inputHot.placeholder = meta.hotPlaceholder;
-  }
-  if (inputViews) {
-    inputViews.value = currentTags.views || '';
-    inputViews.placeholder = meta.viewsPlaceholder;
-  }
-  if (inputTop) {
-    inputTop.value = currentTags.top || '';
-    inputTop.placeholder = meta.topPlaceholder;
-  }
-  if (inputNew) {
-    inputNew.value = currentTags.new || '';
-    inputNew.placeholder = meta.newPlaceholder;
-  }
-
-  if (badgeHot) badgeHot.textContent = `(авто: ${meta.hotBadge})`;
-  if (badgeViews) badgeViews.textContent = `(авто: ${meta.viewsBadge})`;
-  if (badgeTop) badgeTop.textContent = `(авто: ${meta.topBadge})`;
-  if (badgeNew) badgeNew.textContent = `(авто: ${meta.newBadge})`;
-
-  if (presetsContainer) {
-    presetsContainer.innerHTML = '';
-    if (meta.presets && meta.presets.length > 0) {
-      const label = document.createElement('span');
-      label.style.fontSize = '10px';
-      label.style.opacity = '0.7';
-      label.style.alignSelf = 'center';
-      label.textContent = t('settings.sortPresets', 'Пресеты:');
-      presetsContainer.appendChild(label);
-
-      meta.presets.forEach(pr => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn-text';
-        btn.style.fontSize = '10px';
-        btn.style.padding = '2px 6px';
-        btn.style.background = 'var(--surface-sunken)';
-        btn.style.border = '1px solid var(--border-subtle)';
-        btn.style.borderRadius = 'var(--radius-sm)';
-        btn.style.cursor = 'pointer';
-        btn.textContent = pr;
-        btn.addEventListener('click', () => {
-          if (inputHot) {
-            inputHot.value = pr;
-            saveCurrentSiteSortInputs();
-          }
-        });
-        presetsContainer.appendChild(btn);
-      });
-    }
-  }
-}
-
-export const SITES_MEDIA_PROXY_CONFIG = [
-  { id: 'danbooru', name: 'Danbooru', badgeClass: 'site-danbooru', defaultHint: 'Кэш и обход hotlink' },
-  { id: 'gelbooru', name: 'Gelbooru', badgeClass: 'site-gelbooru', defaultHint: 'По общим правилам' },
-  { id: 'rule34', name: 'Rule34.xxx', badgeClass: 'site-r34', defaultHint: 'По общим правилам' },
-  { id: 'yandere', name: 'Yande.re', badgeClass: 'site-yandere', defaultHint: 'По общим правилам' },
-  { id: 'konachan', name: 'Konachan', badgeClass: 'site-konachan', defaultHint: 'По общим правилам' },
-  { id: 'safebooru', name: 'Safebooru', badgeClass: 'site-safebooru', defaultHint: 'По общим правилам' },
-  { id: 'rule34video', name: 'Rule34Video', badgeClass: 'site-rule34video', defaultHint: 'Серверный видео-стриминг' },
-  { id: 'pawchive', name: 'Pawchive', badgeClass: 'site-pawchive', defaultHint: 'По общим правилам' },
-  { id: 'kemono', name: 'Kemono', badgeClass: 'site-kemono', defaultHint: 'По общим правилам' },
-  { id: 'xbooru', name: 'Xbooru', badgeClass: 'site-xbooru', defaultHint: 'По общим правилам' },
-  { id: 'hypnohub', name: 'Hypnohub', badgeClass: 'site-hypnohub', defaultHint: 'По общим правилам' },
-  { id: 'tbib', name: 'TBIB', badgeClass: 'site-tbib', defaultHint: 'По общим правилам' }
-];
-
-function getSiteProxyHintText(site, mode) {
-  if (mode === 'server') {
-    return t('settings.proxyModeServerHint', 'Через сервер (кэш)');
-  }
-  if (mode === 'direct') {
-    return t('settings.proxyModeDirectHint', 'Напрямую с CDN');
-  }
-  return site.defaultHint;
-}
-
-export function renderSiteMediaProxyUI() {
-  const container = document.getElementById('siteMediaProxyList');
-  if (!container) return;
-  container.innerHTML = '';
-
-  const fragment = document.createDocumentFragment();
-
-  SITES_MEDIA_PROXY_CONFIG.forEach(site => {
-    const currentMode = tempSiteMediaProxy[site.id] || 'default';
-    const row = document.createElement('div');
-    row.className = 'site-proxy-item';
-    row.dataset.siteId = site.id;
-
-    const meta = document.createElement('div');
-    meta.className = 'site-proxy-meta';
-    meta.innerHTML = `
-      <span class="api-key-site-badge ${site.badgeClass}">${escapeHtml(site.name)}</span>
-      <span class="site-proxy-hint-text" id="siteProxyHint_${site.id}">${escapeHtml(getSiteProxyHintText(site, currentMode))}</span>
-    `;
-
-    const controls = document.createElement('div');
-    controls.className = 'segmented-control';
-    controls.innerHTML = `
-      <button type="button" class="segmented-pill ${currentMode === 'default' ? 'active' : ''}" data-proxy-mode="default" title="${t('settings.proxyModeDefault', 'По умолчанию')}">${t('settings.proxyModeDefault', 'По умолчанию')}</button>
-      <button type="button" class="segmented-pill ${currentMode === 'server' ? 'active' : ''}" data-proxy-mode="server" title="${t('settings.proxyModeServer', 'Через сервер')}">${t('settings.proxyModeServer', 'Через сервер')}</button>
-      <button type="button" class="segmented-pill ${currentMode === 'direct' ? 'active' : ''}" data-proxy-mode="direct" title="${t('settings.proxyModeDirect', 'Напрямую')}">${t('settings.proxyModeDirect', 'Напрямую')}</button>
-    `;
-
-    controls.addEventListener('click', (e) => {
-      const btn = e.target.closest('.segmented-pill');
-      if (!btn) return;
-      const mode = btn.dataset.proxyMode;
-      if (!mode) return;
-
-      if (mode === 'default') {
-        delete tempSiteMediaProxy[site.id];
-      } else {
-        tempSiteMediaProxy[site.id] = mode;
-      }
-
-      controls.querySelectorAll('.segmented-pill').forEach(b => {
-        b.classList.toggle('active', b.dataset.proxyMode === mode);
-      });
-
-      const hintEl = document.getElementById(`siteProxyHint_${site.id}`);
-      if (hintEl) {
-        hintEl.textContent = getSiteProxyHintText(site, mode);
-      }
-    });
-
-    row.appendChild(meta);
-    row.appendChild(controls);
-    fragment.appendChild(row);
-  });
-
-  container.appendChild(fragment);
-}
+import {
+  renderSettingsChips,
+  initTagListInputs,
+  loadTempTagsFromSettings,
+  getTempTags,
+  resetTempTagsToDefaults
+} from './settingsTabs/tagLists.js';
+import { loadTempSiteSortTags, getTempSiteSortTags, resetTempSiteSortTags, initSiteSortEditor } from './settingsTabs/siteSortEditor.js';
+import { loadTempSiteMediaProxy, getTempSiteMediaProxy, resetTempSiteMediaProxy, renderSiteMediaProxyUI } from './settingsTabs/mediaProxySettings.js';
+import { renderTasteProfileUI, initTasteProfileControls } from './settingsTabs/tasteProfile.js';
+import {
+  updateStorageUsageInfo,
+  updateDiscoveredAliasesUI,
+  updateTelegramBackupStatusUI,
+  initStorageBackup
+} from './settingsTabs/storageBackup.js';
+import { initCredentialTests } from './settingsTabs/credentialTests.js';
+import { initProxyTests } from './settingsTabs/proxyTests.js';
+import { ensureSettingsMarkup } from './settingsMarkup.js';
+import { initNotificationSettingsControls } from './notificationsUI.js';
 
 export function applySettingsToUIAndState(s) {
   if (!s) return;
@@ -480,356 +254,6 @@ export function applySettingsToUIAndState(s) {
   updateTelegramBackupStatusUI(s);
 }
 
-export function updateTelegramBackupStatusUI(s = state.settings) {
-  const statusDot = document.getElementById('telegramStatusDot');
-  const statusText = document.getElementById('telegramStatusText');
-  if (!statusText || !statusDot) return;
-
-  const hasConfig = !!(s?.telegramBotToken && s?.telegramChatId);
-  const isEnabled = !!s?.telegramBackupEnabled;
-  const lastBackup = s?.telegramLastBackupAt;
-
-  if (!hasConfig) {
-    statusDot.className = 'tg-status-dot dot-idle';
-    statusText.textContent = t('set.tgNotConfigured', 'Бот не настроен (введите Token и Chat ID)');
-  } else if (!isEnabled) {
-    statusDot.className = 'tg-status-dot dot-paused';
-    statusText.textContent = t('set.tgDisabled', 'Автобэкап выключен (доступна ручная отправка)');
-  } else {
-    statusDot.className = 'tg-status-dot dot-active';
-    if (lastBackup) {
-      const d = new Date(lastBackup);
-      const dateStr = d.toLocaleString('ru-RU', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      statusText.textContent = t('set.tgActiveLast', 'Активен. Последний бэкап: {d}').replace('{d}', dateStr);
-    } else {
-      statusText.textContent = t('set.tgActiveWaiting', 'Активен. Ожидание первого автобэкапа');
-    }
-  }
-}
-
-export { persistSettings } from './settingsPersist.js';
-import { persistSettings } from './settingsPersist.js';
-
-function renderChipsForGroup(wrapperEl, inputEl, tagList, onRemove) {
-  if (!wrapperEl || !inputEl) return;
-  wrapperEl.querySelectorAll('.tag-chip').forEach(c => c.remove());
-  tagList.forEach(tag => {
-    const chip = document.createElement('div');
-    chip.className = 'tag-chip';
-    chip.innerHTML = `
-      <span>${escapeHtml(tag)}</span>
-      <span class="tag-chip-remove">×</span>
-    `;
-    chip.querySelector('.tag-chip-remove').addEventListener('click', (e) => {
-      e.stopPropagation();
-      onRemove(tag);
-    });
-    wrapperEl.insertBefore(chip, inputEl);
-  });
-}
-
-export function renderSettingsChips() {
-  renderChipsForGroup(
-    document.getElementById('blacklistWrapper'),
-    document.getElementById('blacklistInput'),
-    tempBlacklist,
-    (tag) => { tempBlacklist = tempBlacklist.filter(t => t !== tag); renderSettingsChips(); }
-  );
-
-  renderChipsForGroup(
-    document.getElementById('aiTagsWrapper'),
-    document.getElementById('aiTagsInput'),
-    tempAiTags,
-    (tag) => { tempAiTags = tempAiTags.filter(t => t !== tag); renderSettingsChips(); }
-  );
-
-  renderChipsForGroup(
-    document.getElementById('curvyTagsWrapper'),
-    document.getElementById('curvyTagsInput'),
-    tempCurvyTags,
-    (tag) => { tempCurvyTags = tempCurvyTags.filter(t => t !== tag); renderSettingsChips(); }
-  );
-
-  renderChipsForGroup(
-    document.getElementById('petiteTagsWrapper'),
-    document.getElementById('petiteTagsInput'),
-    tempPetiteTags,
-    (tag) => { tempPetiteTags = tempPetiteTags.filter(t => t !== tag); renderSettingsChips(); }
-  );
-
-  renderChipsForGroup(
-    document.getElementById('furryTagsWrapper'),
-    document.getElementById('furryTagsInput'),
-    tempFurryTags,
-    (tag) => { tempFurryTags = tempFurryTags.filter(t => t !== tag); renderSettingsChips(); }
-  );
-
-  renderChipsForGroup(
-    document.getElementById('pregnantTagsWrapper'),
-    document.getElementById('pregnantTagsInput'),
-    tempPregnantTags,
-    (tag) => { tempPregnantTags = tempPregnantTags.filter(t => t !== tag); renderSettingsChips(); }
-  );
-
-  renderChipsForGroup(
-    document.getElementById('lgbtTagsWrapper'),
-    document.getElementById('lgbtTagsInput'),
-    tempLgbtTags,
-    (tag) => { tempLgbtTags = tempLgbtTags.filter(t => t !== tag); renderSettingsChips(); }
-  );
-
-  renderChipsForGroup(
-    document.getElementById('ignoredAliasesWrapper'),
-    document.getElementById('ignoredAliasesInput'),
-    tempIgnoredAliases,
-    (tag) => { tempIgnoredAliases = tempIgnoredAliases.filter(t => t !== tag); renderSettingsChips(); }
-  );
-}
-
-export function renderTasteProfileUI() {
-  const checkRecSkipPenalty = document.getElementById('checkRecSkipPenalty');
-  if (checkRecSkipPenalty) {
-    checkRecSkipPenalty.checked = state.settings?.recommendationEnableSkipPenalty !== false;
-  }
-
-  const container = document.getElementById('recInterestsContainer');
-  const countEl = document.getElementById('recInterestsCount');
-  if (container) {
-    const topInterests = getUserInterestTags(20);
-    if (countEl) countEl.textContent = String(topInterests.length);
-
-    if (topInterests.length === 0) {
-      container.innerHTML = `<span class="text-muted" style="font-size: 12px;">${t('settings.noInterests', 'Лайкайте арты, чтобы сформировать профиль вкусов.')}</span>`;
-    } else {
-      container.innerHTML = topInterests.map(item => {
-        const catClass = item.category === 'artist' ? 'chip-artist' : item.category === 'character' ? 'chip-char' : item.category === 'copyright' ? 'chip-cp' : 'chip-general';
-        const displayTag = item.category === 'artist' ? `@${item.tag}` : item.tag;
-        return `
-          <div class="rec-interest-chip ${catClass}" title="${escapeHtml(t('settings.interestWeight', 'Вес интереса: {s}').replace('{s}', item.score.toFixed(1)))}">
-            <span class="rec-chip-label">${escapeHtml(displayTag)}</span>
-            <span class="rec-chip-score">${escapeHtml(item.score.toFixed(1))}</span>
-            <button type="button" class="btn-rec-chip-remove" data-tag="${escapeHtml(item.tag)}" title="${escapeHtml(t('settings.excludeTagBtn', 'Исключить из рекомендаций'))}">×</button>
-          </div>
-        `;
-      }).join('');
-
-      container.querySelectorAll('.btn-rec-chip-remove').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const tag = btn.dataset.tag;
-          if (!tag) return;
-          excludeInterestTag(tag);
-          renderTasteProfileUI();
-          showToast(t('gal.matchPopover.toastExcluded', 'Тег {t} исключен из рекомендаций').replace('{t}', tag));
-        });
-      });
-    }
-  }
-
-  const excludedContainer = document.getElementById('recExcludedContainer');
-  if (excludedContainer) {
-    const excludedTags = Array.isArray(state.settings?.excludedInterestTags) ? state.settings.excludedInterestTags : [];
-    if (excludedTags.length === 0) {
-      excludedContainer.innerHTML = `<span class="text-muted" style="font-size: 12px;">${t('settings.noExcludedTags', 'Нет исключенных тегов')}</span>`;
-    } else {
-      excludedContainer.innerHTML = excludedTags.map(tag => {
-        return `
-          <div class="rec-excluded-chip">
-            <span class="rec-chip-label">${escapeHtml(tag)}</span>
-            <button type="button" class="btn-rec-chip-restore" data-tag="${escapeHtml(tag)}" title="${escapeHtml(t('settings.restoreTagBtn', 'Восстановить в рекомендациях'))}">✕</button>
-          </div>
-        `;
-      }).join('');
-
-      excludedContainer.querySelectorAll('.btn-rec-chip-restore').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const tag = btn.dataset.tag;
-          if (!tag) return;
-          restoreInterestTag(tag);
-          renderTasteProfileUI();
-          showToast(t('gal.matchPopover.toastRestored', 'Тег {t} возвращен в рекомендации').replace('{t}', tag));
-        });
-      });
-    }
-  }
-}
-
-export async function updateStorageUsageInfo() {
-  const storageUsageText = document.getElementById('storageUsageText');
-  const storageQuotaText = document.getElementById('storageQuotaText');
-  const storageProgressBar = document.getElementById('storageProgressBar');
-  const storageMediaCacheText = document.getElementById('storageMediaCacheText');
-  const storageServerCacheText = document.getElementById('storageServerCacheText');
-
-  let localBytes = 0;
-  try {
-    for (const key in localStorage) {
-      if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
-        localBytes += (localStorage[key].length + key.length) * 2;
-      }
-    }
-  } catch {}
-
-  let pwaCacheBytes = 0;
-  let pwaMediaCacheBytes = 0;
-  if ('caches' in window) {
-    try {
-      const keys = await caches.keys();
-      for (const k of keys) {
-        const isMediaCache = k.includes('media');
-        const cache = await caches.open(k);
-        const reqs = await cache.keys();
-        for (const req of reqs) {
-          const res = await cache.match(req);
-          if (res) {
-            const blob = await res.blob();
-            pwaCacheBytes += blob.size;
-            if (isMediaCache) {
-              pwaMediaCacheBytes += blob.size;
-            }
-          }
-        }
-      }
-    } catch {}
-  }
-
-  let serverCacheBytes = 0;
-  let maxServerCacheMb = (state.settings.maxServerCacheMb !== undefined) ? Number(state.settings.maxServerCacheMb) : 1500;
-  try {
-    const data = await fetchCacheInfo();
-    if (data && data.success) {
-      serverCacheBytes = data.diskCacheBytes || 0;
-    }
-  } catch {}
-
-  const selectMaxServerCache = document.getElementById('selectMaxServerCache');
-  if (selectMaxServerCache && maxServerCacheMb !== undefined) {
-    selectMaxServerCache.value = String(maxServerCacheMb);
-  }
-
-  let quotaBytes = 0;
-  let usageBytes = 0;
-  if (navigator.storage && navigator.storage.estimate) {
-    try {
-      const est = await navigator.storage.estimate();
-      usageBytes = est.usage || 0;
-      quotaBytes = est.quota || 0;
-    } catch {}
-  }
-
-  const clientTotalBytes = usageBytes || (localBytes + pwaCacheBytes);
-
-  if (storageUsageText) storageUsageText.textContent = formatBytes(clientTotalBytes);
-  if (storageQuotaText) {
-    storageQuotaText.textContent = quotaBytes > 0 ? formatBytes(quotaBytes) : t('set.quotaUnknown', '-- ГБ');
-  }
-
-  if (storageProgressBar && quotaBytes > 0) {
-    const pct = Math.min(100, Math.max(1, Math.round((clientTotalBytes / quotaBytes) * 100)));
-    storageProgressBar.style.width = `${pct}%`;
-  }
-
-  if (storageMediaCacheText) storageMediaCacheText.textContent = formatBytes(pwaMediaCacheBytes);
-  if (storageServerCacheText) {
-    const formattedLimit = maxServerCacheMb > 0 
-      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ' + t('unit.gb', 'ГБ') : maxServerCacheMb + ' ' + t('unit.mb', 'МБ'))
-      : null;
-    const limitLabel = formattedLimit ? ` / ${formattedLimit}` : ` (${t('settings.cacheUnlimited', 'Без лимита')})`;
-    storageServerCacheText.textContent = `${formatBytes(serverCacheBytes)}${limitLabel}`;
-  }
-  const storageLimitBadge = document.getElementById('storageLimitBadge');
-  if (storageLimitBadge) {
-    storageLimitBadge.textContent = maxServerCacheMb > 0 
-      ? (maxServerCacheMb >= 1000 ? (maxServerCacheMb / 1000).toFixed(1).replace('.0', '') + ' ' + t('unit.gb', 'ГБ') : maxServerCacheMb + ' ' + t('unit.mb', 'МБ'))
-      : t('settings.cacheUnlimited', 'Без лимита');
-  }
-}
-
-export async function updateDiscoveredAliasesUI() {
-  const countEl = document.getElementById('discoveredAliasesCountText');
-  if (!countEl) return;
-  try {
-    const info = await fetchAliasesInfo();
-    countEl.textContent = String(info.discoveredCount || 0);
-  } catch {
-    countEl.textContent = '0';
-  }
-}
-
-export async function handleClearStorageCache() {
-  const btn = document.getElementById('btnClearStorageBtn');
-  const statusEl = document.getElementById('storageClearStatus');
-
-  if (btn) btn.disabled = true;
-  if (statusEl) statusEl.textContent = t('set.clearing', 'Очистка...');
-
-  try {
-    const keysToRemove = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('booru_cache_') || key.startsWith('booru_history_') || key.startsWith('booru_thumb_'))) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-
-    if ('caches' in window) {
-      const cacheNames = await caches.keys();
-      for (const name of cacheNames) {
-        if (name.includes('media') || name.startsWith('booru-cache-')) {
-          await caches.delete(name);
-        } else if (name.startsWith('booru-explorer-')) {
-          try {
-            const appCache = await caches.open(name);
-            const requests = await appCache.keys();
-            await Promise.all(
-              requests
-                .filter(req => {
-                  try {
-                    const pathname = new URL(req.url).pathname;
-                    return pathname.startsWith('/api/');
-                  } catch {
-                    return false;
-                  }
-                })
-                .map(req => appCache.delete(req))
-            );
-          } catch {}
-        }
-      }
-    }
-
-    await clearCache();
-
-    await updateStorageUsageInfo();
-    if (statusEl) {
-      statusEl.textContent = t('set.cacheCleared', 'Кэш очищен');
-      setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
-    }
-    showToast(t('set.mediaCacheCleared', 'Кэш медиа успешно очищен'));
-  } catch (err) {
-    console.error('[Settings] Cache clear failed:', err);
-    if (statusEl) {
-      statusEl.textContent = t('set.clearFailed', 'Ошибка очистки');
-      setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
-    }
-    // The server half of the clear needs a signed-in account (401) while the
-    // browser-side caches above are already gone, so surface the server's reason
-    // instead of a bare "could not clear" that reads like a half-success
-    const reason = err instanceof Error && err.message ? `: ${err.message}` : '';
-    showToast(t('set.cacheClearIncomplete', 'Не удалось полностью очистить кэш') + reason);
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
 export function switchSettingsTab(tabId) {
   document.querySelectorAll('.settings-nav-tab').forEach(btn => {
     const isActive = btn.dataset.tab === tabId;
@@ -883,37 +307,7 @@ export function openSettingsModal() {
   const checkEnablePaheal = document.getElementById('checkEnablePaheal');
   const selectRule34Provider = document.getElementById('selectRule34Provider');
 
-  tempBlacklist = Array.isArray(state.settings.blacklist) && state.settings.blacklist.length > 0 
-    ? [...state.settings.blacklist] 
-    : [...DEFAULT_BLACKLIST];
-
-  tempAiTags = Array.isArray(state.settings.aiTags) && state.settings.aiTags.length > 0 
-    ? [...state.settings.aiTags] 
-    : [...DEFAULT_AI_TAGS];
-
-  tempCurvyTags = Array.isArray(state.settings.curvyTags) && state.settings.curvyTags.length > 0 
-    ? [...state.settings.curvyTags] 
-    : [...DEFAULT_CURVY_TAGS];
-
-  tempPetiteTags = Array.isArray(state.settings.petiteTags) && state.settings.petiteTags.length > 0 
-    ? [...state.settings.petiteTags] 
-    : [...DEFAULT_PETITE_TAGS];
-
-  tempFurryTags = Array.isArray(state.settings.furryTags) && state.settings.furryTags.length > 0 
-    ? [...state.settings.furryTags] 
-    : [...DEFAULT_FURRY_TAGS];
-
-  tempPregnantTags = Array.isArray(state.settings.pregnantTags) && state.settings.pregnantTags.length > 0 
-    ? [...state.settings.pregnantTags] 
-    : [...DEFAULT_PREGNANT_TAGS];
-
-  tempLgbtTags = Array.isArray(state.settings.lgbtTags) && state.settings.lgbtTags.length > 0 
-    ? [...state.settings.lgbtTags] 
-    : [...DEFAULT_LGBT_TAGS];
-
-  tempIgnoredAliases = Array.isArray(state.settings.ignoredAliases)
-    ? [...state.settings.ignoredAliases]
-    : [];
+  loadTempTagsFromSettings();
 
   const checkEnableAliasDiscovery = document.getElementById('checkEnableAliasDiscovery');
   if (checkEnableAliasDiscovery) {
@@ -1014,16 +408,10 @@ export function openSettingsModal() {
   if (selectRecommendationMode) selectRecommendationMode.value = state.settings.recommendationMode || 'tags-only';
 
   // Update per-site sort tags
-  tempSiteSortTags = JSON.parse(JSON.stringify(state.settings.siteSortTags || {}));
-  const selectSortTagsSite = document.getElementById('selectSortTagsSite');
-  const initialSortSite = (state.currentSite && state.currentSite !== 'custom' && state.currentSite !== 'all') ? state.currentSite : 'gelbooru';
-  if (selectSortTagsSite) {
-    selectSortTagsSite.value = initialSortSite;
-  }
-  renderSiteSortTagsUI(initialSortSite);
+  loadTempSiteSortTags();
 
   // Open the General tab by default
-  tempSiteMediaProxy = (state.settings?.siteMediaProxy && typeof state.settings.siteMediaProxy === 'object') ? { ...state.settings.siteMediaProxy } : {};
+  loadTempSiteMediaProxy();
   renderSiteMediaProxyUI();
   switchSettingsTab('general');
 
@@ -1048,23 +436,49 @@ export function closeSettingsModal() {
   document.dispatchEvent(new CustomEvent('booru:settings-closed'));
 }
 
+// PWA install prompt: the button lives in the lazily injected settings
+// markup, so the prompt event is captured at module load — it usually fires
+// long before the user first opens the settings.
+let deferredInstallPrompt = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const group = document.getElementById('pwaInstallGroup');
+    if (group) group.style.display = 'block';
+  });
+}
+
+function bindPwaInstallControls() {
+  const group = document.getElementById('pwaInstallGroup');
+  if (deferredInstallPrompt && group) group.style.display = 'block';
+  const btnInstallPwa = document.getElementById('btnInstallPwa');
+  if (btnInstallPwa) {
+    btnInstallPwa.addEventListener('click', async () => {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        const { outcome } = await deferredInstallPrompt.userChoice;
+        if (outcome === 'accepted') {
+          showToast(t('app.pwaInstalling', 'Приложение Booru Explorer устанавливается'));
+          if (group) group.style.display = 'none';
+        }
+        deferredInstallPrompt = null;
+      } else {
+        showToast(t('app.pwaManualInstall', 'Для установки нажмите «На экран "Домой"» в меню браузера'));
+      }
+    });
+  }
+}
+
 export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateFavoritesBadge }) {
+  ensureSettingsMarkup();
+  bindPwaInstallControls();
+  initNotificationSettingsControls();
   const btnSettings = document.getElementById('btnSettings');
   const btnCloseSettings = document.getElementById('btnCloseSettings');
   const settingsBackdrop = document.getElementById('settingsBackdrop');
   const btnSaveSettings = document.getElementById('btnSaveSettings');
   const btnResetSettings = document.getElementById('btnResetSettings');
-  const blacklistInput = document.getElementById('blacklistInput');
-  const aiTagsInput = document.getElementById('aiTagsInput');
-  const curvyTagsInput = document.getElementById('curvyTagsInput');
-  const petiteTagsInput = document.getElementById('petiteTagsInput');
-  const btnResetCurvyTags = document.getElementById('btnResetCurvyTags');
-  const btnResetPetiteTags = document.getElementById('btnResetPetiteTags');
-  const btnRefreshStorage = document.getElementById('btnRefreshStorage');
-  const btnClearStorageBtn = document.getElementById('btnClearStorageBtn');
-  const btnExportData = document.getElementById('btnExportData');
-  const btnImportData = document.getElementById('btnImportData');
-  const inputImportFile = document.getElementById('inputImportFile');
 
   // Tab switching
   document.querySelectorAll('.settings-nav-tab').forEach(tabBtn => {
@@ -1080,700 +494,13 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
   if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeSettingsModal);
   if (settingsBackdrop) settingsBackdrop.addEventListener('click', closeSettingsModal);
 
-  // Per-site sort tags events
-  const selectSortTagsSite = document.getElementById('selectSortTagsSite');
-  if (selectSortTagsSite) {
-    selectSortTagsSite.addEventListener('change', () => {
-      saveCurrentSiteSortInputs();
-      renderSiteSortTagsUI(selectSortTagsSite.value);
-    });
-  }
-
-  const inputSiteSortHot = document.getElementById('inputSiteSortHot');
-  const inputSiteSortViews = document.getElementById('inputSiteSortViews');
-  const inputSiteSortTop = document.getElementById('inputSiteSortTop');
-  const inputSiteSortNew = document.getElementById('inputSiteSortNew');
-  [inputSiteSortHot, inputSiteSortViews, inputSiteSortTop, inputSiteSortNew].forEach(inp => {
-    if (inp) inp.addEventListener('input', saveCurrentSiteSortInputs);
-  });
-
-  const btnResetCurrentSiteSort = document.getElementById('btnResetCurrentSiteSort');
-  if (btnResetCurrentSiteSort) {
-    btnResetCurrentSiteSort.addEventListener('click', () => {
-      if (currentSortEditingSite && tempSiteSortTags[currentSortEditingSite]) {
-        delete tempSiteSortTags[currentSortEditingSite];
-      }
-      renderSiteSortTagsUI(currentSortEditingSite);
-      showToast(t('settings.siteSortReset', 'Теги для сайта сброшены к стандартным'));
-    });
-  }
-
-  // Auto-sync AI & Recommendation mode dropdowns immediately on change
-  const selectRecommendationMode = document.getElementById('selectRecommendationMode');
-  if (selectRecommendationMode) {
-    selectRecommendationMode.addEventListener('change', () => {
-      const val = selectRecommendationMode.value;
-      state.settings.recommendationMode = val;
-      state.settings.enableRecommendations = val !== 'off';
-      saveLocalSettings(state.settings);
-      saveSettings(state.settings).catch(() => {});
-      if (onSettingsChanged) onSettingsChanged();
-    });
-  }
-
-  // Generic tag input handler for tag groups
-  const setupTagInput = (inputId, wrapperId, getList, setList) => {
-    const input = document.getElementById(inputId);
-    const wrapper = document.getElementById(wrapperId);
-    if (!input) return;
-
-    if (wrapper) {
-      wrapper.addEventListener('click', (e) => {
-        if (e.target === wrapper) {
-          input.focus();
-        }
-      });
-    }
-
-    input.addEventListener('keydown', (e) => {
-      if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) {
-        e.preventDefault();
-        const raw = input.value.trim().toLowerCase();
-        const tokens = raw.split(/[, ]+/).map(t => t.trim().replace(/\s+/g, '_')).filter(Boolean);
-        let list = getList();
-        let changed = false;
-        tokens.forEach(val => {
-          if (val && !list.includes(val)) {
-            list.push(val);
-            changed = true;
-          }
-        });
-        if (changed) {
-          setList(list);
-          renderSettingsChips();
-        }
-        input.value = '';
-      } else if (e.key === 'Backspace' && !input.value) {
-        let list = getList();
-        if (list.length > 0) {
-          list.pop();
-          setList(list);
-          renderSettingsChips();
-        }
-      }
-    });
-  };
-
-  setupTagInput('blacklistInput', 'blacklistWrapper', () => tempBlacklist, (l) => { tempBlacklist = l; });
-  setupTagInput('aiTagsInput', 'aiTagsWrapper', () => tempAiTags, (l) => { tempAiTags = l; });
-  setupTagInput('curvyTagsInput', 'curvyTagsWrapper', () => tempCurvyTags, (l) => { tempCurvyTags = l; });
-  setupTagInput('petiteTagsInput', 'petiteTagsWrapper', () => tempPetiteTags, (l) => { tempPetiteTags = l; });
-  setupTagInput('furryTagsInput', 'furryTagsWrapper', () => tempFurryTags, (l) => { tempFurryTags = l; });
-  setupTagInput('pregnantTagsInput', 'pregnantTagsWrapper', () => tempPregnantTags, (l) => { tempPregnantTags = l; });
-  setupTagInput('lgbtTagsInput', 'lgbtTagsWrapper', () => tempLgbtTags, (l) => { tempLgbtTags = l; });
-  setupTagInput('ignoredAliasesInput', 'ignoredAliasesWrapper', () => tempIgnoredAliases, (l) => { tempIgnoredAliases = l; });
-
-  // Reset-to-defaults buttons
-  const btnResetBlacklist = document.getElementById('btnResetBlacklist');
-  if (btnResetBlacklist) {
-    btnResetBlacklist.addEventListener('click', () => {
-      tempBlacklist = [...DEFAULT_BLACKLIST];
-      renderSettingsChips();
-      showToast(t('set.blacklistReset', 'Черный список сброшен к стандартному'));
-    });
-  }
-
-  const btnResetAiTags = document.getElementById('btnResetAiTags');
-  if (btnResetAiTags) {
-    btnResetAiTags.addEventListener('click', () => {
-      tempAiTags = [...DEFAULT_AI_TAGS];
-      renderSettingsChips();
-      showToast(t('set.aiTagsReset', 'Теги ИИ сброшены к стандартным'));
-    });
-  }
-
-  if (btnResetCurvyTags) {
-    btnResetCurvyTags.addEventListener('click', () => {
-      tempCurvyTags = [...DEFAULT_CURVY_TAGS];
-      renderSettingsChips();
-      showToast(t('set.curvyReset', 'Слова для «Пышные» сброшены к стандартным'));
-    });
-  }
-
-  if (btnResetPetiteTags) {
-    btnResetPetiteTags.addEventListener('click', () => {
-      tempPetiteTags = [...DEFAULT_PETITE_TAGS];
-      renderSettingsChips();
-      showToast(t('set.petiteReset', 'Слова для «Миниатюрные» сброшены к стандартным'));
-    });
-  }
-
-  const btnResetFurryTags = document.getElementById('btnResetFurryTags');
-  if (btnResetFurryTags) {
-    btnResetFurryTags.addEventListener('click', () => {
-      tempFurryTags = [...DEFAULT_FURRY_TAGS];
-      renderSettingsChips();
-      showToast(t('set.furryReset', 'Слова для «Фурри» сброшены к стандартным'));
-    });
-  }
-
-  const btnResetPregnantTags = document.getElementById('btnResetPregnantTags');
-  if (btnResetPregnantTags) {
-    btnResetPregnantTags.addEventListener('click', () => {
-      tempPregnantTags = [...DEFAULT_PREGNANT_TAGS];
-      renderSettingsChips();
-      showToast(t('set.pregnantReset', 'Слова для «Беременность» сброшены к стандартным'));
-    });
-  }
-
-  const btnResetLgbtTags = document.getElementById('btnResetLgbtTags');
-  if (btnResetLgbtTags) {
-    btnResetLgbtTags.addEventListener('click', () => {
-      tempLgbtTags = [...DEFAULT_LGBT_TAGS];
-      renderSettingsChips();
-      showToast(t('set.lgbtReset', 'Слова для «ЛГБТ» сброшены к стандартным'));
-    });
-  }
-
-  const btnResetIgnoredAliases = document.getElementById('btnResetIgnoredAliases');
-  if (btnResetIgnoredAliases) {
-    btnResetIgnoredAliases.addEventListener('click', () => {
-      tempIgnoredAliases = [];
-      renderSettingsChips();
-      showToast(t('set.ignoredAliasesReset', 'Список запрещённых алиасов очищен'));
-    });
-  }
-
-  const btnResetCustomAliases = document.getElementById('btnResetCustomAliases');
-  if (btnResetCustomAliases) {
-    btnResetCustomAliases.addEventListener('click', () => {
-      const customAliasesInput = document.getElementById('customAliasesInput');
-      if (customAliasesInput) customAliasesInput.value = '';
-      showToast(t('set.customAliasesReset', 'Пользовательские алиасы очищены'));
-    });
-  }
-
-  const btnClearDiscoveredAliases = document.getElementById('btnClearDiscoveredAliases');
-  if (btnClearDiscoveredAliases) {
-    btnClearDiscoveredAliases.addEventListener('click', async () => {
-      const res = await clearDiscoveredAliasesApi();
-      if (res && res.success) {
-        const countEl = document.getElementById('discoveredAliasesCountText');
-        if (countEl) countEl.textContent = '0';
-        showToast(t('set.discoveredAliasesCleared', 'Кэш автопоиска алиасов очищен'));
-      }
-    });
-  }
-
-  const btnResetExcludedRecTags = document.getElementById('btnResetExcludedRecTags');
-  if (btnResetExcludedRecTags) {
-    btnResetExcludedRecTags.addEventListener('click', () => {
-      resetExcludedInterestTags();
-      renderTasteProfileUI();
-      showToast(t('settings.excludedCleared', 'Список исключений очищен'));
-    });
-  }
-
-  const btnClearSessionInterests = document.getElementById('btnClearSessionInterests');
-  if (btnClearSessionInterests) {
-    btnClearSessionInterests.addEventListener('click', () => {
-      clearSessionInterests();
-      renderTasteProfileUI();
-      showToast(t('settings.sessionCleared', 'Сессионная память вкусов очищена'));
-    });
-  }
-
-  const checkRecSkipPenalty = document.getElementById('checkRecSkipPenalty');
-  if (checkRecSkipPenalty) {
-    checkRecSkipPenalty.addEventListener('change', () => {
-      if (!state.settings) state.settings = {};
-      state.settings.recommendationEnableSkipPenalty = checkRecSkipPenalty.checked;
-      saveLocalSettings({ recommendationEnableSkipPenalty: checkRecSkipPenalty.checked });
-    });
-  }
-
-  if (btnRefreshStorage) btnRefreshStorage.addEventListener('click', updateStorageUsageInfo);
-  if (btnClearStorageBtn) btnClearStorageBtn.addEventListener('click', handleClearStorageCache);
-
-  const selectMaxServerCache = document.getElementById('selectMaxServerCache');
-  if (selectMaxServerCache) {
-    selectMaxServerCache.addEventListener('change', () => {
-      const val = parseInt(selectMaxServerCache.value, 10);
-      state.settings.maxServerCacheMb = val;
-      persistSettings({ maxServerCacheMb: val });
-      updateStorageUsageInfo();
-      showToast(t('set.cacheLimitChanged', 'Лимит серверного кэша: {v}').replace('{v}',
-        val > 0 ? (val >= 1000 ? (val / 1000).toFixed(1) + ' ' + t('unit.gb', 'ГБ') : val + ' ' + t('unit.mb', 'МБ')) : t('settings.cacheUnlimited', 'Без ограничений')
-      ));
-    });
-  }
-
-  if (btnExportData) {
-    btnExportData.addEventListener('click', async () => {
-      try {
-        let account = null;
-        if (state.currentUser) {
-          account = await apiExportAccount();
-        }
-        const data = exportUserData(account);
-        const jsonStr = JSON.stringify(data, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const now = new Date();
-        const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        a.href = url;
-        a.download = `booru_explorer_backup_${dateStr}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showToast(t('set.backupDownloaded', 'Резервная копия скачана') +
-          (data.account ? t('set.backupWithAccount', ' (с аккаунтом {name})').replace('{name}', data.account.username) : ''));
-      } catch (err) {
-        showToast(t('set.exportFailed', 'Ошибка при экспорте данных'));
-      }
-    });
-  }
-
-  if (btnImportData && inputImportFile) {
-    btnImportData.addEventListener('click', () => {
-      inputImportFile.value = '';
-      inputImportFile.click();
-    });
-
-    inputImportFile.addEventListener('change', async (e) => {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
-
-      try {
-        if (file.size > 25 * 1024 * 1024) {
-          throw new Error(t('set.importTooLarge', 'Файл слишком большой'));
-        }
-        const text = await file.text();
-        let parsed = JSON.parse(text);
-
-        // Unwrap nested Telegram backups ({ version, data: { settings, ... } })
-        const nested = parsed && typeof parsed === 'object' && typeof parsed.data === 'object' && !Array.isArray(parsed.data)
-          ? parsed.data
-          : null;
-        if (nested && !parsed.settings && !Array.isArray(parsed.favorites)) {
-          parsed = { ...nested, account: parsed.account || nested.account || null };
-        }
-
-        // Restore + log into the account embedded in the file (before merging data,
-        // so all server syncs below land under that account)
-        let switchedAccount = false;
-        const fileAccount = parsed.account;
-        if (fileAccount && fileAccount.username) {
-          const sameAccount = state.currentUser &&
-            String(state.currentUser.username).toLowerCase() === String(fileAccount.username).toLowerCase();
-          if (!sameAccount) {
-            const wantLogin = confirm(t('set.accountFound',
-              'В файле найден аккаунт «{name}». Войти в него и загрузить его данные?').replace('{name}', fileAccount.username));
-            if (wantLogin) {
-              const password = prompt(t('set.accountPasswordPrompt', 'Введите пароль аккаунта {name}').replace('{name}', fileAccount.username));
-              if (password === null) {
-                showToast(t('set.accountRestoreCancelled', 'Вход в аккаунт отменен'), 'error');
-              } else if (!password) {
-                showToast(t('set.accountPasswordRequired', 'Введите пароль аккаунта'), 'error');
-              } else {
-                try {
-                  const res = await apiRestoreAccount(fileAccount, password);
-                  if (res.success && res.token && res.user) {
-                    saveLocalAuth(res.token, res.user);
-                    updateHeaderAuthUI();
-                    switchedAccount = true;
-                    showToast(t('set.accountRestored', 'Вы вошли как @{name}').replace('{name}', res.user.username), 'success');
-                  } else {
-                    showToast(res.message || t('set.accountRestoreFailed', 'Не удалось войти в аккаунт из файла'), 'error');
-                  }
-                } catch (err) {
-                  showToast(t('set.accountRestoreFailed', 'Не удалось войти в аккаунт из файла'), 'error');
-                }
-              }
-            }
-          }
-        }
-
-        // After an account switch replace lists instead of merging:
-        // stale items of the previous session must not leak into the restored account
-        const counts = importUserData(parsed, { replace: switchedAccount });
-
-        if (counts.settings) {
-          try { await saveSettings(state.settings); } catch (err) {}
-          applySettingsToUIAndState(state.settings);
-        }
-        if (counts.favorites > 0) {
-          try { await syncFavorites(state.favorites); } catch (err) {}
-          if (onUpdateFavoritesBadge) onUpdateFavoritesBadge();
-        }
-        if (counts.likes > 0) {
-          try { await syncLikes(state.likes); } catch (err) {}
-        }
-        if (counts.dislikes > 0) {
-          try { await syncDislikes(state.dislikes); } catch (err) {}
-        }
-        if (counts.favoriteAuthors > 0) {
-          try { await syncFavoriteAuthors(state.favoriteAuthors); } catch (err) {}
-          if (onUpdateFavoritesBadge) onUpdateFavoritesBadge();
-        }
-
-        const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
-        const inputRule34UserId = document.getElementById('inputRule34UserId');
-        const inputGelbooruApiKey = document.getElementById('inputGelbooruApiKey');
-        const inputGelbooruUserId = document.getElementById('inputGelbooruUserId');
-        const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
-        const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
-        const inputKonachanLogin = document.getElementById('inputKonachanLogin');
-        const inputKonachanPassword = document.getElementById('inputKonachanPassword');
-        const inputYandereLogin = document.getElementById('inputYandereLogin');
-        const inputYanderePassword = document.getElementById('inputYanderePassword');
-        const inputPawchiveSession = document.getElementById('inputPawchiveSession');
-        const inputKemonoSession = document.getElementById('inputKemonoSession');
-
-        if (inputRule34ApiKey) inputRule34ApiKey.value = state.settings.rule34ApiKey || '';
-        if (inputRule34UserId) inputRule34UserId.value = state.settings.rule34UserId || '';
-        if (inputGelbooruApiKey) inputGelbooruApiKey.value = state.settings.gelbooruApiKey || '';
-        if (inputGelbooruUserId) inputGelbooruUserId.value = state.settings.gelbooruUserId || '';
-        if (inputDanbooruApiKey) inputDanbooruApiKey.value = state.settings.danbooruApiKey || '';
-        if (inputDanbooruLogin) inputDanbooruLogin.value = state.settings.danbooruLogin || '';
-        if (inputKonachanLogin) inputKonachanLogin.value = state.settings.konachanLogin || '';
-        if (inputKonachanPassword) inputKonachanPassword.value = state.settings.konachanPassword || '';
-        if (inputYandereLogin) inputYandereLogin.value = state.settings.yandereLogin || '';
-        if (inputYanderePassword) inputYanderePassword.value = state.settings.yanderePassword || '';
-        if (inputPawchiveSession) inputPawchiveSession.value = state.settings.pawchiveSession || '';
-        if (inputKemonoSession) inputKemonoSession.value = state.settings.kemonoSession || '';
-        tempBlacklist = state.settings.blacklist || [];
-        tempAiTags = state.settings.aiTags || [];
-        tempCurvyTags = state.settings.curvyTags || [...DEFAULT_CURVY_TAGS];
-        tempPetiteTags = state.settings.petiteTags || [...DEFAULT_PETITE_TAGS];
-        renderSettingsChips();
-
-        showToast(t('set.importDone', 'Данные загружены: настройки, {favs} закладок, {authors} авторов')
-          .replace('{favs}', counts.favorites).replace('{authors}', counts.favoriteAuthors));
-        if (onDataImported) onDataImported();
-      } catch (err) {
-        showToast(`${t('set.importFailed', 'Ошибка импорта')}: ${err.message || 'неверный JSON'}`);
-      }
-    });
-  }
-
-  // Telegram auto-backup events
-  const checkTelegramBackupEnabled = document.getElementById('checkTelegramBackupEnabled');
-  const telegramBackupForm = document.getElementById('telegramBackupForm');
-  const btnTestTelegram = document.getElementById('btnTestTelegram');
-  const btnSendTelegramBackup = document.getElementById('btnSendTelegramBackup');
-
-  if (checkTelegramBackupEnabled) {
-    checkTelegramBackupEnabled.addEventListener('change', () => {
-      if (telegramBackupForm) {
-        telegramBackupForm.classList.toggle('is-disabled', !checkTelegramBackupEnabled.checked);
-      }
-      updateTelegramBackupStatusUI({
-        ...state.settings,
-        telegramBackupEnabled: checkTelegramBackupEnabled.checked
-      });
-    });
-  }
-
-  if (btnTestTelegram) {
-    btnTestTelegram.addEventListener('click', async () => {
-      const tokenInput = document.getElementById('inputTelegramBotToken');
-      const chatInput = document.getElementById('inputTelegramChatId');
-      const token = tokenInput ? tokenInput.value.trim() : '';
-      const chatId = chatInput ? chatInput.value.trim() : '';
-
-      if (!token || !chatId) {
-        showToast(t('set.tgTestNeedsCreds', 'Укажите токен бота и Chat ID для проверки связи'));
-        return;
-      }
-
-      const originalHtml = btnTestTelegram.innerHTML;
-      btnTestTelegram.disabled = true;
-      btnTestTelegram.classList.add('is-loading');
-      btnTestTelegram.innerHTML = `<span>${t('set.tgTesting', 'Проверка...')}</span>`;
-
-      try {
-        const res = await testTelegramConnection(token, chatId);
-        if (res.success) {
-          showToast(res.message || t('set.tgTestOk', 'Связь с ботом успешно установлена!'));
-          updateTelegramBackupStatusUI({ 
-            ...state.settings, 
-            telegramBotToken: token, 
-            telegramChatId: chatId, 
-            telegramBackupEnabled: checkTelegramBackupEnabled ? checkTelegramBackupEnabled.checked : true 
-          });
-        } else {
-          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || t('set.tgTestFail', 'Сбой проверки')));
-        }
-      } catch (err) {
-        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.serverUnreachable', 'Не удалось связаться с сервером')));
-      } finally {
-        btnTestTelegram.disabled = false;
-        btnTestTelegram.classList.remove('is-loading');
-        btnTestTelegram.innerHTML = originalHtml;
-      }
-    });
-  }
-
-  // Board credential tests: each button validates the values typed in its own card
-  const authTestConfigs = [
-    { btnId: 'btnTestRule34Auth', site: 'rule34', fields: { apiKey: 'inputRule34ApiKey', userId: 'inputRule34UserId' } },
-    { btnId: 'btnTestGelbooruAuth', site: 'gelbooru', fields: { apiKey: 'inputGelbooruApiKey', userId: 'inputGelbooruUserId' } },
-    { btnId: 'btnTestDanbooruAuth', site: 'danbooru', fields: { apiKey: 'inputDanbooruApiKey', login: 'inputDanbooruLogin' } },
-    { btnId: 'btnTestKonachanAuth', site: 'konachan', fields: { login: 'inputKonachanLogin', password: 'inputKonachanPassword' } },
-    { btnId: 'btnTestYandereAuth', site: 'yandere', fields: { login: 'inputYandereLogin', password: 'inputYanderePassword' } },
-    { btnId: 'btnTestPawchiveAuth', site: 'pawchive', fields: { session: 'inputPawchiveSession' } },
-    { btnId: 'btnTestKemonoAuth', site: 'kemono', fields: { session: 'inputKemonoSession' } }
-  ];
-  authTestConfigs.forEach(({ btnId, site, fields }) => {
-    const btn = document.getElementById(btnId);
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      const payload = { site };
-      let hasAnyValue = false;
-      for (const [key, inputId] of Object.entries(fields)) {
-        const el = document.getElementById(inputId);
-        payload[key] = el ? el.value.trim() : '';
-        if (payload[key]) hasAnyValue = true;
-      }
-
-      if (!hasAnyValue) {
-        showToast(t('set.authTestNeedsCreds', 'Заполните данные для входа в карточке'));
-        return;
-      }
-
-      // A half-filled pair is rejected instead of silently falling back, so a
-      // forgotten password is not reported as a broken session token.
-      const pairIncomplete = ('login' in payload && payload.login) !== ('password' in payload && Boolean(payload.password));
-      if (pairIncomplete && !payload.session) {
-        showToast(t('set.authTestNeedsCreds', 'Заполните данные для входа в карточке'));
-        return;
-      }
-
-      const originalHtml = btn.innerHTML;
-      btn.disabled = true;
-      btn.classList.add('is-loading');
-      btn.innerHTML = `<span>${t('set.tgTesting', 'Проверка...')}</span>`;
-
-      try {
-        const res = await testSiteAuth(payload);
-        if (res.success) {
-          showToast(res.message || t('set.authTestOk', 'Авторизация работает'));
-        } else {
-          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || t('set.authTestFail', 'Проверка не пройдена')));
-        }
-      } catch (err) {
-        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.serverUnreachable', 'Не удалось связаться с сервером')));
-      } finally {
-        btn.disabled = false;
-        btn.classList.remove('is-loading');
-        btn.innerHTML = originalHtml;
-      }
-    });
-  });
-
-  // Batch external synchronization button
-  const btnSyncExternalAll = document.getElementById('btnSyncExternalAll');
-  const syncExternalStatusText = document.getElementById('syncExternalStatusText');
-  if (btnSyncExternalAll) {
-    btnSyncExternalAll.addEventListener('click', async () => {
-      const originalHtml = btnSyncExternalAll.innerHTML;
-      btnSyncExternalAll.disabled = true;
-      btnSyncExternalAll.classList.add('is-loading');
-      btnSyncExternalAll.innerHTML = `<span>${t('settings.syncing', 'Выгрузка...')}</span>`;
-      if (syncExternalStatusText) {
-        syncExternalStatusText.style.display = 'block';
-        syncExternalStatusText.textContent = t('settings.syncingStatus', 'Отправка данных на внешние серверы (Danbooru, Pawchive)...');
-      }
-
-      try {
-        const inputDanbooruApiKey = document.getElementById('inputDanbooruApiKey');
-        const inputDanbooruLogin = document.getElementById('inputDanbooruLogin');
-        const inputKonachanLogin = document.getElementById('inputKonachanLogin');
-        const inputKonachanPassword = document.getElementById('inputKonachanPassword');
-        const inputYandereLogin = document.getElementById('inputYandereLogin');
-        const inputYanderePassword = document.getElementById('inputYanderePassword');
-        const inputPawchiveSession = document.getElementById('inputPawchiveSession');
-        const inputKemonoSession = document.getElementById('inputKemonoSession');
-
-        const activeSettings = {
-          ...(state.settings || {}),
-          danbooruApiKey: inputDanbooruApiKey ? inputDanbooruApiKey.value.trim() : (state.settings?.danbooruApiKey || ''),
-          danbooruLogin: inputDanbooruLogin ? inputDanbooruLogin.value.trim() : (state.settings?.danbooruLogin || ''),
-          konachanLogin: inputKonachanLogin ? inputKonachanLogin.value.trim() : (state.settings?.konachanLogin || ''),
-          konachanPassword: inputKonachanPassword ? inputKonachanPassword.value.trim() : (state.settings?.konachanPassword || ''),
-          yandereLogin: inputYandereLogin ? inputYandereLogin.value.trim() : (state.settings?.yandereLogin || ''),
-          yanderePassword: inputYanderePassword ? inputYanderePassword.value.trim() : (state.settings?.yanderePassword || ''),
-          pawchiveSession: inputPawchiveSession ? inputPawchiveSession.value.trim() : (state.settings?.pawchiveSession || ''),
-          kemonoSession: inputKemonoSession ? inputKemonoSession.value.trim() : (state.settings?.kemonoSession || ''),
-        };
-
-        const res = await syncExternalAccounts({ 
-          targetSite: 'all', 
-          syncLikes: true, 
-          syncFavorites: true, 
-          syncAuthors: true,
-          settings: activeSettings
-        });
-        if (res.success) {
-          showToast(res.message || t('settings.syncSuccess', 'Синхронизация успешно выполнена'));
-          if (syncExternalStatusText) {
-            syncExternalStatusText.textContent = res.message || t('settings.syncSuccess', 'Синхронизация успешно выполнена');
-          }
-        } else {
-          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || 'Ошибка синхронизации'));
-          if (syncExternalStatusText) {
-            syncExternalStatusText.textContent = res.message || 'Ошибка синхронизации';
-          }
-        }
-      } catch (err) {
-        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.serverUnreachable', 'Не удалось связаться с сервером')));
-        if (syncExternalStatusText) {
-          syncExternalStatusText.textContent = err.message || 'Сбой связи с сервером';
-        }
-      } finally {
-        btnSyncExternalAll.disabled = false;
-        btnSyncExternalAll.classList.remove('is-loading');
-        btnSyncExternalAll.innerHTML = originalHtml;
-      }
-    });
-  }
-
-
-  // Upstream proxy site picker dropdown setup
-  const selectUpstreamProxySite = document.getElementById('selectUpstreamProxySite');
-  const updateUpstreamProxyRows = () => {
-    const selected = selectUpstreamProxySite ? selectUpstreamProxySite.value : 'danbooru';
-    document.querySelectorAll('.upstream-site-editor-row').forEach(row => {
-      row.style.display = (row.dataset.upstreamSite === selected) ? 'block' : 'none';
-    });
-  };
-  if (selectUpstreamProxySite) {
-    selectUpstreamProxySite.addEventListener('change', updateUpstreamProxyRows);
-    updateUpstreamProxyRows();
-  }
-
-  document.querySelectorAll('.upstream-site-editor-row input').forEach(inp => {
-    inp.addEventListener('focus', () => {
-      const parentRow = inp.closest('.upstream-site-editor-row');
-      const site = parentRow?.dataset?.upstreamSite;
-      if (site && selectUpstreamProxySite && selectUpstreamProxySite.value !== site) {
-        selectUpstreamProxySite.value = site;
-        updateUpstreamProxyRows();
-      }
-    });
-  });
-
-  // Per-site proxy tests
-  const proxyTestConfigs = [
-    { btnId: 'btnTestGlobalProxy', site: '', inputId: 'inputGlobalProxy' },
-    { btnId: 'btnTestDanbooruProxy', site: 'danbooru', inputId: 'inputDanbooruProxy' },
-    { btnId: 'btnTestGelbooruProxy', site: 'gelbooru', inputId: 'inputGelbooruProxy' },
-    { btnId: 'btnTestRule34Proxy', site: 'rule34', inputId: 'inputRule34Proxy' },
-    { btnId: 'btnTestYandereProxy', site: 'yandere', inputId: 'inputYandereProxy' },
-    { btnId: 'btnTestKonachanProxy', site: 'konachan', inputId: 'inputKonachanProxy' },
-    { btnId: 'btnTestSafebooruProxy', site: 'safebooru', inputId: 'inputSafebooruProxy' },
-    { btnId: 'btnTestRule34videoProxy', site: 'rule34video', inputId: 'inputRule34videoProxy' },
-    { btnId: 'btnTestPawchiveProxy', site: 'pawchive', inputId: 'inputPawchiveProxy' },
-    { btnId: 'btnTestKemonoProxy', site: 'kemono', inputId: 'inputKemonoProxy' },
-    { btnId: 'btnTestXbooruProxy', site: 'xbooru', inputId: 'inputXbooruProxy' },
-    { btnId: 'btnTestHypnohubProxy', site: 'hypnohub', inputId: 'inputHypnohubProxy' },
-    { btnId: 'btnTestTbibProxy', site: 'tbib', inputId: 'inputTbibProxy' }
-  ];
-  proxyTestConfigs.forEach(({ btnId, site, inputId }) => {
-    const btn = document.getElementById(btnId);
-    if (!btn) return;
-    btn.addEventListener('click', async () => {
-      const el = document.getElementById(inputId);
-      const rawProxy = el ? el.value.trim() : '';
-
-      if (!rawProxy) {
-        showToast(t('set.proxyTestNeedsUrl', 'Введите URL прокси (например: http://127.0.0.1:8080)'));
-        return;
-      }
-
-      const proxyUrl = normalizeProxyString(rawProxy);
-      if (el && proxyUrl !== rawProxy) {
-        el.value = proxyUrl;
-      }
-
-      const originalHtml = btn.innerHTML;
-      btn.disabled = true;
-      btn.classList.add('is-loading');
-      btn.innerHTML = `<span>${t('set.tgTesting', 'Проверка...')}</span>`;
-
-      try {
-        const res = await testProxyConnection(site, proxyUrl);
-        if (res.success) {
-          showToast(res.message || t('set.proxyTestOk', 'Прокси успешно подключен'));
-        } else {
-          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || t('set.proxyTestFail', 'Не удалось подключиться через прокси')));
-        }
-      } catch (err) {
-        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.serverUnreachable', 'Не удалось связаться с сервером')));
-      } finally {
-        btn.disabled = false;
-        btn.classList.remove('is-loading');
-        btn.innerHTML = originalHtml;
-      }
-    });
-  });
-
-  if (btnSendTelegramBackup) {
-    btnSendTelegramBackup.addEventListener('click', async () => {
-      const tokenInput = document.getElementById('inputTelegramBotToken');
-      const chatInput = document.getElementById('inputTelegramChatId');
-      const intervalSelect = document.getElementById('selectTelegramBackupInterval');
-      const enabledCheck = document.getElementById('checkTelegramBackupEnabled');
-
-      const token = tokenInput ? tokenInput.value.trim() : '';
-      const chatId = chatInput ? chatInput.value.trim() : '';
-
-      if (!token || !chatId) {
-        showToast(t('set.tgSendNeedsCreds', 'Сначала введите токен бота и Chat ID'));
-        return;
-      }
-
-      // Save the currently entered settings before submitting
-      const currentSettings = {
-        ...state.settings,
-        telegramBackupEnabled: enabledCheck ? enabledCheck.checked : false,
-        telegramBotToken: token,
-        telegramChatId: chatId,
-        telegramBackupInterval: intervalSelect ? intervalSelect.value : 'daily'
-      };
-      state.settings = currentSettings;
-      saveLocalSettings(currentSettings);
-      await saveSettings(currentSettings).catch(() => {});
-
-      const originalHtml = btnSendTelegramBackup.innerHTML;
-      btnSendTelegramBackup.disabled = true;
-      btnSendTelegramBackup.classList.add('is-loading');
-      btnSendTelegramBackup.innerHTML = `<span>${t('set.tgSending', 'Отправка...')}</span>`;
-
-      try {
-        const res = await sendTelegramBackupNow();
-        if (res.success) {
-          showToast(t('set.tgBackupSent', 'Резервная копия доставлена в Telegram!'));
-          if (res.result?.lastBackupAt) {
-            state.settings.telegramLastBackupAt = res.result.lastBackupAt;
-            saveLocalSettings(state.settings);
-            updateTelegramBackupStatusUI(state.settings);
-          }
-        } else {
-          showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', res.message || t('set.tgSendFail', 'Сбой отправки бэкапа')));
-        }
-      } catch (err) {
-        showToast(t('set.errorPrefix', 'Ошибка: {m}').replace('{m}', err.message || t('set.connLost', 'Сбой соединения')));
-      } finally {
-        btnSendTelegramBackup.disabled = false;
-        btnSendTelegramBackup.classList.remove('is-loading');
-        btnSendTelegramBackup.innerHTML = originalHtml;
-      }
-    });
-  }
+  // Per-tab controls, each owning its own DOM wiring and temp state
+  initSiteSortEditor();
+  initTagListInputs();
+  initTasteProfileControls({ onSettingsChanged });
+  initStorageBackup({ applySettingsToUIAndState, onDataImported, onUpdateFavoritesBadge });
+  initCredentialTests();
+  initProxyTests();
 
   document.querySelectorAll('.btn-theme[data-theme-val]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1881,6 +608,7 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       const selectMaxServerCache = document.getElementById('selectMaxServerCache');
       const maxServerCacheMbVal = selectMaxServerCache ? (parseInt(selectMaxServerCache.value, 10)) : (state.settings.maxServerCacheMb !== undefined ? state.settings.maxServerCacheMb : 1500);
 
+      const tags = getTempTags();
       const updated = {
         ...state.settings,
         theme,
@@ -1897,13 +625,13 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         proxyDownloads: proxyDownloadsVal,
         proxyVideoDefault: proxyVideoDefaultVal,
         showVideoStatusBanner: showVideoStatusBannerVal,
-        blacklist: tempBlacklist,
-        aiTags: tempAiTags,
-        curvyTags: tempCurvyTags,
-        petiteTags: tempPetiteTags,
-        furryTags: tempFurryTags,
-        pregnantTags: tempPregnantTags,
-        lgbtTags: tempLgbtTags,
+        blacklist: tags.blacklist,
+        aiTags: tags.aiTags,
+        curvyTags: tags.curvyTags,
+        petiteTags: tags.petiteTags,
+        furryTags: tags.furryTags,
+        pregnantTags: tags.pregnantTags,
+        lgbtTags: tags.lgbtTags,
         maxServerCacheMb: maxServerCacheMbVal,
         rule34ApiKey: inputRule34ApiKey ? inputRule34ApiKey.value.trim() : '',
         rule34UserId: inputRule34UserId ? inputRule34UserId.value.trim() : '',
@@ -1946,11 +674,11 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         recommendationMode: document.getElementById('selectRecommendationMode')?.value || 'tags-only',
         enableRecommendations: document.getElementById('selectRecommendationMode')?.value !== 'off',
         recommendationEnableSkipPenalty: document.getElementById('checkRecSkipPenalty')?.checked !== false,
-        siteSortTags: tempSiteSortTags,
+        siteSortTags: getTempSiteSortTags(),
         customAliases: document.getElementById('customAliasesInput')?.value || '',
         enableAliasDiscovery: document.getElementById('checkEnableAliasDiscovery')?.checked !== false,
-        ignoredAliases: tempIgnoredAliases,
-        siteMediaProxy: tempSiteMediaProxy
+        ignoredAliases: tags.ignoredAliases,
+        siteMediaProxy: getTempSiteMediaProxy()
       };
 
       saveLocalSettings(updated);
@@ -1977,16 +705,8 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
 
   if (btnResetSettings) {
     btnResetSettings.addEventListener('click', async () => {
-      tempSiteMediaProxy = {};
-      renderSiteMediaProxyUI();
-      tempBlacklist = [...DEFAULT_BLACKLIST];
-      tempAiTags = [...DEFAULT_AI_TAGS];
-      tempCurvyTags = [...DEFAULT_CURVY_TAGS];
-      tempPetiteTags = [...DEFAULT_PETITE_TAGS];
-      tempFurryTags = [...DEFAULT_FURRY_TAGS];
-      tempPregnantTags = [...DEFAULT_PREGNANT_TAGS];
-      tempLgbtTags = [...DEFAULT_LGBT_TAGS];
-      renderSettingsChips();
+      resetTempSiteMediaProxy();
+      resetTempTagsToDefaults();
       
       const inputRule34ApiKey = document.getElementById('inputRule34ApiKey');
       const inputRule34UserId = document.getElementById('inputRule34UserId');
@@ -2053,13 +773,11 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
       if (checkEnablePaheal) checkEnablePaheal.checked = true;
       if (checkEnableJsDemuxing) checkEnableJsDemuxing.checked = true;
       if (selectMaxServerCache) selectMaxServerCache.value = '1500';
-      tempIgnoredAliases = [];
       const checkEnableAliasDiscovery = document.getElementById('checkEnableAliasDiscovery');
       if (checkEnableAliasDiscovery) checkEnableAliasDiscovery.checked = true;
       const customAliasesInput = document.getElementById('customAliasesInput');
       if (customAliasesInput) customAliasesInput.value = '';
-      tempSiteSortTags = {};
-      renderSiteSortTagsUI(currentSortEditingSite || 'gelbooru');
+      resetTempSiteSortTags();
       renderSettingsChips();
       updateTelegramBackupStatusUI({
         telegramBackupEnabled: false,
@@ -2068,11 +786,12 @@ export function initSettingsModal({ onSettingsChanged, onDataImported, onUpdateF
         telegramBackupInterval: 'daily',
         telegramLastBackupAt: null
       });
+      const resetTags = getTempTags();
       saveLocalSettings({
-        blacklist: tempBlacklist,
-        aiTags: tempAiTags,
-        curvyTags: tempCurvyTags,
-        petiteTags: tempPetiteTags,
+        blacklist: resetTags.blacklist,
+        aiTags: resetTags.aiTags,
+        curvyTags: resetTags.curvyTags,
+        petiteTags: resetTags.petiteTags,
         customAliases: '',
         enableAliasDiscovery: true,
         ignoredAliases: [],

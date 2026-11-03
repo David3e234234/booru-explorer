@@ -25,13 +25,19 @@ import notificationsRoutes from './src/routes/notifications.routes.js';
 import { initNotificationScheduler, stopNotificationScheduler } from './src/services/notificationService.js';
 import { initBackupScheduler } from './src/services/backupService.js';
 import { flushPendingWrites, flushPendingWritesSync, compactStoredCollections } from './src/services/storageService.js';
+import { migrateLegacyJson } from './src/services/sqliteStore.js';
 import { cleanupStaleUserArtifacts } from './src/services/userService.js';
 import { setRuntimePort } from './src/utils/runtimeState.js';
 
-// Rewrite collections written before the compact gzipped schema, then drop the
-// artifacts nothing prunes (throwaway test accounts, quarantined corrupt-file
-// copies). Failures here must never keep the server from starting.
+// Import any remaining legacy JSON user data into SQLite (no-op when already
+// migrated or when the JSON backend is active). Runs before the artifact
+// cleanup so a rewritten users index can never shadow the import source.
 async function runStartupMaintenance() {
+  try {
+    migrateLegacyJson();
+  } catch (err) {
+    console.error('[Startup] Не удалось выполнить миграцию JSON -> SQLite:', err.message);
+  }
   try {
     cleanupStaleUserArtifacts();
   } catch (err) {

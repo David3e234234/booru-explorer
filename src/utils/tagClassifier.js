@@ -3,9 +3,8 @@ import path from 'path';
 import { fetchSafe, discardResponse } from './network.js';
 import { extractAuthor as extractAuthorFromSource, decodeHtmlEntities, isNoiseHandle } from './tagHelpers.js';
 import { resolveBooruTagTypes, getCachedTagType, TAG_TYPE } from '../services/booruTagTypeService.js';
-import { getSettings } from '../services/storageService.js';
-import { readJsonFile } from '../services/jsonFileStore.js';
-import { CACHE_DIR, DATA_DIR, FAVORITE_AUTHORS_FILE } from '../config/constants.js';
+import { getSettings, listFavoriteAuthorCollections } from '../services/storageService.js';
+import { CACHE_DIR } from '../config/constants.js';
 
 // Cache of the global tag map (1 = artist, 3 = copyright, 4 = character, 0 = general, 6 = meta)
 let globalTagMap = null;
@@ -616,24 +615,10 @@ async function fetchAndCacheSummary(settings = {}) {
 function seedFavoriteAuthors(map) {
   if (!map) return;
   try {
-    const candidateFiles = [FAVORITE_AUTHORS_FILE];
-    const usersDir = path.join(DATA_DIR, 'users');
-    if (fs.existsSync(usersDir)) {
-      const uDirs = fs.readdirSync(usersDir);
-      for (const ud of uDirs) {
-        candidateFiles.push(path.join(usersDir, ud, 'favorite_authors.json'));
-      }
-    }
-    for (const file of candidateFiles) {
-      if (!fs.existsSync(file)) continue;
-      // Collections are gzip-compressed; readJsonFile detects that by magic
-      // bytes, while readFileSync('utf8') produced mojibake and threw.
-      const list = readJsonFile(file, []);
-      if (Array.isArray(list)) {
-        for (const a of list) {
-          if (a.name) map.set(String(a.name).toLowerCase().trim(), 1);
-          if (a.id) map.set(String(a.id).toLowerCase().trim(), 1);
-        }
+    for (const { items } of listFavoriteAuthorCollections()) {
+      for (const a of items) {
+        if (a.name) map.set(String(a.name).toLowerCase().trim(), 1);
+        if (a.id) map.set(String(a.id).toLowerCase().trim(), 1);
       }
     }
   } catch {}

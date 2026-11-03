@@ -520,6 +520,15 @@ Object.assign(en, {
   'aliasManager.deleted': 'Alias deleted',
   'aliasManager.tagBanned': 'Tag "{tag}" added to banned aliases',
   'aliasManager.deleteConfirm': 'Delete discovered alias group for "{id}"?',
+  'aliasManager.disabled': 'Disabled',
+  'aliasManager.enable': 'Enable',
+  'aliasManager.disable': 'Disable',
+  'aliasManager.enabledToast': 'Alias "{id}" enabled',
+  'aliasManager.disabledToast': 'Alias "{id}" disabled',
+  'aliasManager.quarantined': 'Disabled automatically: empty results x{n}',
+
+  'app.aliasUsed': 'Search ran via alias: "{a}" → "{b}"',
+  'app.aliasFallback': 'Alias "{a}" found nothing, searched by your query "{b}"',
 
   'settings.sortTagsTitle': 'Per-site sort tags:',
   'settings.sortTagsHint': 'Customize search tags used for the sort pills (Hot, Views, Top, New) for each site individually. Leave blank to use site defaults.',

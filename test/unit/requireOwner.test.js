@@ -5,7 +5,10 @@ import os from 'os';
 import path from 'path';
 
 const previousDataDir = process.env.BOORU_DATA_DIR;
-const previousAdminToken = process.env.BOORU_ADMIN_TOKEN;
+// Captured in before(), not at module load: other suites' module tops may set
+// the token (integration boots with one), and a module-load snapshot would
+// delete their value in after() purely based on import order.
+let previousAdminToken;
 let tmpDir;
 let requireOwner;
 let registerUser;
@@ -29,6 +32,7 @@ function call(req) {
 
 describe('Owner guard', () => {
   before(async () => {
+    previousAdminToken = process.env.BOORU_ADMIN_TOKEN;
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'booru-owner-'));
     process.env.BOORU_DATA_DIR = tmpDir;
     delete process.env.BOORU_ADMIN_TOKEN;

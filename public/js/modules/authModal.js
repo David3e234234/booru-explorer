@@ -4,8 +4,10 @@ import { applySettingsToUIAndState } from './settingsModal.js';
 import { renderPresetsList } from './searchPresetsUI.js';
 import { showToast } from './uiUtils.js';
 import { t } from '../i18n.js';
+import { ensureAuthMarkup } from './authMarkup.js';
 
 export function initAuthModal({ onAuthSuccess, onLogout, onOpenProfile }) {
+  ensureAuthMarkup();
   const modalBackdrop = document.getElementById('modalAuthBackdrop');
   const btnClose = document.getElementById('btnCloseAuthModal');
   const btnTabLogin = document.getElementById('btnAuthTabLogin');

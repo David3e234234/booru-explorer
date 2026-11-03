@@ -6,6 +6,7 @@ import { fetchSafe, discardResponse } from '../utils/network.js';
 import { logInfo, logWarn, logError } from '../utils/logger.js';
 
 import { writeJsonFileAsync } from './jsonFileStore.js';
+import { isActive as sqliteActive, kvGet as sqliteKvGet, kvSet as sqliteKvSet, kvDelete as sqliteKvDelete } from './sqliteStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,15 +80,24 @@ function rebuildBuiltinMap() {
 
 function loadDiscoveredAliases() {
   try {
-    if (fs.existsSync(DISCOVERED_ALIASES_FILE)) {
+    if (sqliteActive()) {
+      const stored = sqliteKvGet('discovered_aliases', null);
+      if (Array.isArray(stored)) {
+        discoveredAliasList = stored;
+        rebuildDiscoveredMap();
+        return;
+      }
+    } else if (fs.existsSync(DISCOVERED_ALIASES_FILE)) {
       const raw = fs.readFileSync(DISCOVERED_ALIASES_FILE, 'utf-8');
       discoveredAliasList = JSON.parse(raw);
       rebuildDiscoveredMap();
+      return;
     }
   } catch (err) {
-    discoveredAliasList = [];
-    discoveredAliasMap = new Map();
+    logError('AliasService', 'Не удалось загрузить discovered_aliases', err);
   }
+  discoveredAliasList = [];
+  discoveredAliasMap = new Map();
 }
 
 function rebuildDiscoveredMap() {
@@ -106,7 +116,8 @@ function rebuildDiscoveredMap() {
       if (alias) {
         discoveredAliasMap.set(alias, {
           id: entry.id,
-          sites
+          sites,
+          enabled: entry.enabled
         });
       }
     }
@@ -114,6 +125,15 @@ function rebuildDiscoveredMap() {
 }
 
 function saveDiscoveredAliasesAsync() {
+  try {
+    if (sqliteActive()) {
+      sqliteKvSet('discovered_aliases', discoveredAliasList);
+      return;
+    }
+  } catch (e) {
+    logError('AliasService', 'Не удалось сохранить discovered_aliases', e);
+    return;
+  }
   writeJsonFileAsync(DISCOVERED_ALIASES_FILE, discoveredAliasList, 200).catch((e) => {
     logError('AliasService', 'Не удалось сохранить discovered_aliases.json', e);
   });
@@ -271,13 +291,16 @@ export function getAllAliasesForName(rawName, customAliases = [], ignoredAliases
   // 2. Check discovered map
   if (discoveredAliasMap.has(clean)) {
     const entry = discoveredAliasMap.get(clean);
-    if (entry.id) result.add(entry.id.toLowerCase());
-    if (Array.isArray(entry.aliases)) entry.aliases.forEach(a => result.add(String(a).toLowerCase()));
-    if (entry.sites) Object.values(entry.sites).forEach(s => s && result.add(String(s).toLowerCase()));
+    if (entry.enabled !== false) {
+      if (entry.id) result.add(entry.id.toLowerCase());
+      if (Array.isArray(entry.aliases)) entry.aliases.forEach(a => result.add(String(a).toLowerCase()));
+      if (entry.sites) Object.values(entry.sites).forEach(s => s && result.add(String(s).toLowerCase()));
+    }
   }
 
   // Also scan discoveredAliasList for any entry containing clean
   for (const entry of discoveredAliasList) {
+    if (entry.enabled === false) continue;
     if (entry.id?.toLowerCase() === clean || entry.aliases?.some(a => a.toLowerCase() === clean)) {
       if (entry.id) result.add(entry.id.toLowerCase());
       if (Array.isArray(entry.aliases)) entry.aliases.forEach(a => result.add(String(a).toLowerCase()));
@@ -303,6 +326,42 @@ export function getAllAliasesForName(rawName, customAliases = [], ignoredAliases
 
   // Filter out any ignored/banned aliases
   return Array.from(result).filter(a => !isAliasIgnored(a, ignoredAliases));
+}
+
+/**
+ * Checks Danbooru's tag directory for the canonical tag's post count, so an
+ * alias group pointing at a name with zero posts is never registered.
+ * Any lookup trouble resolves to true: verification may only block a group on
+ * a definitive answer, not on a network error.
+ */
+async function verifyDanbooruTagHasPosts(tag, settings = {}) {
+  try {
+    const danbooruAuth = settings?.danbooruApiKey && settings?.danbooruLogin
+      ? `&login=${encodeURIComponent(settings.danbooruLogin)}&api_key=${encodeURIComponent(settings.danbooruApiKey)}`
+      : '';
+
+    const url = `https://danbooru.donmai.us/tags.json?search[name_matches]=${encodeURIComponent(tag)}&only=name,post_count${danbooruAuth}`;
+    const res = await fetchSafe(url, {
+      timeout: 6000,
+      headers: { 'User-Agent': 'BooruExp/1.0' },
+      settings,
+      site: 'danbooru'
+    });
+
+    if (!res || !res.ok) {
+      if (res) await discardResponse(res);
+      return true;
+    }
+
+    const data = await res.json().catch(() => []);
+    if (!Array.isArray(data)) return true;
+
+    const match = data.find(t => t && typeof t.name === 'string' && t.name.toLowerCase() === tag);
+    if (!match) return false;
+    return (parseInt(match.post_count, 10) || 0) > 0;
+  } catch (err) {
+    return true;
+  }
 }
 
 /**
@@ -364,6 +423,16 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
     const canonicalName = artistObj.name.toLowerCase().trim();
     if (isAliasIgnored(canonicalName, ignoredList)) return null;
 
+    // any_name_matches is fuzzy: data[0] can be an unrelated artist that merely
+    // resembles the query. Only register when the queried candidate is this
+    // artist's own name or one of its listed other_names.
+    const rawOtherNames = Array.isArray(artistObj.other_names)
+      ? artistObj.other_names.map(n => String(n).toLowerCase().trim())
+      : [];
+    if (canonicalName !== candidate && !rawOtherNames.includes(candidate)) {
+      return null;
+    }
+
     const aliasSet = new Set();
     aliasSet.add(canonicalName);
 
@@ -390,19 +459,21 @@ export async function discoverAuthorAliases(authorCandidate, settings = {}) {
       const aliases = Array.from(aliasSet).filter(a => !isAliasIgnored(a, ignoredList));
       if (aliases.length <= 1) return null;
 
+      // The canonical tag becomes the query actually sent to Danbooru, so a
+      // name with zero posts would blank every search it is substituted into.
+      // Fail-open on lookup trouble: a network hiccup must not block a plausible group.
+      if (!(await verifyDanbooruTagHasPosts(canonicalName, settings))) {
+        return null;
+      }
+
       const sites = { danbooru: canonicalName };
 
-      // Dynamically discover valid tag variant on Rule34
+      // Dynamically discover valid tag variant on Rule34 (verified against the
+      // autocomplete post count, so unverified guesses are not registered)
       const rule34Match = await findRule34TagMatch(aliases, settings);
       if (rule34Match && !isAliasIgnored(rule34Match, ignoredList)) {
         sites.rule34 = rule34Match;
         sites.rule34video = rule34Match;
-      } else {
-        const sfmName = aliases.find(a => a.endsWith('sfm') && !isAliasIgnored(a, ignoredList));
-        if (sfmName) {
-          sites.rule34 = sfmName;
-          sites.rule34video = sfmName;
-        }
       }
 
       // Check if entry already exists in discovered list
@@ -471,7 +542,7 @@ export function learnAliasesFromPostMatches(posts = [], settings = {}) {
     const distinctSites = new Set(items.map(i => i.site));
     const distinctAuthors = new Set(items.map(i => i.author).filter(a => !isAliasIgnored(a, ignoredList)));
 
-    if (distinctSites.size > 1 && distinctAuthors.size > 1) {
+    if (distinctSites.size > 1 && distinctAuthors.size > 1 && distinctAuthors.size <= MAX_DISCOVERED_ALIAS_GROUP) {
       const canonical = items.find(i => i.site === 'danbooru')?.author || Array.from(distinctAuthors)[0];
       if (isAliasIgnored(canonical, ignoredList)) continue;
       const sitesMap = {};
@@ -485,6 +556,9 @@ export function learnAliasesFromPostMatches(posts = [], settings = {}) {
       if (existingIdx >= 0) {
         const existing = discoveredAliasList[existingIdx];
         const mergedAliases = Array.from(new Set([...existing.aliases, ...aliasArray])).filter(a => !isAliasIgnored(a, ignoredList));
+        // Never grow a group past the plausibility cap: a source-URL that keeps
+        // matching new names is an aggregator, not one author
+        if (mergedAliases.length > MAX_DISCOVERED_ALIAS_GROUP) continue;
         const mergedSites = { ...existing.sites, ...sitesMap };
         if (mergedAliases.length > existing.aliases.length || Object.keys(mergedSites).length > Object.keys(existing.sites).length) {
           discoveredAliasList[existingIdx] = {
@@ -570,25 +644,21 @@ export function parseCustomAliases(input) {
 }
 
 /**
- * Resolve a single tag token for a target booru site.
+ * Splits a raw search token into its structural parts: negative prefix, category
+ * prefix, lowercased core and the explicit-artist flag.
  */
-export function resolveTagForSite(token, targetSite, customRules = [], settings = null) {
-  if (!token || typeof token !== 'string') return token;
-
-  const site = String(targetSite || '').toLowerCase();
+function splitTokenParts(token) {
   let prefix = '';
-  let core = token.trim();
+  let core = String(token || '').trim();
 
-  // Handle negative tag prefix
   if (core.startsWith('-')) {
     prefix = '-';
     core = core.slice(1);
   }
 
-  // Handle category prefix (artist:, character:, copyright:, meta:, etc.)
   let categoryPrefix = '';
-  const colonIdx = core.indexOf(':');
   let isExplicitArtist = false;
+  const colonIdx = core.indexOf(':');
   if (colonIdx > 0) {
     const potCat = core.slice(0, colonIdx).toLowerCase();
     if (['artist', 'character', 'copyright', 'meta', 'general', 'circle', 'author', 'creator'].includes(potCat)) {
@@ -600,7 +670,19 @@ export function resolveTagForSite(token, targetSite, customRules = [], settings 
     }
   }
 
-  const lookupKey = core.toLowerCase();
+  return { prefix, categoryPrefix, core: core.toLowerCase(), isExplicitArtist };
+}
+
+/**
+ * Resolve a single tag token for a target booru site.
+ * `settings.bypassDiscoveredAliases` skips the auto-discovered map: it backs the
+ * empty-result retry that keeps a bad discovered alias from killing a search.
+ */
+export function resolveTagForSite(token, targetSite, customRules = [], settings = null) {
+  if (!token || typeof token !== 'string') return token;
+
+  const site = String(targetSite || '').toLowerCase();
+  const { prefix, categoryPrefix, core: lookupKey, isExplicitArtist } = splitTokenParts(token);
   let replacedTag = null;
 
   // 1. Check user custom rules first (highest priority)
@@ -619,10 +701,11 @@ export function resolveTagForSite(token, targetSite, customRules = [], settings 
     }
   }
 
-  // 2. Check dynamically discovered aliases
-  if (!replacedTag && discoveredAliasMap.has(lookupKey)) {
+  // 2. Check dynamically discovered aliases. Groups quarantined by the
+  // empty-result tracker (enabled === false) stay out of the rewrite.
+  if (!replacedTag && settings?.bypassDiscoveredAliases !== true && discoveredAliasMap.has(lookupKey)) {
     const entry = discoveredAliasMap.get(lookupKey);
-    if (entry.sites && entry.sites[site]) {
+    if (entry.enabled !== false && entry.sites && entry.sites[site]) {
       replacedTag = entry.sites[site];
     }
   }
@@ -641,7 +724,7 @@ export function resolveTagForSite(token, targetSite, customRules = [], settings 
   }
 
   // If unknown and explicitly an artist or bare single word, trigger background discovery (non-blocking)
-  if (process.env.NODE_ENV !== 'test' && !replacedTag && settings?.enableAliasDiscovery !== false && (isExplicitArtist || (!lookupKey.includes(':') && !lookupKey.startsWith('order:') && !lookupKey.startsWith('sort:')))) {
+  if (process.env.NODE_ENV !== 'test' && !replacedTag && settings?.enableAliasDiscovery !== false && settings?.bypassDiscoveredAliases !== true && (isExplicitArtist || (!lookupKey.includes(':') && !lookupKey.startsWith('order:') && !lookupKey.startsWith('sort:')))) {
     discoverAuthorAliases(lookupKey, settings).catch(() => {});
   }
 
@@ -650,6 +733,118 @@ export function resolveTagForSite(token, targetSite, customRules = [], settings 
   }
 
   return token;
+}
+
+/**
+ * Describes every alias substitution a query would receive, without applying it.
+ * Powers the empty-result fallback in fetchPosts: when a substituted query comes
+ * back empty and this list is non-empty, the query is retried as the user wrote it.
+ */
+export function getQuerySubstitutions(rawTags, targetSites, settings = null) {
+  if (!rawTags || typeof rawTags !== 'string') return [];
+  const sites = (Array.isArray(targetSites) ? targetSites : [targetSites])
+    .map(s => String(s || '').toLowerCase())
+    .filter(Boolean);
+  if (sites.length === 0) return [];
+
+  const customRules = parseCustomAliases(settings?.customAliases);
+  const ignoredList = Array.isArray(settings?.ignoredAliases) ? settings.ignoredAliases : [];
+  const tokens = rawTags.split(/\s+/).filter(Boolean);
+  const substitutions = [];
+
+  for (const token of tokens) {
+    const { prefix, categoryPrefix, core } = splitTokenParts(token);
+    if (!core || isAliasIgnored(core, ignoredList)) continue;
+
+    for (const site of sites) {
+      let replacement = null;
+      let source = null;
+      let entryId = null;
+
+      if (Array.isArray(customRules) && customRules.length > 0) {
+        for (const rule of customRules) {
+          if (!rule || !Array.isArray(rule.aliases)) continue;
+          if (rule.aliases.includes(core)) {
+            const target = (rule.sites && rule.sites[site]) || rule.defaultTarget;
+            if (target) {
+              replacement = target;
+              source = 'custom';
+              break;
+            }
+          }
+        }
+      }
+
+      if (!replacement && settings?.bypassDiscoveredAliases !== true && discoveredAliasMap.has(core)) {
+        const entry = discoveredAliasMap.get(core);
+        if (entry.enabled !== false && entry.sites && entry.sites[site]) {
+          replacement = entry.sites[site];
+          source = 'discovered';
+          entryId = entry.id;
+        }
+      }
+
+      if (!replacement && builtinAliasMap.has(core)) {
+        const entry = builtinAliasMap.get(core);
+        if (entry.sites && entry.sites[site]) {
+          replacement = entry.sites[site];
+          source = 'builtin';
+        }
+      }
+
+      if (replacement && !isAliasIgnored(replacement, ignoredList)) {
+        const resolved = `${prefix}${categoryPrefix}${replacement}`;
+        // Identity rewrites carry no risk and get no tracking
+        if (resolved !== token) {
+          substitutions.push({ token, resolved, site, source, entryId });
+        }
+      }
+    }
+  }
+
+  return substitutions;
+}
+
+// How many empty-result failures an auto-discovered alias may cause before it is
+// disabled. Manual edits (PUT /api/aliases/discovered/:id) reset the counter.
+const ALIAS_AUTO_DISABLE_THRESHOLD = 3;
+
+/**
+ * Feeds the outcome of a substituted search back into the discovered alias store.
+ * `success` means the substituted query returned posts (failure counter resets);
+ * `empty` means the substituted query returned nothing while the original query
+ * did return posts, which is proof the alias blocked a working search. After
+ * ALIAS_AUTO_DISABLE_THRESHOLD failures the group is disabled but kept visible
+ * in the manager so the operator can inspect or re-enable it.
+ */
+export function reportAliasOutcome(substitutions, outcome) {
+  if (!Array.isArray(substitutions) || substitutions.length === 0) return;
+  if (outcome !== 'success' && outcome !== 'empty') return;
+
+  let changed = false;
+  for (const sub of substitutions) {
+    if (!sub || sub.source !== 'discovered' || !sub.entryId) continue;
+    const entry = discoveredAliasList.find(e => e.id === sub.entryId);
+    if (!entry || entry.enabled === false) continue;
+
+    if (outcome === 'success') {
+      if (entry.failCount) entry.failCount = 0;
+      entry.hitCount = (entry.hitCount || 0) + 1;
+    } else {
+      entry.failCount = (entry.failCount || 0) + 1;
+      if (entry.failCount >= ALIAS_AUTO_DISABLE_THRESHOLD) {
+        entry.enabled = false;
+        entry.disabledAt = new Date().toISOString();
+        logWarn('AliasService', `Алиас "${entry.id}" автоматически отключен: подмена запроса ${entry.failCount} раз привела к пустой выдаче`);
+      }
+    }
+    changed = true;
+  }
+
+  if (changed) {
+    rebuildDiscoveredMap();
+    saveDiscoveredAliasesAsync();
+  }
 }
 
 /**
@@ -684,9 +879,8 @@ export function clearDiscoveredAliases() {
   discoveredAliasMap.clear();
   checkedCandidates.clear();
   try {
-    if (fs.existsSync(DISCOVERED_ALIASES_FILE)) {
-      fs.unlinkSync(DISCOVERED_ALIASES_FILE);
-    }
+    if (sqliteActive()) sqliteKvDelete('discovered_aliases');
+    else if (fs.existsSync(DISCOVERED_ALIASES_FILE)) fs.unlinkSync(DISCOVERED_ALIASES_FILE);
   } catch {}
   logInfo('AliasService', 'Кэш автоматически обнаруженных алиасов очищен');
   return true;
@@ -696,7 +890,7 @@ export function getDiscoveredAliasesList() {
   return [...discoveredAliasList];
 }
 
-export function updateDiscoveredAliasEntry(originalId, { id, aliases, sites } = {}) {
+export function updateDiscoveredAliasEntry(originalId, { id, aliases, sites, enabled } = {}) {
   if (!originalId || typeof originalId !== 'string') return { success: false, error: 'Идентификатор не указан' };
   const targetId = originalId.trim().toLowerCase();
   const idx = discoveredAliasList.findIndex(e => (e.id || '').trim().toLowerCase() === targetId);
@@ -708,6 +902,8 @@ export function updateDiscoveredAliasEntry(originalId, { id, aliases, sites } = 
   const newSites = (sites && typeof sites === 'object' && !Array.isArray(sites))
     ? { ...sites }
     : (idx !== -1 ? discoveredAliasList[idx].sites : {});
+  const existingEnabled = idx !== -1 ? discoveredAliasList[idx].enabled : undefined;
+  const newEnabled = typeof enabled === 'boolean' ? enabled : existingEnabled;
 
   // Ensure newId is in aliases or present
   if (!newAliases.includes(newId)) {
@@ -722,6 +918,7 @@ export function updateDiscoveredAliasEntry(originalId, { id, aliases, sites } = 
       sites: newSites,
       discoveredAt: new Date().toISOString()
     };
+    if (typeof newEnabled === 'boolean') updatedEntry.enabled = newEnabled;
     discoveredAliasList.push(updatedEntry);
   } else {
     const existing = discoveredAliasList[idx];
@@ -732,6 +929,15 @@ export function updateDiscoveredAliasEntry(originalId, { id, aliases, sites } = 
       sites: newSites,
       updatedAt: new Date().toISOString()
     };
+    if (typeof newEnabled === 'boolean') {
+      updatedEntry.enabled = newEnabled;
+      // A manual re-enable (or any edit) is an operator verdict that the
+      // quarantine counter cannot outvote
+      if (newEnabled) {
+        delete updatedEntry.disabledAt;
+        updatedEntry.failCount = 0;
+      }
+    }
     discoveredAliasList[idx] = updatedEntry;
   }
 
@@ -786,7 +992,7 @@ export function getAllKnownAliasesMap(ignoredAliases = []) {
 
   // 2. Discovered aliases
   for (const entry of discoveredAliasList) {
-    if (!entry) continue;
+    if (!entry || entry.enabled === false) continue;
     const items = [entry.id, ...(entry.aliases || []), ...Object.values(entry.sites || {})];
     addVariants(items);
   }

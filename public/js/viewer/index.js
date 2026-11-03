@@ -11,6 +11,7 @@ import { resolvePostMetadata, renderAuthorInfo, handleAuthorFavToggle } from './
 import { renderSidebarArchives, renderArchivePostCard, cancelAllArchiveDownloads, flushArchiveSubscriptions } from './viewerArchives.js';
 import { isArchiveInspectModalOpen, closeArchiveInspectModal, setArchiveInspectContext } from './viewerArchiveInspect.js';
 import { closeCreatorResolverModal } from './viewerCreatorResolver.js';
+import { ensureViewerMarkup } from '../modules/viewerMarkup.js';
 import { renderSidebarCloudLinks, renderSidebarContent } from './viewerCloudLinks.js';
 import { renderSidebarSimilarPosts, configureSimilar, initSimilarEvents } from './viewerSimilar.js';
 import { getCurrentMediaItem, renderAlbumFilmstrip, switchAlbumSlide, preloadAdjacentMedia, loadFullAlbumForPost, downloadFullAlbum, downloadSingleMedia, configureAlbum } from './viewerAlbum.js';
@@ -18,6 +19,7 @@ import { setupViewerGestures } from './viewerGestures.js';
 import { lockBodyScroll, unlockBodyScroll } from '../modules/scrollLock.js';
 
 export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSelect, onAuthorSelect, onDislikeToggle, onFindSimilar, onSwitchSiteAndSearch } = {}) {
+  ensureViewerMarkup();
   const modal = document.getElementById('viewerModal');
   const backdrop = document.getElementById('viewerBackdrop');
   const btnClose = document.getElementById('btnCloseViewer');

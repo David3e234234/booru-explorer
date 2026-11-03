@@ -663,7 +663,7 @@ router.get('/posts', searchLimiter, async (req, res) => {
     logInfo('Search', `Запрос: site=${site}, tags="${tags}", page=${page}, category=${category}, rating=${ratingFilter}, type=${typeFilter}, ai=${aiFilter}, age=${ageFilter}`);
 
     // fetchPosts performs the full local filtering itself (isPostMatchingFilters)
-    let posts = await fetchPosts(site, {
+    const fetchParams = {
       tags, 
       page, 
       limit, 
@@ -679,7 +679,8 @@ router.get('/posts', searchLimiter, async (req, res) => {
       hideFurry,
       hidePregnant,
       hideLgbt
-    }, aiTagsList, settings);
+    };
+    let posts = await fetchPosts(site, fetchParams, aiTagsList, settings);
 
     // Sort top/views categories (after the multi-site round-robin merge)
     if (category === 'top' && site !== 'all') {
@@ -707,6 +708,15 @@ router.get('/posts', searchLimiter, async (req, res) => {
       count: posts.length,
       posts
     };
+
+    // Alias rewrite transparency: the client surfaces a notice when a discovered
+    // alias changed the query and whether the original-token fallback had to run
+    if (fetchParams.aliasMeta) {
+      responsePayload.aliasInfo = {
+        fallbackUsed: fetchParams.aliasMeta.fallbackUsed,
+        substitutions: fetchParams.aliasMeta.substitutions
+      };
+    }
 
     if (category !== 'random' && posts.length > 0) {
       apiPostsCache.set(cacheKey, responsePayload);

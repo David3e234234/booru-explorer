@@ -18,7 +18,7 @@ import {
   SITES
 } from '../config/constants.js';
 import { logInfo, logError } from '../utils/logger.js';
-import { learnAliasesFromPostMatches } from '../services/aliasService.js';
+import { learnAliasesFromPostMatches, getQuerySubstitutions, reportAliasOutcome } from '../services/aliasService.js';
 
 export {
   fetchDanbooru,
@@ -113,13 +113,46 @@ function withDeadline(work, ms = SITE_FETCH_DEADLINE_MS) {
   });
 }
 
+// Empty-result fallback bookkeeping shared by the leaf search branches. A
+// discovered alias silently replaces the user's token inside adaptTagsForSite,
+// so one bad registration can blank a working search. When the substituted
+// query comes back empty and the original-token retry finds posts, the outcome
+// is reported (driving the auto-quarantine) and the rescued posts win.
+async function fetchWithAliasFallback(fetchFn, params, rawTags, targetSites, settings) {
+  const substitutions = getQuerySubstitutions(rawTags, targetSites, settings);
+  const posts = await fetchFn(settings);
+
+  if (substitutions.length === 0) return posts;
+
+  if (posts.length === 0) {
+    const bypassSettings = { ...settings, bypassDiscoveredAliases: true };
+    const rescued = await fetchFn(bypassSettings);
+    if (rescued.length > 0) {
+      reportAliasOutcome(substitutions, 'empty');
+      params.aliasMeta = { substitutions, fallbackUsed: true };
+      return rescued;
+    }
+    return posts;
+  }
+
+  reportAliasOutcome(substitutions, 'success');
+  params.aliasMeta = { substitutions, fallbackUsed: false };
+  return posts;
+}
+
 export async function fetchPosts(site, params, aiTagsList, settings) {
   // Danbooru runs its own cursor loop (danbooru.js:185, up to 8 pages of fetches
   // with the default 25s timeout), so it needs the same site deadline as every
   // other source - without it a single slow search could hold the response for
   // minutes.
   if (site === 'danbooru') {
-    return await withDeadline(() => fetchDanbooru(params, aiTagsList, settings));
+    return await fetchWithAliasFallback(
+      (s) => withDeadline(() => fetchDanbooru(params, aiTagsList, s)),
+      params,
+      params.tags,
+      ['danbooru'],
+      settings
+    );
   }
 
   if (site === 'all' || site === 'custom' || site.includes(',')) {
@@ -200,6 +233,19 @@ export async function fetchPosts(site, params, aiTagsList, settings) {
     return limited;
   }
 
+  return await fetchWithAliasFallback(
+    (s) => runSingleSiteSearch(site, params, aiTagsList, s),
+    params,
+    params.tags,
+    [site],
+    settings
+  );
+}
+
+// Pipeline of remote pages for one booru site, with local filtering and the
+// deep-fetch loop. Extracted verbatim so the alias fallback can re-run it
+// against bypass settings without duplicating the loop.
+async function runSingleSiteSearch(site, params, aiTagsList, settings) {
   const targetLimit = parseInt(params.limit, 10) || 40;
   const page = Math.max(1, parseInt(params.page, 10) || 1);
   // A non-numeric depth ("auto", "abc") used to reach the loop bound as NaN, and

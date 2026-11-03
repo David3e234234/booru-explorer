@@ -459,6 +459,39 @@ function scheduleNotificationsPoll() {
 /**
  * Initialize notification system
  */
+// Notifications settings bindings (checkbox, interval, manual check button)
+// live in the lazily injected settings markup, so they are wired separately
+// once the settings modal is initialized.
+export function initNotificationSettingsControls() {
+  const checkEnabled = document.getElementById('checkNotificationsEnabled');
+  const selectInterval = document.getElementById('selectNotificationsInterval');
+  const btnSettingsCheck = document.getElementById('btnSettingsCheckNotifications');
+
+  if (checkEnabled) {
+    checkEnabled.checked = state.settings?.notificationsEnabled !== false;
+    checkEnabled.addEventListener('change', () => {
+      state.settings.notificationsEnabled = checkEnabled.checked;
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  if (selectInterval) {
+    if (state.settings?.notificationsInterval) {
+      selectInterval.value = String(state.settings.notificationsInterval);
+    }
+    selectInterval.addEventListener('change', () => {
+      state.settings.notificationsInterval = Number(selectInterval.value) || 15;
+      saveSettings(state.settings).catch(() => {});
+    });
+  }
+
+  if (btnSettingsCheck) {
+    btnSettingsCheck.addEventListener('click', () => {
+      triggerManualCheck();
+    });
+  }
+}
+
 export function initNotifications({ onOpenPost, onSwitchToFollowing } = {}) {
   openPostCallback = onOpenPost;
   switchTabCallback = onSwitchToFollowing;
@@ -562,35 +595,6 @@ export function initNotifications({ onOpenPost, onSwitchToFollowing } = {}) {
       tabUnread.classList.add('active');
       tabAll.classList.remove('active');
       renderNotificationsList();
-    });
-  }
-
-  // Settings bindings
-  const checkEnabled = document.getElementById('checkNotificationsEnabled');
-  const selectInterval = document.getElementById('selectNotificationsInterval');
-  const btnSettingsCheck = document.getElementById('btnSettingsCheckNotifications');
-
-  if (checkEnabled) {
-    checkEnabled.checked = state.settings?.notificationsEnabled !== false;
-    checkEnabled.addEventListener('change', () => {
-      state.settings.notificationsEnabled = checkEnabled.checked;
-      saveSettings(state.settings).catch(() => {});
-    });
-  }
-
-  if (selectInterval) {
-    if (state.settings?.notificationsInterval) {
-      selectInterval.value = String(state.settings.notificationsInterval);
-    }
-    selectInterval.addEventListener('change', () => {
-      state.settings.notificationsInterval = Number(selectInterval.value) || 15;
-      saveSettings(state.settings).catch(() => {});
-    });
-  }
-
-  if (btnSettingsCheck) {
-    btnSettingsCheck.addEventListener('click', () => {
-      triggerManualCheck();
     });
   }
 

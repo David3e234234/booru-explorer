@@ -48,10 +48,10 @@ describe('Content filter defaults', () => {
   // The reset button is a user-facing promise about the default, so leaving it
   // on the old values would silently switch LGBT filtering back off.
   it('resets the switches back to enabled', () => {
-    const app = readRepoFile('../../public/js/app.js');
-    assert.ok(app.includes('state.hideLgbt = true;'), 'reset must enable state.hideLgbt');
-    assert.ok(app.includes('checkHideLgbt.checked = true'), 'reset must check the LGBT switch');
-    assert.ok(!app.includes('state.hideLgbt = false;'), 'reset must not disable hideLgbt again');
+    const bindings = readRepoFile('../../public/js/modules/eventBindings.js');
+    assert.ok(bindings.includes('state.hideLgbt = true;'), 'reset must enable state.hideLgbt');
+    assert.ok(bindings.includes('checkHideLgbt.checked = true'), 'reset must check the LGBT switch');
+    assert.ok(!bindings.includes('state.hideLgbt = false;'), 'reset must not disable hideLgbt again');
   });
 
   // The amber dot marks "the user changed something". It compares against the

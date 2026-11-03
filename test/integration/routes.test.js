@@ -47,7 +47,11 @@ describe('Express API Integration & Route Tests', () => {
       server.unref();
     }
     if (ownsDataDir) {
-      await fs.rm(testDataDir, { recursive: true, force: true });
+      // Close the SQLite handle first: on Windows the rm fails with EBUSY
+      // while the integration server's database connection is still open.
+      const { closeDatabase } = await import('../../src/services/sqliteStore.js');
+      closeDatabase();
+      await fs.rm(testDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     }
   });
 
@@ -492,7 +496,7 @@ describe('Express API Integration & Route Tests', () => {
       await fetch(`${baseUrl}/api/likes`, { headers: { 'Authorization': `Bearer ${authToken}` } });
     });
 
-    it('stores a collection gzipped on disk', async () => {
+    it('persists a like durably in the active storage backend', async () => {
       await fetch(`${baseUrl}/api/like`, {
         method: 'POST',
         headers: {
@@ -503,9 +507,19 @@ describe('Express API Integration & Route Tests', () => {
       });
       await flushPendingWrites();
 
-      const usersIndex = JSON.parse(await fs.readFile(path.join(testDataDir, 'users.json'), 'utf8'));
+      const { getUsersIndex } = await import('../../src/services/storageService.js');
+      const usersIndex = getUsersIndex();
       const currentUser = usersIndex.find(u => u.username === testUsername);
       assert.ok(currentUser, 'registered test user must exist');
+
+      const { isActive } = await import('../../src/services/sqliteStore.js');
+      if (isActive()) {
+        const { getLikes } = await import('../../src/services/storageService.js');
+        const likes = getLikes(currentUser.id);
+        assert.ok(likes.some(l => l.id === 'danbooru_gzip_1'), 'like must be stored in the SQLite database');
+        return;
+      }
+
       const likesPath = path.join(testDataDir, 'users', currentUser.id, 'likes.json');
       const raw = await fs.readFile(likesPath);
       assert.equal(raw[0], 0x1f, 'likes.json must start with the gzip magic byte');

@@ -10,7 +10,13 @@ process.env.NODE_ENV = 'test';
 process.env.BOORU_DATA_DIR = testDataDir;
 
 after(async () => {
-  await fs.rm(testDataDir, { recursive: true, force: true });
+  // The integration server keeps the SQLite handle open until it is closed
+  // explicitly; on Windows an open handle makes the unlink fail with EBUSY.
+  // Dynamic import: a static one would hoist constants.js above the
+  // BOORU_DATA_DIR assignment and freeze the real data dir into the tests.
+  const { closeDatabase } = await import('../src/services/sqliteStore.js');
+  closeDatabase();
+  await fs.rm(testDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 });
 
 // Discovery instead of a hardcoded list: a hand-maintained registry silently skips

@@ -17,7 +17,7 @@ import {
 import { logInfo, logError } from '../utils/logger.js';
 import { fetchSafe, discardResponse } from '../utils/network.js';
 import { resolveSiteSession } from './siteSessionService.js';
-import { getUserDataDir, USERS_DIR } from './userService.js';
+import { getUserDataDir, USERS_DIR, USERS_INDEX_FILE } from './userService.js';
 import { compactStoredPost } from './storedPostSchema.js';
 import {
   readJsonFile,
@@ -27,6 +27,7 @@ import {
   flushPendingWritesSync,
   isCompressedJsonFile
 } from './jsonFileStore.js';
+import * as sqliteStore from './sqliteStore.js';
 
 export { readJsonFile, writeJsonFile, writeJsonFileAsync, flushPendingWrites, flushPendingWritesSync };
 
@@ -36,6 +37,26 @@ function getUserFilePath(userId, defaultFile, filename) {
   if (!userId) return defaultFile;
   const userDir = getUserDataDir(userId);
   return path.join(userDir, filename);
+}
+
+// Every user-data document is keyed by scope: 'global' for the anonymous
+// namespace, 'user:<id>' for registered accounts. Under the SQLite backend
+// these live in booru.db; under the legacy backend they map back to files.
+function scopeOf(userId) {
+  return sqliteStore.scopeOf(userId);
+}
+
+function readCollection(file, kind, userId, fallback) {
+  if (sqliteStore.isActive()) return sqliteStore.getCollection(scopeOf(userId), kind, fallback);
+  return readJsonFile(file, fallback);
+}
+
+function writeCollection(file, kind, userId, value) {
+  if (sqliteStore.isActive()) {
+    sqliteStore.setCollection(scopeOf(userId), kind, value);
+    return;
+  }
+  writeJsonFileAsync(file, value);
 }
 
 // Environment variables never change at runtime - read them once,
@@ -51,16 +72,32 @@ const ENV_OVERRIDES = (() => {
   return Object.freeze(envOverrides);
 })();
 
+// On-disk settings, without the environment overlay. The global cache is
+// keyed by the storage backend fingerprint: a backend or data-directory
+// switch (tests, forced JSON mode) must never serve stale in-memory values.
 let inMemorySettings = null;
+let inMemorySettingsBackend = null;
 
 // On-disk settings, without the environment overlay
 function readSettingsRaw(userId) {
   const filePath = getUserFilePath(userId, SETTINGS_FILE, 'settings.json');
-  if (!userId && inMemorySettings) return inMemorySettings;
-  const raw = readJsonFile(filePath, {});
+  const backendKey = sqliteStore.backendFingerprint();
+  if (!userId && inMemorySettings && inMemorySettingsBackend === backendKey) return inMemorySettings;
+  const raw = sqliteStore.isActive()
+    ? sqliteStore.kvGet(`settings:${scopeOf(userId)}`, {})
+    : readJsonFile(filePath, {});
   const settings = { ...DEFAULT_SETTINGS, ...raw };
-  if (!userId) inMemorySettings = settings;
+  if (!userId) {
+    inMemorySettings = settings;
+    inMemorySettingsBackend = backendKey;
+  }
   return settings;
+}
+
+// Settings without the environment overlay, for flows that must not leak
+// env-provided credentials into responses (login, account export).
+export function readRawUserSettings(userId) {
+  return { ...readSettingsRaw(userId) };
 }
 
 export function getSettings(userId = null) {
@@ -73,8 +110,15 @@ export function updateSettings(partial, userId = null) {
   // from where they leaked into Telegram backups and account exports.
   const updated = { ...readSettingsRaw(userId), ...(partial || {}) };
   const filePath = getUserFilePath(userId, SETTINGS_FILE, 'settings.json');
-  if (!userId) inMemorySettings = updated;
-  writeJsonFileAsync(filePath, updated);
+  if (!userId) {
+    inMemorySettings = updated;
+    inMemorySettingsBackend = sqliteStore.backendFingerprint();
+  }
+  if (sqliteStore.isActive()) {
+    sqliteStore.kvSet(`settings:${scopeOf(userId)}`, updated);
+  } else {
+    writeJsonFileAsync(filePath, updated);
+  }
   return { ...updated, ...ENV_OVERRIDES };
 }
 
@@ -90,49 +134,46 @@ export function stripSecretSettings(settings) {
 }
 
 export function getFavorites(userId = null) {
-  const filePath = getUserFilePath(userId, FAVORITES_FILE, 'favorites.json');
-  return readJsonFile(filePath, []);
+  return readCollection(getUserFilePath(userId, FAVORITES_FILE, 'favorites.json'), 'favorites', userId, []);
 }
 
 export function saveFavorites(favorites, userId = null) {
-  const filePath = getUserFilePath(userId, FAVORITES_FILE, 'favorites.json');
-  writeJsonFileAsync(filePath, favorites);
+  writeCollection(getUserFilePath(userId, FAVORITES_FILE, 'favorites.json'), 'favorites', userId, favorites);
 }
 
 export function getFavoriteAuthors(userId = null) {
-  const filePath = getUserFilePath(userId, FAVORITE_AUTHORS_FILE, 'favorite_authors.json');
-  return readJsonFile(filePath, []);
+  return readCollection(getUserFilePath(userId, FAVORITE_AUTHORS_FILE, 'favorite_authors.json'), 'favorite_authors', userId, []);
 }
 
 export function saveFavoriteAuthors(authors, userId = null) {
-  const filePath = getUserFilePath(userId, FAVORITE_AUTHORS_FILE, 'favorite_authors.json');
-  writeJsonFileAsync(filePath, authors);
+  writeCollection(getUserFilePath(userId, FAVORITE_AUTHORS_FILE, 'favorite_authors.json'), 'favorite_authors', userId, authors);
 }
 
 export function getLikes(userId = null) {
-  const filePath = getUserFilePath(userId, LIKES_FILE, 'likes.json');
-  return readJsonFile(filePath, []);
+  return readCollection(getUserFilePath(userId, LIKES_FILE, 'likes.json'), 'likes', userId, []);
 }
 
 export function saveLikes(likes, userId = null) {
-  const filePath = getUserFilePath(userId, LIKES_FILE, 'likes.json');
-  writeJsonFileAsync(filePath, likes);
+  writeCollection(getUserFilePath(userId, LIKES_FILE, 'likes.json'), 'likes', userId, likes);
 }
 
 export function getDislikes(userId = null) {
-  const filePath = getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json');
-  return readJsonFile(filePath, []);
+  return readCollection(getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json'), 'dislikes', userId, []);
 }
 
 export function saveDislikes(dislikes, userId = null) {
-  const filePath = getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json');
-  writeJsonFileAsync(filePath, dislikes);
+  writeCollection(getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json'), 'dislikes', userId, dislikes);
 }
 
-// Rewrite collections that predate the compact schema: strip internal viewer
-// state and alias URL tiers, then store gzipped. A file already in the compact
-// form is detected and skipped, so this is cheap to call on every boot.
+// Rewrite collections that predate the compact schema. Under the SQLite
+// backend the import already stores records in the compact form, so this only
+// makes sure the legacy JSON import has run, then reports nothing to do.
 export async function compactStoredCollections() {
+  if (sqliteStore.isActive()) {
+    sqliteStore.migrateLegacyJson();
+    return { compacted: 0 };
+  }
+
   const targets = [];
 
   const addTargets = (filePrefix, userId) => {
@@ -182,18 +223,25 @@ export async function compactStoredCollections() {
 }
 
 export function clearDislikes(userId = null) {
-  const filePath = getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json');
-  writeJsonFileAsync(filePath, []);
+  writeCollection(getUserFilePath(userId, DISLIKES_FILE, 'dislikes.json'), 'dislikes', userId, []);
 }
 
 // Author-check state: { "site:name": { lastCheckedAt, knownIds, newIds } }
 export function getAuthorFeedState(userId = null) {
+  if (sqliteStore.isActive()) {
+    const data = sqliteStore.kvGet(`feed_state:${scopeOf(userId)}`, {});
+    return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
+  }
   const filePath = getUserFilePath(userId, AUTHOR_FEED_STATE_FILE, 'author_feed_state.json');
   const data = readJsonFile(filePath, {});
   return (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
 }
 
 export function saveAuthorFeedState(state, userId = null) {
+  if (sqliteStore.isActive()) {
+    sqliteStore.kvSet(`feed_state:${scopeOf(userId)}`, state || {});
+    return;
+  }
   const filePath = getUserFilePath(userId, AUTHOR_FEED_STATE_FILE, 'author_feed_state.json');
   writeJsonFileAsync(filePath, state);
 }
@@ -201,14 +249,19 @@ export function saveAuthorFeedState(state, userId = null) {
 const MAX_NOTIFICATIONS = 100;
 
 export function getNotifications(userId = null) {
+  if (sqliteStore.isActive()) return sqliteStore.getNotifications(scopeOf(userId), []);
   const filePath = getUserFilePath(userId, NOTIFICATIONS_FILE, 'notifications.json');
   const data = readJsonFile(filePath, []);
   return Array.isArray(data) ? data : [];
 }
 
 export function saveNotifications(notifications, userId = null) {
-  const filePath = getUserFilePath(userId, NOTIFICATIONS_FILE, 'notifications.json');
   const list = Array.isArray(notifications) ? notifications.slice(0, MAX_NOTIFICATIONS) : [];
+  if (sqliteStore.isActive()) {
+    sqliteStore.setNotifications(scopeOf(userId), list);
+    return;
+  }
+  const filePath = getUserFilePath(userId, NOTIFICATIONS_FILE, 'notifications.json');
   writeJsonFileAsync(filePath, list);
 }
 
@@ -286,6 +339,56 @@ export function clearNotifications(userId = null) {
   saveNotifications([], userId);
   return [];
 }
+
+// --- users index and cross-scope enumeration ---
+
+let usersIndexCache = null;
+let usersIndexCacheBackend = null;
+
+// The users index is read on every authenticated request, so the SQLite
+// branch keeps it in memory (the database is not hand-editable, unlike the
+// legacy users.json, where every call re-reads the file). Keyed by the
+// backend fingerprint so a backend switch never serves a stale index.
+export function getUsersIndex() {
+  if (sqliteStore.isActive()) {
+    const backendKey = sqliteStore.backendFingerprint();
+    if (!usersIndexCache || usersIndexCacheBackend !== backendKey) {
+      usersIndexCache = sqliteStore.kvGet('users_index', []);
+      usersIndexCacheBackend = backendKey;
+    }
+    return [...usersIndexCache];
+  }
+  return readJsonFile(USERS_INDEX_FILE, []);
+}
+
+export function saveUsersIndex(users) {
+  if (sqliteStore.isActive()) {
+    usersIndexCache = Array.isArray(users) ? users : [];
+    usersIndexCacheBackend = sqliteStore.backendFingerprint();
+    sqliteStore.kvSet('users_index', usersIndexCache);
+    return;
+  }
+  return writeJsonFile(USERS_INDEX_FILE, users);
+}
+
+// Every scope's favorite author list, e.g. to seed tag classification.
+export function listFavoriteAuthorCollections() {
+  if (sqliteStore.isActive()) return sqliteStore.listCollections('favorite_authors');
+  const result = [];
+  const candidateFiles = [FAVORITE_AUTHORS_FILE];
+  try {
+    for (const entry of fs.readdirSync(USERS_DIR, { withFileTypes: true })) {
+      if (entry.isDirectory()) candidateFiles.push(path.join(USERS_DIR, entry.name, 'favorite_authors.json'));
+    }
+  } catch {}
+  for (const file of candidateFiles) {
+    if (!fs.existsSync(file)) continue;
+    const list = readJsonFile(file, []);
+    if (Array.isArray(list) && list.length) result.push({ scope: path.basename(path.dirname(file)), items: list });
+  }
+  return result;
+}
+
 
 const MOEBOORU_PASSWORD_SALT = 'So-I-Heard-You-Like-Mupkids-?--';
 

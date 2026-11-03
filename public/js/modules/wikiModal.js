@@ -1,7 +1,9 @@
 import { showToast } from './uiUtils.js';
 import { t } from '../i18n.js';
+import { ensureWikiMarkup } from './wikiMarkup.js';
 
 export function initWikiModal({ onSelectTag, onSwitchSite }) {
+  ensureWikiMarkup();
   const modalBackdrop = document.getElementById('modalWikiBackdrop');
   const btnClose = document.getElementById('btnCloseWikiModal');
   const btnHeaderWiki = document.getElementById('btnHeaderWiki');

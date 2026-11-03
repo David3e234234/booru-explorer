@@ -2,8 +2,19 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { DATA_DIR, DEFAULT_SETTINGS, SECRET_SETTING_FIELDS } from '../config/constants.js';
-import { readJsonFile, writeJsonFile, writeJsonFileAsync } from './storageService.js';
+import {
+  getUsersIndex,
+  saveUsersIndex,
+  readRawUserSettings,
+  updateSettings,
+  saveFavorites,
+  saveLikes,
+  saveDislikes,
+  saveFavoriteAuthors,
+  saveAuthorFeedState
+} from './storageService.js';
 import { logInfo, logError } from '../utils/logger.js';
+import { deleteScopeData, scopeOf } from './sqliteStore.js';
 
 export const USERS_DIR = path.join(DATA_DIR, 'users');
 export const USERS_INDEX_FILE = path.join(DATA_DIR, 'users.json');
@@ -108,14 +119,14 @@ export function verifyToken(token) {
  * Get the list of all users (index)
  */
 export function getUsersList() {
-  return readJsonFile(USERS_INDEX_FILE, []);
+  return getUsersIndex();
 }
 
 /**
  * Save the user list
  */
 export function saveUsersList(users) {
-  return writeJsonFile(USERS_INDEX_FILE, users);
+  return saveUsersIndex(users);
 }
 
 /**
@@ -150,6 +161,11 @@ export function cleanupStaleUserArtifacts() {
     const kept = users.filter((user) => {
       const isTest = /^test_user_/i.test(String(user?.username || ''));
       if (!isTest) return true;
+      // Under the SQLite backend the throwaway account's data lives in the
+      // database, not in a user directory - purge its scope as well.
+      try {
+        if (user?.id) deleteScopeData(scopeOf(user.id));
+      } catch {}
       removedAccounts += 1;
       return false;
     });
@@ -254,21 +270,19 @@ export async function registerUser(username, password, initialData = {}) {
   users.push(user);
   await saveUsersList(users);
 
-  const userDir = getUserDataDir(userId);
+  getUserDataDir(userId);
   const userSettings = { ...DEFAULT_SETTINGS, ...(initialData.settings || {}) };
   const userFavorites = Array.isArray(initialData.favorites) ? initialData.favorites : [];
   const userLikes = Array.isArray(initialData.likes) ? initialData.likes : [];
   const userDislikes = Array.isArray(initialData.dislikes) ? initialData.dislikes : [];
   const userFavoriteAuthors = Array.isArray(initialData.favoriteAuthors) ? initialData.favoriteAuthors : [];
 
-  await Promise.all([
-    writeJsonFile(path.join(userDir, 'settings.json'), userSettings),
-    writeJsonFile(path.join(userDir, 'favorites.json'), userFavorites),
-    writeJsonFile(path.join(userDir, 'likes.json'), userLikes),
-    writeJsonFile(path.join(userDir, 'dislikes.json'), userDislikes),
-    writeJsonFile(path.join(userDir, 'favorite_authors.json'), userFavoriteAuthors),
-    writeJsonFile(path.join(userDir, 'author_feed_state.json'), {})
-  ]);
+  updateSettings(userSettings, userId);
+  saveFavorites(userFavorites, userId);
+  saveLikes(userLikes, userId);
+  saveDislikes(userDislikes, userId);
+  saveFavoriteAuthors(userFavoriteAuthors, userId);
+  saveAuthorFeedState({}, userId);
   logInfo('Auth', `Зарегистрирован новый пользователь: ${cleanUsername} (ID: ${userId})`);
 
   const token = generateToken({ id: userId, username: cleanUsername, tokenVersion: 0 });
@@ -333,15 +347,13 @@ export async function restoreUser(account = {}, password = '') {
   users.push(user);
   await saveUsersList(users);
 
-  const userDir = getUserDataDir(userId);
-  await Promise.all([
-    writeJsonFile(path.join(userDir, 'settings.json'), { ...DEFAULT_SETTINGS }),
-    writeJsonFile(path.join(userDir, 'favorites.json'), []),
-    writeJsonFile(path.join(userDir, 'likes.json'), []),
-    writeJsonFile(path.join(userDir, 'dislikes.json'), []),
-    writeJsonFile(path.join(userDir, 'favorite_authors.json'), []),
-    writeJsonFile(path.join(userDir, 'author_feed_state.json'), {})
-  ]);
+  getUserDataDir(userId);
+  updateSettings({ ...DEFAULT_SETTINGS }, userId);
+  saveFavorites([], userId);
+  saveLikes([], userId);
+  saveDislikes([], userId);
+  saveFavoriteAuthors([], userId);
+  saveAuthorFeedState({}, userId);
   logInfo('Auth', `Аккаунт восстановлен из бэкапа: ${cleanUsername} (ID: ${userId})`);
 
   const token = generateToken({ id: userId, username: cleanUsername, tokenVersion: 0 });
@@ -371,22 +383,20 @@ export async function loginUser(username, password, initialData = null) {
     await saveUsersList(users);
   }
 
-  const userDir = getUserDataDir(user.id);
-  const settingsFile = path.join(userDir, 'settings.json');
-  const userSettings = { ...DEFAULT_SETTINGS, ...readJsonFile(settingsFile, {}) };
+  const userSettings = readRawUserSettings(user.id);
 
   if (initialData?.settings && typeof initialData.settings === 'object') {
-    let changed = false;
+    const changed = {};
     for (const field of SECRET_SETTING_FIELDS) {
       const existingVal = userSettings[field];
       const incomingVal = initialData.settings[field];
       if ((!existingVal || String(existingVal).trim() === '') && incomingVal && String(incomingVal).trim() !== '') {
+        changed[field] = incomingVal;
         userSettings[field] = incomingVal;
-        changed = true;
       }
     }
-    if (changed) {
-      await writeJsonFile(settingsFile, userSettings);
+    if (Object.keys(changed).length > 0) {
+      updateSettings(changed, user.id);
       logInfo('Auth', `Локальные API-ключи перенесены в аккаунт: ${cleanUsername}`);
     }
   }

@@ -11,7 +11,9 @@ import {
 import { state, saveLocalSettings } from '../state.js';
 import { showToast, escapeHtml } from './uiUtils.js';
 import { t } from '../i18n.js';
-import { renderSettingsChips, updateDiscoveredAliasesUI, addIgnoredAliasTag } from './settingsModal.js';
+import { renderSettingsChips, addIgnoredAliasTag } from './settingsTabs/tagLists.js';
+import { updateDiscoveredAliasesUI } from './settingsTabs/storageBackup.js';
+import { ensureAliasManagerMarkup } from './aliasManagerMarkup.js';
 
 let discoveredList = [];
 let filteredList = [];
@@ -87,26 +89,32 @@ function renderList() {
   filteredList.forEach(entry => {
     const card = document.createElement('div');
     card.className = 'discovered-alias-card';
-    card.style.cssText = 'background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;';
+    // Dimmed, not hidden: a quarantined group stays readable for inspection
+    card.style.cssText = `background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;${entry.enabled === false ? ' opacity: 0.55;' : ''}`;
 
     const sitesStr = entry.sites ? Object.entries(entry.sites).map(([k, v]) => `${k}:${v}`).join(', ') : '';
     const aliasesList = Array.isArray(entry.aliases) ? entry.aliases : [];
+    const isDisabled = entry.enabled === false;
 
     card.innerHTML = `
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">
         <span style="font-weight: 600; color: var(--accent-primary); font-size: 14px;">${escapeHtml(entry.id)}</span>
-        <div style="display: flex; gap: 6px;">
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <button type="button" class="btn-secondary btn-sm btn-toggle-alias" style="padding: 3px 8px; font-size: 11px;">${escapeHtml(isDisabled ? t('aliasManager.enable', 'Включить') : t('aliasManager.disable', 'Отключить'))}</button>
           <button type="button" class="btn-secondary btn-sm btn-edit-alias" style="padding: 3px 8px; font-size: 11px;">${escapeHtml(t('aliasManager.edit', 'Редактировать'))}</button>
           <button type="button" class="btn-danger btn-sm btn-delete-alias" style="padding: 3px 8px; font-size: 11px; background: none; border: 1px solid var(--border-subtle); color: var(--text-danger, #ef4444); cursor: pointer;">${escapeHtml(t('aliasManager.delete', 'Удалить'))}</button>
         </div>
       </div>
-      <div class="alias-tags-chips" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
-        ${aliasesList.map(a => `
-          <span class="tag-chip" style="font-size: 11px; padding: 2px 6px; display: inline-flex; align-items: center; gap: 4px;" data-tag="${escapeHtml(a)}">
-            <span>${escapeHtml(a)}</span>
-            <button type="button" class="btn-ban-tag" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; line-height: 1;" title="${escapeHtml(t('aliasManager.banTag', 'Запретить тег'))}">⊘</button>
-          </span>
-        `).join('')}
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center;">
+        <div class="alias-tags-chips" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center;">
+          ${aliasesList.map(a => `
+            <span class="tag-chip" style="font-size: 11px; padding: 2px 6px; display: inline-flex; align-items: center; gap: 4px;" data-tag="${escapeHtml(a)}">
+              <span>${escapeHtml(a)}</span>
+              <button type="button" class="btn-ban-tag" style="background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 0; line-height: 1;" title="${escapeHtml(t('aliasManager.banTag', 'Запретить тег'))}">⊘</button>
+            </span>
+          `).join('')}
+        </div>
+        ${isDisabled ? `<span style="font-size: 11px; padding: 2px 8px; border-radius: var(--radius-sm, 6px); background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-muted);" title="${entry.disabledAt ? escapeHtml(entry.disabledAt) : ''}">${escapeHtml(t('aliasManager.disabled', 'Отключён'))}</span>` : ''}
       </div>
       ${sitesStr ? `<div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(sitesStr)}</div>` : ''}
       <div class="alias-edit-form" style="display: none; flex-direction: column; gap: 8px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-subtle);">
@@ -118,6 +126,32 @@ function renderList() {
         </div>
       </div>
     `;
+
+    // Enable/disable group: quarantined groups are disabled, not deleted
+    const btnToggle = card.querySelector('.btn-toggle-alias');
+    if (btnToggle) {
+      btnToggle.addEventListener('click', async () => {
+        btnToggle.disabled = true;
+        try {
+          const res = await updateDiscoveredAliasApi(entry.id, {
+            id: entry.id,
+            aliases: aliasesList,
+            sites: entry.sites,
+            enabled: isDisabled
+          });
+          if (res && res.success) {
+            showToast(isDisabled
+              ? t('aliasManager.enabledToast', 'Алиас «{id}» включен').replace('{id}', entry.id)
+              : t('aliasManager.disabledToast', 'Алиас «{id}» отключен').replace('{id}', entry.id));
+            await loadAndRenderDiscoveredAliases();
+          } else {
+            showToast(res.error || t('set.errorPrefix', 'Ошибка при обновлении'));
+          }
+        } finally {
+          btnToggle.disabled = false;
+        }
+      });
+    }
 
     // Edit button click
     const btnEdit = card.querySelector('.btn-edit-alias');
@@ -213,6 +247,7 @@ function renderList() {
 }
 
 export function initDiscoveredAliasesModal() {
+  ensureAliasManagerMarkup();
   const searchInput = document.getElementById('inputSearchDiscoveredAliases');
   if (searchInput) {
     searchInput.addEventListener('input', () => {

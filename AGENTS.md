@@ -70,6 +70,7 @@ Runtime dependencies are kept minimal and must stay `0 vulnerabilities` under `n
 
 - `PORT` and `SERVER_PORT` set the port; `--port=N` has priority.
 - `BOORU_DATA_DIR` overrides the data root. Tests always create a temporary directory.
+- `BOORU_STORAGE_BACKEND=json` forces the legacy JSON storage path instead of SQLite (`data/booru.db`), for operations and tests.
 - `SESSION_SECRET` signs bearer tokens. Set it explicitly in multi-instance deployments.
 - `BOORU_ADMIN_TOKEN` enables token-based owner access through `x-booru-admin-token`.
 - Without `BOORU_ADMIN_TOKEN`, the first registered user is the owner.
@@ -85,11 +86,21 @@ src/middleware/                request policies such as rate limiting
 src/parsers/                   one module per source plus aggregation in index.js
 src/routes/                    HTTP endpoints grouped by domain
 src/services/                  storage, cache, media, auth, backup, archives
+src/services/sqliteStore.js    SQLite backend (node:sqlite) for all user data,
+                               legacy JSON import and JSON fallback
 src/utils/                     network, tag logic, logging, host policy, settings policy
 src/utils/searchCompat.js      shared rating-tag, preview-tier and pagination helpers
-public/index.html              static application shell and SVG sprite
+public/index.html              slim application shell: header, sidebar, gallery,
+                               sheets and the SVG sprite; modal markup is injected lazily
 public/js/                     ES modules loaded by the esbuild bundle entry (app.js)
+public/js/search/              feed production per category: searchEngine dispatcher
+                               plus following.js / recommendations.js branches
 public/js/feed/                phone feed subsystem (vertical snap feed: slides, video, gestures, sheets)
+public/js/modules/             UI subsystems loaded by app.js (see boundaries below)
+public/js/modules/settingsTabs/  per-tab controllers of the settings modal (each owns
+                               its temp state, renderers and DOM wiring)
+public/js/modules/*Markup.js   modal markup extracted from index.html (viewer, settings,
+                               wiki, auth, alias manager), injected on first use
 public/js/modules/scrollLock.js shared reference-counted body scroll lock
 public/dist/                   esbuild output (git-ignored, rebuilt by postinstall/server.js)
 scripts/buildClient.mjs        esbuild bundle script behind `npm run build:client`
@@ -114,6 +125,12 @@ Large files must be split by responsibility when touched. Preferred existing bou
 - `notifications.routes.js`: in-app notifications endpoints (GET, POST /read, DELETE, POST /check)
 - `rateLimit.js`: per-instance fixed-window limiter; every limiter gets its own budget
 - `public/js/modules/*`: UI subsystems loaded by `app.js`
+- `public/js/search/searchEngine.js`: the only feed producer; category branches live in `search/following.js` and `search/recommendations.js` and receive a `ctx` ({ reset, options, isSuperseded, renderFavoriteAuthors }), never app.js scope
+- `public/js/modules/lazyLoader.js`: `importOnce` loaders, the instance registry (get*/set* per component) and the app.js actions injected via `initLazyLoaders(deps)`
+- `public/js/modules/accountData.js`: account data loaders and the account generation guard
+- `public/js/modules/eventBindings.js`: static-shell event wiring; app.js actions arrive via `initEventBindings(deps)`
+- `public/js/modules/settingsModal.js`: settings orchestration (open/save/reset/apply); per-tab state and wiring live in `settingsTabs/*`
+- `public/js/modules/*Markup.js`: modal markup injected on first use; keep `data-i18n` translated right after injection and bind controls only after `ensure*Markup()` (delegation for init-time bindings)
 
 ## 6. Backend Architecture
 
@@ -124,9 +141,10 @@ Large files must be split by responsibility when touched. Preferred existing bou
 3. Single-site mode runs the parser and a bounded deep-fetch loop.
 4. All-sites mode uses `Promise.allSettled`, a per-site deadline, `Promise.allSettled` fan-out, round-robin merge and a final `limit` slice.
 5. `isPostMatchingFilters()` in `tagHelpers.js` is the canonical content filter. Danbooru also prefilters inside its parser to avoid expensive cursor paging; routes must never add another filter pass.
-6. Auto-discovered Danbooru aliases are only registered when the discovered alias group is plausible (at most 8 names). A Danbooru page with dozens of `other_names` is a circle or aggregator page; registering it aliases unrelated artists to each other, so a single-author Pawchive query returns several unrelated feeds.
+6. Auto-discovered Danbooru aliases are only registered when the discovered alias group is plausible (at most 8 names). A Danbooru page with dozens of `other_names` is a circle or aggregator page; registering it aliases unrelated artists to each other, so a single-author Pawchive query returns several unrelated feeds. Additionally, the queried candidate must be the artist's own name or one of its listed `other_names` (the `artists.json` fuzzy `data[0]` is not trusted), and the canonical tag must have a nonzero post count per Danbooru's `tags.json` before the group is written. The blind "any alias ending in `sfm`" Rule34 fallback is gone: Rule34 mappings come only from the post-count-verified autocomplete match.
 7. Author alias auto-discovery can be globally disabled via `enableAliasDiscovery: false` in user settings. Erroneous or noisy tags can be blacklisted via `ignoredAliases: string[]`, preventing them from being discovered, linked, or resolved.
-8. Discovered aliases can be inspected and edited via `/api/aliases/discovered` (`GET`, `PUT /:id`, `DELETE /:id`). All writes serialize atomically through `jsonFileStore.js`.
+8. Discovered aliases can be inspected and edited via `/api/aliases/discovered` (`GET`, `PUT /:id` accepts `{ id, aliases, sites, enabled }`, `DELETE /:id`). All writes serialize atomically through `jsonFileStore.js`.
+9. **A bad discovered alias must never kill a search.** `fetchPosts()` (danbooru and single-site leaf branches) tracks substitutions via `getQuerySubstitutions()`; when a substituted query returns zero posts, the same fetch is retried once with `bypassDiscoveredAliases: true` so the user's original token reaches the board. The retry rescuing posts proves the alias was harmful: `reportAliasOutcome()` counts `failCount`, and after 3 empty-result failures the group is auto-disabled (`enabled: false`, kept visible in the manager, reset by a manual edit or re-enable). `/api/posts` responses may carry `aliasInfo: { fallbackUsed, substitutions }` for client-side transparency toasts. Custom and built-in aliases are operator-curated: they participate in the fallback retry but are never auto-quarantined.
 
 ### Author Resolution
 
@@ -234,17 +252,19 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 
 ### Storage
 
-- All persistence is JSON under `DATA_DIR` through `jsonFileStore.js`.
-- Writes are atomic, serialized per file, revision-aware and flushed on shutdown.
-- Never call `fs.writeFile` directly for user data.
-- Serialization is compact (no indentation) everywhere. Collections (`likes`, `favorites`, `dislikes`, `favorite_authors`) are additionally gzip-compressed, chosen by basename; settings and `users.json` stay readable JSON because they get hand-edited.
+- User data (settings, likes/favorites/dislikes, favorite authors, notifications, author-check state, the users index, discovered aliases) lives in **SQLite** at `DATA_DIR/booru.db` through `sqliteStore.js`, using the built-in `node:sqlite` (zero dependencies). Scopes are `'global'` and `'user:<id>'`. Tables: `kv(key, value)` for JSON documents, `posts(scope, kind, idx, data)` for ordered collections, `notifications(scope, idx, notif_id, read, data)`. WAL is on, with `busy_timeout=3000` and `synchronous=NORMAL`. Writes are synchronous and immediate: no debounce, no shutdown flush.
+- `BOORU_STORAGE_BACKEND=json` forces the legacy JSON path. If `node:sqlite` is unavailable or the database cannot open, `isActive()` reports false and every caller transparently falls back to the legacy files — the process always boots.
+- Legacy JSON files are imported once per scope at first database open (`migrateLegacyJson`): a `migrated:v1:<scope>` marker in `kv` plus per-target emptiness checks make it idempotent and unable to overwrite newer database rows. The legacy files are **kept on disk as a rollback path**, not deleted. `server.js` runs it in `runStartupMaintenance()` before the artifact cleanup, so a rewritten users index can never shadow the import source.
+- Under the legacy backend everything below still applies: `jsonFileStore.js` writes are atomic, serialized per file, revision-aware and flushed on shutdown. Never call `fs.writeFile` directly for user data.
+- Serialization is compact (no indentation) everywhere. Under the legacy backend, collections (`likes`, `favorites`, `dislikes`, `favorite_authors`) are additionally gzip-compressed, chosen by basename; settings and `users.json` stay readable JSON because they get hand-edited. Under the default SQLite backend, data is not hand-editable — edit via the UI/API or force the JSON backend.
 - `readJsonFile` detects gzip by magic bytes, not by file name. A collection written before compression must keep reading, so never gate decompression on the extension or an existing `.gz` sibling.
+- Storage-level in-memory caches (`inMemorySettings`, `usersIndexCache` in `storageService.js`) are keyed by `backendFingerprint()`. A backend or data-directory switch (tests, forced JSON mode) must never serve stale cached values.
 - Stored posts pass through `sanitizeStoredPost()` in `storedPostSchema.js`. It is an **allowlist**, not a denylist: any field added to a post later stays out of storage by default. When a renderer starts reading a new post field, add it to `STORED_POST_FIELDS` explicitly or it will be missing from every stored collection. By default, `albumItems` is stripped from persistent collections (likes, favorites, dislikes) to preserve bounded storage; callers needing full album hierarchy (such as `notificationService.js`) explicitly pass `{ keepAlbumItems: true }`.
 - `cleanPostPayload()` in `public/js/api.js` strips the same internal fields client-side. Keep it aligned with the server allowlist: a payload carrying a similar-posts pool (up to ~120 posts) counts against the `express.json` body limit.
 - **Collections are never trimmed.** Every like, favorite and disliked post the user made stays forever; likes feed recommendations through `likedAt`. Growth is bounded per record instead: measured 3496 B/like before, 372 B after. Do not add a cap, a TTL or oldest-first eviction to `saveLikes`/`saveFavorites`/`saveDislikes` — that would silently delete user data.
 - **Exception, client-only:** the browser view history (`booru_view_history_v1` in `public/js/state.js`) is a recency list, not a user collection: it lives only in localStorage, is capped at 500 compact entries, is never synced to the server and never enters the Telegram backup. It is cleared on logout next to `booru_viewed_v1`. Do not start syncing it per user without revisiting the backup-size contract.
 - Redundant URL tiers are elided only when provably identical: `thumbOriginal` is dropped when byte-equal to `fileUrl`, `thumbSample` only when equal to `sampleUrl` *and* `thumb720` exists. Never elide a tier that differs, and never drop `thumbSample` when it is the only card preview available.
-- `compactStoredCollections()` in `storageService.js` migrates pre-existing collections on boot and is idempotent (a file already compact and gzipped is skipped). `cleanupStaleUserArtifacts()` in `userService.js` removes throwaway `test_user_*` accounts from the index and `.corrupt-<stamp>` quarantine copies that nothing else prunes. Both run from `runStartupMaintenance()` in `server.js` and must never block startup.
+- `compactStoredCollections()` in `storageService.js` rewrites pre-existing collections on boot under the legacy backend and is idempotent (a file already compact and gzipped is skipped); under SQLite it only makes sure the import has run and reports nothing to do. `cleanupStaleUserArtifacts()` in `userService.js` removes throwaway `test_user_*` accounts from the index (their scope rows from the database too) and `.corrupt-<stamp>` quarantine copies that nothing else prunes. Both run from `runStartupMaintenance()` in `server.js` and must never block startup.
 - Secret settings are listed in `SECRET_SETTING_FIELDS`, which now includes proxy URLs and the Kemono and Pawchive session tokens. Do not return those fields to anonymous clients or include them in backups.
 - The client keeps a duplicate `SECRET_SETTING_FIELDS` in `public/js/state.js`. Every new credential must be added to both lists, otherwise it survives a client export or is never sent in `x-booru-auth`.
 
@@ -285,6 +305,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
 - No framework. `public/` is served statically and bundled by esbuild (`public/js/app.js` → `public/dist`, code-splitting keeps dynamic `import()` boundaries). Heavy subsystems (viewer stack, settings modal, profile, downloads, wiki, aliases) stay lazy; do not add static imports of them from `app.js`, or they rejoin the critical path. Variable-specifier dynamic imports do not bundle — always use literal specifiers in `importOnce` loaders.
 - `public/dist/` is git-ignored and rebuilt by `postinstall` on `npm install` and by `server.js` when sources change (mtime check); `npm run build:client` rebuilds manually. esbuild is a runtime dependency so `npm install --omit=dev` deploys still build.
 - `state.js` owns mutable state, local persistence and import/export. `api.js` owns HTTP and auth headers. `app.js` coordinates search and routing.
+- `index.html` is a slim shell. Modal markup (viewer, settings, wiki, auth, alias manager) lives in `modules/*Markup.js` and is injected into `document.body` on first use of the owning module; `applyStaticTranslations` runs right after injection, and `i18n.setLang` re-translates the whole document on language change. Controls inside injected markup must be bound after `ensure*Markup()` — for wiring that runs at app init (quality selects, PWA install), use event delegation or move the binding into the markup owner.
 - `router.js` is the only writer of search and viewer URL state. Missing URL parameters restore canonical defaults.
 - The phone feed (`public/js/feed/`) is a fullscreen vertical snap feed for viewports up to 800 px. `openPostOverlay()` in `app.js` routes every "open post" action: phones get the feed, desktops keep the viewer; archive posts (`isArchive`, `zip`, `archiveUrls`) always open the viewer. `view=feed` mirrors a feed session in the URL; `notifyFeedOpened/Moved/Closed` in `router.js` own those history entries. The track keeps a shell for every index (scroll geometry is always listLength screens); the content of a small window is populated lazily. A tap toggles video playback (or the chrome on still slides), a long press opens the "more" sheet with the Clean screen mode, the sound toggle sits in the rail on video posts, and the bottom bar scrubs. Player rules (HEVC, teasers, scrubbing) live in `public/js/feed/video.js`. Long-press on a phone grid card opens the quick actions sheet; per-card action buttons stay hidden below 800 px.
 - Album carousel pages mount lazily around the visible page; only the current page plays, far video players are destroyed and an album lookup is aborted when its slide leaves the window. `syncList()` may rebuild a shorter list and must keep the current post by id, because removing a disliked post shifts every index.
@@ -336,7 +357,7 @@ There is no linter. Do not claim verification for a check that was not executed.
 
 ## 10. Known Constraints
 
-- JSON storage is single-node and not suitable for concurrent serverless writers.
+- Storage is single-node: SQLite (WAL, in-process) or the legacy JSON files are not suitable for concurrent serverless writers. On Vercel, `DATA_DIR` points into an ephemeral tmpdir, so the database exists but per-user persistence is not supported there.
 - Anonymous callers share the default global data namespace. Do not treat LAN access as a trust boundary.
 - Archive unpacking supports ZIP only.
 - DNS pre-checks reduce rebinding risk but do not pin the connection IP; keep user-controlled media behind the allowlists and ownership checks.
