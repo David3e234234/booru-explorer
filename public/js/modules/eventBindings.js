@@ -308,8 +308,8 @@ export function setupEventListeners() {
       updateCategoryTabsUI();
       updateSiteCapabilitiesUI(state.currentSite);
       updateCurrentSiteLabel();
-      renderSitesBar({ onSelectSite: selectSite });
-      renderMobileSourcesSheet({ onSelectSite: selectSite });
+      renderSitesBar({ onSelectSite: deps.selectSite });
+      renderMobileSourcesSheet({ onSelectSite: deps.selectSite });
       if (state.currentSite === 'pawchive') ensurePawchiveServiceOptions();
       if (state.currentSite === 'kemono') ensureKemonoServiceOptions();
       updatePostSortUI();
@@ -409,14 +409,14 @@ export function setupEventListeners() {
   if (btnFavSubPosts) {
     btnFavSubPosts.addEventListener('click', () => {
       haptic(10);
-      switchFavoritesSubTab('posts', { onSearch: performSearch, onRenderAuthors: renderFavoriteAuthors });
+      switchFavoritesSubTab('posts', { onSearch: performSearch, onRenderAuthors: deps.renderFavoriteAuthors });
     });
   }
 
   if (btnFavSubAuthors) {
     btnFavSubAuthors.addEventListener('click', () => {
       haptic(10);
-      switchFavoritesSubTab('authors', { onSearch: performSearch, onRenderAuthors: renderFavoriteAuthors });
+      switchFavoritesSubTab('authors', { onSearch: performSearch, onRenderAuthors: deps.renderFavoriteAuthors });
     });
   }
 

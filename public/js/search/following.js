@@ -9,6 +9,8 @@ import { getGalleryInstance, getAutocompleteInstance } from '../modules/lazyLoad
 // ctx: { reset, options, isSuperseded(), renderFavoriteAuthors() }
 export async function runFollowingSearch(ctx) {
   const { reset, options } = ctx;
+  const galleryInstance = getGalleryInstance();
+  const autocompleteInstance = getAutocompleteInstance();
   try {
     state.isLoading = true;
     const btnRefreshSearch = document.getElementById('btnRefreshSearch');
@@ -47,8 +49,8 @@ export async function runFollowingSearch(ctx) {
     if (followedAuthors.length === 0) {
       state.posts = [];
       state.hasMore = false;
-      galleryInstance.renderGallery(false);
-      renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+      galleryInstance?.renderGallery(false);
+      renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance?.selectTag(t) });
       return { success: true };
     }
 
@@ -127,8 +129,8 @@ export async function runFollowingSearch(ctx) {
     if (authorQueries.length === 0) {
       state.posts = [];
       state.hasMore = false;
-      galleryInstance.renderGallery(false);
-      renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+      galleryInstance?.renderGallery(false);
+      renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance?.selectTag(t) });
       return { success: true };
     }
 
@@ -292,8 +294,8 @@ export async function runFollowingSearch(ctx) {
     }
     state.hasMore = pageSlice.length > 0;
 
-    galleryInstance.renderGallery(!reset);
-    renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+    galleryInstance?.renderGallery(!reset);
+    renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance?.selectTag(t) });
   } catch (err) {
     console.error('Ошибка загрузки ленты подписок:', err);
     if (ctx.isSuperseded()) return { success: false, superseded: true };
@@ -303,7 +305,7 @@ export async function runFollowingSearch(ctx) {
       state.page--;
       state.hasMore = true;
     }
-    galleryInstance.renderGallery(false);
+    galleryInstance?.renderGallery(false);
     return { success: false, error: err };
   } finally {
     if (!ctx.isSuperseded()) {

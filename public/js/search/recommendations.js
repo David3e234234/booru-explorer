@@ -16,6 +16,8 @@ import { getGalleryInstance, getAutocompleteInstance } from '../modules/lazyLoad
 // ctx: { reset, options, isSuperseded() }
 export async function runRecommendedSearch(ctx) {
   const { reset, options } = ctx;
+  const galleryInstance = getGalleryInstance();
+  const autocompleteInstance = getAutocompleteInstance();
   try {
     state.isLoading = true;
     const btnRefreshSearch = document.getElementById('btnRefreshSearch');
@@ -415,8 +417,8 @@ export async function runRecommendedSearch(ctx) {
     }
     state.hasMore = candidatePosts.length > 0 || finalRecommended.length > 0;
 
-    galleryInstance.renderGallery(!reset);
-    renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance.selectTag(t) });
+    galleryInstance?.renderGallery(!reset);
+    renderSidebarPageTags({ onTagSelect: (t) => autocompleteInstance?.selectTag(t) });
   } catch (err) {
     console.error('Ошибка рекомендаций:', err);
     if (ctx.isSuperseded()) return { success: false, superseded: true };
@@ -426,7 +428,7 @@ export async function runRecommendedSearch(ctx) {
       state.page--;
       state.hasMore = true;
     }
-    galleryInstance.renderGallery(false);
+    galleryInstance?.renderGallery(false);
     return { success: false, error: err };
   } finally {
     if (!ctx.isSuperseded()) {
