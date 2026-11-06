@@ -957,6 +957,19 @@ export function adaptTagsForSite(site, rawTags = '', ageFilter = 'all', typeFilt
     }
   }
 
+  // 5. Mix in media type tags for boorus that support animated/video content
+  // Danbooru handles this directly inside its parser to enforce the 2-tag anonymous quota.
+  // Rule34, Gelbooru, Xbooru, and Hypnohub use animated for videos and animations.
+  if (normalizedSite === 'rule34' || normalizedSite === 'gelbooru' || normalizedSite === 'xbooru' || normalizedSite === 'hypnohub') {
+    const hasAnimatedTag = tagList.some(t => t.toLowerCase() === 'animated' || t.toLowerCase() === 'video');
+    const hasMinusAnimatedTag = tagList.some(t => t.toLowerCase() === '-animated' || t.toLowerCase() === '-video');
+    if ((typeFilter === 'video' || typeFilter === 'audio' || typeFilter === 'sound') && !hasAnimatedTag && !hasMinusAnimatedTag) {
+      tagList.push('animated');
+    } else if (typeFilter === 'image' && !hasAnimatedTag && !hasMinusAnimatedTag) {
+      tagList.push('-animated');
+    }
+  }
+
   return tagList.join(' ');
 }
 

@@ -746,6 +746,17 @@ describe('Module 9: Auxiliary tag utilities', () => {
     assert.ok(resAdult.includes('-loli'));
     assert.ok(resAdult.includes('-shota'));
     assert.ok(resAdult.includes('-flat_chest'));
+
+    // Media type filter for boorus (rule34, gelbooru, xbooru, hypnohub)
+    const resVideo = adaptTagsForSite('rule34', 'blue_archive', 'all', 'video', testSettings);
+    assert.ok(resVideo.includes('animated'));
+
+    const resImage = adaptTagsForSite('gelbooru', '1girl', 'all', 'image', testSettings);
+    assert.ok(resImage.includes('-animated'));
+
+    // Does not duplicate if already present
+    const resVideoDupe = adaptTagsForSite('rule34', 'blue_archive animated', 'all', 'video', testSettings);
+    assert.strictEqual(resVideoDupe.split(/\s+/).filter(t => t === 'animated').length, 1);
   });
 
   it('decodeHtmlEntities decodes common XML/HTML entities', () => {
