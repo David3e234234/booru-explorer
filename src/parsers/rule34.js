@@ -302,6 +302,8 @@ export async function fetchRule34(params, aiTagsList, settings) {
                 }
                 sampleUrl = fileUrl;
                 rawSampleUrl = '';
+              } else if (isGif && fileUrl) {
+                sampleUrl = fileUrl;
               }
               previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
               const { tagDetails, author, assistants, authorTentative } = await classifyPostTags(rawTags, item.source, searchAuthor, settings, false, 'rule34');
@@ -842,6 +844,8 @@ export async function fetchRule34PostById(id, aiTagsList = [], settings = {}, fa
               }
               sampleUrl = fileUrl;
               rawSampleUrl = '';
+            } else if (isGif && fileUrl) {
+              sampleUrl = fileUrl;
             }
             previewUrl = resolvePreviewUrl(previewUrl, fileUrl, sampleUrl, isVideo);
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });

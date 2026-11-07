@@ -115,6 +115,9 @@ export async function fetchSafebooru(params, aiTagsList, settings = {}) {
       else if (previewUrlRaw.startsWith('/')) previewUrlRaw = 'https://safebooru.org' + previewUrlRaw;
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      if (isGif && fileUrl) {
+        sampleUrl = fileUrl;
+      }
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
       const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
@@ -260,6 +263,9 @@ export async function fetchSafebooruPostById(id, aiTagsList = [], settings = {},
   else if (previewUrlRaw.startsWith('/')) previewUrlRaw = 'https://safebooru.org' + previewUrlRaw;
 
   const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', collectedTags);
+  if (isGif && fileUrl) {
+    sampleUrl = fileUrl;
+  }
   const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
   const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
   const thumbSample = sampleUrl;

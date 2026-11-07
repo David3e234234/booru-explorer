@@ -637,6 +637,11 @@ describe('Module 9: Auxiliary tag utilities', () => {
     assert.strictEqual(res.isVideo, false);
     assert.strictEqual(res.isGif, true);
     assert.strictEqual(res.fileExt, 'gif');
+
+    const res2 = checkMediaTypes('https://img4.gelbooru.com/thumbnails/ca/1f/thumbnail_123.jpg', '', ['animated', 'animated_gif']);
+    assert.strictEqual(res2.isVideo, false);
+    assert.strictEqual(res2.isGif, true);
+    assert.strictEqual(res2.fileExt, 'gif');
   });
 
   it('checkMediaTypes detects sound in video and ignores sound on static images', () => {

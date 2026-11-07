@@ -46,7 +46,8 @@ export function getCurrentMediaItem(post, albumIndex) {
  */
 export function getMediaItemUrl(item) {
   if (!item) return '';
-  const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
+  const isGifMedia = Boolean(item.isGif || item.fileExt === 'gif' || (typeof item.fileUrl === 'string' && item.fileUrl.toLowerCase().split(/[?#]/)[0].endsWith('.gif')));
+  const directMedia = (isGifMedia ? (item.fileUrl || item.sampleUrl) : (item.sampleUrl || item.fileUrl)) || item.previewUrl || '';
   const needsImgProxy = shouldProxyMedia({ site: item.site, url: directMedia, type: 'image' });
   return needsImgProxy ? getProxiedUrl(directMedia) : directMedia;
 }

@@ -114,8 +114,8 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
             const rawTags = decodeHtmlEntities(item.tags || '').split(/\s+/).filter(Boolean);
             const fileUrl = item.file_url || (item.image && item.directory ? `https://img3.gelbooru.com/images/${item.directory}/${item.image}` : '');
             const rawSampleUrl = item.sample_url || '';
-            const sampleUrl = rawSampleUrl || fileUrl;
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
+            const sampleUrl = (isGif && fileUrl) ? fileUrl : (rawSampleUrl || fileUrl);
             const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
             const thumbSample = sampleUrl;
@@ -213,9 +213,13 @@ export async function fetchGelbooru(params, aiTagsList, settings) {
       const cleanTitleTags = decodeHtmlEntities(titleAttr.replace(/score:-?\d+/g, '').replace(/rating:\w+/g, '')).trim();
       const rawTags = cleanTitleTags.split(/\s+/).filter(Boolean);
 
-      const fileUrl = thumbUrl.replace('/thumbnails/', '/images/').replace('thumbnail_', '');
-      const sampleUrl = thumbUrl.replace('/thumbnails/', '/samples/').replace('thumbnail_', 'sample_');
+      let fileUrl = thumbUrl.replace('/thumbnails/', '/images/').replace('thumbnail_', '');
+      let sampleUrl = thumbUrl.replace('/thumbnails/', '/samples/').replace('thumbnail_', 'sample_');
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      if (isGif) {
+        fileUrl = fileUrl.replace(/\.[a-z0-9]+$/i, '.gif');
+        sampleUrl = fileUrl;
+      }
       const previewUrl = resolvePreviewUrl(thumbUrl, fileUrl, sampleUrl, isVideo);
       const source = `https://gelbooru.com/index.php?page=post&s=view&id=${id}`;
 
@@ -333,6 +337,9 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
 
           if (fileUrl || sampleUrl || item.preview_url) {
             const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, item.image || '', rawTags);
+            if (isGif && fileUrl) {
+              sampleUrl = fileUrl;
+            }
             const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
             const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl, fileUrl, isVideo });
             const thumbSample = sampleUrl;
@@ -448,13 +455,14 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
 
       const allTags = [...new Set([...artistMatches, ...copyrightMatches, ...characterMatches, ...metadataMatches, ...generalMatches, ...fallbackTags])];
 
+      const originalMediaMatch = html.match(/<li><a\s+href="([^"]+)"[^>]*>Original (?:image|video)<\/a>/i) || html.match(/<a\s+href="([^"]+)"[^>]*>Original (?:image|video)<\/a>/i);
       const videoMatch = html.match(/<video[^>]*>[\s\S]*?<source[^>]+src="([^"]+)"/i) || html.match(/<video[^>]+src="([^"]+)"/i);
-      const imgMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i) || html.match(/<li><a\s+href="([^"]+)"[^>]*>Original image<\/a>/i) || html.match(/<li><a\s+href="([^"]+)"[^>]*>Original video<\/a>/i);
-      let fileUrl = videoMatch ? videoMatch[1].replace(/&amp;/g, '&') : (imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : '');
+      const imgMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i);
+      let fileUrl = videoMatch ? videoMatch[1].replace(/&amp;/g, '&') : (originalMediaMatch ? originalMediaMatch[1].replace(/&amp;/g, '&') : (imgMatch ? imgMatch[1].replace(/&amp;/g, '&') : ''));
       if (fileUrl.startsWith('//')) fileUrl = 'https:' + fileUrl;
       else if (fileUrl.startsWith('/')) fileUrl = 'https://gelbooru.com' + fileUrl;
 
-      const sampleMatch = html.match(/<img[^>]+id="image"[^>]+src="([^"]+)"/i);
+      const sampleMatch = imgMatch;
       let sampleUrl = sampleMatch ? sampleMatch[1].replace(/&amp;/g, '&') : fileUrl;
       if (sampleUrl.startsWith('//')) sampleUrl = 'https:' + sampleUrl;
       else if (sampleUrl.startsWith('/')) sampleUrl = 'https://gelbooru.com' + sampleUrl;
@@ -467,6 +475,9 @@ export async function fetchGelbooruPostById(id, aiTagsList = [], settings = {}, 
       const source = sourceMatch ? sourceMatch[1].trim().replace(/&amp;/g, '&') : '';
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', allTags);
+      if (isGif && fileUrl) {
+        sampleUrl = fileUrl;
+      }
       const previewUrl = resolvePreviewUrl(sampleUrl, fileUrl, sampleUrl, isVideo);
       const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;

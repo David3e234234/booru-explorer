@@ -104,7 +104,8 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     if (currentZoomInstance) { currentZoomInstance.destroy(); currentZoomInstance = null; }
     if (currentVideoInstance) { currentVideoInstance.destroy(); currentVideoInstance = null; }
 
-    const directMedia = item.sampleUrl || item.fileUrl || item.previewUrl || '';
+    const isGifMedia = Boolean(item.isGif || item.fileExt === 'gif' || (typeof item.fileUrl === 'string' && item.fileUrl.toLowerCase().split(/[?#]/)[0].endsWith('.gif')));
+    const directMedia = (isGifMedia ? (item.fileUrl || item.sampleUrl) : (item.sampleUrl || item.fileUrl)) || item.previewUrl || '';
     if (!directMedia) {
       showToast(t('vw.mediaUnavailable', 'Ссылка на медиа недоступна'));
       return;
@@ -177,12 +178,13 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
       let errorAttempt = 0;
       img.addEventListener('error', function () {
         errorAttempt++;
+        const fallbackCandidate = isGifMedia ? (item.sampleUrl || item.previewUrl) : item.fileUrl;
         if (errorAttempt === 1 && !this.src.startsWith('/api/proxy') && directMedia) {
           console.warn('[Viewer Image Fallback] Переключение на прокси');
           this.src = getProxiedUrl(directMedia);
-        } else if (errorAttempt <= 2 && item.fileUrl && this.src !== item.fileUrl && this.src !== getProxiedUrl(item.fileUrl)) {
-          console.warn('[Viewer Image Fallback] Переключение на fileUrl');
-          this.src = getProxiedUrl(item.fileUrl);
+        } else if (errorAttempt <= 2 && fallbackCandidate && this.src !== fallbackCandidate && this.src !== getProxiedUrl(fallbackCandidate)) {
+          console.warn('[Viewer Image Fallback] Переключение на резервный источник');
+          this.src = getProxiedUrl(fallbackCandidate);
         } else if (errorAttempt <= 3 && item.previewUrl && this.src !== item.previewUrl && this.src !== getProxiedUrl(item.previewUrl)) {
           console.warn('[Viewer Image Fallback] Переключение на previewUrl');
           this.src = getProxiedUrl(item.previewUrl);

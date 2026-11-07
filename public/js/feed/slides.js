@@ -308,17 +308,19 @@ function createImageWithFallbacks(item, className) {
   img.draggable = false;
   img.decoding = 'async';
 
-  const direct = item.sampleUrl || item.fileUrl || item.previewUrl || '';
+  const isGifMedia = Boolean(item.isGif || item.fileExt === 'gif' || (typeof item.fileUrl === 'string' && item.fileUrl.toLowerCase().split(/[?#]/)[0].endsWith('.gif')));
+  const direct = (isGifMedia ? (item.fileUrl || item.sampleUrl) : (item.sampleUrl || item.fileUrl)) || item.previewUrl || '';
   const needsProxy = shouldProxyMedia({ site: item.site, url: direct, type: 'image' });
 
   const targetSrc = direct.startsWith('/api/') || !needsProxy ? direct : getProxiedUrl(direct);
   let errorAttempt = 0;
   img.addEventListener('error', () => {
     errorAttempt++;
+    const fallbackTarget = isGifMedia ? (item.sampleUrl || item.previewUrl) : item.fileUrl;
     if (errorAttempt === 1 && direct && !img.src.includes('/api/proxy') && needsProxy) {
       img.src = getProxiedUrl(direct);
-    } else if (errorAttempt <= 2 && item.fileUrl && img.src !== item.fileUrl && img.src !== getProxiedUrl(item.fileUrl)) {
-      img.src = getProxiedUrl(item.fileUrl);
+    } else if (errorAttempt <= 2 && fallbackTarget && img.src !== fallbackTarget && img.src !== getProxiedUrl(fallbackTarget)) {
+      img.src = getProxiedUrl(fallbackTarget);
     } else if (errorAttempt <= 3 && item.previewUrl && img.src !== item.previewUrl && img.src !== getProxiedUrl(item.previewUrl)) {
       img.src = getProxiedUrl(item.previewUrl);
     } else if (img.dataset.onFinalError !== '1') {

@@ -296,4 +296,66 @@ test('Gelbooru Parser Unit Tests', async (t) => {
     assert.equal(post.height, 1800);
     assert.ok(post.tagDetails.artist.includes('kok_(kokenn)'));
   });
+
+  await t.test('fetchGelbooruPostById resolves animated GIF properly and prefers gif over static sample jpg', async () => {
+    const client = mockContext.agent.get('https://gelbooru.com');
+    client.intercept({
+      path: (p) => p.includes('id=15223418') && p.includes('page=dapi'),
+      method: 'GET'
+    }).reply(200, {
+      post: [
+        {
+          id: 15223418,
+          file_url: 'https://img4.gelbooru.com/images/ca/1f/ca1fa3273163e44de9443cfcfe35cc81.gif',
+          sample_url: 'https://img4.gelbooru.com/samples/ca/1f/sample_ca1fa3273163e44de9443cfcfe35cc81.jpg',
+          preview_url: 'https://img4.gelbooru.com/thumbnails/ca/1f/thumbnail_ca1fa3273163e44de9443cfcfe35cc81.jpg',
+          tags: 'animated animated_gif bleach bluethebone',
+          rating: 'explicit',
+          score: 11
+        }
+      ]
+    });
+
+    const post = await fetchGelbooruPostById('15223418', [], mockSettings);
+    assert.ok(post);
+    assert.equal(post.originalId, '15223418');
+    assert.equal(post.isGif, true);
+    assert.equal(post.isVideo, false);
+    assert.equal(post.fileExt, 'gif');
+    assert.equal(post.fileUrl, 'https://img4.gelbooru.com/images/ca/1f/ca1fa3273163e44de9443cfcfe35cc81.gif');
+    assert.equal(post.sampleUrl, 'https://img4.gelbooru.com/images/ca/1f/ca1fa3273163e44de9443cfcfe35cc81.gif');
+  });
+
+  await t.test('fetchGelbooruPostById resolves animated GIF from HTML page using Original image link', async () => {
+    const client = mockContext.agent.get('https://gelbooru.com');
+    client.intercept({
+      path: (p) => p.includes('id=15223419') && p.includes('page=dapi'),
+      method: 'GET'
+    }).reply(404, 'Not found');
+
+    const html = `<!DOCTYPE html>
+      <html>
+        <body>
+          <img id="image" src="https://img4.gelbooru.com/samples/ca/1f/sample_ca1fa3273163e44de9443cfcfe35cc81.jpg" />
+          <li><a href="https://img4.gelbooru.com/images/ca/1f/ca1fa3273163e44de9443cfcfe35cc81.gif">Original image</a></li>
+          <ul id="tag-list">
+            <li class="tag-type-artist tag"><a href="index.php?page=post&amp;s=list&amp;tags=bluethebone">bluethebone</a></li>
+            <li class="tag-type-general tag"><a href="index.php?page=post&amp;s=list&amp;tags=animated_gif">animated_gif</a></li>
+          </ul>
+        </body>
+      </html>`;
+    client.intercept({
+      path: (p) => p.includes('id=15223419') && p.includes('s=view'),
+      method: 'GET'
+    }).reply(200, html);
+
+    const post = await fetchGelbooruPostById('15223419', [], {});
+    assert.ok(post);
+    assert.equal(post.originalId, '15223419');
+    assert.equal(post.isGif, true);
+    assert.equal(post.isVideo, false);
+    assert.equal(post.fileExt, 'gif');
+    assert.equal(post.fileUrl, 'https://img4.gelbooru.com/images/ca/1f/ca1fa3273163e44de9443cfcfe35cc81.gif');
+    assert.equal(post.sampleUrl, 'https://img4.gelbooru.com/images/ca/1f/ca1fa3273163e44de9443cfcfe35cc81.gif');
+  });
 });

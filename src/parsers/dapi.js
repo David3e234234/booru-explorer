@@ -136,6 +136,9 @@ export async function fetchXbooru(params, aiTagsList, settings = {}) {
       if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      if (isGif && fileUrl) {
+        sampleUrl = fileUrl;
+      }
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
       const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
@@ -268,6 +271,9 @@ export async function fetchHypnohub(params, aiTagsList, settings = {}) {
       if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      if (isGif && fileUrl) {
+        sampleUrl = fileUrl;
+      }
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
       const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
@@ -397,6 +403,9 @@ export async function fetchTbib(params, aiTagsList, settings = {}) {
       if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
 
       const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      if (isGif && fileUrl) {
+        sampleUrl = fileUrl;
+      }
       const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
       const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
       const thumbSample = sampleUrl;
@@ -561,6 +570,9 @@ export async function fetchXbooruPostById(postId, aiTagsList = [], settings = {}
     if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      if (isGif && fileUrl) {
+        sampleUrl = fileUrl;
+      }
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
     const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
     const thumbSample = sampleUrl;
@@ -707,6 +719,9 @@ export async function fetchHypnohubPostById(id, aiTagsList = [], settings = {}, 
     if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      if (isGif && fileUrl) {
+        sampleUrl = fileUrl;
+      }
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
     const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
     const thumbSample = sampleUrl;
@@ -853,6 +868,9 @@ export async function fetchTbibPostById(id, aiTagsList = [], settings = {}, fall
     if (previewUrlRaw.startsWith('//')) previewUrlRaw = 'https:' + previewUrlRaw;
 
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+      if (isGif && fileUrl) {
+        sampleUrl = fileUrl;
+      }
     const previewUrl = resolvePreviewUrl(previewUrlRaw, fileUrl, sampleUrl, isVideo);
     const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
     const thumbSample = sampleUrl;

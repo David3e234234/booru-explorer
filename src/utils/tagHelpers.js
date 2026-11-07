@@ -403,11 +403,6 @@ export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
   }
 
   // 2. GIF detection (a GIF is an animated image (img), not an HTML5 video container)
-  const isGif = ext === 'gif' || lowerTags.includes('gif') || (!ext && (lowerUrl.includes('.gif') || lowerFileExt.includes('.gif')));
-
-  // 3. Video detection (MP4, WebM, MKV, MOV, M4V, FLV, AVI)
-  // IMPORTANT: the 'animated' tag is applied to both GIFs and videos, so animated alone does not make a file a video when it is a GIF or a static format.
-  const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'avif'];
   const videoExts = ['mp4', 'webm', 'mkv', 'mov', 'm4v', 'flv', 'avi'];
   let hasVideoExtByUrl = false;
   for (const vExt of videoExts) {
@@ -416,6 +411,12 @@ export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
       break;
     }
   }
+  const hasGifTag = lowerTags.some(t => t === 'gif' || t === 'animated_gif' || t === 'gif_(image)' || t === 'animated_gif_(image)');
+  const isGif = !hasVideoExtByUrl && (ext === 'gif' || hasGifTag || (!ext && (lowerUrl.includes('.gif') || lowerFileExt.includes('.gif'))));
+
+  // 3. Video detection (MP4, WebM, MKV, MOV, M4V, FLV, AVI)
+  // IMPORTANT: the 'animated' tag is applied to both GIFs and videos, so animated alone does not make a file a video when it is a GIF or a static format.
+  const imageExts = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'avif'];
   const isImageExt = imageExts.includes(ext);
   const hasVideoExt = videoExts.includes(ext) || hasVideoExtByUrl;
   const hasVideoTag = lowerTags.includes('video') || lowerTags.includes('webm') || lowerTags.includes('mp4') || lowerTags.includes('ugoira');
@@ -423,7 +424,9 @@ export function checkMediaTypes(url = '', fileExt = '', rawTags = []) {
   const isVideo = !isGif && !isImageExt && (hasVideoExt || hasVideoTag);
 
   // 4. Final extension determination
-  if (!ext) {
+  if (isGif && !hasVideoExt) {
+    ext = 'gif';
+  } else if (!ext) {
     if (isVideo) ext = 'mp4';
     else if (isGif) ext = 'gif';
     else ext = 'jpg';

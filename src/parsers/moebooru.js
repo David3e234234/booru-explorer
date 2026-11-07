@@ -137,6 +137,9 @@ export async function fetchMoebooru(siteId, siteUrl, siteName, params, aiTagsLis
     const fileUrl = item.file_url || item.jpeg_url || item.sample_url || item.preview_url || '';
     const sampleUrl = item.sample_url || item.jpeg_url || fileUrl || '';
     const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+    if (isGif && fileUrl) {
+      sampleUrl = fileUrl;
+    }
     const previewUrl = resolvePreviewUrl(item.preview_url, fileUrl, sampleUrl, isVideo);
     const isAi = checkIsAi(rawTags, aiTagsList);
 
@@ -281,6 +284,9 @@ export async function fetchMoebooruPostById(siteId, siteUrl, siteName, id, aiTag
   const fileUrl = postItem?.file_url || postItem?.jpeg_url || postItem?.sample_url || postItem?.preview_url || htmlFileUrl || htmlSampleUrl || '';
   const sampleUrl = postItem?.sample_url || postItem?.jpeg_url || htmlSampleUrl || fileUrl || '';
   const { isVideo, isGif, hasSound, fileExt } = checkMediaTypes(fileUrl, '', rawTags);
+    if (isGif && fileUrl) {
+      sampleUrl = fileUrl;
+    }
   const previewUrl = resolvePreviewUrl(postItem?.preview_url || htmlPreviewUrl, fileUrl, sampleUrl, isVideo);
   const { thumb180, thumb360, thumb720 } = buildThumbTiers({ previewUrl, rawSampleUrl: sampleUrl, fileUrl, isVideo });
   const thumbSample = sampleUrl || postItem?.jpeg_url || '';
