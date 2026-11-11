@@ -206,7 +206,7 @@ const MARKUP = `
               <div class="wiki-source-details">
                 <div class="wiki-source-feat">
                   <strong data-i18n="wiki.danbooru.limTitle">Лимит тегов:</strong>
-                  <span data-i18n="wiki.danbooru.limDesc">Без ключа разрешено максимум <strong>2 тега</strong> на запрос. Добавьте свой бесплатный API-ключ в <a href="#settings" id="wikiOpenSettingsLink" class="wiki-inline-link">Настройках</a>, чтобы снять лимит.</span>
+                  <span data-i18n="wiki.danbooru.limDesc">Без аккаунта разрешено максимум <strong>2 тега</strong> на запрос, с бесплатным аккаунтом — <strong>3 тега</strong>. Служебные теги вроде <code>rating:</code>, <code>order:</code> и <code>score:</code> в лимит не входят. Свой API-ключ в <a href="#settings" id="wikiOpenSettingsLink" class="wiki-inline-link">Настройках</a> поднимает лимит вашего уровня и снимает его полностью на Gold.</span>
                 </div>
                 <div class="wiki-source-feat">
                   <strong data-i18n="wiki.danbooru.ratingsTitle">Рейтинги:</strong>
@@ -228,7 +228,7 @@ const MARKUP = `
                 </div>
                 <button type="button" class="btn-wiki-switch-site" data-site="gelbooru" data-i18n="wiki.switchSite">Искать здесь ↗</button>
               </div>
-              <p class="wiki-source-desc" data-i18n="wiki.gelbooru.desc">Огромный архив артов без жесткого лимита в 2 тега. Поддерживает поиск сложных комбинаций персонажей и авторов.</p>
+              <p class="wiki-source-desc" data-i18n="wiki.gelbooru.desc">Огромный архив артов без жесткого лимита на количество тегов в запросе. Поддерживает поиск сложных комбинаций персонажей и авторов.</p>
               <div class="wiki-source-details">
                 <div class="wiki-source-feat">
                   <strong data-i18n="wiki.gelbooru.ratingsTitle">Рейтинги:</strong>

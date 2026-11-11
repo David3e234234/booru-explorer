@@ -13,6 +13,7 @@ import { appendRatingTag } from '../utils/searchCompat.js';
 import { extractSeriesKey } from '../utils/albumHelper.js';
 import { separateAuthorAndAssistants } from '../utils/tagClassifier.js';
 import { logInfo, logError } from '../utils/logger.js';
+import { getDanbooruQueryTagCap, isFreeDanbooruMetatag } from '../services/danbooruTagLimitService.js';
 
 export async function fetchDanbooru(params, aiTagsList, settings) {
   const { tags = '', page = 1, limit = 40, category = '', ratingFilter = 'all', typeFilter = 'all', ageFilter = 'all' } = params;
@@ -20,76 +21,78 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
   const userTagList = adaptedTags.trim().split(/\s+/).filter(Boolean);
   const queryTags = [];
 
-  // Danbooru limits anonymous searches to two tags. Authenticated callers may
-  // send the whole query, so never drop a tag when API credentials exist.
-  const hasCredentials = Boolean(settings?.danbooruLogin && settings?.danbooruApiKey);
-  const maxQueryTags = hasCredentials ? Number.POSITIVE_INFINITY : 2;
-  
+  // Danbooru charges 2 tags for anonymous callers, 3 for members and nothing
+  // from Gold upward. Metatags in PostQuery::UNLIMITED_METATAGS (rating, score,
+  // id, date, parent, ...) are free; `order:` is not, so a sort directive costs
+  // a slot. Going over budget is a 422 and an empty gallery, which is why user
+  // tags are placed before every optional term.
+  const tagBudget = getDanbooruQueryTagCap(settings);
+  let paidTagsUsed = 0;
+  let tagsDropped = false;
+
+  const addTag = (rawToken) => {
+    const token = String(rawToken || '').trim();
+    if (!token) return false;
+    if (isFreeDanbooruMetatag(token)) {
+      queryTags.push(token);
+      return true;
+    }
+    if (paidTagsUsed >= tagBudget) {
+      tagsDropped = true;
+      return false;
+    }
+    paidTagsUsed++;
+    queryTags.push(token);
+    return true;
+  };
+
   const prioritizeUserTags = settings?.prioritizeUserTags === true;
   const deepFetchPagesSetting = settings?.deepFetchPages ? parseInt(settings.deepFetchPages, 10) : 2;
 
   // When manual tags take priority, add them first
   if (prioritizeUserTags) {
-    for (const t of userTagList) {
-      if (queryTags.length < maxQueryTags) queryTags.push(t);
-    }
+    for (const t of userTagList) addTag(t);
   }
 
   // Priority: video/sound
   if (typeFilter === 'audio' || typeFilter === 'sound') {
-    if (queryTags.length < maxQueryTags) queryTags.push('sound');
+    addTag('sound');
   } else if (typeFilter === 'video') {
-    if (queryTags.length < maxQueryTags) queryTags.push('animated');
+    addTag('animated');
   }
 
   // When manual tags are not prioritized, add them after the media filter
   if (!prioritizeUserTags) {
-    for (const t of userTagList) {
-      if (queryTags.length < maxQueryTags) queryTags.push(t);
-    }
+    for (const t of userTagList) addTag(t);
   }
 
-  // Priority: sorting
+  // Priority: sorting. A sort directive costs a tag slot on Danbooru (`order:`
+  // is not in UNLIMITED_METATAGS), but it is still cheaper than a wrong query:
+  // when the budget is already spent, the sort term is the one that gets cut,
+  // because the user's own tags matter more than the ordering.
   const customDanbooruTag = settings?.siteSortTags?.danbooru?.[category];
-  if (queryTags.length < maxQueryTags) {
-    if (customDanbooruTag) {
-      customDanbooruTag.split(/\s+/).forEach(t => {
-        if (queryTags.length < maxQueryTags && t) queryTags.push(t);
-      });
-    } else if (category === 'top') {
-      if (userTagList.length > 0) {
-        queryTags.push('order:score');
-      } else {
-        queryTags.push('order:score');
-        queryTags.push('score:>100');
-      }
-    } else if (category === 'views') {
-      if (userTagList.length > 0) {
-        queryTags.push('order:favcount');
-      } else {
-        queryTags.push('order:favcount');
-        queryTags.push('favcount:>100');
-      }
-    } else if (category === 'hot' || category === 'popular' || category === 'recommended') {
-      queryTags.push('order:rank');
-    } else if (category === 'random') {
-      queryTags.push('order:random');
-    } else if (category === 'new' && settings?.siteSortTags?.danbooru?.new) {
-      settings.siteSortTags.danbooru.new.split(/\s+/).forEach(t => {
-        if (queryTags.length < maxQueryTags && t) queryTags.push(t);
-      });
-    }
+  if (customDanbooruTag) {
+    customDanbooruTag.split(/\s+/).forEach(t => addTag(t));
+  } else if (category === 'top') {
+    addTag('order:score');
+    if (userTagList.length === 0) addTag('score:>100');
+  } else if (category === 'views') {
+    addTag('order:favcount');
+    if (userTagList.length === 0) addTag('favcount:>100');
+  } else if (category === 'hot' || category === 'popular' || category === 'recommended') {
+    addTag('order:rank');
+  } else if (category === 'random') {
+    addTag('order:random');
+  } else if (category === 'new' && settings?.siteSortTags?.danbooru?.new) {
+    settings.siteSortTags.danbooru.new.split(/\s+/).forEach(t => addTag(t));
   }
 
   // Priority: rating. The local matcher below enforces the rating too, but the
-  // remote tag narrows the result set. Anonymous callers can only spend a slot
-  // when one is free; authenticated callers always get it.
-  if (hasCredentials || queryTags.length < maxQueryTags) {
-    const ratedQuery = appendRatingTag(queryTags.join(' '), ratingFilter, 'danbooru');
-    if (ratedQuery) {
-      queryTags.length = 0;
-      queryTags.push(...ratedQuery.split(/\s+/).filter(Boolean));
-    }
+  // remote tag narrows the result set. `rating:` is a free metatag, so it is
+  // added whenever the query does not already constrain ratings.
+  if (!queryTags.some(t => /^[-~]?rating:/.test(t))) {
+    const ratedQuery = appendRatingTag('', ratingFilter, 'danbooru');
+    if (ratedQuery) ratedQuery.split(/\s+/).forEach(t => addTag(t));
   }
 
   const targetLimit = parseInt(params.limit, 10) || 40;
@@ -117,7 +120,11 @@ export async function fetchDanbooru(params, aiTagsList, settings) {
     hasUserPositiveTags
   };
 
-  const isTagsDropped = userTagList.length + (typeFilter !== 'all' ? 1 : 0) + (ratingFilter !== 'all' ? 1 : 0) > 2;
+  // Deep fetch exists to backfill posts that the remote query could not express:
+  // either the local matcher has to narrow a broader query, or tags were left
+  // out because the account ran out of budget.
+  const mediaFilterToken = (typeFilter === 'audio' || typeFilter === 'sound' || typeFilter === 'video') ? 1 : 0;
+  const isTagsDropped = tagsDropped || userTagList.length + mediaFilterToken > tagBudget;
   const shouldDeepFetch = isTagsDropped || deepFetchPagesSetting > 1;
   const fetchLimit = isTagsDropped ? 200 : Math.min(limit || 100, 200);
 

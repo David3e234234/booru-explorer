@@ -17,6 +17,9 @@ data/users/
 data/author_feed_state.json
 data/notifications.json
 data/discovered_aliases.json
+data/booru.db
+data/booru.db-wal
+data/booru.db-shm
 data/.session_secret*
 data/cache/
 data/*.json.bak

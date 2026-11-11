@@ -162,7 +162,10 @@ export async function runRecommendedSearch(ctx) {
         // Extract top user negative tokens from dislikes to filter out at Booru API level
         const negativeSeedTokens = getUserNegativeSeedTokens(3);
         const isDanbooru = (state.currentSite === 'danbooru');
-        const maxAllowedTokens = isDanbooru ? 2 : 5;
+        // Danbooru budgets 2 tags anonymously and 3 for a member account. The
+        // server enforces the real budget, so seeds are only kept short enough
+        // to avoid spending slots on negative padding.
+        const maxAllowedTokens = isDanbooru ? 3 : 5;
 
         for (const rawSeed of selectedSeeds) {
           const cleanSeedTag = rawSeed.replace(/[()]/g, '').trim();
@@ -174,8 +177,8 @@ export async function runRecommendedSearch(ctx) {
           if (isDanbooru) {
             if (queryTokens.length === 1 && negativeSeedTokens.length > 0) {
               queryTokens.push(negativeSeedTokens[0]);
-            } else if (queryTokens.length > 2) {
-              queryTokens = queryTokens.slice(0, 2);
+            } else if (queryTokens.length > maxAllowedTokens) {
+              queryTokens = queryTokens.slice(0, maxAllowedTokens);
             }
           } else {
             for (const neg of negativeSeedTokens) {

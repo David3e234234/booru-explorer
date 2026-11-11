@@ -118,6 +118,7 @@ Large files must be split by responsibility when touched. Preferred existing bou
 - `hostPolicy.js`: hostname boundaries, credential hosts, log redaction
 - `imageCacheService.js`: image signatures and disk cache
 - `booruTagTypeService.js`: per-board authoritative tag categories, batched and disk-cached
+- `danbooruTagLimitService.js`: Danbooru per-level tag budget, free metatag list and `/profile.json` lookup cached for 7 days
 - `mediaJobSupervisor.js`: FFmpeg concurrency and queue limits
 - `siteSessionService.js`: session-token normalization for the Kemono-family boards
 - `tagAutocomplete.routes.js`: autocomplete endpoint, independent from search routes
@@ -147,6 +148,7 @@ Large files must be split by responsibility when touched. Preferred existing bou
 7. Author alias auto-discovery can be globally disabled via `enableAliasDiscovery: false` in user settings. Erroneous or noisy tags can be blacklisted via `ignoredAliases: string[]`, preventing them from being discovered, linked, or resolved.
 8. Discovered aliases can be inspected and edited via `/api/aliases/discovered` (`GET`, `PUT /:id` accepts `{ id, aliases, sites, enabled }`, `DELETE /:id`). All writes serialize atomically through `jsonFileStore.js`.
 9. **A bad discovered alias must never kill a search.** `fetchPosts()` (danbooru and single-site leaf branches) tracks substitutions via `getQuerySubstitutions()`; when a substituted query returns zero posts, the same fetch is retried once with `bypassDiscoveredAliases: true` so the user's original token reaches the board. The retry rescuing posts proves the alias was harmful: `reportAliasOutcome()` counts `failCount`, and after 3 empty-result failures the group is auto-disabled (`enabled: false`, kept visible in the manager, reset by a manual edit or re-enable). `/api/posts` responses may carry `aliasInfo: { fallbackUsed, substitutions }` for client-side transparency toasts. Custom and built-in aliases are operator-curated: they participate in the fallback retry but are never auto-quarantined.
+10. **The Danbooru tag budget is part of the request contract.** Since 2026-11-10 Danbooru charges 2 tags to anonymous callers, 3 to member accounts and nothing from Gold upward (`User.tag_query_limit`). One tag over budget is a `422`, which surfaces as an empty gallery, so the query builder in `src/parsers/danbooru.js` spends slots through `addTag()` and never past `getDanbooruQueryTagCap()`. Metatags in `PostQuery::UNLIMITED_METATAGS` (`rating`, `score`, `id`, `date`, `parent`, ...) are free; **`order:` is not free** — the live API answers `422` for `solo 1girl order:score`. `src/services/danbooruTagLimitService.js` owns the budget table, mirrors that metatag list, reads the real limit from `/profile.json` (`tag_query_limit`, `Infinity` serialized as `null`) and caches it per login for 7 days. Credentials with an unresolved limit fall back to 3, which is safe for every registered level; never restore the old `Infinity`-with-credentials shortcut.
 
 ### Author Resolution
 

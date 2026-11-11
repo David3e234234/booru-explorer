@@ -861,7 +861,7 @@ const MARKUP = `
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
                 <span data-i18n="settings.apiKeys">Персональные API Ключи (Booru)</span>
               </h4>
-              <p class="settings-card-hint" data-i18n="settings.apiKeysHint">Необязательно. Бесплатные ключи снимают ограничения поиска, повышают лимиты и ускоряют выдачу.</p>
+              <p class="settings-card-hint" data-i18n="settings.apiKeysHint">Необязательно. Ключ применяет уровень вашего аккаунта: он поднимает лимиты поиска и ускоряет выдачу.</p>
             </div>
 
             <div class="api-keys-container">
