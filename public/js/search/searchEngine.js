@@ -68,6 +68,13 @@ export async function performSearch(reset = false, options = {}) {
     galleryInstance.showLoading();
   }
 
+  // Remember which source this feed belongs to. A later settings write can
+  // change state.currentSite without a new fetch; recording it here keeps the
+  // sources panel able to tell "already showing this" from "highlight is stale".
+  if (state.currentCategory !== 'favorites' && state.currentCategory !== 'profile') {
+    state.loadedSite = state.currentSite;
+  }
+
   syncSearchUrl(reset ? 'push' : 'replace');
   updatePresetActiveState();
 

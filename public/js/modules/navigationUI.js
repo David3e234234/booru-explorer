@@ -7,6 +7,16 @@ import { t } from '../i18n.js';
 
 let customSourcesCallbacks = null;
 
+// Every caller passes the same click handler (app.js owns selectSite), but the
+// handler itself is not importable from here without a cycle. Remembering the
+// last one lets any module refresh the panel without owning the wiring.
+let onSelectSiteHandler = null;
+
+function rememberSelectHandler(fn) {
+  if (typeof fn === 'function') onSelectSiteHandler = fn;
+  return onSelectSiteHandler;
+}
+
 // Built-in mix used when the user has not configured custom sources yet, and the target
 // of the "select all / reset" toggle in the custom sources modal.
 const DEFAULT_CUSTOM_SOURCES = ['danbooru', 'gelbooru', 'rule34', 'yandere'];
@@ -34,7 +44,48 @@ export function updateCurrentSiteLabel() {
   }
 }
 
-export function renderSitesBar({ onSelectSite }) {
+// Every place that mutates state.currentSite must call this instead of
+// re-rendering four widgets by hand. Keeping the list in one function is what
+// stops a partial update: the source panel used to keep its old highlight when
+// only state and the capabilities changed (author search, preset apply).
+//
+// The three surfaces are also compared against what was last painted: a call
+// that would repaint identical markup (the common "author on the site already
+// selected" case) is skipped, so the sources list does not lose its scroll
+// position for nothing. Pass `{ force: true }` after a language change.
+let paintedSourcesSignature = '';
+
+function sourcesSignature() {
+  const siteIds = (state.sites || [])
+    .map(site => site && site.id ? `${site.id}:${site.name || ''}` : '')
+    .filter(Boolean)
+    .join(',');
+  return `${state.currentSite}|${siteIds}|${getCustomSourcesList().join(',')}`;
+}
+
+// First paint: remembers the click handler (owned by app.js) and renders both
+// containers. Every later state-driven repaint goes through
+// syncSourceSelectionUI(), which reuses the remembered handler.
+export function initSourcePanel({ onSelectSite, force = true } = {}) {
+  rememberSelectHandler(onSelectSite);
+  syncSourceSelectionUI({ force });
+}
+
+export function syncSourceSelectionUI({ force = false } = {}) {
+  const signature = sourcesSignature();
+  updateCurrentSiteLabel();
+  if (!force && signature === paintedSourcesSignature) return;
+  renderSitesBar();
+  renderMobileSourcesSheet();
+  // Only record the paint when a container actually existed; otherwise a later
+  // call would skip the repaint for markup that never got rendered.
+  if (document.getElementById('sourcesList') || document.getElementById('sourcesListMobile')) {
+    paintedSourcesSignature = signature;
+  }
+}
+
+export function renderSitesBar({ onSelectSite } = {}) {
+  const selectHandler = rememberSelectHandler(onSelectSite);
   const sourcesList = document.getElementById('sourcesList');
   if (!sourcesList) return;
   sourcesList.innerHTML = '';
@@ -46,7 +97,7 @@ export function renderSitesBar({ onSelectSite }) {
     <span class="source-dot" style="background-color: var(--accent-primary)"></span>
     <span>${t('navui.allSites', 'Все сразу')}</span>
   `;
-  allItem.addEventListener('click', () => onSelectSite('all'));
+  allItem.addEventListener('click', () => selectHandler?.('all'));
   sourcesList.appendChild(allItem);
 
   // 2. Custom selection (CUSTOM)
@@ -70,7 +121,7 @@ export function renderSitesBar({ onSelectSite }) {
       openCustomSourcesModal();
       return;
     }
-    onSelectSite('custom');
+    selectHandler?.('custom');
   });
 
   sourcesList.appendChild(customItem);
@@ -84,13 +135,14 @@ export function renderSitesBar({ onSelectSite }) {
       <span>${escapeHtml(site.name)}</span>
     `;
     item.addEventListener('click', () => {
-      onSelectSite(site.id);
+      selectHandler?.(site.id);
     });
     sourcesList.appendChild(item);
   });
 }
 
-export function renderMobileSourcesSheet({ onSelectSite }) {
+export function renderMobileSourcesSheet({ onSelectSite } = {}) {
+  const selectHandler = rememberSelectHandler(onSelectSite);
   const sourcesListMobile = document.getElementById('sourcesListMobile');
   if (!sourcesListMobile) return;
   sourcesListMobile.innerHTML = '';
@@ -106,7 +158,7 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
     <span class="source-mobile-badge">ALL</span>
   `;
   allCard.addEventListener('click', () => {
-    onSelectSite('all');
+    selectHandler?.('all');
     closeAllDrawers();
   });
   sourcesListMobile.appendChild(allCard);
@@ -135,7 +187,7 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
       openCustomSourcesModal();
       return;
     }
-    onSelectSite('custom');
+    selectHandler?.('custom');
     closeAllDrawers();
   });
   sourcesListMobile.appendChild(customCard);
@@ -152,7 +204,7 @@ export function renderMobileSourcesSheet({ onSelectSite }) {
       <span class="source-mobile-badge">${escapeHtml((site.id || '').toUpperCase())}</span>
     `;
     card.addEventListener('click', () => {
-      onSelectSite(site.id);
+      selectHandler?.(site.id);
       closeAllDrawers();
     });
     sourcesListMobile.appendChild(card);
@@ -275,14 +327,17 @@ export function initCustomSourcesModal({ onApply }) {
   }
 }
 
-export async function loadBooruSites({ onSelectSite }) {
+export async function loadBooruSites({ onSelectSite } = {}) {
   try {
     const data = await fetchSites();
     const sites = data.sites || [];
     state.sites = sites;
+    // The registry just arrived: repaint even if the signature looks unchanged,
+    // because the previous paint may have used the built-in DEFAULT_SITES list.
     updateCurrentSiteLabel();
     renderSitesBar({ onSelectSite });
     renderMobileSourcesSheet({ onSelectSite });
+    paintedSourcesSignature = sourcesSignature();
   } catch (err) {
     console.error('Ошибка загрузки сайтов:', err);
   }

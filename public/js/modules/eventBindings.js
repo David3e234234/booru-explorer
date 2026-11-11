@@ -13,10 +13,10 @@ import {
   closeSettingsModal
 } from './lazyLoader.js';
 import { ensurePawchiveServiceOptions, ensureKemonoServiceOptions } from './serviceOptions.js';
+import { applyCurrentSiteUi } from './siteSelectionUI.js';
 import { performSearch } from '../search/searchEngine.js';
 import {
   updateCategoryTabsUI,
-  updateSiteCapabilitiesUI,
   updatePostSortUI,
   updateVideoSortUI,
   updateTypeFilterUI,
@@ -27,7 +27,6 @@ import {
   updateKemonoServiceUI,
   updateFilterActiveDot
 } from './filtersUI.js';
-import { renderSitesBar, renderMobileSourcesSheet, updateCurrentSiteLabel } from './navigationUI.js';
 import { renderSidebarPageTags } from './sidebarTags.js';
 import { closeAllDrawers, openDrawer } from './drawers.js';
 import { showToast, haptic } from './uiUtils.js';
@@ -306,12 +305,7 @@ export function setupEventListeners() {
 
       // 5. Update UI controls
       updateCategoryTabsUI();
-      updateSiteCapabilitiesUI(state.currentSite);
-      updateCurrentSiteLabel();
-      renderSitesBar({ onSelectSite: deps.selectSite });
-      renderMobileSourcesSheet({ onSelectSite: deps.selectSite });
-      if (state.currentSite === 'pawchive') ensurePawchiveServiceOptions();
-      if (state.currentSite === 'kemono') ensureKemonoServiceOptions();
+      applyCurrentSiteUi();
       updatePostSortUI();
       updateAiFilterUI();
       updateRatingFilterUI();

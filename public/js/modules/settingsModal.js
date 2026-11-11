@@ -15,6 +15,7 @@ import { t, getLang, setLang } from '../i18n.js';
 import { updateCategoryTabsUI, updatePostSortUI, updateAiFilterUI, updateRatingFilterUI, updateTypeFilterUI, updateAgeFilterUI, updatePawchiveServiceUI, updateKemonoServiceUI } from './filtersUI.js';
 
 import { lockBodyScroll, unlockBodyScroll } from './scrollLock.js';
+import { applyCurrentSiteUi } from './siteSelectionUI.js';
 import {
   normalizeProxyString
 } from './settingsConstants.js';
@@ -55,8 +56,15 @@ export function applySettingsToUIAndState(s) {
   invalidateInterestCache();
   markAuthHeadersDirty();
   const savedSite = s.defaultSite || localStorage.getItem('booru_selected_site');
+  const siteChanged = Boolean(savedSite) && savedSite !== state.currentSite;
   if (savedSite) {
     state.currentSite = savedSite;
+  }
+  // The panel may already be painted with the previous source (boot ordering,
+  // login, backup restore). Repaint it together with the capabilities so the
+  // highlight can never disagree with the feed being loaded.
+  if (siteChanged) {
+    applyCurrentSiteUi();
   }
   if (s.postSort) {
     state.postSort = s.postSort;

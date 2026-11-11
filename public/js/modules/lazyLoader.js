@@ -12,7 +12,6 @@ import { showToast, haptic } from './uiUtils.js';
 import { openDrawer } from './drawers.js';
 import { persistSettings } from './settingsPersist.js';
 import {
-  updateSiteCapabilitiesUI,
   updateCategoryTabsUI,
   updatePostSortUI,
   updateAiFilterUI,
@@ -24,12 +23,7 @@ import {
   updateKemonoServiceUI,
   updateFilterActiveDot
 } from './filtersUI.js';
-import {
-  renderSitesBar,
-  renderMobileSourcesSheet,
-  updateCurrentSiteLabel
-} from './navigationUI.js';
-import { ensurePawchiveServiceOptions, ensureKemonoServiceOptions } from './serviceOptions.js';
+import { applyCurrentSiteUi } from './siteSelectionUI.js';
 import { bumpAccountGeneration, refreshAllUserData } from './accountData.js';
 import { renderPresetsList } from './searchPresetsUI.js';
 
@@ -88,7 +82,7 @@ export function ensureSettingsModal() {
     settingsModalPromise = importOnce('settingsModal', () => import('./settingsModal.js')).then((m) => {
       m.initSettingsModal({
         onSettingsChanged: () => {
-          updateSiteCapabilitiesUI();
+          applyCurrentSiteUi();
           updateCategoryTabsUI();
           whenViewerLoaded((v) => v.refreshSimilarState?.());
           if ((state.currentCategory === 'favorites' && state.favoritesSubTab === 'authors') ||
@@ -250,12 +244,7 @@ export function ensureViewer() {
           if (site) {
             state.currentSite = site;
             persistSettings({ defaultSite: site });
-            updateSiteCapabilitiesUI(site);
-            updateCurrentSiteLabel();
-            renderSitesBar({ onSelectSite: deps.selectSite });
-            renderMobileSourcesSheet({ onSelectSite: deps.selectSite });
-            if (site === 'pawchive') ensurePawchiveServiceOptions();
-            if (site === 'kemono') ensureKemonoServiceOptions();
+            applyCurrentSiteUi();
           }
           state.currentCategory = 'feed';
           updateCategoryTabsUI();

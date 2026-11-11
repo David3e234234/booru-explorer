@@ -178,6 +178,12 @@ export function getInitialSettings() {
 export const state = {
   sites: [...DEFAULT_SITES],
   currentSite: 'danbooru',
+  // Site the visible feed was actually requested for. Usually equal to
+  // currentSite; they diverge when settings (defaultSite) or a restore rewrote
+  // the preference while a feed was already on screen. The sources panel keeps
+  // the recovery honest: clicking the highlighted source is a no-op only when
+  // this matches, otherwise the feed is reloaded for it.
+  loadedSite: null,
   postSort: 'new', // 'new', 'hot', 'views', 'top'
   currentCategory: 'feed', // 'feed', 'following', 'recommended', 'favorites', 'profile'
   recommendationFocus: 'all', // 'all' | 'artists' | 'characters' | 'discovery'

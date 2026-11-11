@@ -23,7 +23,6 @@ import {
   setDrawerCallbacks
 } from './modules/drawers.js';
 import {
-  updateSiteCapabilitiesUI,
   updatePostSortUI,
   updateAiFilterUI,
   updateRatingFilterUI,
@@ -35,11 +34,11 @@ import {
 } from './modules/filtersUI.js';
 import { 
   loadBooruSites, 
-  renderSitesBar, 
-  renderMobileSourcesSheet,
   initCustomSourcesModal,
-  updateCurrentSiteLabel
+  initSourcePanel,
+  syncSourceSelectionUI
 } from './modules/navigationUI.js';
+import { applyCurrentSiteUi } from './modules/siteSelectionUI.js';
 import {
   renderFavoriteAuthorsList,
   initAddAuthorModal,
@@ -51,7 +50,6 @@ import {
   persistSettings,
 } from './modules/settingsPersist.js';
 
-import { ensurePawchiveServiceOptions, ensureKemonoServiceOptions } from './modules/serviceOptions.js';
 import {
   initAccountData,
   loadUserSettings,
@@ -208,12 +206,7 @@ async function init() {
       if (!preset || !Array.isArray(preset.tags)) return;
       if (preset.site && preset.site !== state.currentSite && state.sites.some(s => s.id === preset.site)) {
         state.currentSite = preset.site;
-        updateSiteCapabilitiesUI(state.currentSite);
-        updateCurrentSiteLabel();
-        renderSitesBar({ onSelectSite: selectSite });
-        renderMobileSourcesSheet({ onSelectSite: selectSite });
-        if (preset.site === 'pawchive') ensurePawchiveServiceOptions();
-        if (preset.site === 'kemono') ensureKemonoServiceOptions();
+        applyCurrentSiteUi();
       }
       if (preset.filters && typeof preset.filters === 'object') {
         if (typeof preset.filters.hideFurry === 'boolean') state.hideFurry = preset.filters.hideFurry;
@@ -292,8 +285,9 @@ async function init() {
 
   document.addEventListener('booru:langchange', () => {
     getGalleryInstance()?.renderGallery(false, { preserveScroll: true });
-    renderSitesBar({ onSelectSite: selectSite });
-    renderMobileSourcesSheet({ onSelectSite: selectSite });
+    // force: the signature only tracks ids and names, so the translated
+    // "all sources" / "custom" labels need an unconditional repaint.
+    syncSourceSelectionUI({ force: true });
     renderPresetsList();
     getProfileUIInstance()?.renderProfile();
   });
@@ -359,8 +353,9 @@ async function init() {
 
   ensureDownloadManager().catch(() => {});
 
-  renderSitesBar({ onSelectSite: selectSite });
-  renderMobileSourcesSheet({ onSelectSite: selectSite });
+  // Paint the source panel once with the click handler; the state-driven
+  // repaints below reuse the remembered handler.
+  initSourcePanel({ onSelectSite: selectSite });
 
   // 2. Set up button listeners
   setupEventListeners();
@@ -407,12 +402,7 @@ function refreshSearchUiFromState() {
   const autocompleteInstance = getAutocompleteInstance();
   if (autocompleteInstance) autocompleteInstance.renderTagsChips();
   updatePresetActiveState();
-  updateCurrentSiteLabel();
-  renderSitesBar({ onSelectSite: selectSite });
-  renderMobileSourcesSheet({ onSelectSite: selectSite });
-  updateSiteCapabilitiesUI(state.currentSite);
-  if (state.currentSite === 'pawchive') ensurePawchiveServiceOptions();
-  if (state.currentSite === 'kemono') ensureKemonoServiceOptions();
+  applyCurrentSiteUi();
 }
 
 // Opens a post by its original site id: fast path searches the loaded feed,
@@ -494,25 +484,21 @@ function renderFavoriteAuthors() {
 
 function handleExploreAuthor(author) {
   if (!author || !author.name) return;
-  if (author.site && state.sites.some(s => s.id === author.site)) {
-    state.currentSite = author.site;
-    updateSiteCapabilitiesUI(state.currentSite);
-  }
-  if (state.currentSite === 'pawchive') ensurePawchiveServiceOptions();
-  if (state.currentSite === 'kemono') ensureKemonoServiceOptions();
-
+  // Do not set state.currentSite here: searchAuthorPosts() owns the switch and
+  // has to see the previous site to know the selection changed. Assigning it
+  // twice made the second check a no-op, which left the source panel on the
+  // old highlight (and the old source still clickable as "already active").
   searchAuthorPosts(author);
 }
 
 // Global quick search helper to jump to a specific author
 function searchAuthorPosts(author) {
   if (!author || !author.name) return;
-  if (state.currentSite !== author.site && author.site) {
+  if (author.site && state.sites.some(s => s.id === author.site)) {
+    // Always repaint from state, even when the id matches: a stale panel
+    // highlight is what made the active source unclickable before.
     state.currentSite = author.site;
-    updateSiteCapabilitiesUI(author.site);
-    updateCurrentSiteLabel();
-    renderSitesBar({ onSelectSite: selectSite });
-    renderMobileSourcesSheet({ onSelectSite: selectSite });
+    applyCurrentSiteUi();
   }
   state.searchTags = [];
   if (state.currentSite === 'rule34video' && !author.name.includes(':')) {
@@ -531,12 +517,23 @@ function searchAuthorPosts(author) {
   if (autocompleteInstance) {
     autocompleteInstance.renderTagsChips();
   }
-  selectCategory('feed');
+  // Not selectCategory('feed'): that returns early when the category already is
+  // 'feed', which left the previous author's results on screen even though the
+  // source and the tag chips had already changed.
+  state.currentCategory = 'feed';
+  updateCategoryTabsUI();
+  performSearch(true);
   showToast(`${t('app.authorSearch', 'Поиск работ автора:')} ${author.displayName || author.name}`);
 }
 
 function selectSite(siteId) {
-  if (state.currentSite === siteId && state.currentCategory !== 'favorites') {
+  // "Already selected" is a statement about the feed on screen, not only about
+  // the preference: after an author jump or a settings restore the two can
+  // disagree, and a click on the highlighted source has to heal that instead of
+  // being swallowed by an early return.
+  const feedAlreadyShowsSite = state.currentSite === siteId && state.loadedSite === siteId;
+  if (feedAlreadyShowsSite && state.currentCategory !== 'favorites') {
+    syncSourceSelectionUI();
     if (siteId === 'custom') {
       performSearch(true);
     }
@@ -547,12 +544,7 @@ function selectSite(siteId) {
   if (state.currentCategory === 'favorites') {
     state.currentCategory = 'feed';
   }
-  updateSiteCapabilitiesUI(siteId);
-  updateCurrentSiteLabel();
-  renderSitesBar({ onSelectSite: selectSite });
-  renderMobileSourcesSheet({ onSelectSite: selectSite });
-  if (siteId === 'pawchive') ensurePawchiveServiceOptions();
-  if (siteId === 'kemono') ensureKemonoServiceOptions();
+  applyCurrentSiteUi();
   performSearch(true);
 }
 
@@ -607,12 +599,7 @@ function switchSiteAndSearchForFeed(site, query) {
   if (site) {
     state.currentSite = site;
     persistSettings({ defaultSite: site });
-    updateSiteCapabilitiesUI(site);
-    updateCurrentSiteLabel();
-    renderSitesBar({ onSelectSite: selectSite });
-    renderMobileSourcesSheet({ onSelectSite: selectSite });
-    if (site === 'pawchive') ensurePawchiveServiceOptions();
-    if (site === 'kemono') ensureKemonoServiceOptions();
+    applyCurrentSiteUi();
   }
   state.currentCategory = 'feed';
   updateCategoryTabsUI();
