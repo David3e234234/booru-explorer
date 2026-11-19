@@ -1,5 +1,70 @@
 import { fetchTagAutocomplete } from './api.js';
 import { state, addSearchTag, removeSearchTag } from './state.js';
+import { t } from './i18n.js';
+
+const SEARCH_HISTORY_KEY = 'booru_search_history_v1';
+const MAX_SEARCH_HISTORY = 20;
+
+export function getSearchHistory() {
+  try {
+    const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter(item => item && Array.isArray(item.tags) && item.tags.length > 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function recordSearchHistory(tags, site) {
+  if (!Array.isArray(tags) || tags.length === 0) return;
+  const cleanTags = tags.map(t => String(t || '').trim()).filter(Boolean);
+  if (cleanTags.length === 0) return;
+
+  try {
+    const current = getSearchHistory();
+    const tagKey = cleanTags.slice().sort().join(' ').toLowerCase();
+    const siteKey = String(site || '').toLowerCase();
+
+    const filtered = current.filter(item => {
+      const itemTagKey = (item.tags || []).slice().sort().join(' ').toLowerCase();
+      const itemSiteKey = String(item.site || '').toLowerCase();
+      return !(itemTagKey === tagKey && itemSiteKey === siteKey);
+    });
+
+    filtered.unshift({
+      tags: cleanTags,
+      site: site || 'danbooru',
+      ts: Date.now()
+    });
+
+    if (filtered.length > MAX_SEARCH_HISTORY) {
+      filtered.length = MAX_SEARCH_HISTORY;
+    }
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(filtered));
+  } catch (err) {
+    console.warn('[Search History Error]', err);
+  }
+}
+
+export function removeSearchHistoryItem(idx) {
+  try {
+    const current = getSearchHistory();
+    if (idx >= 0 && idx < current.length) {
+      current.splice(idx, 1);
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(current));
+    }
+    return current;
+  } catch {
+    return [];
+  }
+}
+
+export function clearSearchHistory() {
+  try {
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
+  } catch {}
+}
 
 export function initAutocomplete({ onSearch, onTagsChanged }) {
   const searchInput = document.getElementById('searchInput');
@@ -11,6 +76,7 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
   let requestSeq = 0;
   let activeIndex = -1;
   let currentSuggestions = [];
+  let isShowingHistory = false;
   let activeAbortController = null;
   const suggestionsCache = new Map(); // Fast client-side suggestion cache
 
@@ -38,6 +104,88 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
     }
   }
 
+  function renderHistoryDropdown() {
+    const history = getSearchHistory();
+    if (!history || history.length === 0) {
+      hideDropdown();
+      return;
+    }
+    isShowingHistory = true;
+    activeIndex = -1;
+    currentSuggestions = [];
+
+    dropdown.innerHTML = `
+      <div class="autocomplete-history-header">
+        <span class="ac-history-title">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>${escapeHtml(t('search.recentQueries', 'Недавние поиски'))}</span>
+        </span>
+        <button type="button" class="btn-clear-search-history" title="${escapeHtml(t('search.clearHistory', 'Очистить'))}">${escapeHtml(t('search.clearHistory', 'Очистить'))}</button>
+      </div>
+      <div class="autocomplete-history-list">
+        ${history.map((item, idx) => `
+          <div class="autocomplete-item autocomplete-history-item" data-index="${idx}">
+            <div class="ac-history-left">
+              <svg class="ac-history-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <div class="ac-history-tags">
+                ${item.tags.map(tag => `<span class="ac-history-tag">${escapeHtml(tag)}</span>`).join('')}
+              </div>
+              ${item.site && item.site !== 'all' ? `<span class="ac-history-site">${escapeHtml(item.site)}</span>` : ''}
+            </div>
+            <button type="button" class="ac-history-remove" data-index="${idx}" title="${escapeHtml(t('search.removeFromHistory', 'Удалить из истории'))}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+
+    dropdown.style.display = 'block';
+
+    const clearBtn = dropdown.querySelector('.btn-clear-search-history');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        clearSearchHistory();
+        hideDropdown();
+      });
+    }
+
+    dropdown.querySelectorAll('.ac-history-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.index, 10);
+        removeSearchHistoryItem(idx);
+        renderHistoryDropdown();
+      });
+    });
+
+    dropdown.querySelectorAll('.autocomplete-history-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const idx = parseInt(item.dataset.index, 10);
+        const hist = getSearchHistory();
+        const selected = hist[idx];
+        if (selected && Array.isArray(selected.tags)) {
+          state.searchTags = [...selected.tags];
+          searchInput.value = '';
+          renderTagsChips();
+          hideDropdown();
+          recordSearchHistory(state.searchTags, state.currentSite);
+          onSearch();
+        }
+      });
+    });
+  }
+
+  const showHistoryIfEmpty = () => {
+    if (!searchInput.value.trim() && state.searchTags.length === 0) {
+      renderHistoryDropdown();
+    }
+  };
+
+  searchInput.addEventListener('focus', showHistoryIfEmpty);
+  searchInput.addEventListener('click', showHistoryIfEmpty);
+
   tagsWrapper.addEventListener('click', (e) => {
     const removeBtn = e.target.closest('.tag-chip-remove');
     if (removeBtn) {
@@ -56,10 +204,15 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
     clearTimeout(debounceTimer);
     if (!val) {
       requestSeq += 1;
-      hideDropdown();
+      if (state.searchTags.length === 0) {
+        renderHistoryDropdown();
+      } else {
+        hideDropdown();
+      }
       return;
     }
 
+    isShowingHistory = false;
     const normalizedVal = val.replace(/\s+/g, '_');
     const cacheKey = `${state.currentSite}:${normalizedVal.toLowerCase()}`;
     if (suggestionsCache.has(cacheKey)) {
@@ -127,6 +280,7 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
       hideDropdown();
       return;
     }
+    isShowingHistory = false;
     activeIndex = -1;
     dropdown.innerHTML = tags.map((t, idx) => `
       <div class="autocomplete-item" data-index="${idx}" data-val="${escapeHtml(t.value)}">
@@ -160,6 +314,7 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
       renderTagsChips();
       hideDropdown();
       if (triggerSearch) {
+        recordSearchHistory(state.searchTags, state.currentSite);
         onSearch();
       }
     }
@@ -169,6 +324,7 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
     dropdown.style.display = 'none';
     activeIndex = -1;
     currentSuggestions = [];
+    isShowingHistory = false;
   }
 
   function clear() {
@@ -190,7 +346,9 @@ export function initAutocomplete({ onSearch, onTagsChanged }) {
     renderTagsChips,
     selectTag,
     clear,
-    clearTags: clear
+    clearTags: clear,
+    recordSearch: (tags, site) => recordSearchHistory(tags, site),
+    getHistory: getSearchHistory
   };
 }
 

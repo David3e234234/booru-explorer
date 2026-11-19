@@ -75,6 +75,10 @@ export async function performSearch(reset = false, options = {}) {
     state.loadedSite = state.currentSite;
   }
 
+  if (reset && state.searchTags.length > 0 && state.currentCategory !== 'favorites' && state.currentCategory !== 'profile') {
+    autocompleteInstance?.recordSearch?.(state.searchTags, state.currentSite);
+  }
+
   syncSearchUrl(reset ? 'push' : 'replace');
   updatePresetActiveState();
 

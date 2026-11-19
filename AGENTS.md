@@ -210,6 +210,7 @@ Adding a site requires: parser module, `SITES` entry, `fetchSingleSiteBatch` cas
   - **Subject / Gender**: Solo girl vs solo boy posts without named characters are not merged into single-character albums unless tagged `genderbend` or `comic`.
   - **Original Art**: For solo original characters with no character tags, disjoint solid hair colors (e.g. blonde vs black) prevent unrelated character illustrations from merging into false albums.
 - When compatibility fails, `/api/posts/album` returns `success: false, albumCount: 0` to preserve the post as a single item, and `groupPostsIntoAlbums` retains distinct card entries.
+- Albums can be bundled into a single ZIP archive for downloading via `POST /api/archive/bundle` (bounded to 60 items, SSRF-validated via `isSafeExternalUrlResolved()`, packed with `AdmZip`).
 
 ### Settings And Cache Keys
 

@@ -37,6 +37,7 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
   const btnDownload = document.getElementById('btnDownload');
   const btnDownloadAlbum = document.getElementById('btnDownloadAlbum');
   const btnCopyLink = document.getElementById('btnCopyLink');
+  const btnCopyImage = document.getElementById('btnCopyImage');
   const btnViewerTagsToggle = document.getElementById('btnViewerTagsToggle');
   const btnCloseViewerTags = document.getElementById('btnCloseViewerTags');
   const viewerSidebar = document.getElementById('viewerSidebar');
@@ -548,6 +549,51 @@ export function initViewer({ onFavoriteToggle, onFavoriteAuthorToggle, onTagSele
     haptic(15);
     const success = await copyToClipboard(urlToCopy);
     showToast(success ? t('vw.linkCopied', 'Ссылка на пост скопирована') : t('vw.linkCopyFailed', 'Не удалось скопировать ссылку'));
+  });
+
+  btnCopyImage?.addEventListener('click', async () => {
+    if (!currentPost) return;
+    const activeItem = (currentPost.isAlbum && currentPost.albumItems?.[currentAlbumIndex]) ? currentPost.albumItems[currentAlbumIndex] : currentPost;
+    if (activeItem.isVideo || currentPost.isVideo) {
+      showToast(t('viewer.copyVideoUnsupported', 'Копирование видео в буфер не поддерживается'));
+      return;
+    }
+
+    const imgUrl = activeItem.fileUrl || activeItem.sampleUrl || activeItem.previewUrl || currentPost.fileUrl || currentPost.sampleUrl;
+    if (!imgUrl) {
+      showToast(t('viewer.copyImageFailed', 'Не удалось скопировать изображение'));
+      return;
+    }
+
+    haptic(15);
+    showToast(t('viewer.copyingImage', 'Копирование изображения...'));
+
+    try {
+      const shouldUseProxy = shouldProxyMedia({ site: activeItem.site || currentPost.site, url: imgUrl, type: 'image' });
+      const targetUrl = shouldUseProxy ? getProxiedUrl(imgUrl, activeItem.site || currentPost.site) : imgUrl;
+      const resp = await fetch(targetUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+
+      let pngBlob = blob;
+      if (blob.type !== 'image/png') {
+        const imgBitmap = await createImageBitmap(blob);
+        const canvas = document.createElement('canvas');
+        canvas.width = imgBitmap.width;
+        canvas.height = imgBitmap.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(imgBitmap, 0, 0);
+        pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+      }
+
+      await navigator.clipboard.write([
+        new ClipboardItem({ 'image/png': pngBlob })
+      ]);
+      showToast(t('viewer.imageCopied', 'Изображение скопировано в буфер обмена ✓'));
+    } catch (err) {
+      console.warn('[Copy image failed]', err);
+      showToast(t('viewer.copyImageFailed', 'Не удалось скопировать изображение'));
+    }
   });
 
   btnDownload?.addEventListener('click', (e) => {

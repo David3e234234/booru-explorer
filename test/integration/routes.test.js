@@ -716,5 +716,36 @@ describe('Express API Integration & Route Tests', () => {
       assert.strictEqual(data.newCount, 0);
     });
   });
+
+  describe('Archive Bundle Routes (/api/archive/bundle)', () => {
+    it('POST /api/archive/bundle rejects empty items array with 400', async () => {
+      const res = await fetch(`${baseUrl}/api/archive/bundle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: [] })
+      });
+      assert.strictEqual(res.status, 400);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+    });
+
+    it('POST /api/archive/bundle rejects unsafe SSRF loopback URLs', async () => {
+      const res = await fetch(`${baseUrl}/api/archive/bundle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'test_bundle',
+          items: [
+            { url: 'http://127.0.0.1:3000/api/settings', filename: 'settings.json' },
+            { url: 'http://localhost/secret', filename: 'secret.txt' }
+          ]
+        })
+      });
+      // SSRF filter ignores unsafe URLs; with 0 valid items it returns 502
+      assert.strictEqual(res.status, 502);
+      const data = await res.json();
+      assert.strictEqual(data.success, false);
+    });
+  });
 });
 

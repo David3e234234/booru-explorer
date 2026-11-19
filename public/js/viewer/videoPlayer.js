@@ -317,6 +317,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       <button class="btn-download-video" title="${t('vp.downloadBtn.title', 'Скачать исходный видео-файл на устройство')}">${t('vp.downloadBtn', 'Скачать видео')}</button>
       <button class="btn-cache-toggle" title="${t('vp.cacheBtn.title', 'Полностью закэшировать видео в память для просмотра без лагов')}">${t('vp.cacheBtn', 'Кэш в память')}</button>
       <button class="btn-switch-source" title="${t('vp.switchSourceBtn.title', 'Переключить между прямым источником и прокси')}">${t('vp.proxyBtn', 'Прокси')}</button>
+      <button class="btn-video-speed" title="${t('vp.speedBtn.title', 'Скорость воспроизведения')}">1x</button>
+      <button class="btn-video-pip" title="${t('vp.pipBtn.title', 'Картинка в картинке')}">PiP</button>
     </div>
   `;
 
@@ -419,6 +421,8 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   const btnCache = statusBanner.querySelector('.btn-cache-toggle');
   const btnDownloadVideo = statusBanner.querySelector('.btn-download-video');
   const switchBtn = statusBanner.querySelector('.btn-switch-source');
+  const btnSpeed = statusBanner.querySelector('.btn-video-speed');
+  const btnPip = statusBanner.querySelector('.btn-video-pip');
   
   const triggerDownload = () => {
     // Downloading the teaser would silently hand the user a 20s clip labelled as
@@ -455,6 +459,53 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       e.stopPropagation();
       triggerDownload();
     });
+  }
+
+  const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+  let currentSpeed = parseFloat(localStorage.getItem('booru_video_speed') || '1');
+  if (isNaN(currentSpeed) || !SPEEDS.includes(currentSpeed)) currentSpeed = 1;
+
+  const updateSpeedUI = () => {
+    if (btnSpeed) btnSpeed.textContent = `${currentSpeed}x`;
+    if (video) video.playbackRate = currentSpeed;
+  };
+  updateSpeedUI();
+
+  if (btnSpeed) {
+    btnSpeed.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const nextIdx = (SPEEDS.indexOf(currentSpeed) + 1) % SPEEDS.length;
+      currentSpeed = SPEEDS[nextIdx];
+      try { localStorage.setItem('booru_video_speed', String(currentSpeed)); } catch {}
+      updateSpeedUI();
+    });
+  }
+
+  video.addEventListener('loadedmetadata', () => {
+    video.playbackRate = currentSpeed;
+  });
+  video.addEventListener('play', () => {
+    video.playbackRate = currentSpeed;
+  });
+
+  if (btnPip) {
+    if (!document.pictureInPictureEnabled) {
+      btnPip.style.display = 'none';
+    } else {
+      btnPip.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          if (document.pictureInPictureElement === video) {
+            await document.exitPictureInPicture();
+          } else {
+            await video.requestPictureInPicture();
+          }
+        } catch (err) {
+          console.warn('[PiP error]', err);
+          showToast(t('vp.pipNotSupported', 'Картинка в картинке не поддерживается'));
+        }
+      });
+    }
   }
 
   const needsProxy = shouldProxyMedia({ site: currentPost.site, url: directMedia, type: 'video', settings: state.settings });

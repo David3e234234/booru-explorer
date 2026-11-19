@@ -1,11 +1,14 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import AdmZip from 'adm-zip';
 import { ARCHIVES_DIR } from '../config/constants.js';
 import { getArchiveManifest, buildArchiveAlbumItems, isAllowedArchiveUrl, getArchiveJobStatus, inspectArchive, getArchiveKey, readManifest, downloadArchiveEntry, downloadFullArchive } from '../services/archiveService.js';
 import { logError } from '../utils/logger.js';
 import { sanitizeLogUrl } from '../utils/hostPolicy.js';
-import { parseRequestAuth } from '../utils/settingsValidation.js';
+import { parseRequestAuth, resolveRequestSettings } from '../utils/settingsValidation.js';
+import { getSettings } from '../services/storageService.js';
+import { isSafeExternalUrlResolved, fetchSafe } from '../utils/network.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
@@ -197,6 +200,80 @@ router.get('/download-archive', archiveLimiter, async (req, res) => {
     if (!res.headersSent) {
       res.status(500).send('Не удалось скачать архив');
     }
+  }
+});
+
+// POST /api/archive/bundle - bundle multiple image/media URLs into a single zip archive
+router.post('/bundle', archiveLimiter, async (req, res) => {
+  const { title, items, site } = req.body || {};
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, error: 'Список файлов пуст' });
+  }
+
+  // Cap items to prevent resource exhaustion (max 60 items per bundle)
+  const bundleItems = items.slice(0, 60);
+
+  // Validate title to prevent header injection
+  let rawTitle = typeof title === 'string' ? title.replace(/[^a-zA-Z0-9_\-\. ]/g, '_').trim() : '';
+  if (!rawTitle) rawTitle = `album_${Date.now()}`;
+  const zipFilename = rawTitle.endsWith('.zip') ? rawTitle : `${rawTitle}.zip`;
+
+  const settings = resolveRequestSettings(getSettings(), parseRequestAuth(req));
+
+  try {
+    const zip = new AdmZip();
+    let addedCount = 0;
+
+    for (let i = 0; i < bundleItems.length; i++) {
+      const item = bundleItems[i];
+      const url = item?.url;
+      if (typeof url !== 'string' || !url) continue;
+
+      // SSRF validation: ensure URL is safe and resolved hostname is valid
+      const isSafe = await isSafeExternalUrlResolved(url);
+      if (!isSafe) {
+        logError('ArchiveBundle', `Отклонен небезопасный URL: ${sanitizeLogUrl(url)}`);
+        continue;
+      }
+
+      try {
+        const resp = await fetchSafe(url, {
+          timeout: 15000,
+          settings,
+          site: item.site || site || undefined
+        });
+
+        if (resp && resp.ok) {
+          const arrayBuf = await resp.arrayBuffer();
+          const buffer = Buffer.from(arrayBuf);
+          if (buffer.length > 0 && buffer.length <= 50 * 1024 * 1024) {
+            let filename = typeof item.filename === 'string' ? item.filename.replace(/[^a-zA-Z0-9_\-\. ]/g, '_').trim() : '';
+            if (!filename) {
+              const ext = url.split('.').pop().split('?')[0].slice(0, 5) || 'jpg';
+              filename = `${String(i + 1).padStart(2, '0')}.${ext}`;
+            }
+            zip.addFile(filename, buffer);
+            addedCount++;
+          }
+        }
+      } catch (fetchErr) {
+        logError('ArchiveBundle', `Не удалось загрузить файл ${i + 1}: ${fetchErr.message}`);
+      }
+    }
+
+    if (addedCount === 0) {
+      return res.status(502).json({ success: false, error: 'Не удалось загрузить ни одного файла для архива' });
+    }
+
+    const zipBuffer = zip.toBuffer();
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.end(zipBuffer);
+  } catch (err) {
+    logError('ArchiveBundle', `Ошибка сборки архива: ${err.message}`, err);
+    return res.status(500).json({ success: false, error: 'Ошибка сборки ZIP-архива' });
   }
 });
 

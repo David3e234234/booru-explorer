@@ -1,5 +1,5 @@
 import { state } from '../state.js';
-import { fetchAlbumPosts, getProxiedUrl, shouldProxyMedia } from '../api.js';
+import { fetchAlbumPosts, getProxiedUrl, shouldProxyMedia, getAuthHeaders } from '../api.js';
 import { downloadManager } from '../modules/downloadManager.js';
 import { showToast, haptic, toSafeHttpUrl, escapeHtml } from '../modules/uiUtils.js';
 import { t } from '../i18n.js';
@@ -397,12 +397,61 @@ export async function loadFullAlbumForPost(targetPost, isUserExplicit = false, o
 }
 
 /**
- * Downloads all images in an album sequentially.
+ * Downloads all images in an album, preferring server-side ZIP packaging with a clean fallback.
  * @param {Object} currentPost
  */
 export async function downloadFullAlbum(currentPost) {
   if (!currentPost || !currentPost.isAlbum || !Array.isArray(currentPost.albumItems) || currentPost.albumItems.length === 0) return;
   haptic(20);
+
+  const baseId = currentPost.id || currentPost.originalId || 'album';
+  const albumTitle = `album_${currentPost.site || 'post'}_${baseId}`;
+  const bundleItems = [];
+
+  for (let i = 0; i < currentPost.albumItems.length; i++) {
+    const item = currentPost.albumItems[i];
+    const targetUrl = item.fileUrl || item.sampleUrl || item.previewUrl;
+    if (!targetUrl) continue;
+    const ext = item.fileExt || (item.isVideo ? 'mp4' : 'jpg');
+    const filename = `${String(i + 1).padStart(2, '0')}_${baseId}.${ext}`;
+    bundleItems.push({ url: targetUrl, filename, site: item.site || currentPost.site });
+  }
+
+  if (bundleItems.length > 0) {
+    showToast(t('vw.bundlingAlbum', 'Сборка ZIP-архива альбома...'));
+    try {
+      const resp = await fetch('/api/archive/bundle', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({
+          title: albumTitle,
+          items: bundleItems,
+          site: currentPost.site
+        })
+      });
+
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${albumTitle}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
+        showToast(t('vw.albumDownloaded', 'Все изображения альбома загружены в ZIP'));
+        return;
+      }
+    } catch (bundleErr) {
+      console.warn('[Album bundle failed, falling back to sequential download]', bundleErr);
+      showToast(t('vw.albumZipFailed', 'Сборка архива не удалась, скачиваем файлы по очереди...'));
+    }
+  }
+
   showToast(t('vw.albumDownloadStart', 'Начато скачивание альбома ({n} файлов)...').replace('{n}', currentPost.albumItems.length));
 
   for (let i = 0; i < currentPost.albumItems.length; i++) {
