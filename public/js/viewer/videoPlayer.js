@@ -6,221 +6,8 @@ import { isHevcSource, browserSupportsHevc } from '../modules/hevcCodec.js';
 
 export function makeBannerDraggable(bannerEl) {
   if (!bannerEl) return;
-  let isDraggingBanner = false;
-  let startX = 0;
-  let startY = 0;
-  let startLeft = 0;
-  let startTop = 0;
-
-  const getParentInfo = () => {
-    const parent = bannerEl.offsetParent || bannerEl.parentElement || document.body;
-    const pRect = parent.getBoundingClientRect();
-    return { parent, pRect };
-  };
-
-  const applySavedPosition = () => {
-    try {
-      const saved = localStorage.getItem('booru_video_banner_pos');
-      if (saved) {
-        const pos = JSON.parse(saved);
-        if (pos && typeof pos.xRatio === 'number' && typeof pos.yRatio === 'number') {
-          const { parent } = getParentInfo();
-          const parentWidth = parent.clientWidth || window.innerWidth;
-          const parentHeight = parent.clientHeight || window.innerHeight;
-          const bannerWidth = bannerEl.offsetWidth || 280;
-          const bannerHeight = bannerEl.offsetHeight || 90;
-
-          let left = pos.xRatio * parentWidth;
-          let top = pos.yRatio * parentHeight;
-
-          const maxX = Math.max(0, parentWidth - bannerWidth - 8);
-          const maxY = Math.max(0, parentHeight - bannerHeight - 8);
-          left = Math.max(8, Math.min(left, maxX));
-          top = Math.max(8, Math.min(top, maxY));
-
-          bannerEl.style.bottom = 'auto';
-          bannerEl.style.right = 'auto';
-          bannerEl.style.left = `${left}px`;
-          bannerEl.style.top = `${top}px`;
-          bannerEl.style.transform = 'none';
-        }
-      }
-    } catch (e) {
-      console.warn('[Banner Position Load Error]', e);
-    }
-  };
-
-  applySavedPosition();
-  requestAnimationFrame(applySavedPosition);
-
-  const savePosition = () => {
-    try {
-      const { parent, pRect } = getParentInfo();
-      const rect = bannerEl.getBoundingClientRect();
-      const currentLeft = rect.left - pRect.left;
-      const currentTop = rect.top - pRect.top;
-      const parentWidth = parent.clientWidth || window.innerWidth;
-      const parentHeight = parent.clientHeight || window.innerHeight;
-
-      const pos = {
-        xRatio: parentWidth > 0 ? currentLeft / parentWidth : 0,
-        yRatio: parentHeight > 0 ? currentTop / parentHeight : 0,
-        left: currentLeft,
-        top: currentTop
-      };
-      localStorage.setItem('booru_video_banner_pos', JSON.stringify(pos));
-    } catch (e) {
-      console.warn('[Banner Position Save Error]', e);
-    }
-  };
-
-  const startDrag = (clientX, clientY, target) => {
-    if (target && (
-      target.tagName === 'BUTTON' || 
-      target.closest('button') || 
-      target.tagName === 'INPUT' || 
-      target.closest('input') || 
-      target.tagName === 'A' || 
-      target.closest('a')
-    )) {
-      return false;
-    }
-    const { pRect } = getParentInfo();
-    const rect = bannerEl.getBoundingClientRect();
-    startLeft = rect.left - pRect.left;
-    startTop = rect.top - pRect.top;
-    startX = clientX;
-    startY = clientY;
-    isDraggingBanner = true;
-
-    bannerEl.style.bottom = 'auto';
-    bannerEl.style.right = 'auto';
-    bannerEl.style.left = `${startLeft}px`;
-    bannerEl.style.top = `${startTop}px`;
-    bannerEl.style.transform = 'none';
-    bannerEl.classList.add('is-dragging');
-    return true;
-  };
-
-  const moveDrag = (clientX, clientY, e) => {
-    if (!isDraggingBanner) return;
-    const dx = clientX - startX;
-    const dy = clientY - startY;
-
-    if (e && e.cancelable) {
-      e.preventDefault();
-    }
-
-    let newLeft = startLeft + dx;
-    let newTop = startTop + dy;
-
-    const { parent } = getParentInfo();
-    const parentWidth = parent.clientWidth || window.innerWidth;
-    const parentHeight = parent.clientHeight || window.innerHeight;
-    const bannerWidth = bannerEl.offsetWidth || 280;
-    const bannerHeight = bannerEl.offsetHeight || 90;
-    const maxX = Math.max(0, parentWidth - bannerWidth - 8);
-    const maxY = Math.max(0, parentHeight - bannerHeight - 8);
-
-    newLeft = Math.max(8, Math.min(newLeft, maxX));
-    newTop = Math.max(8, Math.min(newTop, maxY));
-
-    bannerEl.style.left = `${newLeft}px`;
-    bannerEl.style.top = `${newTop}px`;
-  };
-
-  const endDrag = () => {
-    if (isDraggingBanner) {
-      isDraggingBanner = false;
-      bannerEl.classList.remove('is-dragging');
-      savePosition();
-    }
-  };
-
-  bannerEl.addEventListener('touchstart', (e) => {
-    e.stopPropagation();
-    if (e.touches.length === 1) {
-      startDrag(e.touches[0].clientX, e.touches[0].clientY, e.target);
-    }
-  }, { passive: false });
-
-  bannerEl.addEventListener('touchmove', (e) => {
-    e.stopPropagation();
-    if (isDraggingBanner && e.touches.length === 1) {
-      moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
-    }
-  }, { passive: false });
-
-  bannerEl.addEventListener('touchend', (e) => {
-    e.stopPropagation();
-    if (isDraggingBanner) {
-      endDrag();
-    }
-  }, { passive: true });
-
-  bannerEl.addEventListener('touchcancel', (e) => {
-    e.stopPropagation();
-    if (isDraggingBanner) {
-      endDrag();
-    }
-  }, { passive: true });
-
-  const onWindowTouchMove = (e) => {
-    if (isDraggingBanner && e.touches.length === 1) {
-      moveDrag(e.touches[0].clientX, e.touches[0].clientY, e);
-      if (e.cancelable) e.preventDefault();
-      e.stopPropagation();
-    }
-  };
-
-  const onWindowTouchEnd = () => {
-    if (isDraggingBanner) {
-      endDrag();
-    }
-  };
-
-  const onWindowTouchCancel = () => {
-    if (isDraggingBanner) {
-      endDrag();
-    }
-  };
-
-  const onMouseMove = (e) => {
-    if (isDraggingBanner) {
-      moveDrag(e.clientX, e.clientY, e);
-    }
-  };
-
-  const onMouseUp = () => {
-    if (isDraggingBanner) {
-      endDrag();
-    }
-  };
-
-  window.addEventListener('touchmove', onWindowTouchMove, { passive: false });
-
-  window.addEventListener('touchend', onWindowTouchEnd, { passive: true });
-
-  window.addEventListener('touchcancel', onWindowTouchCancel, { passive: true });
-
-  bannerEl.addEventListener('mousedown', (e) => {
-    e.stopPropagation();
-    startDrag(e.clientX, e.clientY, e.target);
-  });
-
-  window.addEventListener('mousemove', onMouseMove);
-
-  window.addEventListener('mouseup', onMouseUp);
-
-  // Every player instance registers its own window listeners; without this
-  // teardown they accumulate for the whole session and keep dead banners alive
-  bannerEl._destroyDrag = () => {
-    window.removeEventListener('touchmove', onWindowTouchMove);
-    window.removeEventListener('touchend', onWindowTouchEnd);
-    window.removeEventListener('touchcancel', onWindowTouchCancel);
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
-  };
+  // Kept for backward compatibility
+  bannerEl._destroyDrag = () => {};
 }
 
 let mp4BoxLoader = null;
@@ -238,36 +25,43 @@ function ensureMp4Box() {
   return mp4BoxLoader;
 }
 
+function formatTime(seconds) {
+  if (isNaN(seconds) || seconds < 0 || !isFinite(seconds)) return '0:00';
+  const s = Math.floor(seconds);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  const remS = s % 60;
+  const secStr = remS < 10 ? `0${remS}` : `${remS}`;
+  if (h > 0) {
+    const minStr = remM < 10 ? `0${remM}` : `${remM}`;
+    return `${h}:${minStr}:${secStr}`;
+  }
+  return `${remM}:${secStr}`;
+}
+
 export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef, blobRef, resolvedVideoPromise = null }) {
   const defaultPrefQuality = state.settings?.videoDefaultQuality || 'original';
   let activeQuality = defaultPrefQuality; // 'original', '720p', '480p'
 
   const getBaseOriginal = () => currentPost.fileUrl || currentPost.sampleUrl || '';
 
-  // HEVC sources (Pawchive serves H.265 under names like "clip_H.265.mp4") do
-  // not play in browsers without an OS HEVC decoder, and the JS remux cannot
-  // help: the codec itself is unsupported. Route them straight to the FFmpeg
-  // transcode instead of the media element. The probe runs once per post.
   const isCurrentHevc = () => isHevcSource(getBaseOriginal()) && !browserSupportsHevc();
   let hevcTranscodeTried = false;
 
   const getMediaUrlForQuality = (qualityKey) => {
     const originalUrl = getBaseOriginal();
 
-    // 1. Check if post has native quality list from source
     if (Array.isArray(currentPost.videoQualities) && currentPost.videoQualities.length > 0) {
       const match = currentPost.videoQualities.find(q => q.quality === qualityKey);
       if (match?.url) return { url: match.url, isTranscode: false, label: match.label || match.quality };
     }
 
-    // 2. HEVC the browser cannot decode: the "original" entry becomes the
-    // transcode so playback starts playable instead of failing on decode.
     if (isCurrentHevc() && qualityKey === 'original' && originalUrl && !originalUrl.startsWith('/api/transcode-video')) {
       const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(originalUrl)}&quality=720p`;
       return { url: transcodeUrl, isTranscode: true, label: '720p (H.264)' };
     }
 
-    // 3. If lower quality requested but no native version, use real-time stream transcode
     if ((qualityKey === '480p' || qualityKey === '720p') && originalUrl && !originalUrl.startsWith('/api/transcode-video')) {
       const transcodeUrl = `/api/transcode-video?url=${encodeURIComponent(originalUrl)}&quality=${qualityKey}`;
       return { url: transcodeUrl, isTranscode: true, label: qualityKey };
@@ -280,60 +74,38 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   let directMedia = activeMediaInfo.url;
   let proxyMedia = activeMediaInfo.isTranscode ? directMedia : getProxiedUrl(directMedia);
 
-  // Rule34Video links are one-time use: after a token refresh, rebuild every source variant
   const rebuildMediaUrls = () => {
     activeMediaInfo = getMediaUrlForQuality(activeQuality);
     directMedia = activeMediaInfo.url;
     proxyMedia = activeMediaInfo.isTranscode ? directMedia : getProxiedUrl(directMedia);
   };
 
-  // A Rule34Video feed post only carries the ~20s teaser, so playback is deferred
-  // until /api/resolve-video hands over the full stream. Handing the teaser to the
-  // media element is what made users report "the video is only 20 seconds long".
   const teaserUrl = currentPost.teaserUrl || (isRule34VideoTeaserUrl(directMedia) ? directMedia : '');
   let fullMediaPending = isFullMediaPending(currentPost);
   let playingTeaser = false;
   let playerDestroyed = false;
   let resolveWatchdog = null;
+  let idleTimer = null;
+  let isSettingsMenuOpen = false;
+  let isScrubbing = false;
+  let singleClickTimeout = null;
+  let isCachedInMemory = false;
 
+  // Root container
   const videoContainer = document.createElement('div');
   videoContainer.className = 'viewer-video-container';
 
+  // Dummy status banner so callers (e.g. index.js) appending statusBanner won't fail
   const statusBanner = document.createElement('div');
   statusBanner.className = 'video-status-banner';
-  statusBanner.innerHTML = `
-    <div class="video-status-drag-handle" title="${t('vp.dragHandle.title', 'Потяните, чтобы переместить')}"></div>
-    <div class="video-status-top-row">
-      <div class="video-status-left">
-        <div class="video-status-spinner"></div>
-        <span class="video-status-text">${t('vp.initStream', 'Инициализация видеопотока...')}</span>
-      </div>
-      <span class="video-progress-percent">0%</span>
-    </div>
-    <div class="video-progress-track">
-      <div class="video-progress-fill" style="width: 0%;"></div>
-    </div>
-    <div class="video-status-actions">
-      <button class="btn-download-video" title="${t('vp.downloadBtn.title', 'Скачать исходный видео-файл на устройство')}">${t('vp.downloadBtn', 'Скачать видео')}</button>
-      <button class="btn-cache-toggle" title="${t('vp.cacheBtn.title', 'Полностью закэшировать видео в память для просмотра без лагов')}">${t('vp.cacheBtn', 'Кэш в память')}</button>
-      <button class="btn-switch-source" title="${t('vp.switchSourceBtn.title', 'Переключить между прямым источником и прокси')}">${t('vp.proxyBtn', 'Прокси')}</button>
-      <button class="btn-video-speed" title="${t('vp.speedBtn.title', 'Скорость воспроизведения')}">1x</button>
-      <button class="btn-video-pip" title="${t('vp.pipBtn.title', 'Картинка в картинке')}">PiP</button>
-    </div>
-  `;
+  statusBanner.style.display = 'none';
 
-  makeBannerDraggable(statusBanner);
-
-  const isBannerVisible = state.settings.showVideoStatusBanner !== false;
-  if (!isBannerVisible) {
-    statusBanner.style.display = 'none';
-  }
-
+  // Native HTML5 video element with custom YouTube overlay
   const shouldAutoplay = state.settings?.videoAutoplayViewer !== false;
   const video = document.createElement('video');
   video.className = 'viewer-video';
   video.referrerPolicy = 'no-referrer';
-  video.controls = true;
+  video.controls = false; // YouTube player controls replace default browser controls
   video.autoplay = shouldAutoplay;
   video.loop = true;
   video.playsInline = true;
@@ -341,7 +113,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   video.setAttribute('webkit-playsinline', '');
   video.preload = shouldAutoplay ? 'auto' : 'metadata';
 
-  // Restore the saved volume level and mute state
+  // Restore volume and mute state
   try {
     const savedVolume = parseFloat(localStorage.getItem('booru_video_volume') ?? '1');
     const savedMuted = localStorage.getItem('booru_video_muted') === 'true';
@@ -351,8 +123,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   const posterQuality = state.settings?.previewQuality || 'high';
   const videoTarget = currentPost.fileUrl || currentPost.sampleUrl || '';
-  // While only the teaser is known, its still frame is the honest poster: running
-  // FFmpeg over a 20s clip to draw a placeholder wastes a job on every opened post.
   const stillPoster = (fullMediaPending && currentPost.previewUrl && !isRule34VideoTeaserUrl(currentPost.previewUrl))
     ? currentPost.previewUrl
     : '';
@@ -368,7 +138,29 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     video.style.aspectRatio = `${currentPost.width} / ${currentPost.height}`;
   }
 
-  // Unmute button for when the browser's Autoplay Policy blocks sound
+  // Center loading spinner
+  const ytCenterSpinner = document.createElement('div');
+  ytCenterSpinner.className = 'yt-center-spinner';
+
+  // Center action pulse ripple (play / pause animation on video click)
+  const ytCenterAction = document.createElement('div');
+  ytCenterAction.className = 'yt-center-action';
+
+  let rippleTimeout = null;
+  const triggerCenterRipple = (isPlaying) => {
+    ytCenterAction.innerHTML = isPlaying
+      ? `<svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`
+      : `<svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+    ytCenterAction.classList.remove('pulse');
+    void ytCenterAction.offsetWidth; // force reflow
+    ytCenterAction.classList.add('pulse');
+    clearTimeout(rippleTimeout);
+    rippleTimeout = setTimeout(() => {
+      ytCenterAction.classList.remove('pulse');
+    }, 400);
+  };
+
+  // Unmute button for autoplay blocked by browser policy
   const unmuteBtn = document.createElement('button');
   unmuteBtn.className = 'btn-video-unmute';
   unmuteBtn.style.display = 'none';
@@ -377,7 +169,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     <span>${t('vp.unmute', 'Включить звук')}</span>
   `;
   unmuteBtn.title = t('vp.unmute.title', 'Включить звук (кликните для снятия ограничения браузера)');
-
   unmuteBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     video.muted = false;
@@ -386,24 +177,12 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     unmuteBtn.style.display = 'none';
   });
 
-  video.addEventListener('volumechange', () => {
-    try {
-      localStorage.setItem('booru_video_volume', String(video.volume));
-      localStorage.setItem('booru_video_muted', String(video.muted));
-      if (!video.muted && video.volume > 0) {
-        unmuteBtn.style.display = 'none';
-      }
-    } catch {}
-  });
-
   const safePlay = () => {
     if (!shouldAutoplay) return;
     const playPromise = video.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
-        // Browser blocked autoplay with sound (NotAllowedError)
         if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
-          console.warn('[Video Autoplay] Автоплей со звуком ограничен браузером, переход на muted fallback');
           video.muted = true;
           video.play().catch(() => {});
           if (currentPost.hasSound !== false) {
@@ -414,19 +193,825 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   };
 
-  const textEl = statusBanner.querySelector('.video-status-text');
-  const spinEl = statusBanner.querySelector('.video-status-spinner');
-  const percentEl = statusBanner.querySelector('.video-progress-percent');
-  const fillEl = statusBanner.querySelector('.video-progress-fill');
-  const btnCache = statusBanner.querySelector('.btn-cache-toggle');
-  const btnDownloadVideo = statusBanner.querySelector('.btn-download-video');
-  const switchBtn = statusBanner.querySelector('.btn-switch-source');
-  const btnSpeed = statusBanner.querySelector('.btn-video-speed');
-  const btnPip = statusBanner.querySelector('.btn-video-pip');
-  
+  // ═══════════════════════════════════════════════════════════
+  // YouTube Controls Layout & Construction
+  // ═══════════════════════════════════════════════════════════
+  const ytControlsWrapper = document.createElement('div');
+  ytControlsWrapper.className = 'yt-controls-wrapper';
+
+  const ytScrim = document.createElement('div');
+  ytScrim.className = 'yt-controls-scrim';
+  ytControlsWrapper.appendChild(ytScrim);
+
+  // Timeline / Scrubber
+  const ytProgressBarContainer = document.createElement('div');
+  ytProgressBarContainer.className = 'yt-progress-bar-container';
+
+  const ytProgressTrack = document.createElement('div');
+  ytProgressTrack.className = 'yt-progress-track';
+
+  const ytProgressBuffer = document.createElement('div');
+  ytProgressBuffer.className = 'yt-progress-buffer';
+
+  const ytProgressPlayed = document.createElement('div');
+  ytProgressPlayed.className = 'yt-progress-played';
+
+  const ytProgressScrubberHandle = document.createElement('div');
+  ytProgressScrubberHandle.className = 'yt-progress-scrubber-handle';
+  ytProgressPlayed.appendChild(ytProgressScrubberHandle);
+
+  const ytProgressHoverLine = document.createElement('div');
+  ytProgressHoverLine.className = 'yt-progress-hover-line';
+
+  ytProgressTrack.appendChild(ytProgressBuffer);
+  ytProgressTrack.appendChild(ytProgressPlayed);
+  ytProgressTrack.appendChild(ytProgressHoverLine);
+
+  const ytProgressTooltip = document.createElement('div');
+  ytProgressTooltip.className = 'yt-progress-tooltip';
+  ytProgressTooltip.textContent = '0:00';
+
+  ytProgressBarContainer.appendChild(ytProgressTrack);
+  ytProgressBarContainer.appendChild(ytProgressTooltip);
+  ytControlsWrapper.appendChild(ytProgressBarContainer);
+
+  // Controls Row (Left & Right)
+  const ytControlsRow = document.createElement('div');
+  ytControlsRow.className = 'yt-controls-row';
+
+  // Left Controls: Play/Pause, Volume + Slider, Time Display, Status Badge
+  const ytControlsLeft = document.createElement('div');
+  ytControlsLeft.className = 'yt-controls-left';
+
+  const ytBtnPlay = document.createElement('button');
+  ytBtnPlay.className = 'yt-btn yt-btn-play';
+  ytBtnPlay.type = 'button';
+  ytBtnPlay.title = `${t('vp.play', 'Воспроизвести')} (k / space)`;
+  ytBtnPlay.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+
+  const ytVolumeArea = document.createElement('div');
+  ytVolumeArea.className = 'yt-volume-area';
+
+  const ytBtnVolume = document.createElement('button');
+  ytBtnVolume.className = 'yt-btn yt-btn-volume';
+  ytBtnVolume.type = 'button';
+  ytBtnVolume.title = `${t('vp.mute', 'Отключить звук')} (m)`;
+  ytBtnVolume.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
+
+  const ytVolumeSliderContainer = document.createElement('div');
+  ytVolumeSliderContainer.className = 'yt-volume-slider-container';
+
+  const ytVolumeSlider = document.createElement('input');
+  ytVolumeSlider.type = 'range';
+  ytVolumeSlider.className = 'yt-volume-slider';
+  ytVolumeSlider.min = '0';
+  ytVolumeSlider.max = '1';
+  ytVolumeSlider.step = '0.05';
+  ytVolumeSlider.value = video.muted ? '0' : String(video.volume);
+  ytVolumeSlider.title = t('vp.volume', 'Громкость');
+
+  ytVolumeSliderContainer.appendChild(ytVolumeSlider);
+  ytVolumeArea.appendChild(ytBtnVolume);
+  ytVolumeArea.appendChild(ytVolumeSliderContainer);
+
+  const ytTimeDisplay = document.createElement('div');
+  ytTimeDisplay.className = 'yt-time-display';
+  ytTimeDisplay.innerHTML = `
+    <span class="yt-time-current">0:00</span>
+    <span class="yt-time-separator">/</span>
+    <span class="yt-time-duration">0:00</span>
+  `;
+
+  const ytTimeCurrent = ytTimeDisplay.querySelector('.yt-time-current');
+  const ytTimeDuration = ytTimeDisplay.querySelector('.yt-time-duration');
+
+  const ytStatusBadge = document.createElement('div');
+  ytStatusBadge.className = 'yt-status-badge';
+  ytStatusBadge.style.display = 'none';
+  ytStatusBadge.innerHTML = `
+    <span class="yt-status-spinner"></span>
+    <span class="yt-status-text">...</span>
+  `;
+  const ytStatusSpinner = ytStatusBadge.querySelector('.yt-status-spinner');
+  const ytStatusText = ytStatusBadge.querySelector('.yt-status-text');
+
+  ytControlsLeft.appendChild(ytBtnPlay);
+  ytControlsLeft.appendChild(ytVolumeArea);
+  ytControlsLeft.appendChild(ytTimeDisplay);
+  ytControlsLeft.appendChild(ytStatusBadge);
+
+  // Right Controls: HD Badge, Settings Gear, PiP, Fullscreen
+  const ytControlsRight = document.createElement('div');
+  ytControlsRight.className = 'yt-controls-right';
+
+  const ytSettingsAnchor = document.createElement('div');
+  ytSettingsAnchor.className = 'yt-settings-anchor';
+
+  const ytBtnSettings = document.createElement('button');
+  ytBtnSettings.className = 'yt-btn yt-btn-settings';
+  ytBtnSettings.type = 'button';
+  ytBtnSettings.title = t('vp.settings', 'Настройки');
+  ytBtnSettings.innerHTML = `
+    <span class="yt-hd-badge" style="display: none;">HD</span>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-1.08-.73-1.69-.98l-.38-2.65C14.46 2.18 14.25 2 14 2h-4c-.25 0-.46.18-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1c-.23-.09-.49 0-.61.22l-2 3.46c-.13.22-.07.49.12.64l2.11 1.65c-.04.32-.07.65-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4 1.08.73 1.69.98l.38 2.65c.03.24.24.42.49.42h4c.25 0 .46-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1c.23.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 15.5c-1.93 0-3.5-1.57-3.5-3.5s1.57-3.5 3.5-3.5 3.5 1.57 3.5 3.5-1.57 3.5-3.5 3.5z"/>
+    </svg>
+  `;
+
+  const ytHdBadge = ytBtnSettings.querySelector('.yt-hd-badge');
+
+  const ytSettingsMenu = document.createElement('div');
+  ytSettingsMenu.className = 'yt-settings-menu';
+  ytSettingsMenu.style.display = 'none';
+
+  ytSettingsAnchor.appendChild(ytBtnSettings);
+  ytSettingsAnchor.appendChild(ytSettingsMenu);
+
+  const ytBtnPip = document.createElement('button');
+  ytBtnPip.className = 'yt-btn yt-btn-pip';
+  ytBtnPip.type = 'button';
+  ytBtnPip.title = t('vp.pipBtn.title', 'Картинка в картинке');
+  ytBtnPip.innerHTML = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M19 11h-8v6h8v-6zm4 8V4.98C23 3.88 22.1 3 21 3H3c-1.1 0-2 .88-2 1.98V19c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2zm-2 .02H3V4.97h18v14.05z"/>
+    </svg>
+  `;
+  if (!document.pictureInPictureEnabled) {
+    ytBtnPip.style.display = 'none';
+  }
+
+  const ytBtnFullscreen = document.createElement('button');
+  ytBtnFullscreen.className = 'yt-btn yt-btn-fullscreen';
+  ytBtnFullscreen.type = 'button';
+  ytBtnFullscreen.title = `${t('vp.fullscreen', 'Во весь экран')} (f)`;
+  ytBtnFullscreen.innerHTML = `
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+    </svg>
+  `;
+
+  ytControlsRight.appendChild(ytSettingsAnchor);
+  ytControlsRight.appendChild(ytBtnPip);
+  ytControlsRight.appendChild(ytBtnFullscreen);
+
+  ytControlsRow.appendChild(ytControlsLeft);
+  ytControlsRow.appendChild(ytControlsRight);
+  ytControlsWrapper.appendChild(ytControlsRow);
+
+  // ═══════════════════════════════════════════════════════════
+  // Autohide & Inactivity Timer
+  // ═══════════════════════════════════════════════════════════
+  const wakeControls = () => {
+    videoContainer.classList.remove('hide-cursor');
+    ytControlsWrapper.classList.add('visible');
+    clearTimeout(idleTimer);
+    if (!video.paused && !isSettingsMenuOpen && !isScrubbing) {
+      idleTimer = setTimeout(() => {
+        if (!video.paused && !isSettingsMenuOpen && !isScrubbing) {
+          videoContainer.classList.add('hide-cursor');
+          ytControlsWrapper.classList.remove('visible');
+        }
+      }, 2500);
+    }
+  };
+
+  videoContainer.addEventListener('mousemove', wakeControls);
+  videoContainer.addEventListener('touchstart', wakeControls, { passive: true });
+
+  // ═══════════════════════════════════════════════════════════
+  // Play / Pause Logic
+  // ═══════════════════════════════════════════════════════════
+  const updatePlayButtonUI = () => {
+    const isPaused = video.paused;
+    videoContainer.classList.toggle('is-paused', isPaused);
+    if (isPaused) {
+      ytBtnPlay.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+      ytBtnPlay.title = `${t('vp.play', 'Воспроизвести')} (k / space)`;
+      wakeControls();
+    } else {
+      ytBtnPlay.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+      ytBtnPlay.title = `${t('vp.pause', 'Пауза')} (k / space)`;
+      wakeControls();
+    }
+  };
+
+  const togglePlayPause = () => {
+    if (video.paused) {
+      video.play().catch(() => {});
+      triggerCenterRipple(true);
+    } else {
+      video.pause();
+      triggerCenterRipple(false);
+    }
+    updatePlayButtonUI();
+  };
+
+  ytBtnPlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    togglePlayPause();
+  });
+
+  video.addEventListener('play', updatePlayButtonUI);
+  video.addEventListener('pause', updatePlayButtonUI);
+
+  // Video click (single click = play/pause, double click = fullscreen)
+  video.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isSettingsMenuOpen) {
+      closeSettingsMenu();
+      return;
+    }
+    if (singleClickTimeout !== null) {
+      clearTimeout(singleClickTimeout);
+      singleClickTimeout = null;
+      toggleFullscreen();
+      return;
+    }
+    singleClickTimeout = setTimeout(() => {
+      singleClickTimeout = null;
+      togglePlayPause();
+    }, 240);
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // Volume & Mute UI Logic
+  // ═══════════════════════════════════════════════════════════
+  const updateVolumeUI = () => {
+    const isMuted = video.muted || video.volume === 0;
+    ytVolumeSlider.value = isMuted ? '0' : String(video.volume);
+
+    if (isMuted) {
+      ytBtnVolume.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>`;
+      ytBtnVolume.title = `${t('vp.unmute', 'Включить звук')} (m)`;
+    } else if (video.volume > 0.5) {
+      ytBtnVolume.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
+      ytBtnVolume.title = `${t('vp.mute', 'Отключить звук')} (m)`;
+    } else {
+      ytBtnVolume.innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z"/></svg>`;
+      ytBtnVolume.title = `${t('vp.mute', 'Отключить звук')} (m)`;
+    }
+
+    try {
+      localStorage.setItem('booru_video_volume', String(video.volume));
+      localStorage.setItem('booru_video_muted', String(video.muted));
+    } catch {}
+  };
+
+  ytBtnVolume.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (video.muted) {
+      video.muted = false;
+      if (video.volume === 0) video.volume = 1;
+    } else {
+      video.muted = true;
+    }
+    updateVolumeUI();
+  });
+
+  ytVolumeSlider.addEventListener('input', (e) => {
+    e.stopPropagation();
+    const val = parseFloat(ytVolumeSlider.value);
+    video.volume = val;
+    video.muted = val === 0;
+    updateVolumeUI();
+  });
+
+  video.addEventListener('volumechange', () => {
+    updateVolumeUI();
+    if (!video.muted && video.volume > 0) {
+      unmuteBtn.style.display = 'none';
+    }
+  });
+
+  updateVolumeUI();
+
+  // ═══════════════════════════════════════════════════════════
+  // Progress Bar & Scrubbing
+  // ═══════════════════════════════════════════════════════════
+  const updateProgressUI = () => {
+    if (isScrubbing) return;
+    const dur = video.duration;
+    const cur = video.currentTime;
+    if (dur > 0 && !isNaN(dur)) {
+      const pct = Math.min(100, Math.max(0, (cur / dur) * 100));
+      ytProgressPlayed.style.width = `${pct}%`;
+      ytTimeCurrent.textContent = formatTime(cur);
+      ytTimeDuration.textContent = formatTime(dur);
+    } else {
+      ytProgressPlayed.style.width = '0%';
+      ytTimeCurrent.textContent = formatTime(cur);
+      ytTimeDuration.textContent = currentPost.durationText || '0:00';
+    }
+  };
+
+  const updateBufferUI = () => {
+    if (video.duration > 0 && video.buffered.length > 0) {
+      const end = video.buffered.end(video.buffered.length - 1);
+      const pct = Math.min(100, (end / video.duration) * 100);
+      ytProgressBuffer.style.width = `${pct}%`;
+    }
+  };
+
+  video.addEventListener('timeupdate', updateProgressUI);
+  video.addEventListener('progress', updateBufferUI);
+
+  const getScrubberFraction = (clientX) => {
+    const rect = ytProgressBarContainer.getBoundingClientRect();
+    if (rect.width <= 0) return 0;
+    const offsetX = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    return offsetX / rect.width;
+  };
+
+  ytProgressBarContainer.addEventListener('mousemove', (e) => {
+    const fraction = getScrubberFraction(e.clientX);
+    const rect = ytProgressBarContainer.getBoundingClientRect();
+    const pct = fraction * 100;
+    const hoverX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+
+    ytProgressHoverLine.style.display = 'block';
+    ytProgressHoverLine.style.left = `${hoverX}px`;
+
+    const dur = video.duration || currentPost.duration || 0;
+    if (dur > 0) {
+      ytProgressTooltip.textContent = formatTime(fraction * dur);
+      ytProgressTooltip.style.left = `${hoverX}px`;
+      ytProgressTooltip.style.opacity = '1';
+    }
+  });
+
+  ytProgressBarContainer.addEventListener('mouseleave', () => {
+    if (!isScrubbing) {
+      ytProgressHoverLine.style.display = 'none';
+      ytProgressTooltip.style.opacity = '0';
+    }
+  });
+
+  const onScrubberPointerDown = (e) => {
+    e.stopPropagation();
+    isScrubbing = true;
+    ytProgressBarContainer.classList.add('is-scrubbing');
+    wakeControls();
+
+    const fraction = getScrubberFraction(e.clientX);
+    ytProgressPlayed.style.width = `${fraction * 100}%`;
+    const dur = video.duration || currentPost.duration || 0;
+    if (dur > 0) {
+      try { video.currentTime = fraction * dur; } catch {}
+    }
+
+    const onPointerMove = (ev) => {
+      if (!isScrubbing) return;
+      const frac = getScrubberFraction(ev.clientX);
+      ytProgressPlayed.style.width = `${frac * 100}%`;
+      const d = video.duration || currentPost.duration || 0;
+      if (d > 0) {
+        try { video.currentTime = frac * d; } catch {}
+        ytTimeCurrent.textContent = formatTime(frac * d);
+      }
+    };
+
+    const onPointerUp = () => {
+      isScrubbing = false;
+      ytProgressBarContainer.classList.remove('is-scrubbing');
+      ytProgressHoverLine.style.display = 'none';
+      ytProgressTooltip.style.opacity = '0';
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      wakeControls();
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+  };
+
+  ytProgressBarContainer.addEventListener('pointerdown', onScrubberPointerDown);
+
+  // ═══════════════════════════════════════════════════════════
+  // Fullscreen & PiP Handling
+  // ═══════════════════════════════════════════════════════════
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    } else {
+      if (videoContainer.requestFullscreen) {
+        videoContainer.requestFullscreen().catch(() => {});
+      } else if (video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+      }
+    }
+  };
+
+  const onFullscreenChange = () => {
+    const isFs = Boolean(document.fullscreenElement);
+    if (isFs) {
+      ytBtnFullscreen.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>`;
+      ytBtnFullscreen.title = `${t('vp.exitFullscreen', 'Выйти из полноэкранного режима')} (f)`;
+    } else {
+      ytBtnFullscreen.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>`;
+      ytBtnFullscreen.title = `${t('vp.fullscreen', 'Во весь экран')} (f)`;
+    }
+  };
+
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  ytBtnFullscreen.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFullscreen();
+  });
+
+  ytBtnPip.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    try {
+      if (document.pictureInPictureElement === video) {
+        await document.exitPictureInPicture();
+      } else {
+        await video.requestPictureInPicture();
+      }
+    } catch (err) {
+      console.warn('[PiP error]', err);
+      showToast(t('vp.pipNotSupported', 'Картинка в картинке не поддерживается'));
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════
+  // Quality & Playback Speed Management
+  // ═══════════════════════════════════════════════════════════
+  const SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  let currentSpeed = parseFloat(localStorage.getItem('booru_video_speed') || '1');
+  if (isNaN(currentSpeed) || !SPEEDS.includes(currentSpeed)) currentSpeed = 1;
+
+  const setPlaybackSpeed = (speed) => {
+    currentSpeed = speed;
+    video.playbackRate = currentSpeed;
+    try { localStorage.setItem('booru_video_speed', String(currentSpeed)); } catch {}
+  };
+
+  video.addEventListener('loadedmetadata', () => { video.playbackRate = currentSpeed; });
+  video.addEventListener('play', () => { video.playbackRate = currentSpeed; });
+
+  const getAvailableQualities = () => {
+    const list = [];
+    if (Array.isArray(currentPost.videoQualities) && currentPost.videoQualities.length > 0) {
+      for (const q of currentPost.videoQualities) {
+        if (!list.some(item => item.key === q.quality)) {
+          list.push({ key: q.quality, label: q.label || q.quality });
+        }
+      }
+    }
+    if (!list.some(item => item.key === '480p')) {
+      list.push({ key: '480p', label: '480p (Быстро)' });
+    }
+    if (!list.some(item => item.key === 'original')) {
+      list.push({ key: 'original', label: 'Оригинал' });
+    }
+    return list;
+  };
+
+  const getQualityShortLabel = () => {
+    if (activeQuality === 'original') return 'Оригинал';
+    return activeQuality || 'HD';
+  };
+
+  const updateHDBadge = () => {
+    const isHD = activeQuality !== '480p' || (currentPost.height && currentPost.height >= 720);
+    ytHdBadge.style.display = isHD ? 'inline-block' : 'none';
+  };
+  updateHDBadge();
+
+  const switchQuality = (newQuality) => {
+    if (activeQuality === newQuality) return;
+    activeQuality = newQuality;
+    updateHDBadge();
+    rebuildMediaUrls();
+
+    if (iosTranscodeAbort) {
+      try { iosTranscodeAbort.abort(); iosTranscodeAbort = null; } catch {}
+    }
+    iosWaitDone = false;
+
+    const targetUrl = (currentSource === 'proxy' || needsProxy || activeMediaInfo.isTranscode) ? proxyMedia : directMedia;
+    const curTime = video.currentTime || 0;
+    const isPaused = video.paused;
+
+    if (isPreCaching && abortRef.current) {
+      abortRef.current.abort();
+      isPreCaching = false;
+    }
+
+    setProgress(0, t('vp.switchingQuality', 'Переключение качества ({q})...').replace('{q}', activeMediaInfo.label || newQuality), true);
+    video.src = targetUrl;
+    video.addEventListener('loadedmetadata', () => {
+      if (curTime > 0 && curTime < video.duration) {
+        try { video.currentTime = curTime; } catch {}
+      }
+      if (!isPaused) safePlay();
+    }, { once: true });
+    safePlay();
+  };
+
+  // ═══════════════════════════════════════════════════════════
+  // YouTube Settings Menu (Screenshot 3 Matching)
+  // ═══════════════════════════════════════════════════════════
+  const closeSettingsMenu = () => {
+    isSettingsMenuOpen = false;
+    ytSettingsMenu.style.display = 'none';
+    videoContainer.classList.remove('menu-open');
+    wakeControls();
+  };
+
+  const openSettingsMenu = () => {
+    isSettingsMenuOpen = true;
+    renderSettingsView('main');
+    ytSettingsMenu.style.display = 'block';
+    videoContainer.classList.add('menu-open');
+    wakeControls();
+  };
+
+  const renderSettingsView = (viewName = 'main') => {
+    ytSettingsMenu.innerHTML = '';
+
+    if (viewName === 'main') {
+      // 1. Playback Speed Row
+      const speedRow = document.createElement('div');
+      speedRow.className = 'yt-menu-item';
+      speedRow.innerHTML = `
+        <div class="yt-menu-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>${t('yt.speed', 'Скорость воспроизведения')}</span>
+        </div>
+        <div class="yt-menu-item-right">
+          <span class="yt-menu-value">${currentSpeed === 1 ? t('yt.normal', 'Обычная') : `${currentSpeed}x`}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      `;
+      speedRow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renderSettingsView('speed');
+      });
+      ytSettingsMenu.appendChild(speedRow);
+
+      // 2. Quality Row
+      const qualityRow = document.createElement('div');
+      qualityRow.className = 'yt-menu-item';
+      qualityRow.innerHTML = `
+        <div class="yt-menu-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+          <span>${t('yt.quality', 'Качество')}</span>
+        </div>
+        <div class="yt-menu-item-right">
+          <span class="yt-menu-value">${getQualityShortLabel()}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      `;
+      qualityRow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renderSettingsView('quality');
+      });
+      ytSettingsMenu.appendChild(qualityRow);
+
+      // 3. Source Row
+      const sourceRow = document.createElement('div');
+      sourceRow.className = 'yt-menu-item';
+      sourceRow.innerHTML = `
+        <div class="yt-menu-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span>${t('yt.source', 'Источник')}</span>
+        </div>
+        <div class="yt-menu-item-right">
+          <span class="yt-menu-value">${currentSource === 'proxy' ? t('yt.proxy', 'Прокси (Сервер)') : t('yt.direct', 'Прямой (CDN)')}</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      `;
+      sourceRow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renderSettingsView('source');
+      });
+      ytSettingsMenu.appendChild(sourceRow);
+
+      // 4. Cache in Memory Row
+      const cacheRow = document.createElement('div');
+      cacheRow.className = 'yt-menu-item';
+      const cacheStatusLabel = isCachedInMemory ? t('yt.cached', 'В памяти ✓') : (isPreCaching ? '...' : '');
+      cacheRow.innerHTML = `
+        <div class="yt-menu-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          <span>${t('yt.cache', 'Кэш в память')}</span>
+        </div>
+        <div class="yt-menu-item-right">
+          <span class="yt-menu-value">${cacheStatusLabel}</span>
+        </div>
+      `;
+      cacheRow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSettingsMenu();
+        const currentSrc = currentSource === 'proxy' ? proxyMedia : directMedia;
+        startPreCaching(currentSrc);
+      });
+      ytSettingsMenu.appendChild(cacheRow);
+
+      // 5. Download Video Row
+      const downloadRow = document.createElement('div');
+      downloadRow.className = 'yt-menu-item';
+      downloadRow.innerHTML = `
+        <div class="yt-menu-item-left">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>${t('yt.download', 'Скачать видео')}</span>
+        </div>
+      `;
+      downloadRow.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSettingsMenu();
+        triggerDownload();
+      });
+      ytSettingsMenu.appendChild(downloadRow);
+
+    } else if (viewName === 'speed') {
+      // Header with back arrow
+      const header = document.createElement('div');
+      header.className = 'yt-menu-header';
+      header.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>${t('yt.speed', 'Скорость воспроизведения')}</span>
+      `;
+      header.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renderSettingsView('main');
+      });
+      ytSettingsMenu.appendChild(header);
+
+      for (const sp of SPEEDS) {
+        const item = document.createElement('div');
+        const isActive = currentSpeed === sp;
+        item.className = `yt-menu-item${isActive ? ' active' : ''}`;
+        item.innerHTML = `
+          <div class="yt-menu-item-left">
+            <span class="yt-menu-check">${isActive ? '✓' : ''}</span>
+            <span>${sp === 1 ? t('yt.normal', 'Обычная') : `${sp}x`}</span>
+          </div>
+        `;
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          setPlaybackSpeed(sp);
+          closeSettingsMenu();
+        });
+        ytSettingsMenu.appendChild(item);
+      }
+
+    } else if (viewName === 'quality') {
+      // Header with back arrow
+      const header = document.createElement('div');
+      header.className = 'yt-menu-header';
+      header.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>${t('yt.quality', 'Качество')}</span>
+      `;
+      header.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renderSettingsView('main');
+      });
+      ytSettingsMenu.appendChild(header);
+
+      const avail = getAvailableQualities();
+      for (const q of avail) {
+        const item = document.createElement('div');
+        const isActive = activeQuality === q.key;
+        item.className = `yt-menu-item${isActive ? ' active' : ''}`;
+        item.innerHTML = `
+          <div class="yt-menu-item-left">
+            <span class="yt-menu-check">${isActive ? '✓' : ''}</span>
+            <span>${q.label}</span>
+          </div>
+        `;
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          closeSettingsMenu();
+          switchQuality(q.key);
+        });
+        ytSettingsMenu.appendChild(item);
+      }
+
+    } else if (viewName === 'source') {
+      // Header with back arrow
+      const header = document.createElement('div');
+      header.className = 'yt-menu-header';
+      header.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>${t('yt.source', 'Источник')}</span>
+      `;
+      header.addEventListener('click', (e) => {
+        e.stopPropagation();
+        renderSettingsView('main');
+      });
+      ytSettingsMenu.appendChild(header);
+
+      // Direct CDN option
+      const optDirect = document.createElement('div');
+      const isDirect = currentSource === 'direct';
+      optDirect.className = `yt-menu-item${isDirect ? ' active' : ''}`;
+      optDirect.innerHTML = `
+        <div class="yt-menu-item-left">
+          <span class="yt-menu-check">${isDirect ? '✓' : ''}</span>
+          <span>${t('yt.direct', 'Прямой (CDN)')}</span>
+        </div>
+      `;
+      optDirect.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSettingsMenu();
+        if (currentSource !== 'direct') {
+          currentSource = 'direct';
+          setProgress(0, t('vp.loadingDirectCdn', 'Загрузка напрямую с CDN...'), true);
+          video.src = directMedia;
+          safePlay();
+        }
+      });
+      ytSettingsMenu.appendChild(optDirect);
+
+      // Local Proxy option
+      const optProxy = document.createElement('div');
+      const isProxy = currentSource === 'proxy';
+      optProxy.className = `yt-menu-item${isProxy ? ' active' : ''}`;
+      optProxy.innerHTML = `
+        <div class="yt-menu-item-left">
+          <span class="yt-menu-check">${isProxy ? '✓' : ''}</span>
+          <span>${t('yt.proxy', 'Прокси (Сервер)')}</span>
+        </div>
+      `;
+      optProxy.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeSettingsMenu();
+        if (currentSource !== 'proxy') {
+          currentSource = 'proxy';
+          setProgress(0, t('vp.loadingViaServer', 'Загрузка через локальный сервер...'), true);
+          video.src = proxyMedia;
+          safePlay();
+        }
+      });
+      ytSettingsMenu.appendChild(optProxy);
+    }
+  };
+
+  ytBtnSettings.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isSettingsMenuOpen) {
+      closeSettingsMenu();
+    } else {
+      openSettingsMenu();
+    }
+  });
+
+  const onDocClickCloseSettings = (e) => {
+    if (isSettingsMenuOpen && !ytSettingsAnchor.contains(e.target)) {
+      closeSettingsMenu();
+    }
+  };
+  document.addEventListener('click', onDocClickCloseSettings);
+
+  // ═══════════════════════════════════════════════════════════
+  // Keyboard Shortcuts
+  // ═══════════════════════════════════════════════════════════
+  const onKeyDown = (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable)) {
+      return;
+    }
+    if (!document.body.contains(videoContainer)) return;
+
+    if (e.code === 'Space' || e.key === 'k' || e.key === 'K') {
+      e.preventDefault();
+      togglePlayPause();
+    } else if (e.key === 'f' || e.key === 'F') {
+      e.preventDefault();
+      toggleFullscreen();
+    } else if (e.key === 'm' || e.key === 'M') {
+      e.preventDefault();
+      video.muted = !video.muted;
+      if (!video.muted && video.volume === 0) video.volume = 1;
+      updateVolumeUI();
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      video.currentTime = Math.max(0, video.currentTime - 5);
+      wakeControls();
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      video.currentTime = Math.min(video.duration || 0, video.currentTime + 5);
+      wakeControls();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      video.volume = Math.min(1, Math.round((video.volume + 0.1) * 10) / 10);
+      video.muted = false;
+      updateVolumeUI();
+      wakeControls();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      video.volume = Math.max(0, Math.round((video.volume - 0.1) * 10) / 10);
+      updateVolumeUI();
+      wakeControls();
+    }
+  };
+  document.addEventListener('keydown', onKeyDown);
+
+  // ═══════════════════════════════════════════════════════════
+  // Networking, Transcoding, Caching & Error Handling
+  // ═══════════════════════════════════════════════════════════
   const triggerDownload = () => {
-    // Downloading the teaser would silently hand the user a 20s clip labelled as
-    // the video, so the button waits until the full stream is known.
     if (fullMediaPending) {
       showToast(t('vp.downloadPending', 'Полное видео ещё загружается, попробуйте через пару секунд'));
       return;
@@ -454,60 +1039,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     a.remove();
   };
 
-  if (btnDownloadVideo) {
-    btnDownloadVideo.addEventListener('click', (e) => {
-      e.stopPropagation();
-      triggerDownload();
-    });
-  }
-
-  const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
-  let currentSpeed = parseFloat(localStorage.getItem('booru_video_speed') || '1');
-  if (isNaN(currentSpeed) || !SPEEDS.includes(currentSpeed)) currentSpeed = 1;
-
-  const updateSpeedUI = () => {
-    if (btnSpeed) btnSpeed.textContent = `${currentSpeed}x`;
-    if (video) video.playbackRate = currentSpeed;
-  };
-  updateSpeedUI();
-
-  if (btnSpeed) {
-    btnSpeed.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const nextIdx = (SPEEDS.indexOf(currentSpeed) + 1) % SPEEDS.length;
-      currentSpeed = SPEEDS[nextIdx];
-      try { localStorage.setItem('booru_video_speed', String(currentSpeed)); } catch {}
-      updateSpeedUI();
-    });
-  }
-
-  video.addEventListener('loadedmetadata', () => {
-    video.playbackRate = currentSpeed;
-  });
-  video.addEventListener('play', () => {
-    video.playbackRate = currentSpeed;
-  });
-
-  if (btnPip) {
-    if (!document.pictureInPictureEnabled) {
-      btnPip.style.display = 'none';
-    } else {
-      btnPip.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        try {
-          if (document.pictureInPictureElement === video) {
-            await document.exitPictureInPicture();
-          } else {
-            await video.requestPictureInPicture();
-          }
-        } catch (err) {
-          console.warn('[PiP error]', err);
-          showToast(t('vp.pipNotSupported', 'Картинка в картинке не поддерживается'));
-        }
-      });
-    }
-  }
-
   const needsProxy = shouldProxyMedia({ site: currentPost.site, url: directMedia, type: 'video', settings: state.settings });
   let currentSource = needsProxy ? 'proxy' : 'direct';
   let isPreCaching = false;
@@ -516,21 +1047,21 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   let loadTimeout = null;
 
   const setProgress = (percent, text = null, showSpinner = true, isError = false) => {
-    if (text && textEl) textEl.textContent = text;
-    if (spinEl) spinEl.style.display = showSpinner ? 'block' : 'none';
-    if (percent !== null && percent !== undefined) {
-      const clamped = Math.min(100, Math.max(0, Math.round(percent)));
-      if (percentEl) percentEl.textContent = `${clamped}%`;
-      if (fillEl) fillEl.style.width = `${clamped}%`;
+    if (text) {
+      ytStatusText.textContent = text;
+      ytStatusSpinner.style.display = showSpinner ? 'inline-block' : 'none';
+      ytStatusBadge.style.display = 'inline-flex';
     }
-    statusBanner.classList.toggle('error', isError);
-    if (state.settings.showVideoStatusBanner !== false) {
-      statusBanner.style.display = 'flex';
+    if (showSpinner && (video.readyState < 3 || isPreCaching)) {
+      ytCenterSpinner.classList.add('active');
+    } else {
+      ytCenterSpinner.classList.remove('active');
     }
   };
 
   const hideStatus = () => {
-    statusBanner.style.display = 'none';
+    ytStatusBadge.style.display = 'none';
+    ytCenterSpinner.classList.remove('active');
   };
 
   let unsupportedFallbackEl = null;
@@ -540,7 +1071,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (iosWaitOverlay) return;
     video.style.display = 'none';
     iosWaitOverlay = document.createElement('div');
-    iosWaitOverlay.className = 'video-unsupported-fallback'; // Reusing this class for styling
+    iosWaitOverlay.className = 'video-unsupported-fallback';
     iosWaitOverlay.innerHTML = `
       <div class="video-unsupported-icon" style="animation: spin 2s linear infinite;">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -611,11 +1142,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     setProgress(0, t('vp.unsupportedShort', 'Формат видео не поддерживается. Скачайте файл.'), false, true);
   };
 
-  /**
-   * Shown when /api/resolve-video could not hand over the full stream. Silently
-   * replaying the teaser is what made the 20s clip look like the whole video, so
-   * the teaser becomes an explicit, labelled user choice instead of a fallback.
-   */
   const showFullMediaUnavailable = () => {
     if (unsupportedFallbackEl || !teaserUrl || playerDestroyed) return;
     clearTimeout(resolveWatchdog);
@@ -655,7 +1181,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     unsupportedFallbackEl.querySelector('.btn-retry-resolve')?.addEventListener('click', (e) => {
       e.stopPropagation();
       if (unsupportedFallbackEl) { unsupportedFallbackEl.remove(); unsupportedFallbackEl = null; }
-      startFullMediaResolve();
+      startFullMediaResolve(true);
     });
 
     unsupportedFallbackEl.querySelector('.btn-play-teaser')?.addEventListener('click', (e) => {
@@ -668,8 +1194,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     setProgress(0, t('vp.fullUnavailableShort', 'Полное видео недоступно'), false, true);
   };
 
-  // Explicit opt-in: the teaser is muted, ~20s long and must not loop, otherwise
-  // it reads as the finished video.
   const playTeaser = () => {
     if (!teaserUrl || playerDestroyed) return;
     clearTimeout(resolveWatchdog);
@@ -686,8 +1210,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     if (abortRef.current) abortRef.current.abort();
     abortRef.current = new AbortController();
     isPreCaching = true;
-    btnCache.classList.add('active');
-    btnCache.textContent = t('vp.caching', 'Кэширование...');
+    isCachedInMemory = false;
     setProgress(0, t('vp.cachingToMemory', 'Кэширование в память...'), true);
 
     try {
@@ -718,27 +1241,18 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
       video.src = blobRef.current;
       safePlay();
-      // Reset the flag, otherwise the video error listener keeps skipping the
-      // whole fallback chain for the rest of this player's lifetime
       isPreCaching = false;
+      isCachedInMemory = true;
       setProgress(100, t('vp.cachedInMemory', 'Закэшировано в память!'), false);
-      btnCache.textContent = t('vp.inMemoryOk', 'В памяти (OK)');
-      setTimeout(hideStatus, 1200);
+      setTimeout(hideStatus, 1500);
     } catch (err) {
       if (err.name === 'AbortError') return;
       console.warn('[PreCache Error]', err);
-      btnCache.classList.remove('active');
-      btnCache.textContent = t('vp.cacheBtn', 'Кэш в память');
       isPreCaching = false;
+      isCachedInMemory = false;
       handleVideoError();
     }
   };
-
-  btnCache.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const currentSrc = currentSource === 'proxy' ? proxyMedia : directMedia;
-    startPreCaching(currentSrc);
-  });
 
   let mediaSourceInstance = null;
   let reresolvedOnce = false;
@@ -750,9 +1264,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     abortRef.current = controller;
     isPreCaching = true;
     currentSource = 'remux';
-    if (switchBtn) {
-      switchBtn.textContent = t('vp.jsRemuxing', 'JS Ремукс...');
-    }
     setProgress(0, t('vp.jsDemuxing', 'Клиентский JS-демуксинг (MSE)...'), true);
 
     let internalAbortReason = null;
@@ -773,9 +1284,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       video.src = blobRef.current;
 
       const mp4boxfile = window.MP4Box.createFile();
-
-      // Per-track segment queue: appendBuffer can't be called while the SourceBuffer
-      // is still busy with the previous one. Previously such segments were dropped and broke the stream
       const trackPipes = [];
       const pumpTrack = (id) => {
         const pipe = trackPipes.find(p => p.id === id);
@@ -843,7 +1351,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
       mp4boxfile.onSegment = (id, user, buffer) => enqueueSegment(id, buffer);
 
-      // If the MP4 structure wasn't recognized (e.g. an HTML response arrived), don't hang forever
       const readyWatchdog = setTimeout(() => {
         if (!readySettled) {
           console.warn('[Client Remux] MP4-метаданные не распознаны, отмена');
@@ -891,7 +1398,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       safePlay();
       setTimeout(hideStatus, 1200);
     } catch (err) {
-      // User-initiated aborts or source switches must not fall through
       if (err.name === 'AbortError' && !internalAbortReason) return;
       clearTimeout(loadTimeout);
       console.warn('[Client Remux Error]', err);
@@ -900,32 +1406,26 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   };
 
-  // The server holds the transcode request until the background FFmpeg run
-  // finishes, so the client polls it with HEAD until the cached H.264 file
-  // exists, then hands the local URL to the media element.
   const startTranscodeWait = async (targetUrl, { overlay = false } = {}) => {
     if (iosTranscodeAbort) {
       try { iosTranscodeAbort.abort(); } catch {}
     }
     iosTranscodeAbort = new AbortController();
     iosWaitDone = true;
-    isPreCaching = true; // prevent other errors from firing
+    isPreCaching = true;
     setProgress(0, overlay
       ? t('vp.iosTranscoding', 'Apple устройства не поддерживают стриминг. Ожидание завершения конвертации...')
       : t('vp.transcodingHevc', 'Видео в кодеке HEVC, конвертируем в H.264...'), true);
-    if (switchBtn) switchBtn.textContent = t('vp.transcoding', 'Конвертация...');
 
     if (overlay) showIosWaitOverlay();
 
     try {
-      // The server will hold this request until the background transcode completes
       const res = await fetch(targetUrl, {
         method: 'HEAD',
         signal: iosTranscodeAbort.signal
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
 
-      // Now the file is fully cached and remuxed to standard MP4!
       isPreCaching = false;
       if (overlay) hideIosWaitOverlay();
       setProgress(100, overlay
@@ -947,9 +1447,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   const startRemuxOrFallback = () => {
     const cleanExt = (currentPost.fileExt || '').toLowerCase();
-
-    // HEVC stays undecodable no matter how it is demuxed, so the remux path is
-    // skipped entirely: go to the FFmpeg transcode once, then give up.
     if (isCurrentHevc()) {
       if (!hevcTranscodeTried) {
         hevcTranscodeTried = true;
@@ -980,11 +1477,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   };
 
   const handleProxySourceFailure = () => {
-    // Rule34Video links are one-shot: try a fresh token before remuxing
     if (currentPost.site === 'rule34video' && !reresolvedOnce) {
       reresolvedOnce = true;
       setProgress(0, t('vp.linkExpired', 'Ссылка источника устарела, обновляем...'), true);
-      // The one-shot token is spent, so the cached answer must be bypassed here.
       resolveRule34VideoMedia(currentPost, { force: true })
         .then(data => {
           if (data && data.fullVideoUrl) {
@@ -1009,20 +1504,15 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
   const handleVideoError = () => {
     if (isPreCaching) return;
-    if (video.error && video.error.code === 1) return; // MEDIA_ERR_ABORTED
+    if (video.error && video.error.code === 1) return;
     
-    // Do not ignore fatal errors (decode or format not supported) even if partially buffered
     const isFatal = video.error && (video.error.code === 3 || video.error.code === 4);
     if (!isFatal && (video.currentTime > 0 || video.readyState >= 2)) return;
 
-    // Errors arrive in bursts per single switch: debounce so we don't hammer the source
     const now = Date.now();
     if (now - lastFallbackTime < 1500) return;
     lastFallbackTime = now;
 
-    // HEVC the browser cannot decode: escalate to the FFmpeg transcode once.
-    // The initial source is already the transcode; this covers the cases where
-    // the native URL was still attached (e.g. Rule34Video-resolved streams).
     if (isCurrentHevc() && !hevcTranscodeTried && !(activeMediaInfo && activeMediaInfo.isTranscode)) {
       hevcTranscodeTried = true;
       const hevcTranscodeUrl = `/api/transcode-video?url=${encodeURIComponent(getBaseOriginal())}&quality=720p`;
@@ -1034,7 +1524,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
 
     if (currentSource === 'direct' && !directMedia.startsWith('/api/')) {
       currentSource = 'proxy';
-      if (switchBtn) switchBtn.textContent = t('vp.directCdn', 'Прямой CDN');
       setProgress(0, t('vp.connectingProxy', 'Подключение через прокси...'), true);
       video.src = proxyMedia;
       safePlay();
@@ -1044,174 +1533,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       showUnsupportedVideoFallback();
     }
   };
-
-  // Floating YouTube-style quality menu: the only quality control, so it stays
-  // reachable after the status banner hides itself
-  const qualityMenuWrapper = document.createElement('div');
-  qualityMenuWrapper.className = 'video-quality-overlay';
-
-  const overlayQualityBtn = document.createElement('button');
-  overlayQualityBtn.className = 'btn-video-quality-overlay';
-  overlayQualityBtn.setAttribute('type', 'button');
-  overlayQualityBtn.setAttribute('title', t('vp.qualityBtn.title', 'Качество видео'));
-  overlayQualityBtn.innerHTML = `
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-      <circle cx="12" cy="12" r="3"/>
-    </svg>
-    <span class="video-quality-overlay-label">HD</span>
-  `;
-
-  const qualityDropdown = document.createElement('div');
-  qualityDropdown.className = 'video-quality-dropdown';
-  qualityDropdown.style.display = 'none';
-
-  qualityMenuWrapper.appendChild(overlayQualityBtn);
-  qualityMenuWrapper.appendChild(qualityDropdown);
-
-  const getAvailableQualities = () => {
-    const list = [];
-    if (Array.isArray(currentPost.videoQualities) && currentPost.videoQualities.length > 0) {
-      for (const q of currentPost.videoQualities) {
-        if (!list.some(item => item.key === q.quality)) {
-          list.push({ key: q.quality, label: q.label || q.quality });
-        }
-      }
-    }
-    // Always provide 480p and Original options if not already listed
-    if (!list.some(item => item.key === '480p')) {
-      list.push({ key: '480p', label: '480p (Быстро)' });
-    }
-    if (!list.some(item => item.key === 'original')) {
-      list.push({ key: 'original', label: 'Оригинал' });
-    }
-    return list;
-  };
-
-  const renderQualityDropdown = () => {
-    const avail = getAvailableQualities();
-    qualityDropdown.innerHTML = `
-      <div class="video-quality-dropdown-header">${t('vp.quality', 'Качество')}</div>
-    `;
-    for (const item of avail) {
-      const isSelected = item.key === activeQuality;
-      const opt = document.createElement('button');
-      opt.className = `video-quality-dropdown-item${isSelected ? ' active' : ''}`;
-      opt.setAttribute('type', 'button');
-      opt.innerHTML = `
-        <span class="video-quality-dropdown-check">
-          ${isSelected ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
-        </span>
-        <span class="video-quality-dropdown-name">${item.label}</span>
-      `;
-      opt.addEventListener('click', (e) => {
-        e.stopPropagation();
-        closeQualityDropdown();
-        switchQuality(item.key);
-      });
-      qualityDropdown.appendChild(opt);
-    }
-  };
-
-  const toggleQualityDropdown = () => {
-    const isShowing = qualityDropdown.style.display !== 'none';
-    if (isShowing) {
-      closeQualityDropdown();
-    } else {
-      renderQualityDropdown();
-      qualityDropdown.style.display = 'flex';
-      overlayQualityBtn.classList.add('active');
-    }
-  };
-
-  const closeQualityDropdown = () => {
-    qualityDropdown.style.display = 'none';
-    overlayQualityBtn.classList.remove('active');
-  };
-
-  overlayQualityBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleQualityDropdown();
-  });
-
-  const onDocClickCloseQuality = (e) => {
-    if (!qualityMenuWrapper.contains(e.target)) {
-      closeQualityDropdown();
-    }
-  };
-  document.addEventListener('click', onDocClickCloseQuality);
-
-  const updateQualityButtonLabel = () => {
-    const overlayLabel = overlayQualityBtn.querySelector('.video-quality-overlay-label');
-    if (overlayLabel) {
-      // Short label for the YouTube-style gear icon badge (e.g. "480p", "720p", "1080p", "Ориг")
-      let shortLabel = activeQuality;
-      if (activeQuality === 'original') shortLabel = 'Ориг';
-      else if (activeQuality.length > 5) shortLabel = activeQuality.slice(0, 5);
-      overlayLabel.textContent = shortLabel || 'HD';
-    }
-  };
-
-  updateQualityButtonLabel();
-
-  const switchQuality = (newQuality) => {
-    if (activeQuality === newQuality) return;
-    activeQuality = newQuality;
-    updateQualityButtonLabel();
-    rebuildMediaUrls();
-
-    if (iosTranscodeAbort) {
-      try { iosTranscodeAbort.abort(); iosTranscodeAbort = null; } catch {}
-    }
-    iosWaitDone = false;
-
-    const targetUrl = (currentSource === 'proxy' || needsProxy || activeMediaInfo.isTranscode) ? proxyMedia : directMedia;
-    const curTime = video.currentTime || 0;
-    const isPaused = video.paused;
-
-    if (isPreCaching && abortRef.current) {
-      abortRef.current.abort();
-      isPreCaching = false;
-      btnCache.classList.remove('active');
-      btnCache.textContent = t('vp.cacheBtn', 'Кэш в память');
-    }
-
-    setProgress(0, t('vp.switchingQuality', 'Переключение качества ({q})...').replace('{q}', activeMediaInfo.label || newQuality), true);
-    video.src = targetUrl;
-    video.addEventListener('loadedmetadata', () => {
-      if (curTime > 0 && curTime < video.duration) {
-        try { video.currentTime = curTime; } catch {}
-      }
-      if (!isPaused) safePlay();
-    }, { once: true });
-    safePlay();
-  };
-
-  if (switchBtn) {
-    switchBtn.textContent = currentSource === 'proxy' ? t('vp.directCdn', 'Прямой CDN') : t('vp.proxyBtn', 'Прокси');
-    switchBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (isPreCaching && abortRef.current) {
-        abortRef.current.abort();
-        isPreCaching = false;
-        btnCache.classList.remove('active');
-        btnCache.textContent = t('vp.cacheBtn', 'Кэш в память');
-      }
-
-      if (currentSource === 'direct') {
-        currentSource = 'proxy';
-        switchBtn.textContent = t('vp.directCdn', 'Прямой CDN');
-        setProgress(0, t('vp.loadingViaServer', 'Загрузка через локальный сервер...'), true);
-        video.src = proxyMedia;
-      } else {
-        currentSource = 'direct';
-        switchBtn.textContent = t('vp.proxyBtn', 'Прокси');
-        setProgress(0, t('vp.loadingDirectCdn', 'Загрузка напрямую с CDN...'), true);
-        video.src = directMedia;
-      }
-      safePlay();
-    });
-  }
 
   video.addEventListener('loadstart', () => {
     if (!isPreCaching) {
@@ -1229,18 +1550,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }, 8000);
   });
 
-  video.addEventListener('progress', () => {
-    if (isPreCaching) return;
-    if (video.duration > 0 && video.buffered.length > 0) {
-      const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-      const pct = (bufferedEnd / video.duration) * 100;
-      setProgress(pct, t('vp.buffering', 'Буферизация...'), true);
-      if (pct >= 99) {
-        setTimeout(hideStatus, 800);
-      }
-    }
-  });
-
   video.addEventListener('waiting', () => {
     if (!isPreCaching) {
       setProgress(null, t('vp.bufferingVideo', 'Буферизация видео...'), true);
@@ -1248,14 +1557,9 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   });
 
   video.addEventListener('loadedmetadata', () => {
-    // During real-time stream transcoding (pipe:1 with fragmented MP4), video.duration initially
-    // reflects only the currently buffered stream fragment and keeps growing.
-    // If the post already has a known duration from its metadata/source, preserve it.
     const isTranscodingStream = Boolean(activeMediaInfo?.isTranscode);
     const hasKnownDuration = Boolean(currentPost.duration && currentPost.duration > 0);
 
-    // A teaser is ~20s long: letting it overwrite the post duration would put
-    // "0:18" on the card badge and in the sidebar for the rest of the session.
     if (playingTeaser) return;
 
     if (video.duration && !isNaN(video.duration) && (!isTranscodingStream || !hasKnownDuration)) {
@@ -1268,11 +1572,10 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
       const infoDurationRow = document.getElementById('infoDurationRow');
       if (infoDuration) infoDuration.textContent = currentPost.durationText;
       if (infoDurationRow) infoDurationRow.style.display = 'flex';
+      ytTimeDuration.textContent = currentPost.durationText;
     }
   });
 
-  // Applies a freshly resolved full stream to the player. Shared by the initial
-  // resolve and the retry button, so both paths keep the playback position.
   const applyFullMedia = (data) => {
     currentPost.fileUrl = data.fullVideoUrl;
     currentPost.sampleUrl = data.fullVideoUrl;
@@ -1282,7 +1585,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     playingTeaser = false;
     if (data.quality) currentPost.quality = data.quality;
     if (Array.isArray(data.videoQualities)) currentPost.videoQualities = data.videoQualities;
-    updateQualityButtonLabel();
+    updateHDBadge();
     rebuildMediaUrls();
     const targetUrl = (currentSource === 'proxy' || needsProxy || activeMediaInfo.isTranscode) ? proxyMedia : directMedia;
 
@@ -1313,10 +1616,6 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     }
   };
 
-  // Request the full stream and either play it or explain why it is missing.
-  // `resolvedVideoPromise` is owned by the viewer (openViewer) and goes through the
-  // shared resolver, so the gallery, the metadata pass and the player cost one
-  // request per post instead of one each.
   const startFullMediaResolve = (force = false) => {
     if (currentPost.site !== 'rule34video') return;
     if (currentPost.source || currentPost.originalId) {
@@ -1366,7 +1665,7 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   video.addEventListener('error', () => {
     clearTimeout(loadTimeout);
     if (!isPreCaching) {
-      if (video.error && video.error.code === 1) return; // MEDIA_ERR_ABORTED
+      if (video.error && video.error.code === 1) return;
       if (video.currentTime > 0 || video.readyState >= 2) return;
       console.warn('[Video Error] Ошибка тега video, запуск обработчика fallback');
       handleVideoError();
@@ -1374,20 +1673,19 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
   });
 
   videoContainer.appendChild(video);
+  videoContainer.appendChild(ytCenterSpinner);
+  videoContainer.appendChild(ytCenterAction);
   videoContainer.appendChild(unmuteBtn);
-  videoContainer.appendChild(qualityMenuWrapper);
+  videoContainer.appendChild(ytControlsWrapper);
 
   const UNPLAYABLE_CONTAINERS = new Set(['mkv', 'avi', 'wmv', 'flv', 'ts']);
   const cleanExt = String(currentPost.fileExt || '').toLowerCase();
   if (fullMediaPending) {
-    // Nothing is attached to the media element: the post still has to resolve, and
-    // startFullMediaResolve() above is already waiting for it.
     setProgress(0, t('vp.resolvingFull', 'Получаем ссылку на полное видео...'), true);
   } else if (UNPLAYABLE_CONTAINERS.has(cleanExt)) {
     showUnsupportedVideoFallback();
   } else {
     video.src = currentSource === 'proxy' ? proxyMedia : directMedia;
-    // Start autoplay with safe Autoplay Policy handling
     safePlay();
   }
 
@@ -1398,18 +1696,20 @@ export function createVideoPlayer(currentPost, { state, getProxiedUrl, abortRef,
     destroy: () => {
       playerDestroyed = true;
       clearTimeout(resolveWatchdog);
+      clearTimeout(idleTimer);
+      clearTimeout(singleClickTimeout);
+      clearTimeout(rippleTimeout);
       if (iosTranscodeAbort) {
         try { iosTranscodeAbort.abort(); iosTranscodeAbort = null; } catch {}
       }
       hideIosWaitOverlay();
       clearTimeout(loadTimeout);
-      document.removeEventListener('click', onDocClickCloseQuality);
+      document.removeEventListener('click', onDocClickCloseSettings);
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
       try { video.pause(); } catch {}
       video.removeAttribute('src');
       try { video.load(); } catch {}
-      if (statusBanner && typeof statusBanner._destroyDrag === 'function') {
-        statusBanner._destroyDrag();
-      }
       if (mediaSourceInstance && mediaSourceInstance.readyState === 'open') {
         try { mediaSourceInstance.endOfStream(); } catch {}
       }

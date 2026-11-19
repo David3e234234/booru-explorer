@@ -29,6 +29,8 @@ export function isInteractiveTouchTarget(target, touch) {
   if (!target || typeof target.closest !== 'function') return false;
   return Boolean(
     isVideoControlsTouch(target, touch) ||
+    target.closest('.yt-controls-wrapper') ||
+    target.closest('.yt-settings-menu') ||
     target.closest('.video-status-banner') ||
     target.closest('.viewer-album-filmstrip') ||
     target.closest('.viewer-similar-filmstrip') ||

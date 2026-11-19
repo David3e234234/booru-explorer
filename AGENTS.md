@@ -134,6 +134,7 @@ Large files must be split by responsibility when touched. Preferred existing bou
 - `public/js/modules/eventBindings.js`: static-shell event wiring; app.js actions arrive via `initEventBindings(deps)`
 - `public/js/modules/settingsModal.js`: settings orchestration (open/save/reset/apply); per-tab state and wiring live in `settingsTabs/*`
 - `public/js/modules/*Markup.js`: modal markup injected on first use; keep `data-i18n` translated right after injection and bind controls only after `ensure*Markup()` (delegation for init-time bindings)
+- `public/js/viewer/videoPlayer.js`: YouTube-style custom video player overlay (scrim, timeline scrubber with hover line & tooltip, expanding volume slider, frosted-glass settings popup, center ripple, autohiding controls) replacing HTML5 default controls and the legacy floating banner
 
 ## 6. Backend Architecture
 

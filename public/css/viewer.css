@@ -766,6 +766,446 @@
   object-fit: contain;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   YouTube-style Video Player
+   ═══════════════════════════════════════════════════════════════ */
+
+.viewer-video-container {
+  overflow: hidden;
+  user-select: none;
+}
+
+.viewer-video-container.hide-cursor,
+.viewer-video-container.hide-cursor * {
+  cursor: none !important;
+}
+
+/* Center loading spinner */
+.yt-center-spinner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 56px;
+  height: 56px;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent-primary, #e5a968);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  pointer-events: none;
+  z-index: 20;
+  display: none;
+}
+
+.yt-center-spinner.active {
+  display: block;
+}
+
+/* Center Play/Pause Ripple */
+.yt-center-action {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  pointer-events: none;
+  opacity: 0;
+  transition: transform 0.22s ease-out, opacity 0.22s ease-out;
+  z-index: 22;
+}
+
+.yt-center-action.pulse {
+  transform: translate(-50%, -50%) scale(1.15);
+  opacity: 1;
+}
+
+/* Controls wrapper */
+.yt-controls-wrapper {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.yt-controls-wrapper.visible,
+.viewer-video-container:hover .yt-controls-wrapper,
+.viewer-video-container.is-paused .yt-controls-wrapper,
+.viewer-video-container.menu-open .yt-controls-wrapper {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Scrim gradient */
+.yt-controls-scrim {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 120px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.45) 55%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Progress bar container */
+.yt-progress-bar-container {
+  position: relative;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0 14px;
+  z-index: 10;
+  touch-action: none;
+}
+
+.yt-progress-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 2px;
+  transition: height 0.12s ease;
+}
+
+.yt-progress-bar-container:hover .yt-progress-track,
+.yt-progress-bar-container.is-scrubbing .yt-progress-track {
+  height: 6px;
+}
+
+.yt-progress-buffer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.yt-progress-played {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  background: #ff0000;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.yt-progress-scrubber-handle {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%) scale(0);
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #ff0000;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+  transition: transform 0.12s ease;
+  pointer-events: none;
+}
+
+.yt-progress-bar-container:hover .yt-progress-scrubber-handle,
+.yt-progress-bar-container.is-scrubbing .yt-progress-scrubber-handle {
+  transform: translateY(-50%) scale(1);
+}
+
+.yt-progress-hover-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+  display: none;
+}
+
+.yt-progress-tooltip {
+  position: absolute;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: rgba(28, 28, 28, 0.92);
+  color: #fff;
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  padding: 3px 7px;
+  border-radius: 4px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Controls row */
+.yt-controls-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px 10px;
+  z-index: 10;
+  color: #fff;
+}
+
+.yt-controls-left,
+.yt-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* General button */
+.yt-btn {
+  background: none;
+  border: none;
+  color: #eee;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  padding: 0;
+  transition: color 0.15s, background-color 0.15s, transform 0.1s;
+  outline: none;
+  flex-shrink: 0;
+}
+
+.yt-btn:hover {
+  color: #fff;
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.yt-btn:active {
+  transform: scale(0.92);
+}
+
+.yt-btn svg {
+  display: block;
+}
+
+/* Volume control */
+.yt-volume-area {
+  display: flex;
+  align-items: center;
+}
+
+.yt-volume-slider-container {
+  width: 0;
+  overflow: hidden;
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1), margin 0.2s;
+  margin-left: 0;
+  display: flex;
+  align-items: center;
+}
+
+.yt-volume-area:hover .yt-volume-slider-container,
+.yt-volume-area:focus-within .yt-volume-slider-container,
+.yt-volume-slider-container.active {
+  width: 64px;
+  margin-left: 4px;
+  margin-right: 8px;
+}
+
+.yt-volume-slider {
+  width: 64px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.yt-volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+}
+
+.yt-volume-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  border: none;
+}
+
+/* Time display */
+.yt-time-display {
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: #ddd;
+  margin-left: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.yt-time-current,
+.yt-time-duration {
+  font-variant-numeric: tabular-nums;
+}
+
+.yt-time-separator {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Status badge (transcoding, buffering, memory cache) */
+.yt-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #eee;
+  margin-left: 10px;
+  backdrop-filter: blur(8px);
+}
+
+.yt-status-spinner {
+  width: 11px;
+  height: 11px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: var(--accent-primary, #e5a968);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* HD Badge */
+.yt-hd-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  background: #ff0000;
+  color: #fff;
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-right: 4px;
+  user-select: none;
+}
+
+/* Settings popup menu anchor */
+.yt-settings-anchor {
+  position: relative;
+}
+
+.yt-settings-menu {
+  position: absolute;
+  bottom: 50px;
+  right: 0;
+  min-width: 260px;
+  max-width: 310px;
+  background: rgba(28, 24, 20, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.75);
+  padding: 6px 0;
+  z-index: 100;
+  font-size: 13px;
+  color: #fff;
+  animation: fadeIn 0.15s ease-out;
+  user-select: none;
+}
+
+.yt-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: #fff;
+  transition: background-color 0.12s;
+}
+
+.yt-menu-header:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.yt-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background-color 0.12s;
+  color: #eee;
+  gap: 12px;
+}
+
+.yt-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.yt-menu-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yt-menu-item-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.yt-menu-value {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.yt-menu-item.active {
+  color: var(--accent-primary, #e5a968);
+}
+
+.yt-menu-check {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary, #e5a968);
+  font-weight: bold;
+}
+
 /* Unmute button for browser-blocked autoplay with sound */
 .btn-video-unmute {
   position: absolute;
