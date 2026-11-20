@@ -681,7 +681,7 @@ const MARKUP = `
             <!-- Global Fallback Proxy -->
             <div class="api-key-card" style="margin-top: 4px;">
               <div class="api-key-card-header">
-                <span class="api-key-site-badge site-global" data-i18n="settings.proxyGlobalBadge">🌐 Общий прокси (Fallback)</span>
+                <span class="api-key-site-badge site-global" data-i18n="settings.proxyGlobalBadge">Общий прокси (Fallback)</span>
                 <span class="api-key-card-actions">
                   <button type="button" class="api-key-test-btn" id="btnTestGlobalProxy" title="Проверить общий прокси">
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>

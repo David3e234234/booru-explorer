@@ -58,11 +58,7 @@ const MARKUP = `
             <!-- Card 1: Tag Structure -->
             <div class="wiki-card">
               <div class="wiki-card-header">
-                <div class="wiki-card-icon icon-blue">🏷️</div>
-                <div>
-                  <h4 class="wiki-card-title" data-i18n="wiki.basics.syntaxTitle">Синтаксис и пробелы</h4>
-                  <span class="wiki-card-category" data-i18n="wiki.basics.syntaxCategory">Главное правило Booru</span>
-                </div>
+                <h4 class="wiki-card-title" data-i18n="wiki.basics.syntaxTitle">Синтаксис и пробелы</h4>
               </div>
               <div class="wiki-card-body">
                 <p data-i18n="wiki.basics.syntaxDesc">В Booru-системах понятия из нескольких слов всегда соединяются <strong>подчеркиванием <code>_</code></strong>. Пробел между словами означает логическое <strong>«И» (AND)</strong>: то есть на картинке должны присутствовать оба признака.</p>
@@ -86,11 +82,7 @@ const MARKUP = `
             <!-- Card 2: Negative Tags (Exclusion) -->
             <div class="wiki-card">
               <div class="wiki-card-header">
-                <div class="wiki-card-icon icon-red">⛔</div>
-                <div>
-                  <h4 class="wiki-card-title" data-i18n="wiki.basics.negTitle">Исключение тегов (Минус)</h4>
-                  <span class="wiki-card-category" data-i18n="wiki.basics.negCategory">Фильтрация лишнего</span>
-                </div>
+                <h4 class="wiki-card-title" data-i18n="wiki.basics.negTitle">Исключение тегов (Минус)</h4>
               </div>
               <div class="wiki-card-body">
                 <p data-i18n="wiki.basics.negDesc">Чтобы скрыть из выдачи арты с определенными элементами, добавьте перед тегом знак <strong>минус (<code>-</code>)</strong>. Это работает во всех источниках и в мультипоиске.</p>
@@ -114,11 +106,7 @@ const MARKUP = `
             <!-- Card 3: Tag Categories -->
             <div class="wiki-card full-width">
               <div class="wiki-card-header">
-                <div class="wiki-card-icon icon-purple">🎨</div>
-                <div>
-                  <h4 class="wiki-card-title" data-i18n="wiki.basics.catsTitle">Категории тегов и префиксы</h4>
-                  <span class="wiki-card-category" data-i18n="wiki.basics.catsCategory">Цветовая разметка и назначение</span>
-                </div>
+                <h4 class="wiki-card-title" data-i18n="wiki.basics.catsTitle">Категории тегов и префиксы</h4>
               </div>
               <div class="wiki-card-body">
                 <p data-i18n="wiki.basics.catsDesc">В карточках артов и подсказках поиска теги разделены по 5 типам. Вы можете указывать явный префикс (например <code>artist:</code>) для точного поиска:</p>
@@ -362,11 +350,7 @@ const MARKUP = `
           <div class="wiki-grid">
             <div class="wiki-card">
               <div class="wiki-card-header">
-                <div class="wiki-card-icon icon-amber">⚡</div>
-                <div>
-                  <h4 class="wiki-card-title" data-i18n="wiki.multi.title">Мультипоиск («Все сайты» / «Пользовательские»)</h4>
-                  <span class="wiki-card-category" data-i18n="wiki.multi.cat">Параллельный опрос и адаптация</span>
-                </div>
+                <h4 class="wiki-card-title" data-i18n="wiki.multi.title">Мультипоиск («Все сайты» / «Пользовательские»)</h4>
               </div>
               <div class="wiki-card-body">
                 <p data-i18n="wiki.multi.desc">В режиме «Все сайты» приложение параллельно отправляет запросы на все подключенные борды. Синтаксис тегов автоматически адаптируется под каждый движок (Danbooru, Moebooru, DAPI, Pawchive), а результаты перемешиваются методом Round-Robin для разнообразия ленты.</p>
@@ -375,11 +359,7 @@ const MARKUP = `
 
             <div class="wiki-card">
               <div class="wiki-card-header">
-                <div class="wiki-card-icon icon-purple">🤖</div>
-                <div>
-                  <h4 class="wiki-card-title" data-i18n="wiki.ai.title">Фильтр ИИ (No-AI)</h4>
-                  <span class="wiki-card-category" data-i18n="wiki.ai.cat">Отсечение нейросетей</span>
-                </div>
+                <h4 class="wiki-card-title" data-i18n="wiki.ai.title">Фильтр ИИ (No-AI)</h4>
               </div>
               <div class="wiki-card-body">
                 <p data-i18n="wiki.ai.desc">Фильтр «Без ИИ» проверяет каждый пост по базе из 80+ меток нейросетей (NovelAI, Stable Diffusion, Midjourney, AI Generated и др.) и показывает только авторский человеческий арт.</p>
@@ -388,11 +368,7 @@ const MARKUP = `
 
             <div class="wiki-card">
               <div class="wiki-card-header">
-                <div class="wiki-card-icon icon-green">🛡️</div>
-                <div>
-                  <h4 class="wiki-card-title" data-i18n="wiki.censor.title">Фильтры цензуры (Furry, Pregnant, LGBT)</h4>
-                  <span class="wiki-card-category" data-i18n="wiki.censor.cat">Комфортная лента</span>
-                </div>
+                <h4 class="wiki-card-title" data-i18n="wiki.censor.title">Фильтры цензуры (Furry, Pregnant, LGBT)</h4>
               </div>
               <div class="wiki-card-body">
                 <p data-i18n="wiki.censor.desc">В левом сайдбаре вы можете в один клик скрыть специфичные категории контента. Приложение автоматически фильтрует теги и глубоко добирает другие арты (Deep Fetch), чтобы лента всегда оставалась заполненной.</p>
@@ -401,11 +377,7 @@ const MARKUP = `
 
             <div class="wiki-card">
               <div class="wiki-card-header">
-                <div class="wiki-card-icon icon-pink">✨</div>
-                <div>
-                  <h4 class="wiki-card-title" data-i18n="wiki.rec.title">Рекомендации «Для вас»</h4>
-                  <span class="wiki-card-category" data-i18n="wiki.rec.cat">Персональный ИИ-граф</span>
-                </div>
+                <h4 class="wiki-card-title" data-i18n="wiki.rec.title">Рекомендации «Для вас»</h4>
               </div>
               <div class="wiki-card-body">
                 <p data-i18n="wiki.rec.desc">На основе ваших лайков, закладок и любимых художников приложение строит персонализированный граф предпочтений и подбирает новые релевантные работы из всех источников.</p>
@@ -477,7 +449,7 @@ const MARKUP = `
       </div>
 
       <div class="modal-footer wiki-modal-footer">
-        <span class="wiki-footer-hint" data-i18n="wiki.footerHint">💡 Нажмите на любой тег-пример в справке, чтобы сразу добавить его в поиск</span>
+        <span class="wiki-footer-hint" data-i18n="wiki.footerHint">Нажмите на любой тег-пример в справке, чтобы сразу добавить его в поиск</span>
         <button type="button" class="btn-primary" id="btnUnderstandWikiModal" data-i18n="modal.close">Понятно</button>
       </div>
     </div>

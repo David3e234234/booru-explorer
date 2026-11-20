@@ -575,7 +575,7 @@ Object.assign(en, {
 
   'settings.proxyServers': 'Server HTTP / HTTPS / SOCKS5 proxies per site:',
   'settings.proxyServersHint': 'Specify a proxy (e.g. http://127.0.0.1:8080 or socks5://127.0.0.1:1080) for each board individually to bypass IP bans or hosting blocks. If no proxy is set for a site, the global fallback proxy or direct connection is used.',
-  'settings.proxyGlobalBadge': '🌐 Global Proxy (Fallback)',
+  'settings.proxyGlobalBadge': 'Global Proxy (Fallback)',
   'settings.proxyGlobalPlaceholder': 'http://127.0.0.1:8080 or socks5://127.0.0.1:1080',
 
   'settings.proxyMain': 'Proxying and server traffic saving:',
@@ -1226,7 +1226,7 @@ Object.assign(en, {
   'wiki.hk.escDesc': 'Closes viewer, Wiki guide, or settings modal',
   'wiki.hk.enter': 'Apply search',
   'wiki.hk.enterDesc': 'Executes search with entered tags',
-  'wiki.footerHint': '💡 Click on any example tag in the guide to add it directly to your search',
+  'wiki.footerHint': 'Click on any example tag in the guide to add it directly to your search',
   'wiki.tagAdded': 'Tag {tag} added to search',
   'wiki.siteSwitched': 'Switched source to {site}',
 

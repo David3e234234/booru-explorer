@@ -331,7 +331,7 @@ export function openPresetModal(presetToEdit = null, prefillTags = []) {
     if (!hintFilters) return;
     if (checkSaveFilters && checkSaveFilters.checked) {
       const summary = formatFiltersSummary(activeFiltersForModal);
-      hintFilters.textContent = '⚡ ' + summary;
+      hintFilters.textContent = summary;
       hintFilters.style.color = '';
     } else {
       hintFilters.textContent = t('presets.noFiltersSaved', 'Фильтры не сохраняются (только теги)');
